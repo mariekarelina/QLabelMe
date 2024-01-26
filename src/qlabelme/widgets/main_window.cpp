@@ -112,47 +112,7 @@ bool MainWindow::init()
 
 void MainWindow::deinit()
 {
-//    if (_socket)
-//        _socket->disconnect();
 }
-
-//void MainWindow::message(const pproto::Message::Ptr& message)
-//{
-//    if (message->processed())
-//        return;
-
-//    if (lst::FindResult fr = _funcInvoker.findCommand(message->command()))
-//    {
-//        if (command::pool().commandIsSinglproc(message->command()))
-//            message->markAsProcessed();
-//        _funcInvoker.call(message, fr);
-//    }
-//}
-
-//void MainWindow::socketConnected(pproto::SocketDescriptor)
-//{
-//    connectActiveMessage();
-//    enableButtons(true);
-//    disableAdminMode();
-//}
-
-//void MainWindow::socketDisconnected(pproto::SocketDescriptor)
-//{
-//    enableButtons(false);
-//    disableAdminMode();
-
-//    if (_isConnected)
-//        _labelConnectStatus->setText(u8"Переподключение");
-//    else
-//        _labelConnectStatus->setText(u8"Нет подключения");
-
-//    QMetaObject::invokeMethod(this, "reconnectCheck", Qt::QueuedConnection);
-//}
-
-//void MainWindow::on_actExit_triggered(bool)
-//{
-//    close();
-//}
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
@@ -193,36 +153,7 @@ void MainWindow::saveGeometry()
 //    config::base().setValue("windows.main_window.event_journal_header", QString::fromLatin1(ba));
 }
 
-//QString MainWindow::labelStyleSheet(const QString& bgrColor)
-//{
-//    QString s = "border: 1px solid; border-radius: 8px; color: white; "
-//                "border-color: rgb(85, 85, 0); background-color: %1; "
-//                "margin: 3px;";
-//    return s.arg(bgrColor);
-//}
-
-//void MainWindow::enableButtons(bool val)
-//{
-//    ui->actReceiveVideo->setEnabled(val);
-//    ui->actAdminMode->setEnabled(val);
-//    ui->actRoiGeometry->setEnabled(val);
-//    ui->actRoiGeometrySave->setEnabled(val);
-//}
-
-//void MainWindow::connectActiveMessage()
-//{
-//    QString msg = u8"Подключено к %1:%2";
-//    _labelConnectStatus->setText(msg.arg(_socket->peerPoint().address().toString())
-//                                    .arg(_socket->peerPoint().port()));
-//}
-
-void MainWindow::on_actionClose_triggered()
-{
-    QApplication::quit();
-}
-
-
-void MainWindow::on_actionOpen_triggered()
+void MainWindow::on_actOpen_triggered(bool)
 {
     // Create File Dialog
     QString fileName = QFileDialog::getOpenFileName(this,
@@ -234,4 +165,9 @@ void MainWindow::on_actionOpen_triggered()
     int width = ui->image->width();
     int height = ui->image->height();
     ui->image->setPixmap(pix.scaled(width, height, Qt::KeepAspectRatio));
+}
+
+void MainWindow::on_actClose_triggered(bool)
+{
+    QApplication::quit();
 }

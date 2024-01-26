@@ -35,17 +35,8 @@ public:
     void deinit();
 
 private slots:
-//    void message(const pproto::Message::Ptr&);
-//    void socketConnected(pproto::SocketDescriptor);
-//    void socketDisconnected(pproto::SocketDescriptor);
-
-private slots:
-    //void on_actConnect_triggered(bool);
-    //void on_actExit_triggered(bool);
-
-    void on_actionClose_triggered();
-
-    void on_actionOpen_triggered();
+    void on_actOpen_triggered(bool);
+    void on_actClose_triggered(bool);
 
 private:
     Q_OBJECT
@@ -54,20 +45,9 @@ private:
     void loadGeometry();
     void saveGeometry();
 
-    // Не надо прописывать в .h??????????
-    //void on_actionClose_triggered();
-
-    //QString labelStyleSheet(const QString& bgrColor);
-
-    //void enableButtons(bool);
-    //void connectActiveMessage();
-
 private:
     Ui::MainWindow *ui;
     static QUuidEx _applId;
-
-    //tcp::Socket::Ptr _socket;
-    //FunctionInvoker  _funcInvoker;
 
     //QGraphicsScene _scene;
     //qgraph::VideoRect* _videoRect = {nullptr};
