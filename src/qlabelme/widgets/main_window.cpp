@@ -24,6 +24,7 @@
 #include <QFileInfo>
 #include <QInputDialog>
 #include <QGraphicsItem>
+#include <QPixmap>
 #include <unistd.h>
 
 #define log_error_m   alog::logger().error   (alog_line_location, "MainWin")
@@ -214,3 +215,23 @@ void MainWindow::saveGeometry()
 //    _labelConnectStatus->setText(msg.arg(_socket->peerPoint().address().toString())
 //                                    .arg(_socket->peerPoint().port()));
 //}
+
+void MainWindow::on_actionClose_triggered()
+{
+    QApplication::quit();
+}
+
+
+void MainWindow::on_actionOpen_triggered()
+{
+    // Create File Dialog
+    QString fileName = QFileDialog::getOpenFileName(this,
+        tr("Open Image"), "/home");
+
+    // Выводит путь файла
+    //ui->image->setText(fileName);
+    QPixmap pix(fileName);
+    int width = ui->image->width();
+    int height = ui->image->height();
+    ui->image->setPixmap(pix.scaled(width, height, Qt::KeepAspectRatio));
+}

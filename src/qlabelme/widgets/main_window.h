@@ -11,6 +11,7 @@
 //#include "qutils/video_widget.h"
 
 #include <QMainWindow>
+#include <QFileDialog>
 #include <QCloseEvent>
 #include <QGraphicsScene>
 
@@ -42,12 +43,19 @@ private slots:
     //void on_actConnect_triggered(bool);
     //void on_actExit_triggered(bool);
 
+    void on_actionClose_triggered();
+
+    void on_actionOpen_triggered();
+
 private:
     Q_OBJECT
     void closeEvent(QCloseEvent*) override;
 
     void loadGeometry();
     void saveGeometry();
+
+    // Не надо прописывать в .h??????????
+    //void on_actionClose_triggered();
 
     //QString labelStyleSheet(const QString& bgrColor);
 
