@@ -48,9 +48,21 @@ Product {
         name: "widgets"
         prefix: "widgets/"
         files: [
+            "graphics_view.cpp",
+            "graphics_view.h",
+            "graphicsscene.cpp",
+            "graphicsscene.h",
+            "handle.cpp",
+            "handle.h",
+            "line.cpp",
+            "line.h",
             "main_window.cpp",
             "main_window.h",
             "main_window.ui",
+            "selectiondialog.cpp",
+            "selectiondialog.h",
+            "square.cpp",
+            "square.h",
         ]
     }
 

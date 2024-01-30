@@ -18,7 +18,7 @@ Product {
 
     property var includePaths: [
         "./",
-        "./qgraphics",
+        "./qgraphics2",
     ]
     cpp.includePaths: includePaths
 
@@ -27,20 +27,20 @@ Product {
     )
 
     files: [
-        "qgraphics/circle.cpp",
-        "qgraphics/circle.h",
-        "qgraphics/drag_circle.cpp",
-        "qgraphics/drag_circle.h",
-        //"qgraphics/functions.cpp",
-        //"qgraphics/functions.h",
-        "qgraphics/rectangle.cpp",
-        "qgraphics/rectangle.h",
-        "qgraphics/shape.h",
-        "qgraphics/square.cpp",
-        "qgraphics/square.h",
-        "qgraphics/user_type.h",
-        "qgraphics/video_rect.cpp",
-        "qgraphics/video_rect.h",
+        "qgraphics2/circle.cpp",
+        "qgraphics2/circle.h",
+        "qgraphics2/drag_circle.cpp",
+        "qgraphics2/drag_circle.h",
+        "qgraphics2/polyline.cpp",
+        "qgraphics2/polyline.h",
+        "qgraphics2/rectangle.cpp",
+        "qgraphics2/rectangle.h",
+        "qgraphics2/shape.h",
+        "qgraphics2/square.cpp",
+        "qgraphics2/square.h",
+        "qgraphics2/user_type.h",
+        "qgraphics2/video_rect.cpp",
+        "qgraphics2/video_rect.h",
     ]
 
     Export {
