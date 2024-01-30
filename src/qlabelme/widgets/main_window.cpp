@@ -12,8 +12,9 @@
 #include "pproto/commands/pool.h"
 #include "pproto/logger_operators.h"
 
-//#include "qgraphics/circle.h"
-//#include "qgraphics/square.h"
+#include "qgraphics/circle.h"
+#include "qgraphics/rectangle.h"
+#include "qgraphics/square.h"
 //#include "qgraphics/functions.h"
 //#include "qutils/message_box.h"
 
@@ -57,8 +58,8 @@ MainWindow::MainWindow(QWidget *parent) :
 //    enableButtons(false);
 //    disableAdminMode();
 
-    //ui->graphView->setScene(&_scene);
-    //_videoRect = new qgraph::VideoRect(&_scene);
+    ui->graphView->setScene(&_scene);
+    _videoRect = new qgraph::VideoRect(&_scene);
 
     _labelConnectStatus = new QLabel(u8"Нет подключения", this);
     ui->statusBar->addWidget(_labelConnectStatus);
@@ -128,6 +129,10 @@ void MainWindow::loadGeometry()
     config::base().getValue("windows.main_window.geometry", v);
     setGeometry(v[0], v[1], v[2], v[3]);
 
+    QVector<int> splitterSizes;
+    if (config::base().getValue("windows.main_window.splitter_sizes", splitterSizes))
+        ui->splitter->setSizes(splitterSizes.toList());
+
 //    int tabIndex = 0;
 //    config::base().getValue("windows.main_window.tab_index", tabIndex);
 //    ui->tabWidget->setCurrentIndex(tabIndex);
@@ -147,6 +152,9 @@ void MainWindow::saveGeometry()
     QVector<int> v {g.x(), g.y(), g.width(), g.height()};
     config::base().setValue("windows.main_window.geometry", v);
 
+    QList<int> splitterSizes = ui->splitter->sizes();
+    config::base().setValue("windows.main_window.splitter_sizes", splitterSizes.toVector());
+
 //    config::base().setValue("windows.main_window.tab_index", ui->tabWidget->currentIndex());
 
 //    QByteArray ba = ui->tableJournal->horizontalHeader()->saveState().toBase64();
@@ -165,9 +173,47 @@ void MainWindow::on_actOpen_triggered(bool)
     int width = ui->image->width();
     int height = ui->image->height();
     ui->image->setPixmap(pix.scaled(width, height, Qt::KeepAspectRatio));
+
+//    if (!img.isNull())
+//    {
+//        QPixmap pixmap = QPixmap::fromImage(img);
+        _videoRect->setPixmap(pix);
+//    }
+
+
+    qgraph::Rectangle* rect = new qgraph::Rectangle(&_scene);
+
+    rect->setRect({0, 0, 100, 100});
+    rect->moveBy(100, 100);
+    //rect->setFrameScale(float(frameScale) / 100);
+    rect->setFrameScale(1.0);
+    rect->shapeVisible(true);
+    rect->setZLevel(1);
+    //rect->circleMoveSignal.connect(CLOSURE(&MainWindow::graphicShapeChange, this));
+    rect->setPenColor(QColor(0, 255, 0));
+    //rect->setTag(toInt(tag));
+
+    //qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item);
+    qgraph::Circle* circle = new qgraph::Circle(&_scene);
+    circle->setRect({0, 0, 100, 100});
+    circle->moveBy(300, 100);
+    rect->setFrameScale(1.0);
+
+    circle->shapeVisible(true);
+    circle->setZLevel(2);
+    circle->setPenColor(QColor(255, 0, 0));
+
+
+//data::DetectRect tableRect = roiGeometry.table;
+//qgraph::Rectangle* table = new qgraph::Rectangle(&_scene);
+//createElementRectangle(table, tableRect,
+//                       QColor(0, 255, 0), ElementTag::Table);
+
+
+
 }
 
 void MainWindow::on_actClose_triggered(bool)
 {
-    QApplication::quit();
+    close();
 }

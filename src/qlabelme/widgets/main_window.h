@@ -7,7 +7,7 @@
 //#include "commands/commands.h"
 //#include "commands/error.h"
 
-//#include "qgraphics/video_rect.h"
+#include "qgraphics/video_rect.h"
 //#include "qutils/video_widget.h"
 
 #include <QMainWindow>
@@ -49,8 +49,8 @@ private:
     Ui::MainWindow *ui;
     static QUuidEx _applId;
 
-    //QGraphicsScene _scene;
-    //qgraph::VideoRect* _videoRect = {nullptr};
+    QGraphicsScene _scene;
+    qgraph::VideoRect* _videoRect = {nullptr};
 
     QString _windowTitle;
     QLabel* _labelConnectStatus;
