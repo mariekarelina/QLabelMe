@@ -7,6 +7,7 @@ QLabelMeBase {
     references: [
         "src/qlabelme/qlabelme.qbs",
         "src/pproto/pproto.qbs",
+        "src/qgraphics/qgraphics.qbs",
         "src/rapidjson/rapidjson.qbs",
         "src/shared/shared.qbs",
         "src/yaml/yaml.qbs",

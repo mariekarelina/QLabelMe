@@ -13,3 +13,6 @@
 [submodule "src/yaml"]
 	path = src/yaml
 	url = https://github.com/hkarel/yaml-cpp.git
+[submodule "src/qgraphics/qgraphics"]
+	path = src/qgraphics/qgraphics
+	url = https://github.com/hkarel/QGraphics.git

@@ -11,7 +11,7 @@ Product {
 
     Depends { name: "cpp" }
     Depends { name: "PProto" }
-    //Depends { name: "QGraphics" }
+    Depends { name: "QGraphics" }
     //Depends { name: "QUtils" }
     Depends { name: "RapidJson" }
     Depends { name: "SharedLib" }
