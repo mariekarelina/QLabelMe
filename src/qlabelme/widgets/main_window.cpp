@@ -37,7 +37,7 @@
 #include <QKeyEvent>
 #include <unistd.h>
 
-#include <view.h>
+//#include <view.h>
 
 #define log_error_m   alog::logger().error   (alog_line_location, "MainWin")
 #define log_warn_m    alog::logger().warn    (alog_line_location, "MainWin")
@@ -305,7 +305,7 @@ void MainWindow::on_actCreateCircle_triggered()
     _scene.addRect(QRectF(100, 100, 100, 100), QPen(Qt::green));
     QGraphicsView* graphView = new QGraphicsView;
     GraphicsScene* scene = new GraphicsScene();
-    qgraph:: Circle* circ = new qgraph::Circle();
+    //qgraph:: Circle* circ = new qgraph::Circle();
     graphView->setScene(scene);
     graphView->setSceneRect(-300,-300, 300, 300);
     this->setCentralWidget(graphView);

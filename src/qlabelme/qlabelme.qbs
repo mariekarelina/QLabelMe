@@ -48,13 +48,15 @@ Product {
         name: "widgets"
         prefix: "widgets/"
         files: [
+            "graphics_view.cpp",
+            "graphics_view.h",
             "graphicsscene.cpp",
             "graphicsscene.h",
             "main_window.cpp",
             "main_window.h",
             "main_window.ui",
-            "view.cpp",
-            "view.h",
+            //"view.cpp",
+            //"view.h",
         ]
     }
 
