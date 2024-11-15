@@ -53,6 +53,8 @@ Product {
             "main_window.cpp",
             "main_window.h",
             "main_window.ui",
+            "view.cpp",
+            "view.h",
         ]
     }
 

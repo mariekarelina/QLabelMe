@@ -17,6 +17,7 @@
 #include "qgraphics/square.h"
 //#include "qgraphics/functions.h"
 //#include "qutils/message_box.h"
+#include <QSlider>
 
 #include <QApplication>
 #include <QHostInfo>
@@ -28,11 +29,15 @@
 #include <QGraphicsItem>
 #include <QVBoxLayout>
 #include <QPixmap>
+#include <QFrame>
 #include <QMouseEvent>
+#include <QScrollBar>
 #include <QWheelEvent>
 #include <QEvent>
 #include <QKeyEvent>
 #include <unistd.h>
+
+#include <view.h>
 
 #define log_error_m   alog::logger().error   (alog_line_location, "MainWin")
 #define log_warn_m    alog::logger().warn    (alog_line_location, "MainWin")
@@ -65,8 +70,9 @@ MainWindow::MainWindow(QWidget *parent) :
 //    disableAdminMode();
 
 
+
+
     ui->graphView->setScene(&_scene);
-    // Кто это?
     _videoRect = new qgraph::VideoRect(&_scene);
 
     _labelConnectStatus = new QLabel(u8"Нет подключения", this);
@@ -76,7 +82,25 @@ MainWindow::MainWindow(QWidget *parent) :
     vers = vers.arg(VERSION_PROJECT).arg(GIT_REVISION);
     ui->statusBar->addPermanentWidget(new QLabel(vers, this));
 
+    // Выключение скролла при приближении
+    //ui->graphView->verticalScrollBar()->setEnabled(false);
+    //ui->graphView->horizontalScrollBar()->setEnabled(false);
 
+
+//    QFrame frame;
+//    frame.setFrameStyle(QFrame::Sunken | QFrame::StyledPanel);
+
+
+//    QHBoxLayout *labelLayout = new QHBoxLayout;
+//    selectModeButton = new QToolButton;
+//    selectModeButton->setText(tr("Select"));
+//    selectModeButton->setCheckable(true);
+//    selectModeButton->setChecked(true);
+
+//    labelLayout->addWidget(label);
+//    labelLayout->addWidget(selectModeButton);
+
+//    connect(selectModeButton, &QAbstractButton::toggled, this, &MainWindow::togglePointerMode);
 
 
 
@@ -145,6 +169,16 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     return 0;
 }
 
+void MainWindow::togglePointerMode()
+{
+//    ui->graphView->setDragMode(selectModeButton->isChecked()
+//                              ? QGraphicsView::RubberBandDrag
+//                              : QGraphicsView::ScrollHandDrag);
+//    // Это свойство определяет, позволяет ли представление
+//    // взаимодействовать со сценой.
+//    ui->graphView->setInteractive(selectModeButton->isChecked());
+}
+
 
 void MainWindow::on_actOpen_triggered(bool)
 {
@@ -165,6 +199,20 @@ void MainWindow::on_actOpen_triggered(bool)
 
     //QGraphicsRectItem *rect = _scene.addRect(QRectF(0, 0, 100, 100));
 
+
+
+//    QSlider *zoomSlider = new QSlider;
+//    zoomSlider->setMinimum(0);
+//    zoomSlider->setMaximum(500);
+//    zoomSlider->setValue(250);
+//    zoomSlider->setTickPosition(QSlider::TicksRight);
+//    // Zoom slider layout
+//    QVBoxLayout *zoomSliderLayout = new QVBoxLayout;
+//    zoomSliderLayout->addWidget(zoomSlider);
+
+//    QGridLayout *topLayout = new QGridLayout;
+//    topLayout->addLayout(zoomSliderLayout, 1, 1);
+//    setLayout(topLayout);
 
 
 
@@ -207,7 +255,7 @@ void MainWindow::on_actClose_triggered(bool)
     close();
 }
 
-void MainWindow::on_actionCreate_rectangle_triggered()
+void MainWindow::on_actCreateRectangle_triggered()
 {
 //    ui->graphView->setMouseTracking(true);
 //    qgraph::Rectangle* rect = new qgraph::Rectangle(&_scene);
@@ -252,7 +300,7 @@ void MainWindow::on_actionCreate_rectangle_triggered()
 
 }
 
-void MainWindow::on_actionCreate_circle_triggered()
+void MainWindow::on_actCreateCircle_triggered()
 {
     _scene.addRect(QRectF(100, 100, 100, 100), QPen(Qt::green));
     QGraphicsView* graphView = new QGraphicsView;
@@ -264,7 +312,7 @@ void MainWindow::on_actionCreate_circle_triggered()
     this->resize(600, 600);
 }
 
-void MainWindow::on_actionCreate_line_triggered()
+void MainWindow::on_actCreateLine_triggered()
 {
     /*QVBoxLayout *layout = new QVBoxLayout(this);
     setLayout(layout);
@@ -292,66 +340,73 @@ void MainWindow::on_actionCreate_line_triggered()
 
 void MainWindow::on_toolButton_clicked()
 {
-    ZoomIn();
+    zoomIn();
 }
 
 
 void MainWindow::on_toolButton_2_clicked()
 {
-    ZoomOut();
+    zoomOut();
 }
 
 
 
-void MainWindow::mousePressEvent(QMouseEvent* event)
+void MainWindow::mousePressEvent(QGraphicsSceneMouseEvent* event)
 {
-    if (event->button() == Qt::LeftButton)
-    {
-        // Начинаем перетаскивание
-        dragging = true;
-        lastMousePos = event->pos();
-    }
+    ui->graphView->setCursor(QCursor(Qt::ClosedHandCursor));
+    Q_UNUSED(event);
 }
 
 
-void MainWindow::mouseMoveEvent(QMouseEvent* event)
+void MainWindow::mouseMoveEvent(QGraphicsSceneMouseEvent* event)
 {
-    if (dragging)
-    {
-        // Перемещаем сцену на основе перемещения мыши
-        QPointF delta = ui->graphView->mapToScene(event->pos()) -
-                        ui->graphView->mapToScene(lastMousePos);
-        ui->graphView->translate(delta.x(), delta.y());
-        // Обновляем последнюю позицию мыши
-        lastMousePos = event->pos();
-    }
+//    if (_dragging)
+//    {
+//        // Перемещаем сцену на основе перемещения мыши
+//        QPointF delta = ui->graphView->mapToScene(event->pos()) -
+//                        ui->graphView->mapToScene(_lastMousePos);
+//        ui->graphView->translate(delta.x(), delta.y());
+//        // Обновляем последнюю позицию мыши
+//        _lastMousePos = event->pos();
+//    }
+
+
+//    if (event->modifiers() & Qt::ShiftModifier)
+//    {
+//        _stuff << event->pos();
+//        update();
+//        return;
+//    }
+//    MainWindow::mouseMoveEvent(event);
+    //graphView->setPos(mapToScene(event->pos()));
 }
 
 
-void MainWindow::mouseReleaseEvent(QMouseEvent* event)
+void MainWindow::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
 {
-    if (event->button() == Qt::LeftButton)
-    {
-        // Прекращаем перетаскивание
-        dragging = false;
-    }
+    //this->setCursor(QCursor(Qt::ArrowCursor));
+    //ui->graphView->setCursor(QCursor(Qt::ArrowCursor));
+    _videoRect->setCursor(QCursor(Qt::ArrowCursor));
+    Q_UNUSED(event);
 }
 
 void MainWindow::wheelEvent(QWheelEvent* event)
 {
     // Получаем позицию курсора мыши в сцене
-    QPointF scenePos = ui->graphView->mapToScene(event->pos());
-    if (event->angleDelta().y() > 0)
+    //QPointF scenePos = ui->graphView->mapToScene(event->pos());
+
+    if (event->modifiers() & Qt::ControlModifier)
     {
-        //ZoomIn();  // При прокрутке вверх - увеличиваем масштаб
-        ZoomInPos(scenePos);
+        if (event->angleDelta().y() > 0)
+        {
+            zoomIn();
+        }
+        else
+        {
+            zoomOut();
+        }
+        event->accept(); // Указываем, что событие обработано
     }
-    else
-    {
-        //ZoomOut(); // При прокрутке вниз - уменьшаем масштаб
-        ZoomOutPos(scenePos);
-    }
-    event->accept(); // Указываем, что событие обработано
 }
 
 
@@ -378,8 +433,8 @@ void MainWindow::loadGeometry()
     setGeometry(v[0], v[1], v[2], v[3]);
 
     QVector<int> splitterSizes;
-    if (config::base().getValue("windows.main_window.splitter_sizes", splitterSizes))
-        ui->splitter->setSizes(splitterSizes.toList());
+//    if (config::base().getValue("windows.main_window.splitter_sizes", splitterSizes))
+//        ui->splitter->setSizes(splitterSizes.toList());
 
 //    int tabIndex = 0;
 //    config::base().getValue("windows.main_window.tab_index", tabIndex);
@@ -409,37 +464,19 @@ void MainWindow::saveGeometry()
 //    config::base().setValue("windows.main_window.event_journal_header", QString::fromLatin1(ba));
 }
 
-void MainWindow::paintEvent(QPaintEvent *event)
-{
-    Q_UNUSED(event)
-    QPainter painter(this);
-    int w = 200; // ширина каждого прямоугольника
-    int h = 100;  // высота каждого прямоугольника
 
-
-    painter.setBrush(Qt::green);
-    painter.drawRect(100, 100, w, h);    // левый верхний
-    painter.setBrush(Qt::yellow);
-    painter.drawRect(w + 100, 100, w, h);    // правый верхний
-    painter.setBrush(Qt::magenta);
-    painter.drawRect(100, h + 100, w, h);    // левый нижний
-    painter.setBrush(Qt::cyan);
-    painter.drawRect(w + 100, h + 100, w, h);    // правый нижний
-}
-
-
-void MainWindow::ZoomIn()
+void MainWindow::zoomIn()
 {
     ui->graphView->scale(1.1, 1.1);
 }
 
-void MainWindow::ZoomOut()
+void MainWindow::zoomOut()
 {
     ui->graphView->scale(1.0 / 1.1, 1.0 / 1.1);
 }
 
 
-void MainWindow::ZoomInPos(QPointF scenePos)
+void MainWindow::zoomInPos(QPointF scenePos)
 {
     // Получаем текущую позицию центра
     QPointF viewCenter = ui->graphView->mapToScene(ui->graphView->viewport()->rect().center());
@@ -455,10 +492,11 @@ void MainWindow::ZoomInPos(QPointF scenePos)
     ui->graphView->translate(offset.x(), offset.y());
 }
 
-void MainWindow::ZoomOutPos(QPointF scenePos)
+void MainWindow::zoomOutPos(QPointF scenePos)
 {
     ui->graphView->scale(1.0 / 1.1, 1.0 / 1.1);
 }
+
 
 
 

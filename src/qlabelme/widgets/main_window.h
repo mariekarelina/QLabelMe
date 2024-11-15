@@ -15,6 +15,7 @@
 #include <QCloseEvent>
 #include <QGraphicsScene>
 #include <QWheelEvent>
+#include <QToolButton>
 
 #include <QGraphicsView>
 #include <QGraphicsScene>
@@ -45,6 +46,7 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event);
 
 private slots:
+    void togglePointerMode();
     void on_actOpen_triggered(bool);
     void on_actClose_triggered(bool);
 
@@ -55,12 +57,10 @@ private slots:
     void on_toolButton_clicked();
     void on_toolButton_2_clicked();
 
-    void mousePressEvent(QMouseEvent* event);
-    void mouseMoveEvent(QMouseEvent* event);
-    void mouseReleaseEvent(QMouseEvent* event);
+    void mousePressEvent(QGraphicsSceneMouseEvent* event);
+    void mouseMoveEvent(QGraphicsSceneMouseEvent* event);
+    void mouseReleaseEvent(QGraphicsSceneMouseEvent* event);
     void wheelEvent(QWheelEvent* event);
-
-
 
 
 private:
@@ -69,7 +69,6 @@ private:
 
     void loadGeometry();
     void saveGeometry();
-    void paintEvent(QPaintEvent* event);
     void zoomIn();
     void zoomOut();
     void zoomInPos(QPointF scenePos);
@@ -96,5 +95,10 @@ private:
 
     bool _dragging = false; // Флаг для отслеживания состояния перетаскивания
     QPoint _lastMousePos;   // Последняя позиция мыши
+    QVector<QPointF> _stuff;
+
+    QLabel *label;
+    QLabel *label2;
+    QToolButton *selectModeButton;
 };
 
