@@ -53,6 +53,8 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
     //_socket(new tcp::Socket)
 {
+    _btnLineFlag = false;
+    _btnRectFlag = false;
     ui->setupUi(this);
     _windowTitle = windowTitle();
     //setWindowTitle(windowTitle() + QString(" (%1)").arg(VERSION_PROJECT));
@@ -82,13 +84,6 @@ MainWindow::MainWindow(QWidget *parent) :
     vers = vers.arg(VERSION_PROJECT).arg(GIT_REVISION);
     ui->statusBar->addPermanentWidget(new QLabel(vers, this));
 
-    // Выключение скролла при приближении
-    //ui->graphView->verticalScrollBar()->setEnabled(false);
-    //ui->graphView->horizontalScrollBar()->setEnabled(false);
-
-
-//    QFrame frame;
-//    frame.setFrameStyle(QFrame::Sunken | QFrame::StyledPanel);
 
 
 //    QHBoxLayout *labelLayout = new QHBoxLayout;
@@ -151,6 +146,53 @@ void MainWindow::deinit()
 {
 }
 
+void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
+{
+    graphView->setCursor(QCursor(Qt::ClosedHandCursor));
+    if (mouseEvent->button() == Qt::LeftButton
+        && (mouseEvent->modifiers() & Qt::ShiftModifier))
+    {
+        // Проверяем, есть ли элемент под курсором мыши
+        _draggingItem = graphView->itemAt(mouseEvent->pos());
+        // Возвращает указатель
+        qgraph::VideoRect* videoRect = dynamic_cast<qgraph::VideoRect*>(_draggingItem);
+        if (videoRect)
+        {
+            // Запоминаем начальную позицию курсора
+            _lastPos = mouseEvent->pos();
+        }
+    }
+//    else
+//    {
+//        QGraphicsView::mousePressEvent(mouseEvent);
+//    }
+    // Если нажали кнопку на main_window
+    if (_btnRectFlag)
+    {
+        QGraphicsScene* scene = graphView->scene();
+        if (scene)
+        {
+            QPointF _scenePos;
+            double size = 50; // Размер стороны квадрата
+            scene->addRect(QRectF(_scenePos.x() - size / 2, _scenePos.y() - size / 2, size, size),
+                           QPen(Qt::red));
+        }
+    }
+
+    if (_btnLineFlag)
+    {
+        QGraphicsScene* scene = graphView->scene();
+        if (scene)
+        {
+            QPointF _scenePos;
+            scene->addLine(QLine(_scenePos.x() - 50 / 2, _scenePos.y() - 50 / 2, 100, 30),
+                           QPen(Qt::green));
+        }
+    }
+
+    graphView->mousePressEvent(mouseEvent);
+}
+
 // Переопределили функцию, ловим все события
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
@@ -182,8 +224,10 @@ void MainWindow::togglePointerMode()
 
 void MainWindow::on_actOpen_triggered(bool)
 {
-    QString fileName = QFileDialog::getOpenFileName(this,
-        tr("Open file"), getenv("HOME"));
+//    QString fileName = QFileDialog::getOpenFileName(this,
+//        tr("Open file"), getenv("HOME"));
+
+    QString fileName = "/home/marie/university/студенческий.jpg";
 
     QPixmap pix(fileName);
     //int width = ui->image->width();
@@ -338,84 +382,26 @@ void MainWindow::on_actCreateLine_triggered()
 }
 
 
-void MainWindow::on_toolButton_clicked()
+void MainWindow::on_btnRect_clicked(bool)
 {
-    zoomIn();
+//    //QPointF _scenePos
+//    double size = 50; // Размер стороны квадрата
+//    _scene.addRect(QRectF(_scenePos.x() - size / 2, _scenePos.y() - size / 2, size, size),
+//                   QPen(Qt::red));
+    _btnRectFlag = true;
+
+}
+
+void MainWindow::on_btnLine_clicked(bool)
+{
+    _btnLineFlag = true;
 }
 
 
-void MainWindow::on_toolButton_2_clicked()
+void MainWindow::on_btnTest_clicked(bool)
 {
-    zoomOut();
+    _btnLineFlag = true;
 }
-
-
-
-void MainWindow::mousePressEvent(QGraphicsSceneMouseEvent* event)
-{
-    ui->graphView->setCursor(QCursor(Qt::ClosedHandCursor));
-    Q_UNUSED(event);
-}
-
-
-void MainWindow::mouseMoveEvent(QGraphicsSceneMouseEvent* event)
-{
-//    if (_dragging)
-//    {
-//        // Перемещаем сцену на основе перемещения мыши
-//        QPointF delta = ui->graphView->mapToScene(event->pos()) -
-//                        ui->graphView->mapToScene(_lastMousePos);
-//        ui->graphView->translate(delta.x(), delta.y());
-//        // Обновляем последнюю позицию мыши
-//        _lastMousePos = event->pos();
-//    }
-
-
-//    if (event->modifiers() & Qt::ShiftModifier)
-//    {
-//        _stuff << event->pos();
-//        update();
-//        return;
-//    }
-//    MainWindow::mouseMoveEvent(event);
-    //graphView->setPos(mapToScene(event->pos()));
-}
-
-
-void MainWindow::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
-{
-    //this->setCursor(QCursor(Qt::ArrowCursor));
-    //ui->graphView->setCursor(QCursor(Qt::ArrowCursor));
-    _videoRect->setCursor(QCursor(Qt::ArrowCursor));
-    Q_UNUSED(event);
-}
-
-void MainWindow::wheelEvent(QWheelEvent* event)
-{
-    // Получаем позицию курсора мыши в сцене
-    //QPointF scenePos = ui->graphView->mapToScene(event->pos());
-
-    if (event->modifiers() & Qt::ControlModifier)
-    {
-        if (event->angleDelta().y() > 0)
-        {
-            zoomIn();
-        }
-        else
-        {
-            zoomOut();
-        }
-        event->accept(); // Указываем, что событие обработано
-    }
-}
-
-
-// setMouseTracking() - отслеживание мыши
-/*
-    Функция Position() определяет положение курсора относительно виджета или элемента,
-    который получает событие мыши. Если вы перемещаете виджет в результате события мыши,
-    используйте глобальную позицию, возвращаемую функцией globalPosition(), чтобы избежать тряски.
-*/
 
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -465,37 +451,43 @@ void MainWindow::saveGeometry()
 }
 
 
-void MainWindow::zoomIn()
-{
-    ui->graphView->scale(1.1, 1.1);
-}
+//void MainWindow::zoomIn()
+//{
+//    ui->graphView->scale(1.1, 1.1);
+//}
 
-void MainWindow::zoomOut()
-{
-    ui->graphView->scale(1.0 / 1.1, 1.0 / 1.1);
-}
+//void MainWindow::zoomOut()
+//{
+//    ui->graphView->scale(1.0 / 1.1, 1.0 / 1.1);
+//}
 
 
-void MainWindow::zoomInPos(QPointF scenePos)
-{
-    // Получаем текущую позицию центра
-    QPointF viewCenter = ui->graphView->mapToScene(ui->graphView->viewport()->rect().center());
+//void MainWindow::zoomInPos(QPointF scenePos)
+//{
+//    // Получаем текущую позицию центра
+//    QPointF viewCenter = ui->graphView->mapToScene(ui->graphView->viewport()->rect().center());
 
-    // Увеличиваем масштаб на 10%
-    ui->graphView->scale(1.1, 1.1); // Увеличиваем масштаб по обеим осям
+//    // Увеличиваем масштаб на 10%
+//    ui->graphView->scale(1.1, 1.1); // Увеличиваем масштаб по обеим осям
 
-    // Вычисляем новое положение центра
-    QPointF newViewCenter = ui->graphView->mapToScene(ui->graphView->viewport()->rect().center());
-    QPointF offset = scenePos - newViewCenter;
+//    // Вычисляем новое положение центра
+//    QPointF newViewCenter = ui->graphView->mapToScene(ui->graphView->viewport()->rect().center());
+//    QPointF offset = scenePos - newViewCenter;
 
-    // Перемещаем вид, чтобы сохранить позицию курсора
-    ui->graphView->translate(offset.x(), offset.y());
-}
+//    // Перемещаем вид, чтобы сохранить позицию курсора
+//    ui->graphView->translate(offset.x(), offset.y());
+//}
 
-void MainWindow::zoomOutPos(QPointF scenePos)
-{
-    ui->graphView->scale(1.0 / 1.1, 1.0 / 1.1);
-}
+//void MainWindow::zoomOutPos(QPointF scenePos)
+//{
+//    ui->graphView->scale(1.0 / 1.1, 1.0 / 1.1);
+//}
+
+
+
+
+
+
 
 
 

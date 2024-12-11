@@ -21,6 +21,7 @@
 #include <QGraphicsScene>
 #include "circle.h"
 #include "graphicsscene.h"
+#include "graphics_view.h"
 
 using namespace std;
 using namespace pproto;
@@ -40,10 +41,13 @@ public:
 
     bool init();
     void deinit();
-    qgraph::VideoRect* _videoRect = {nullptr};
+
+    void graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsView* graphView);
+
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
+
 
 private slots:
     void togglePointerMode();
@@ -54,14 +58,9 @@ private slots:
     void on_actCreateCircle_triggered();
     void on_actCreateLine_triggered();
 
-    void on_toolButton_clicked();
-    void on_toolButton_2_clicked();
-
-    void mousePressEvent(QGraphicsSceneMouseEvent* event);
-    void mouseMoveEvent(QGraphicsSceneMouseEvent* event);
-    void mouseReleaseEvent(QGraphicsSceneMouseEvent* event);
-    void wheelEvent(QWheelEvent* event);
-
+    void on_btnRect_clicked(bool);
+    void on_btnLine_clicked(bool);
+    void on_btnTest_clicked(bool);
 
 private:
     Q_OBJECT
@@ -69,10 +68,10 @@ private:
 
     void loadGeometry();
     void saveGeometry();
-    void zoomIn();
-    void zoomOut();
-    void zoomInPos(QPointF scenePos);
-    void zoomOutPos(QPointF scenePos);
+//    void zoomIn();
+//    void zoomOut();
+//    void zoomInPos(QPointF scenePos);
+//    void zoomOutPos(QPointF scenePos);
 
 
 private:
@@ -80,9 +79,12 @@ private:
     Ui::MainWindow* ui;
     static QUuidEx _applId;
 
+    qgraph::VideoRect* _videoRect = {nullptr};
+
 
     QGraphicsScene _scene;
     //qgraph::VideoRect* _videoRect = {nullptr};
+    //GraphicsView* _graphView;
 
     QString _windowTitle;
     QLabel* _labelConnectStatus;
@@ -96,9 +98,19 @@ private:
     bool _dragging = false; // Флаг для отслеживания состояния перетаскивания
     QPoint _lastMousePos;   // Последняя позиция мыши
     QVector<QPointF> _stuff;
+    QPointF _scenePos;
 
     QLabel *label;
     QLabel *label2;
     QToolButton *selectModeButton;
+    bool _btnRectFlag = {false};
+    bool _btnLineFlag = {false};
+
+    QGraphicsItem* _draggingItem = {nullptr}; // Указатель на перетаскиваемый объект
+    QPoint _lastPos; // Хранит последнюю позицию мыши
+
+
+    // Позволяем стороннему классу видеть все
+    //friend class GraphicsView;
 };
 
