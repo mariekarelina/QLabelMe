@@ -53,10 +53,12 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
     //_socket(new tcp::Socket)
 {
-    _btnLineFlag = false;
-    _btnRectFlag = false;
+    //_btnLineFlag = false;
+    //_btnRectFlag = false;
     ui->setupUi(this);
     _windowTitle = windowTitle();
+
+    ui->graphView->init(this);
     //setWindowTitle(windowTitle() + QString(" (%1)").arg(VERSION_PROJECT));
 
     QList<QScreen*> screens = QGuiApplication::screens();

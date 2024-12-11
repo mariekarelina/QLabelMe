@@ -30,6 +30,6 @@ private:
     QPoint _lastPos; // Хранит последнюю позицию мыши
 
     QSlider* _zoomSlider;
-    MainWindow* _mw;
+    MainWindow* _mw = {nullptr};
 
 };

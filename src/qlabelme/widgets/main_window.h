@@ -42,7 +42,7 @@ public:
     bool init();
     void deinit();
 
-    void graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsView* graphView);
+    void graphicsView_mousePressEvent(QMouseEvent*, GraphicsView*);
 
 
 protected:
@@ -100,9 +100,9 @@ private:
     QVector<QPointF> _stuff;
     QPointF _scenePos;
 
-    QLabel *label;
-    QLabel *label2;
-    QToolButton *selectModeButton;
+    QLabel* label;
+    QLabel* label2;
+    QToolButton* selectModeButton;
     bool _btnRectFlag = {false};
     bool _btnLineFlag = {false};
 
