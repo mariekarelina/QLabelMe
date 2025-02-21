@@ -7,8 +7,8 @@
 //#include "commands/commands.h"
 //#include "commands/error.h"
 
-#include "qgraphics/video_rect.h"
-#include "qgraphics/rectangle.h"
+#include "qgraphics2/video_rect.h"
+#include "qgraphics2/rectangle.h"
 //#include "qutils/video_widget.h"
 
 #include <QMainWindow>

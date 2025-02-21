@@ -12,9 +12,9 @@
 #include "pproto/commands/pool.h"
 #include "pproto/logger_operators.h"
 
-#include "qgraphics/circle.h"
-#include "qgraphics/rectangle.h"
-#include "qgraphics/square.h"
+#include "qgraphics2/circle.h"
+#include "qgraphics2/rectangle.h"
+#include "qgraphics2/square.h"
 #include "line.h"
 #include "square.h"
 #include "circle.h"
@@ -214,7 +214,15 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 //            drawingSquare = false;
 //        }
         qgraph::Rectangle* roi = new qgraph::Rectangle(_scene);
-        roi->setRect({scenePos.x(), scenePos.y(), 50, 100});
+        //roi->setRect({scenePos.x(), scenePos.y(), 50, 100});
+
+        roi->setRect({0, 0, 50, 100});
+        //roi->moveBy(scenePos);
+        roi->setPos(scenePos);
+        //roi->setPos(0, 0);
+        roi->setFrameScale(1);
+        roi->shapeVisible(true);
+
 
         drawingSquare = false;
 
@@ -301,7 +309,8 @@ void MainWindow::on_actOpen_triggered(bool)
 //    QString fileName = QFileDialog::getOpenFileName(this,
 //        tr("Open file"), getenv("HOME"));
 
-    QString fileName = "/home/marie/university/студенческий.jpg";
+    //QString fileName = "/home/marie/university/студенческий.jpg";
+    QString fileName = "/home/hkarel/4386x2920.jpg";
 
     QPixmap pix(fileName);
     //int width = ui->image->width();
