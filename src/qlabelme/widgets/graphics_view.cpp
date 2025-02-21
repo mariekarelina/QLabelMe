@@ -13,6 +13,7 @@ bool GraphicsView::init(MainWindow* mw)
 
 void GraphicsView::mouseMoveEvent(QMouseEvent* mouseEvent)
 {
+    _mw->graphicsView_mouseMoveEvent(mouseEvent, this);
 //    if (_draggingItem)
 //    {
 //        // Вычисляем смещение
@@ -25,13 +26,14 @@ void GraphicsView::mouseMoveEvent(QMouseEvent* mouseEvent)
 //    QGraphicsView::mouseMoveEvent(mouseEvent);
 
 
-    this->setDragMode(QGraphicsView::RubberBandDrag
-                              /*: QGraphicsView::ScrollHandDrag*/);
+    //this->setDragMode(QGraphicsView::RubberBandDrag
+    //                          /*: QGraphicsView::ScrollHandDrag*/);
     // Это свойство определяет, позволяет ли представление
     // взаимодействовать со сценой.
     //graphicsView->setInteractive(selectModeButton->isChecked());
-    this->setInteractive(true);
+    //this->setInteractive(true);
     QGraphicsView::mouseMoveEvent(mouseEvent);
+
 }
 
 void GraphicsView::mousePressEvent(QMouseEvent* mouseEvent)
@@ -79,7 +81,7 @@ void GraphicsView::mousePressEvent(QMouseEvent* mouseEvent)
 //        }
 //    }
 
-//    QGraphicsView::mousePressEvent(mouseEvent);
+    QGraphicsView::mousePressEvent(mouseEvent);
 }
 
 void GraphicsView::mouseReleaseEvent(QMouseEvent* mouseEvent)

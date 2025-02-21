@@ -52,11 +52,15 @@ Product {
             "graphics_view.h",
             "graphicsscene.cpp",
             "graphicsscene.h",
+            "handle.cpp",
+            "handle.h",
+            "line.cpp",
+            "line.h",
             "main_window.cpp",
             "main_window.h",
             "main_window.ui",
-            //"view.cpp",
-            //"view.h",
+            "square.cpp",
+            "square.h",
         ]
     }
 

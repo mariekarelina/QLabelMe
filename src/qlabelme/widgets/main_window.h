@@ -8,6 +8,7 @@
 //#include "commands/error.h"
 
 #include "qgraphics/video_rect.h"
+#include "qgraphics/rectangle.h"
 //#include "qutils/video_widget.h"
 
 #include <QMainWindow>
@@ -19,9 +20,10 @@
 
 #include <QGraphicsView>
 #include <QGraphicsScene>
-#include "circle.h"
 #include "graphicsscene.h"
 #include "graphics_view.h"
+#include "line.h"
+#include "square.h"
 
 using namespace std;
 using namespace pproto;
@@ -43,6 +45,8 @@ public:
     void deinit();
 
     void graphicsView_mousePressEvent(QMouseEvent*, GraphicsView*);
+    void graphicsView_mouseMoveEvent(QMouseEvent*, GraphicsView*);
+    void graphicsView_mouseReleaseEvent(QMouseEvent*, GraphicsView*);
 
 
 protected:
@@ -60,6 +64,7 @@ private slots:
 
     void on_btnRect_clicked(bool);
     void on_btnLine_clicked(bool);
+    void on_btnCircle_clicked(bool);
     void on_btnTest_clicked(bool);
 
 private:
@@ -73,6 +78,8 @@ private:
 //    void zoomInPos(QPointF scenePos);
 //    void zoomOutPos(QPointF scenePos);
 
+    void graphicShapeChange(QGraphicsItem* item);
+
 
 private:
     // Члены класса начинаются с _
@@ -82,8 +89,7 @@ private:
     qgraph::VideoRect* _videoRect = {nullptr};
 
 
-    QGraphicsScene _scene;
-    //qgraph::VideoRect* _videoRect = {nullptr};
+    QGraphicsScene* _scene = nullptr;
     //GraphicsView* _graphView;
 
     QString _windowTitle;
@@ -105,10 +111,15 @@ private:
     QToolButton* selectModeButton;
     bool _btnRectFlag = {false};
     bool _btnLineFlag = {false};
+    bool _btnCircleFlag = {false};
 
     QGraphicsItem* _draggingItem = {nullptr}; // Указатель на перетаскиваемый объект
-    QPoint _lastPos; // Хранит последнюю позицию мыши
 
+
+    bool drawingLine = {false};      // Флаг, рисуется ли линия
+    bool drawingSquare = {false};    // Флаг, рисуется ли квадрат
+    LineDrawingItem* currentLine = {nullptr}; // Текущая линия
+    SquareDrawingItem* currentSquare = {nullptr}; // Текущий квадрат
 
     // Позволяем стороннему классу видеть все
     //friend class GraphicsView;

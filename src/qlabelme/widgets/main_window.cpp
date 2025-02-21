@@ -15,6 +15,9 @@
 #include "qgraphics/circle.h"
 #include "qgraphics/rectangle.h"
 #include "qgraphics/square.h"
+#include "line.h"
+#include "square.h"
+#include "circle.h"
 //#include "qgraphics/functions.h"
 //#include "qutils/message_box.h"
 #include <QSlider>
@@ -36,6 +39,9 @@
 #include <QEvent>
 #include <QKeyEvent>
 #include <unistd.h>
+#include <QPen>
+
+using namespace qgraph;
 
 //#include <view.h>
 
@@ -50,11 +56,10 @@ QUuidEx MainWindow::_applId;
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
-    ui(new Ui::MainWindow)
+    ui(new Ui::MainWindow),
+    _scene(new QGraphicsScene(this))
     //_socket(new tcp::Socket)
 {
-    //_btnLineFlag = false;
-    //_btnRectFlag = false;
     ui->setupUi(this);
     _windowTitle = windowTitle();
 
@@ -76,8 +81,8 @@ MainWindow::MainWindow(QWidget *parent) :
 
 
 
-    ui->graphView->setScene(&_scene);
-    _videoRect = new qgraph::VideoRect(&_scene);
+    ui->graphView->setScene(_scene);
+    _videoRect = new qgraph::VideoRect(_scene);
 
     _labelConnectStatus = new QLabel(u8"Нет подключения", this);
     ui->statusBar->addWidget(_labelConnectStatus);
@@ -150,7 +155,7 @@ void MainWindow::deinit()
 
 void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
 {
-    graphView->setCursor(QCursor(Qt::ClosedHandCursor));
+    //graphView->setCursor(QCursor(Qt::ClosedHandCursor));
     if (mouseEvent->button() == Qt::LeftButton
         && (mouseEvent->modifiers() & Qt::ShiftModifier))
     {
@@ -161,39 +166,106 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         if (videoRect)
         {
             // Запоминаем начальную позицию курсора
-            _lastPos = mouseEvent->pos();
+            _lastMousePos = mouseEvent->pos();
         }
     }
+
 //    else
 //    {
 //        QGraphicsView::mousePressEvent(mouseEvent);
 //    }
-    // Если нажали кнопку на main_window
-    if (_btnRectFlag)
+
+
+    QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
+
+
+//    qgraph::Rectangle* roi = new qgraph::Rectangle(_scene);
+//    roi->setRect({0, 0, 50, 100});
+
+
+
+    if (drawingLine)
     {
-        QGraphicsScene* scene = graphView->scene();
-        if (scene)
+        if (!currentLine)
         {
-            QPointF _scenePos;
-            double size = 50; // Размер стороны квадрата
-            scene->addRect(QRectF(_scenePos.x() - size / 2, _scenePos.y() - size / 2, size, size),
-                           QPen(Qt::red));
+            currentLine = new LineDrawingItem();
+            _scene->addItem(currentLine);
+            currentLine->setStartHandle(scenePos.x(), scenePos.y()); // Устанавливаем первую ручку
+        }
+        else
+        {
+            currentLine->setEndHandle(scenePos.x(), scenePos.y()); // Устанавливаем вторую ручку
+            currentLine = nullptr; // Завершаем рисование линии
+            drawingLine = false;
         }
     }
-
-    if (_btnLineFlag)
+    else if (drawingSquare)
     {
-        QGraphicsScene* scene = graphView->scene();
-        if (scene)
-        {
-            QPointF _scenePos;
-            scene->addLine(QLine(_scenePos.x() - 50 / 2, _scenePos.y() - 50 / 2, 100, 30),
-                           QPen(Qt::green));
-        }
+//        if (!currentSquare)
+//        {
+//            currentSquare = new SquareDrawingItem();
+//            _scene->addItem(currentSquare);
+//            currentSquare->setTopLeftHandle(scenePos.x(), scenePos.y()); // Устанавливаем первую ручку
+//        }
+//        else
+//        {
+//            currentSquare->setBottomRightHandle(scenePos.x(), scenePos.y()); // Устанавливаем вторую ручку
+//            currentSquare = nullptr; // Завершаем рисование квадрата
+//            drawingSquare = false;
+//        }
+        qgraph::Rectangle* roi = new qgraph::Rectangle(_scene);
+        roi->setRect({scenePos.x(), scenePos.y(), 50, 100});
+
+        drawingSquare = false;
+
+        //roi->changeSignal.connect(CLOSURE(&MainWindow::graphicShapeChange, this));
+
     }
 
-    graphView->mousePressEvent(mouseEvent);
+
+    //graphView->mousePressEvent(mouseEvent);
 }
+
+void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
+{
+    if (mouseEvent->modifiers() & Qt::ShiftModifier && mouseEvent->buttons() & Qt::LeftButton)
+       {
+           QGraphicsScene* scene = graphView->scene();
+           if (!scene)
+               return;
+
+           QPointF delta = graphView->mapToScene(mouseEvent->pos())
+                           - graphView->mapToScene(_lastMousePos);
+
+           foreach (QGraphicsItem* item, scene->items())
+           {
+               item->moveBy(delta.x(), delta.y());
+           }
+           _lastMousePos = mouseEvent->pos();
+       }
+//       else
+//       {
+//           QGraphicsView::mouseMoveEvent(mouseEvent);
+//       }
+
+
+    if (drawingLine && currentLine)
+    {
+        QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
+        currentLine->setEndHandle(scenePos.x(), scenePos.y()); // Обновление линии
+    }
+    else if (drawingSquare && currentSquare)
+    {
+        QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
+        currentSquare->setBottomRightHandle(scenePos.x(), scenePos.y()); // Обновление квадрата
+    }
+}
+
+void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
+{
+
+}
+
 
 // Переопределили функцию, ловим все события
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
@@ -236,16 +308,13 @@ void MainWindow::on_actOpen_triggered(bool)
     //int height = ui->image->height();
     //ui->image->setPixmap(pix.scaled(width, height, Qt::KeepAspectRatio));
 
-//    if (!img.isNull())
-//    {
-//        QPixmap pixmap = QPixmap::fromImage(img);
-        _videoRect->setPixmap(pix);
-        _videoRect->setFlags(QGraphicsItem::ItemIsMovable);
-//    }
+    if (pix.isNull()) {
+        // Обработка ошибок, если изображение не загружено
+        return;
+    }
 
-    //QGraphicsRectItem *rect = _scene.addRect(QRectF(0, 0, 100, 100));
-
-
+    _videoRect->setPixmap(pix);
+    _videoRect->setFlags(QGraphicsItem::ItemIsMovable);
 
 //    QSlider *zoomSlider = new QSlider;
 //    zoomSlider->setMinimum(0);
@@ -259,32 +328,6 @@ void MainWindow::on_actOpen_triggered(bool)
 //    QGridLayout *topLayout = new QGridLayout;
 //    topLayout->addLayout(zoomSliderLayout, 1, 1);
 //    setLayout(topLayout);
-
-
-
-
-/*    qgraph::Rectangle* rect = new qgraph::Rectangle(&_scene);
-
-    rect->setRect({0, 0, 100, 100});
-    rect->moveBy(100, 100);
-    //rect->setFrameScale(float(frameScale) / 100);
-    rect->setFrameScale(1.0);
-    rect->shapeVisible(true);
-    rect->setZLevel(1);
-    //rect->circleMoveSignal.connect(CLOSURE(&MainWindow::graphicShapeChange, this));
-    rect->setPenColor(QColor(0, 255, 0));
-    //rect->setTag(toInt(tag));
-
-    //qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item);
-    qgraph::Circle* circle = new qgraph::Circle(&_scene);
-    circle->setRect({0, 0, 100, 100});
-    circle->moveBy(300, 100);
-    rect->setFrameScale(1.0);
-
-    circle->shapeVisible(true);
-    circle->setZLevel(2);
-    circle->setPenColor(QColor(255, 0, 0));
-*/
 
 
 //data::DetectRect tableRect = roiGeometry.table;
@@ -314,17 +357,17 @@ void MainWindow::on_actCreateRectangle_triggered()
 //    }
 
 
-    _scene.addRect(QRectF(50, 50, 100, 100), QPen(Qt::red));
-    qgraph::Rectangle* rect = new qgraph::Rectangle(&_scene);
-    rect->setRect({0, 0, 100, 100});
-    rect->setRect({0, 0, 100, 100});
-    rect->moveBy(100, 100);
-    //rect->setFrameScale(float(frameScale) / 100);
-    rect->setFrameScale(1.0);
-    rect->shapeVisible(true);
-    rect->setZLevel(1);
-    //rect->circleMoveSignal.connect(CLOSURE(&MainWindow::graphicShapeChange, this));
-    rect->setPenColor(QColor(0, 255, 0));
+//    _scene.addRect(QRectF(50, 50, 100, 100), QPen(Qt::red));
+//    qgraph::Rectangle* rect = new qgraph::Rectangle(&_scene);
+//    rect->setRect({0, 0, 100, 100});
+//    rect->setRect({0, 0, 100, 100});
+//    rect->moveBy(100, 100);
+//    //rect->setFrameScale(float(frameScale) / 100);
+//    rect->setFrameScale(1.0);
+//    rect->shapeVisible(true);
+//    rect->setZLevel(1);
+//    //rect->circleMoveSignal.connect(CLOSURE(&MainWindow::graphicShapeChange, this));
+//    rect->setPenColor(QColor(0, 255, 0));
     //rect->setTag(toInt(tag));
     //Ловим координаты курсора
     /*if (event->button() == Qt::LeftButton)
@@ -348,14 +391,14 @@ void MainWindow::on_actCreateRectangle_triggered()
 
 void MainWindow::on_actCreateCircle_triggered()
 {
-    _scene.addRect(QRectF(100, 100, 100, 100), QPen(Qt::green));
-    QGraphicsView* graphView = new QGraphicsView;
-    GraphicsScene* scene = new GraphicsScene();
-    //qgraph:: Circle* circ = new qgraph::Circle();
-    graphView->setScene(scene);
-    graphView->setSceneRect(-300,-300, 300, 300);
-    this->setCentralWidget(graphView);
-    this->resize(600, 600);
+//    _scene.addRect(QRectF(100, 100, 100, 100), QPen(Qt::green));
+//    QGraphicsView* graphView = new QGraphicsView;
+//    GraphicsScene* scene = new GraphicsScene();
+//    //qgraph:: Circle* circ = new qgraph::Circle();
+//    graphView->setScene(scene);
+//    graphView->setSceneRect(-300,-300, 300, 300);
+//    this->setCentralWidget(graphView);
+//    this->resize(600, 600);
 }
 
 void MainWindow::on_actCreateLine_triggered()
@@ -386,23 +429,51 @@ void MainWindow::on_actCreateLine_triggered()
 
 void MainWindow::on_btnRect_clicked(bool)
 {
+//    qgraph::Rectangle* roi = new qgraph::Rectangle(_scene);
+//    roi->setRect({0, 0, 50, 100});
+
 //    //QPointF _scenePos
 //    double size = 50; // Размер стороны квадрата
 //    _scene.addRect(QRectF(_scenePos.x() - size / 2, _scenePos.y() - size / 2, size, size),
 //                   QPen(Qt::red));
-    _btnRectFlag = true;
+    //_btnRectFlag = true;
+
+    drawingSquare = true;
+    //drawingLine = false;
+
+//    SquareDrawingItem* sq = new SquareDrawingItem();
+//    _scene->addItem(sq);
+//    // Устанавливаем начальные и конечные точки линии
+//    sq->setTopLeftHandle(0, 0);
+//    sq->setBottomRightHandle(100, 100);
+
+
 
 }
 
 void MainWindow::on_btnLine_clicked(bool)
 {
     _btnLineFlag = true;
+
+    drawingLine = true;
+    drawingSquare = false;
+
+//    LineDrawingItem* line = new LineDrawingItem();
+//    _scene->addItem(line);
+//    // Устанавливаем начальные и конечные точки линии
+//    line->setStartHandle(0, 0);
+//    line->setEndHandle(100, 100);
+}
+
+void MainWindow::on_btnCircle_clicked(bool)
+{
+    _btnCircleFlag = true;
 }
 
 
 void MainWindow::on_btnTest_clicked(bool)
 {
-    _btnLineFlag = true;
+    //_btnLineFlag = true;
 }
 
 
@@ -484,15 +555,5 @@ void MainWindow::saveGeometry()
 //{
 //    ui->graphView->scale(1.0 / 1.1, 1.0 / 1.1);
 //}
-
-
-
-
-
-
-
-
-
-
 
 
