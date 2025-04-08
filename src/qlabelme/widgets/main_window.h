@@ -148,9 +148,9 @@ private:
     qgraph::Polyline* _polyline = {nullptr};
 
 
-    QListWidget* _listWidget1 = new QListWidget(this);
-    QListWidget* _listWidget2 = new QListWidget(this);
-    QListWidget* _listWidget3 = new QListWidget(this);
+//    QListWidget* _listWidget1 = new QListWidget(this);
+//    QListWidget* _listWidget2 = new QListWidget(this);
+//    QListWidget* _listWidget3 = new QListWidget(this);
 
 
     // Позволяем стороннему классу видеть все

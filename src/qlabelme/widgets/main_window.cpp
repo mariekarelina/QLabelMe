@@ -75,10 +75,10 @@ MainWindow::MainWindow(QWidget *parent) :
     if (!screens.isEmpty())
         _ultraHD = (screens[0]->geometry().width() >= 2560);
 
-    if (_ultraHD)
-        ui->toolBar->setIconSize({48, 48});
-    else
-        ui->toolBar->setIconSize({32, 32});
+//    if (_ultraHD)
+//        ui->toolBar->setIconSize({48, 48});
+//    else
+//        ui->toolBar->setIconSize({32, 32});
 
 //    enableButtons(false);
 //    disableAdminMode();
