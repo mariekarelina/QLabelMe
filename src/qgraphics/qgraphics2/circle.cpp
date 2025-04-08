@@ -6,15 +6,20 @@
 
 namespace qgraph {
 
-Circle::Circle(QGraphicsScene* scene)
+Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
 {
-    setFlags(ItemIsMovable);
+    setFlags(ItemIsMovable | ItemIsFocusable);
     _radius = 20;
     setRect(-_radius, -_radius, _radius * 2, _radius * 2);
-    setPos(_radius + 10, _radius + 10);
+    //setPos(_radius + 10, _radius + 10);
+    setPos(scenePos.x(), scenePos.y());
 
-    setPenColor(QColor(255, 0, 0));
-    setPenWidth(2);
+    QPen pen = this->pen();
+    pen.setColor(QColor(255, 0, 0));
+    pen.setWidth(2);
+    pen.setCosmetic(true);
+    setPen(pen);
+
     setZLevel(5);
     scene->addItem(this);
 
@@ -119,6 +124,29 @@ void Circle::setRealRadius(int val)
     setRect(r);
 
     _circle->setPos(rect().width() / 2, 0);
+}
+
+void Circle::updateHandlePosition()
+{
+    // Обновляем положение ручки (_circle) относительно центра круга
+    if (_circle)
+    {
+        _circle->setPos(rect().width() / 2, 0);
+    }
+}
+
+void Circle::keyPressEvent(QKeyEvent* event)
+{
+    if (event->key() == Qt::Key_Delete) {
+        auto scene = this->scene();
+        if (scene) {
+            scene->removeItem(this);
+            delete this; // Удаляем объект
+        }
+    } else {
+        // Передаем событие дальше, если это не `Del`
+        QGraphicsEllipseItem::keyPressEvent(event);
+    }
 }
 
 } // namespace qgraph

@@ -86,12 +86,13 @@ void GraphicsView::mousePressEvent(QMouseEvent* mouseEvent)
 
 void GraphicsView::mouseReleaseEvent(QMouseEvent* mouseEvent)
 {
-    this->setCursor(QCursor(Qt::ArrowCursor));
-    if (mouseEvent->button() == Qt::LeftButton)
-    {
-        // Сбрасываем указатель на перетаскиваемый элемент
-        _draggingItem = nullptr;
-    }
+    _mw->graphicsView_mouseReleaseEvent(mouseEvent, this);
+//    this->setCursor(QCursor(Qt::ArrowCursor));
+//    if (mouseEvent->button() == Qtb::LeftButton)
+//    {
+//        // Сбрасываем указатель на перетаскиваемый элемент
+//        _draggingItem = nullptr;
+//    }
     QGraphicsView::mouseReleaseEvent(mouseEvent);
 }
 

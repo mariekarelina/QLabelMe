@@ -6,6 +6,9 @@
 #include <QtCore>
 #include <QGraphicsItem>
 #include <QGraphicsScene>
+#include <QKeyEvent>
+#include <QGraphicsSceneMouseEvent>
+
 
 namespace qgraph {
 
@@ -19,6 +22,10 @@ public:
 
     Rectangle(QGraphicsScene*);
 
+//    void mousePressEvent(QGraphicsSceneMouseEvent* event);
+//    void mouseMoveEvent(QGraphicsSceneMouseEvent* event);
+//    void mouseReleaseEvent(QGraphicsSceneMouseEvent* event);
+
     void setFrameScale(float) override;
     void dragCircleMove(DragCircle*) override;
     void dragCircleRelease(DragCircle*) override;
@@ -27,11 +34,23 @@ public:
     // масштабного коэффициента frameScale()
     QRectF realSceneRect() const;
     void setRealSceneRect(const QRectF&);
+    void updateHandlePosition();
+
+protected:
+    // Переопределяем обработчик событий клавиатуры
+    void keyPressEvent(QKeyEvent* event) override;
 
 private:
     DragCircle* _circleTL; // Левый верхний угол
     DragCircle* _circleTR; // Правый верхний
     DragCircle* _circleBR; // Правый нижний
+    DragCircle* _circleBL; // Левый нижний
+
+    // Добавлено для предотвращения полного схлопывания прямоугольника
+    const qreal _minSize = 10.0;
+
+    bool _isDrawing = false;
+    QPointF _startPoint;
 };
 
 } // namespace qgraph

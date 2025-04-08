@@ -10,6 +10,7 @@ Square::Square(QGraphicsScene* scene)
     setFlags(ItemIsMovable);
     setPenColor(QColor(0, 255, 0));
     setPenWidth(2);
+
     setZLevel(4);
     scene->addItem(this);
 

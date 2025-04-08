@@ -17,6 +17,7 @@
 #include <QGraphicsScene>
 #include <QWheelEvent>
 #include <QToolButton>
+#include <QListWidget>
 
 #include <QGraphicsView>
 #include <QGraphicsScene>
@@ -24,6 +25,10 @@
 #include "graphics_view.h"
 #include "line.h"
 #include "square.h"
+
+#include "qgraphics2/circle.h"
+#include "qgraphics2/rectangle.h"
+#include "qgraphics2/polyline.h"
 
 using namespace std;
 using namespace pproto;
@@ -67,9 +72,12 @@ private slots:
     void on_btnCircle_clicked(bool);
     void on_btnTest_clicked(bool);
 
+    void on_listWidget_9_currentItemChanged(QListWidgetItem *current, QListWidgetItem *previous);
+
 private:
     Q_OBJECT
     void closeEvent(QCloseEvent*) override;
+    void loadFilesFromFolder(const QString &folderPath);
 
     void loadGeometry();
     void saveGeometry();
@@ -106,9 +114,9 @@ private:
     QVector<QPointF> _stuff;
     QPointF _scenePos;
 
-    QLabel* label;
-    QLabel* label2;
-    QToolButton* selectModeButton;
+    QLabel* _label;
+    QLabel* _label2;
+    QToolButton* _selectModeButton;
     bool _btnRectFlag = {false};
     bool _btnLineFlag = {false};
     bool _btnCircleFlag = {false};
@@ -116,10 +124,34 @@ private:
     QGraphicsItem* _draggingItem = {nullptr}; // Указатель на перетаскиваемый объект
 
 
-    bool drawingLine = {false};      // Флаг, рисуется ли линия
-    bool drawingSquare = {false};    // Флаг, рисуется ли квадрат
-    LineDrawingItem* currentLine = {nullptr}; // Текущая линия
-    SquareDrawingItem* currentSquare = {nullptr}; // Текущий квадрат
+    bool _drawingCircle = {false};      // Флаг, рисуется ли круг
+    bool _drawingLine = {false};      // Флаг, рисуется ли линия
+    bool _drawingPolyline = {false};      // Флаг, рисуется ли линия
+    bool _drawingRectangle = {false};    // Флаг, рисуется ли прямоугольник
+    LineDrawingItem* _currentLine = {nullptr}; // Текущая линия
+    SquareDrawingItem* _currentSquare = {nullptr}; // Текущий квадрат
+    QList<QPointF> _polylinePoints;            // Точки текущей полилинии
+
+
+    QPointF _startPoint;
+
+    QGraphicsRectItem* _currRectangle = {nullptr};
+    bool _isDrawingRectangle = false;
+
+    QGraphicsEllipseItem* _currCircle = {nullptr};
+    bool _isDrawingCircle = false;
+
+    QGraphicsPathItem* _currPolyline = {nullptr}; // Временная визуализация полилинии
+    bool _isDrawingPolyline = false;           // Флаг для состояния рисования
+
+
+    qgraph::Polyline* _polyline = {nullptr};
+
+
+    QListWidget* _listWidget1 = new QListWidget(this);
+    QListWidget* _listWidget2 = new QListWidget(this);
+    QListWidget* _listWidget3 = new QListWidget(this);
+
 
     // Позволяем стороннему классу видеть все
     //friend class GraphicsView;

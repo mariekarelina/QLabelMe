@@ -6,6 +6,7 @@
 #include <QtCore>
 #include <QGraphicsItem>
 #include <QGraphicsScene>
+#include <QMouseEvent>
 
 namespace qgraph {
 
@@ -17,7 +18,7 @@ public:
     enum {Type = toInt(qgraph::UserType::Circle)};
     int type() const override {return Type;}
 
-    Circle(QGraphicsScene*);
+    Circle(QGraphicsScene*, const QPointF&);
 
     void setFrameScale(float) override;
     void dragCircleMove(DragCircle*) override;
@@ -31,6 +32,12 @@ public:
     // Возвращает радиус окружности с учетом масштабного коэффициента
     int realRadius() const;
     void setRealRadius(int);
+
+    void updateHandlePosition();
+
+protected:
+    // Переопределяем обработчик событий клавиатуры
+    void keyPressEvent(QKeyEvent* event) override;
 
 private:
     DragCircle* _circle;
