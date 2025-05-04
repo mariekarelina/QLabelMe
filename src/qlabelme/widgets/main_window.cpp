@@ -66,25 +66,24 @@ MainWindow::MainWindow(QWidget *parent) :
     //_socket(new tcp::Socket)
 {
     ui->setupUi(this);
+
+    bool ultraHD = false;
+    QList<QScreen*> screens = QGuiApplication::screens();
+    if (!screens.isEmpty())
+        ultraHD = (screens[0]->geometry().width() >= 2560);
+
+    if (ultraHD)
+        ui->toolBar->setIconSize({48, 48});
+    else
+        ui->toolBar->setIconSize({32, 32});
+
     _windowTitle = windowTitle();
 
     ui->graphView->init(this);
     //setWindowTitle(windowTitle() + QString(" (%1)").arg(VERSION_PROJECT));
 
-    QList<QScreen*> screens = QGuiApplication::screens();
-    if (!screens.isEmpty())
-        _ultraHD = (screens[0]->geometry().width() >= 2560);
-
-//    if (_ultraHD)
-//        ui->toolBar->setIconSize({48, 48});
-//    else
-//        ui->toolBar->setIconSize({32, 32});
-
 //    enableButtons(false);
 //    disableAdminMode();
-
-
-
 
     ui->graphView->setScene(_scene);
     _videoRect = new qgraph::VideoRect(_scene);
@@ -528,6 +527,10 @@ void MainWindow::on_actClose_triggered(bool)
     close();
 }
 
+void MainWindow::on_actExit_triggered(bool)
+{
+    qApp->quit();
+}
 
 void MainWindow::on_actCreateRectangle_triggered()
 {

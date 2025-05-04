@@ -69,6 +69,8 @@ private slots:
     void on_actOpen_triggered(bool);
     void on_actClose_triggered(bool);
 
+    void on_actExit_triggered(bool);
+
     void on_actCreateRectangle_triggered();
     void on_actCreateCircle_triggered();
     void on_actCreateLine_triggered();

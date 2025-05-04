@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
             QFile file;
             QByteArray conf;
 
-            file.setFileName(":/config/resources/default.conf");
+            file.setFileName(":/config/resources/qlabelme.base.conf");
             file.open(QIODevice::ReadOnly);
             conf = file.readAll();
 

@@ -1,5 +1,21 @@
 <RCC>
     <qresource prefix="/config">
-        <file>resources/default.conf</file>
+        <file>resources/qlabelme.base.conf</file>
+    </qresource>
+    <qresource prefix="/images">
+        <file>resources/authorize_gray.svg</file>
+        <file>resources/authorize.svg</file>
+        <file>resources/connect_gray.svg</file>
+        <file>resources/connect.svg</file>
+        <file>resources/exit_gray.svg</file>
+        <file>resources/exit.svg</file>
+        <file>resources/geometry_gray.svg</file>
+        <file>resources/geometry.svg</file>
+        <file>resources/save_gray.svg</file>
+        <file>resources/save.svg</file>
+        <file>resources/settings_gray.svg</file>
+        <file>resources/settings.svg</file>
+        <file>resources/video_gray.svg</file>
+        <file>resources/video.svg</file>
     </qresource>
 </RCC>
