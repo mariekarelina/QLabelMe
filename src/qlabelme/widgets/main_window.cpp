@@ -116,9 +116,6 @@ MainWindow::MainWindow(QWidget *parent) :
             this, &MainWindow::fileList_ItemChanged);
 
 
-
-
-
 //    chk_connect_q(_socket.get(), &tcp::Socket::message,
 //                  this, &MainWindow::message)
 
@@ -137,6 +134,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
     #undef FUNC_REGISTRATION
 */
+
+    ui->splitter->setSizes({INT_MAX, INT_MAX});
+
 }
 
 MainWindow::~MainWindow()
@@ -529,7 +529,8 @@ void MainWindow::on_actClose_triggered(bool)
 
 void MainWindow::on_actExit_triggered(bool)
 {
-    qApp->quit();
+    //qApp->quit();
+    close();
 }
 
 void MainWindow::on_actCreateRectangle_triggered()
@@ -742,9 +743,13 @@ void MainWindow::loadGeometry()
     config::base().getValue("windows.main_window.geometry", v);
     setGeometry(v[0], v[1], v[2], v[3]);
 
-    QVector<int> splitterSizes;
-//    if (config::base().getValue("windows.main_window.splitter_sizes", splitterSizes))
-//        ui->splitter->setSizes(splitterSizes.toList());
+    QList<int> splitterSizes;
+    if (config::base().getValue("windows.main_window.splitter_sizes", splitterSizes))
+        ui->splitter->setSizes(splitterSizes);
+
+    splitterSizes.clear();
+    if (config::base().getValue("windows.main_window.splitter2_sizes", splitterSizes))
+        ui->splitter2->setSizes(splitterSizes);
 
 //    int tabIndex = 0;
 //    config::base().getValue("windows.main_window.tab_index", tabIndex);
@@ -765,8 +770,11 @@ void MainWindow::saveGeometry()
     QVector<int> v {g.x(), g.y(), g.width(), g.height()};
     config::base().setValue("windows.main_window.geometry", v);
 
-    //QList<int> splitterSizes = ui->splitter->sizes();
-    //config::base().setValue("windows.main_window.splitter_sizes", splitterSizes.toVector());
+    QList<int> splitterSizes = ui->splitter->sizes();
+    config::base().setValue("windows.main_window.splitter_sizes", splitterSizes);
+
+    splitterSizes = ui->splitter2->sizes();
+    config::base().setValue("windows.main_window.splitter2_sizes", splitterSizes);
 
 //    config::base().setValue("windows.main_window.tab_index", ui->tabWidget->currentIndex());
 
