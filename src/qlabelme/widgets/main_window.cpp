@@ -846,7 +846,7 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     current->setCheckState(Qt::Checked);
 }
 
-void MainWindow::on_actionRect_triggered()
+void MainWindow::on_actRect_triggered()
 {
     _btnRectFlag = true;
 
@@ -856,7 +856,7 @@ void MainWindow::on_actionRect_triggered()
 }
 
 
-void MainWindow::on_actionCircle_triggered()
+void MainWindow::on_actCircle_triggered()
 {
     _btnCircleFlag = true;
 
@@ -867,7 +867,7 @@ void MainWindow::on_actionCircle_triggered()
 }
 
 
-void MainWindow::on_actionLine_triggered()
+void MainWindow::on_actLine_triggered()
 {
     _btnLineFlag = true;
 

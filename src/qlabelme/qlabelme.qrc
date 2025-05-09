@@ -17,5 +17,8 @@
         <file>resources/settings.svg</file>
         <file>resources/video_gray.svg</file>
         <file>resources/video.svg</file>
+        <file>resources/circle.svg</file>
+        <file>resources/rectangle.svg</file>
+        <file>resources/hexagon.svg</file>
     </qresource>
 </RCC>

@@ -81,9 +81,9 @@ private slots:
     void on_btnTest_clicked(bool);
     void fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem* previous);
 
-    void on_actionRect_triggered();
-    void on_actionCircle_triggered();
-    void on_actionLine_triggered();
+    void on_actRect_triggered();
+    void on_actCircle_triggered();
+    void on_actLine_triggered();
 
 
 private:

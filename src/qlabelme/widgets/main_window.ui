@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>931</width>
-    <height>756</height>
+    <height>797</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -125,7 +125,7 @@
      <x>0</x>
      <y>0</y>
      <width>931</width>
-     <height>23</height>
+     <height>30</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -157,12 +157,9 @@
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="actionRect"/>
-   <addaction name="actionCircle"/>
-   <addaction name="actionLine"/>
-   <addaction name="actConnect"/>
-   <addaction name="actSettings"/>
-   <addaction name="actExit"/>
+   <addaction name="actCircle"/>
+   <addaction name="actRect"/>
+   <addaction name="actLine"/>
   </widget>
   <action name="actOpen">
    <property name="text">
@@ -212,21 +209,6 @@
     <string>Ctrl+L</string>
    </property>
   </action>
-  <action name="actionRect">
-   <property name="text">
-    <string>Rect</string>
-   </property>
-  </action>
-  <action name="actionCircle">
-   <property name="text">
-    <string>Circle</string>
-   </property>
-  </action>
-  <action name="actionLine">
-   <property name="text">
-    <string>Line</string>
-   </property>
-  </action>
   <action name="actConnect">
    <property name="icon">
     <iconset resource="../qlabelme.qrc">
@@ -264,6 +246,42 @@
    </property>
    <property name="toolTip">
     <string>Exit</string>
+   </property>
+  </action>
+  <action name="actCircle">
+   <property name="icon">
+    <iconset resource="../qlabelme.qrc">
+     <normaloff>:/images/resources/circle.svg</normaloff>:/images/resources/circle.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Circle</string>
+   </property>
+   <property name="toolTip">
+    <string>Circle</string>
+   </property>
+  </action>
+  <action name="actRect">
+   <property name="icon">
+    <iconset resource="../qlabelme.qrc">
+     <normaloff>:/images/resources/rectangle.svg</normaloff>:/images/resources/rectangle.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Rect</string>
+   </property>
+   <property name="toolTip">
+    <string>Rect</string>
+   </property>
+  </action>
+  <action name="actLine">
+   <property name="icon">
+    <iconset resource="../qlabelme.qrc">
+     <normaloff>:/images/resources/hexagon.svg</normaloff>:/images/resources/hexagon.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Line</string>
+   </property>
+   <property name="toolTip">
+    <string>Line</string>
    </property>
   </action>
  </widget>
