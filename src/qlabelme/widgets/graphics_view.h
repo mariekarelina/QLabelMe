@@ -21,11 +21,11 @@ public:
     void mouseReleaseEvent(QMouseEvent*) override;
     void wheelEvent(QWheelEvent*) override;
 
-    //qreal getCurrentZoom() const { return _currentZoom; }
-    //void setZoom(qreal factor);
+    qreal getCurrentZoom() const
+    {
+        return _currentZoom;
+    }
 
-    // В GraphicsView.h
-    qreal getCurrentZoom() const { return _currentZoom; }
     void setZoom(qreal factor)
     {
         QTransform t;

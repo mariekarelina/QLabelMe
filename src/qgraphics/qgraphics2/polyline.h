@@ -36,6 +36,16 @@ public:
 
     void handlePointDeletion(DragCircle* circle);
 
+    QVector<QPointF> points() const
+    {
+        QVector<QPointF> result;
+        for (DragCircle* circle : _circles)
+        {
+            result.append(circle->scenePos());
+        }
+        return result;
+    }
+
 protected:
     // Переопределяем обработчик событий клавиатуры
     void keyPressEvent(QKeyEvent* event) override;

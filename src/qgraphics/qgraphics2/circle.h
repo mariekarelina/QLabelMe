@@ -35,6 +35,8 @@ public:
 
     void updateHandlePosition();
 
+    int radius() const { return _radius; }
+
 protected:
     // Переопределяем обработчик событий клавиатуры
     void keyPressEvent(QKeyEvent* event) override;

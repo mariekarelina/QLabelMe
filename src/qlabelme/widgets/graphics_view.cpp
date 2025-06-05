@@ -55,10 +55,3 @@ void GraphicsView::wheelEvent(QWheelEvent* wheelEvent)
     }
     QGraphicsView::wheelEvent(wheelEvent);
 }
-
-//void GraphicsView::setZoom(qreal factor)
-//{
-//    _currentZoom = factor;
-//    resetTransform();
-//    scale(factor, factor);
-//}

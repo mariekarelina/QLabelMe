@@ -11,6 +11,6 @@ QLabelMeBase {
         "src/rapidjson/rapidjson.qbs",
         "src/shared/shared.qbs",
         "src/yaml/yaml.qbs",
-        //"setup/package_build.qbs",
+        // //"setup/package_build.qbs",
     ]
 }

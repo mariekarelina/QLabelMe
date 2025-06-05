@@ -98,6 +98,11 @@ private:
     void loadGeometry();
     void saveGeometry();
 
+    void saveAnnotationToFile(const QString& imagePath);
+    void loadAnnotationFromFile(const QString& imagePath);
+    QJsonObject serializeSceneToJson(QGraphicsScene* scene);
+    void deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json);
+
 
 private:
     Ui::MainWindow* ui;

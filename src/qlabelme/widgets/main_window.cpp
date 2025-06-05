@@ -44,6 +44,9 @@
 #include <QSplitter>
 #include <QTextEdit>
 #include <QListWidget>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
 
 
 using namespace qgraph;
@@ -643,6 +646,24 @@ void MainWindow::on_btnTest_clicked(bool)
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
+    // if (!_currentImagePath.isEmpty())
+    // {
+    //     saveAnnotationToFile(_currentImagePath);
+    // }
+    // Сохраняем аннотации для всех изображений
+    for (auto it = _scenesMap.begin(); it != _scenesMap.end(); ++it)
+    {
+        const QString& imagePath = it.key();
+        QGraphicsScene* scene = it.value();
+
+        // Создаем временную переменную для хранения текущей сцены
+        QGraphicsScene* tempScene = _scene;
+        _scene = scene; // Устанавливаем текущую сцену для сериализации
+
+        saveAnnotationToFile(imagePath);
+
+        _scene = tempScene; // Восстанавливаем исходную сцену
+    }
     // В основном окне приложения метод saveGeometry() нужно вызывать в этой
     // точке, иначе геометрия окна будет сохранятся по разному в разных ОС
     saveGeometry();
@@ -782,6 +803,183 @@ void MainWindow::saveGeometry()
 //    config::base().setValue("windows.main_window.event_journal_header", QString::fromLatin1(ba));
 }
 
+void MainWindow::saveAnnotationToFile(const QString& imagePath)
+{
+    if (!_scenesMap.contains(imagePath))
+        return;
+
+    QGraphicsScene* scene = _scenesMap[imagePath];
+    QJsonObject json = serializeSceneToJson(scene);
+
+    // Создаем путь к JSON-файлу (тот же путь, но с расширением .json)
+    QFileInfo fileInfo(imagePath);
+    QString jsonPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".json";
+    if (json["shapes"].toArray().isEmpty())
+    {
+        // Удаляем пустой JSON-файл, если нет разметки
+        QFile::remove(jsonPath);
+        return;
+    }
+
+    QFile file(jsonPath);
+    if (!file.open(QIODevice::WriteOnly))
+    {
+        log_error_m << "Failed to open file for writing:" << jsonPath;
+        return;
+    }
+
+    file.write(QJsonDocument(json).toJson());
+    file.close();
+
+    log_info_m << "Annotation saved to:" << jsonPath;
+}
+
+void MainWindow::loadAnnotationFromFile(const QString& imagePath)
+{
+    // Создаем путь к JSON-файлу
+    QFileInfo fileInfo(imagePath);
+    QString jsonPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".json";
+
+    if (!QFile::exists(jsonPath))
+        return;
+
+    QFile file(jsonPath);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        log_error_m << "Failed to open annotation file:" << jsonPath;
+        return;
+    }
+
+    QByteArray data = file.readAll();
+    file.close();
+
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (doc.isNull())
+    {
+        log_error_m << "Invalid JSON format in file:" << jsonPath;
+        return;
+    }
+
+    deserializeJsonToScene(_scene, doc.object());
+    log_info_m << "Annotation loaded from:" << jsonPath;
+}
+
+void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json)
+{
+    if (!scene)
+        return;
+
+    QJsonArray shapesArray = json["shapes"].toArray();
+    for (const QJsonValue& shapeValue : shapesArray)
+    {
+        QJsonObject shapeObj = shapeValue.toObject();
+        QString className = shapeObj["class"].toString();
+        QString type = shapeObj["type"].toString();
+
+        if (type == "rectangle")
+        {
+            qreal x = shapeObj["x"].toDouble();
+            qreal y = shapeObj["y"].toDouble();
+            qreal width = shapeObj["width"].toDouble();
+            qreal height = shapeObj["height"].toDouble();
+
+            qgraph::Rectangle* rect = new qgraph::Rectangle(scene);
+            rect->setRect(QRectF(x, y, width, height));
+            rect->setData(0, className);
+        }
+        else if (type == "circle")
+        {
+            qreal x = shapeObj["x"].toDouble();
+            qreal y = shapeObj["y"].toDouble();
+            qreal radius = shapeObj["radius"].toDouble();
+
+            qgraph::Circle* circle = new qgraph::Circle(scene, QPointF(x, y));
+            circle->setRealRadius(radius);
+            circle->setData(0, className);
+        }
+        else if (type == "polyline")
+        {
+            QJsonArray pointsArray = shapeObj["points"].toArray();
+            if (pointsArray.isEmpty())
+                continue;
+
+            QPointF firstPoint(pointsArray[0].toObject()["x"].toDouble(),
+                               pointsArray[0].toObject()["y"].toDouble());
+
+            qgraph::Polyline* polyline = new qgraph::Polyline(scene, firstPoint);
+            for (int i = 1; i < pointsArray.size(); ++i)
+            {
+                QPointF point(pointsArray[i].toObject()["x"].toDouble(),
+                              pointsArray[i].toObject()["y"].toDouble());
+                polyline->addPoint(point, scene);
+            }
+            polyline->setData(0, className);
+        }
+    }
+}
+
+QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
+{
+    QJsonObject root;
+    QJsonArray shapesArray;
+
+    for (QGraphicsItem* item : scene->items())
+    {
+        // Пропускаем само изображение и временные элементы
+        if (item == _videoRect || item == _tempRectItem ||
+            item == _tempCircleItem || item == _tempPolyline)
+        {
+            continue;
+        }        
+
+        QJsonObject shapeObj;
+        QString className = item->data(0).toString();
+        shapeObj["class"] = className;
+        // Пропускаем элементы без класса
+        if (className.isEmpty() || className == "--")
+        {
+            continue;
+        }
+
+        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            shapeObj["type"] = "rectangle";
+            QRectF r = rect->rect();
+            shapeObj["x"] = r.x();
+            shapeObj["y"] = r.y();
+            shapeObj["width"] = r.width();
+            shapeObj["height"] = r.height();
+        }
+        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        {
+            shapeObj["type"] = "circle";
+            QPointF center = circle->realCenter();
+            shapeObj["x"] = center.x();
+            shapeObj["y"] = center.y();
+            shapeObj["radius"] = circle->realRadius();
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            shapeObj["type"] = "polyline";
+            QJsonArray pointsArray;
+
+            // Получаем точки полилинии через метод points()
+            for (const QPointF& point : polyline->points())
+            {
+                QJsonObject pointObj;
+                pointObj["x"] = point.x();
+                pointObj["y"] = point.y();
+                pointsArray.append(pointObj);
+            }
+            shapeObj["points"] = pointsArray;
+        }
+
+        shapesArray.append(shapeObj);
+    }
+
+    root["shapes"] = shapesArray;
+    return root;
+}
 
 void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem *previous)
 {
@@ -817,6 +1015,9 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
         qgraph::VideoRect* videoRect = new qgraph::VideoRect(newScene);
         videoRect->setPixmap(pix);
         _scenesMap[filePath] = newScene;
+
+        // Загружаем аннотации, если они есть
+        loadAnnotationFromFile(filePath);
     }
 
     // Устанавливаем текущую сцену
