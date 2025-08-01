@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
         alog::logger().removeSaverStdOut();
         alog::logger().removeSaverStdErr();
 
-        ret = appl.exec();
+            ret = appl.exec();
         mw.deinit();
 
         if (config::base().changed())

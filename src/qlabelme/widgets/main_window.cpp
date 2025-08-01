@@ -94,6 +94,12 @@ MainWindow::MainWindow(QWidget *parent) :
     _labelConnectStatus = new QLabel(u8"Нет подключения", this);
     ui->statusBar->addWidget(_labelConnectStatus);
 
+    // Создаем и настраиваем метки
+    _folderPathLabel = new QLabel(this);
+    _folderPathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    _folderPathLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    ui->statusBar->addWidget(_folderPathLabel, 1); // Растягиваемый
+
     QString vers = u8"Версия: %1 (gitrev: %2)";
     vers = vers.arg(VERSION_PROJECT).arg(GIT_REVISION);
     ui->statusBar->addPermanentWidget(new QLabel(vers, this));
@@ -119,6 +125,12 @@ MainWindow::MainWindow(QWidget *parent) :
             this, &MainWindow::fileList_ItemChanged);
 
 
+
+    QLabel* pathHeader = new QLabel(this);
+    pathHeader->setAlignment(Qt::AlignCenter);
+    // Добавляем заголовок над listWidget
+    ui->verticalLayout->insertWidget(0, pathHeader);
+
 //    chk_connect_q(_socket.get(), &tcp::Socket::message,
 //                  this, &MainWindow::message)
 
@@ -139,6 +151,10 @@ MainWindow::MainWindow(QWidget *parent) :
 */
 
     ui->splitter->setSizes({INT_MAX, INT_MAX});
+    // Сохраняем указатель на правую панель
+    _rightPanel = ui->splitter2->widget(1); // Или другой индекс, в зависимости от структуры
+    // Сохраняем начальные размеры сплиттера
+    _savedSplitterSizes = ui->splitter2->sizes();
 
 }
 
@@ -482,6 +498,23 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 //    return QMainWindow::eventFilter(watched, event);  // Продолжаем обработку остальных событий
 }
 
+void MainWindow::keyPressEvent(QKeyEvent *event)
+{
+    if (event->modifiers() == Qt::ControlModifier && event->key() == Qt::Key_I)
+    {
+        resetViewToDefault();
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_R && event->modifiers() == Qt::NoModifier)
+    {
+        toggleRightSplitter();
+        event->accept();
+        return;
+    }
+    QMainWindow::keyPressEvent(event);
+}
+
 void MainWindow::togglePointerMode()
 {
 //    ui->graphView->setDragMode(_selectModeButton->isChecked()
@@ -673,11 +706,22 @@ void MainWindow::closeEvent(QCloseEvent* event)
 void MainWindow::loadFilesFromFolder(const QString &folderPath)
 {
     QDir directory(folderPath);
-    QStringList files = directory.entryList(QStringList() << "*.*", QDir::Files);
+    _currentFolderPath = folderPath; // Сохраняем путь
+
+    // Путь к папке в заголовке окна
+    updateWindowTitle();
+
+    //Путь к папке внизу окна
+    updateFolderPathDisplay();
 
     ui->listWidget_FileList->clear();  // Очищаем список перед добавлением
+    // Путь к папке над полем FileList
+    ui->labelFileListPath->setText(QDir::toNativeSeparators(folderPath));
 
-    //foreach(QString filename, files)
+
+    QStringList files = directory.entryList(QStringList() << "*.*", QDir::Files);
+
+    // Добавляем файлы
     for (auto filename : files)
     {
         QString filePath = directory.filePath(filename);
@@ -918,6 +962,118 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
     }
 }
 
+qgraph::VideoRect* MainWindow::findVideoRect(QGraphicsScene* scene)
+{
+    if (!scene) return nullptr;
+
+    foreach(QGraphicsItem* item, scene->items()) {
+        if (auto* videoRect = dynamic_cast<qgraph::VideoRect*>(item)) {
+            return videoRect;
+        }
+    }
+    return nullptr;
+}
+
+void MainWindow::resetViewToDefault()
+{
+    if (!_scene || !_videoRect)
+        return;
+
+    // Вычисляем масштаб для полного отображения
+    QRectF viewRect = ui->graphView->viewport()->rect();
+    QRectF sceneRect = _videoRect->sceneBoundingRect();
+
+    qreal xScale = viewRect.width() / sceneRect.width();
+    qreal yScale = viewRect.height() / sceneRect.height();
+    qreal scale = qMin(xScale, yScale);
+
+    // Сбрасываем трансформацию
+    ui->graphView->resetTransform();
+    ui->graphView->scale(scale, scale);
+    ui->graphView->centerOn(sceneRect.center());
+
+    // Обновляем сохраненное состояние
+    if (!_currentImagePath.isEmpty())
+    {
+        _scrollStates[_currentImagePath] = {
+            ui->graphView->horizontalScrollBar()->value(),
+            ui->graphView->verticalScrollBar()->value(),
+            scale,
+            sceneRect.center()
+        };
+    }
+}
+
+void MainWindow::toggleRightSplitter()
+{
+    // Предполагаем, что правый сплиттер - это ui->splitter2
+    QSplitter* rightSplitter = ui->splitter2;
+
+    if (_isRightSplitterCollapsed)
+    {
+        // Восстанавливаем предыдущие размеры
+        rightSplitter->setSizes(_savedSplitterSizes);
+        rightSplitter->setVisible(true);
+    }
+    else
+    {
+        // Сохраняем текущие размеры перед схлопыванием
+        _savedSplitterSizes = rightSplitter->sizes();
+
+        // Схлопываем сплиттер (устанавливаем все размеры в 0)
+        QList<int> newSizes;
+        for (int i = 0; i < rightSplitter->count(); ++i)
+            newSizes << 0;
+        rightSplitter->setSizes(newSizes);
+    }
+
+    _isRightSplitterCollapsed = !_isRightSplitterCollapsed;
+}
+
+void MainWindow::updateWindowTitle()
+{
+    QString title;
+
+    if (!_currentFolderPath.isEmpty())
+    {
+        // Форматируем путь для отображения
+        QString displayPath = QDir::toNativeSeparators(_currentFolderPath);
+
+        // Если путь длинный, можно сократить его
+        if (displayPath.length() > 50)
+        {
+            displayPath = "..." + displayPath.right(47);
+        }
+
+        title = QString("%1 - QLabelMe").arg(displayPath);
+    }
+    else
+    {
+        title = "QLabelMe";
+    }
+
+    setWindowTitle(title);
+}
+
+void MainWindow::updateFolderPathDisplay()
+{
+    if (_currentFolderPath.isEmpty())
+    {
+        _folderPathLabel->clear();
+        _folderPathLabel->setToolTip("");
+    }
+    else
+    {
+        QString displayPath = QDir::toNativeSeparators(_currentFolderPath);
+        _folderPathLabel->setText(displayPath);
+        _folderPathLabel->setToolTip(displayPath); // Полный путь в подсказке
+
+        // Можно добавить иконку папки
+        QIcon folderIcon = style()->standardIcon(QStyle::SP_DirIcon);
+        _folderPathLabel->setPixmap(folderIcon.pixmap(16, 16));
+    }
+}
+
 QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
 {
     QJsonObject root;
@@ -981,18 +1137,74 @@ QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
     return root;
 }
 
+void MainWindow::saveCurrentViewState() {
+    if (_currentImagePath.isEmpty()) return;
+
+    _scrollStates[_currentImagePath] = {
+        ui->graphView->horizontalScrollBar()->value(),
+        ui->graphView->verticalScrollBar()->value(),
+        //getCurrentZoom(),
+        ui->graphView->transform().m11(),
+        ui->graphView->mapToScene(ui->graphView->viewport()->rect().center())
+    };
+}
+
+void MainWindow::restoreViewState(const QString& filePath) {
+    if (_scrollStates.contains(filePath)) {
+        const ScrollState& state = _scrollStates[filePath];
+
+        // Сначала устанавливаем масштаб
+        ui->graphView->resetTransform();
+        ui->graphView->scale(state.zoom, state.zoom);
+
+        // Затем прокрутку
+        ui->graphView->horizontalScrollBar()->setValue(state.hScroll);
+        ui->graphView->verticalScrollBar()->setValue(state.vScroll);
+
+        // И центрируем (для точного восстановления)
+        ui->graphView->centerOn(state.center);
+    } else {
+        // Первый просмотр - подгоняем изображение
+        fitImageToView();
+    }
+}
+
+void MainWindow::fitImageToView()
+{
+    if (!_scene || !_videoRect) return;
+
+    QRectF viewRect = ui->graphView->viewport()->rect();
+    QRectF sceneRect = _videoRect->sceneBoundingRect();
+
+    qreal xScale = viewRect.width() / sceneRect.width();
+    qreal yScale = viewRect.height() / sceneRect.height();
+    qreal scale = qMin(xScale, yScale);
+
+    ui->graphView->resetTransform();
+    ui->graphView->scale(scale, scale);
+    ui->graphView->centerOn(sceneRect.center());
+
+    // Сохраняем новое состояние
+    saveCurrentViewState();
+}
+
 void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem *previous)
 {
     if (!current) return;
 
-    if (previous && !_currentImagePath.isEmpty())
-    {
-        _scrollStates[_currentImagePath] = {
-            ui->graphView->horizontalScrollBar()->value(),
-            ui->graphView->verticalScrollBar()->value(),
-            ui->graphView->getCurrentZoom() // если такой метод реализован
-        };
+    // Сохраняем состояние предыдущего изображения
+    if (previous && !_currentImagePath.isEmpty()) {
+        saveCurrentViewState();
     }
+
+    // if (previous && !_currentImagePath.isEmpty())
+    // {
+    //     _scrollStates[_currentImagePath] = {
+    //         ui->graphView->horizontalScrollBar()->value(),
+    //         ui->graphView->verticalScrollBar()->value(),
+    //         ui->graphView->getCurrentZoom()
+    //     };
+    // }
 
     // Получаем путь к новому изображению
     QString filePath = current->data(Qt::UserRole).toString();
@@ -1023,22 +1235,34 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     // Устанавливаем текущую сцену
     ui->graphView->setScene(_scenesMap[filePath]);
     _scene = _scenesMap[filePath];
+    _videoRect = findVideoRect(_scene);
+
+    // Восстанавливаем состояние для этого изображения
+    restoreViewState(filePath);
+
+    // Определяем, нужно ли подгонять изображение
+    // bool shouldFit = _scrollStates.contains(filePath);
+    // fitImageToView(shouldFit);
+
+
+    // Подгоняем изображение под размер viewport
+    //fitImageToView();
 
     // Восстанавливаем состояние прокрутки
-    if (_scrollStates.contains(filePath))
-    {
-        const ScrollState& state = _scrollStates[filePath];
-        ui->graphView->horizontalScrollBar()->setValue(state.hScroll);
-        ui->graphView->verticalScrollBar()->setValue(state.vScroll);
-        ui->graphView->setZoom(state.zoom); // если есть масштаб
-    }
-    else
-    {
-        // Если первый раз — начальное положение
-        ui->graphView->horizontalScrollBar()->setValue(0);
-        ui->graphView->verticalScrollBar()->setValue(0);
-    //  ui->graphView->setZoom(1.0);
-    }
+    // if (_scrollStates.contains(filePath))
+    // {
+    //     const ScrollState& state = _scrollStates[filePath];
+    //     ui->graphView->horizontalScrollBar()->setValue(state.hScroll);
+    //     ui->graphView->verticalScrollBar()->setValue(state.vScroll);
+    //     ui->graphView->setZoom(state.zoom); // если есть масштаб
+    // }
+    // else
+    // {
+    //     // Если первый раз — начальное положение
+    //     ui->graphView->horizontalScrollBar()->setValue(0);
+    //     ui->graphView->verticalScrollBar()->setValue(0);
+    // //  ui->graphView->setZoom(1.0);
+    // }
 
     // Обновляем список разметок для новой сцены
     updatePolygonListForCurrentScene();
@@ -1075,5 +1299,18 @@ void MainWindow::on_actLine_triggered()
     _drawingLine = true;
     _drawingRectangle= false;
     _drawingCircle = false;
+}
+
+void MainWindow::wheelEvent(QWheelEvent* event) {
+    // Сохраняем состояние при изменении масштаба
+    saveCurrentViewState();
+    QMainWindow::wheelEvent(event);
+}
+
+void MainWindow::resizeEvent(QResizeEvent* event) {
+    // При изменении размера сохраняем текущее состояние
+    saveCurrentViewState();
+    QMainWindow::resizeEvent(event);
+    restoreViewState(_currentImagePath);
 }
 

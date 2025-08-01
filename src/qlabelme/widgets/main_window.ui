@@ -102,6 +102,13 @@
           </widget>
          </item>
          <item>
+          <widget class="QLabel" name="labelFileListPath">
+           <property name="text">
+            <string>FileList</string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QListWidget" name="listWidget_FileList">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -125,7 +132,7 @@
      <x>0</x>
      <y>0</y>
      <width>931</width>
-     <height>30</height>
+     <height>27</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">

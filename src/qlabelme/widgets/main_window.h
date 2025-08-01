@@ -59,10 +59,9 @@ public:
 
     void setSceneItemsMovable(bool movable);
 
-
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
-
+    void keyPressEvent(QKeyEvent *event) override;
 
 private slots:
     void togglePointerMode();
@@ -79,11 +78,19 @@ private slots:
     void on_btnLine_clicked(bool);
     void on_btnCircle_clicked(bool);
     void on_btnTest_clicked(bool);
+    void saveCurrentViewState();
+    void restoreViewState(const QString& filePath);
+    void fitImageToView();
+    //void fitImageToView(bool);
     void fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem* previous);
 
     void on_actRect_triggered();
     void on_actCircle_triggered();
     void on_actLine_triggered();
+
+    void wheelEvent(QWheelEvent* event);
+
+    void resizeEvent(QResizeEvent* event);
 
 
 private:
@@ -102,6 +109,12 @@ private:
     void loadAnnotationFromFile(const QString& imagePath);
     QJsonObject serializeSceneToJson(QGraphicsScene* scene);
     void deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json);
+    qgraph::VideoRect* findVideoRect(QGraphicsScene* scene);
+    void resetViewToDefault();
+
+    void toggleRightSplitter(); // Функция переключения сплиттера
+    void updateWindowTitle(); // Обновление заголовка (путь к папке с файлами)
+    void updateFolderPathDisplay();
 
 
 private:
@@ -114,7 +127,10 @@ private:
     //GraphicsView* _graphView;
 
     QString _windowTitle;
+    QString _currentFolderPath; // Переменную для хранения пути
     QLabel* _labelConnectStatus;
+
+    QLabel* _folderPathLabel; // Для отображения пути к папке рядом с версией
 
     // Признак UltraHD монитора
     bool _ultraHD = {false};
@@ -181,8 +197,14 @@ private:
        int hScroll = 0;
        int vScroll = 0;
        qreal zoom = 1.0;
+       QPointF center; // Центр viewport'а (дополнительно для точного восстановления)
    };
    QMap<QString, ScrollState> _scrollStates; // Ключ — путь к файлу
+
+   QList<int> _savedSplitterSizes; // Хранит нормальные размеры сплиттера
+   bool _isRightSplitterCollapsed = false;
+   bool _isRightPanelVisible = true;
+   QWidget* _rightPanel; // Указатель на правую панель
 
 
 
