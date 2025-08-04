@@ -46,6 +46,9 @@ public:
     virtual int penWidth() const = 0;
     virtual void setPenWidth(int) = 0;
 
+    virtual void raiseHandlesToTop() = 0;
+    //virtual void updateHandlesZValue() = 0;
+
     int tag() const {return _tag;}
     void setTag(int val) {_tag = val;}
 
@@ -53,10 +56,23 @@ public:
     SimpleSignal<ItemSignal> circleReleaseSignal;
     SimpleSignal<ItemSignal> shapeMoveSignal;
 
+    bool handlesUpdateBlocked() const { return _handlesUpdateBlock > 0; }
+
+    // RAII-гард, который блокирует вызовы dragCircleMove из itemChange
+    class HandleBlocker {
+    public:
+        explicit HandleBlocker(Shape* s) : _s(s) { if (_s) ++_s->_handlesUpdateBlock; }
+        ~HandleBlocker() { if (_s) --_s->_handlesUpdateBlock; }
+    private:
+        Shape* _s;
+    };
+
 protected:
     bool _active = {false};
     float _frameScale = {1};
     int _tag = {0};
+
+    int _handlesUpdateBlock = 0;
 
     template<typename> friend class ShapeT;
 };
@@ -70,6 +86,7 @@ struct ShapeT : public Shape, public T
     void circleVisible(bool) override;
     void shapeVisible(bool)  override;
     void setZLevel(float) override;
+    void raiseHandlesToTop() override;
 
     QColor penColor() const override;
     void setPenColor(const QColor&) override;
@@ -112,7 +129,8 @@ void ShapeT<T>::circleVisible(bool val)
     for (QGraphicsItem* item : this->childItems())
         if (DragCircle* circle = qgraphicsitem_cast<DragCircle*>(item))
         {
-            circle->setVisible(val);
+            //circle->setVisible(val);
+            circle->setVisible(true);
             //circle->setZValue(this->zValue() + 1);
         }
 }
@@ -133,6 +151,19 @@ void ShapeT<T>::setZLevel(float z)
     for (QGraphicsItem* item : this->childItems())
         if (DragCircle* circle = qgraphicsitem_cast<DragCircle*>(item))
             circle->setZValue(z + 1);
+}
+
+template<typename T>
+void ShapeT<T>::raiseHandlesToTop()
+{
+    for (QGraphicsItem* item : this->childItems())
+    {
+        if (DragCircle* circle = qgraphicsitem_cast<DragCircle*>(item))
+        {
+            circle->setZValue(10000); // Очень высокое значение
+            circle->raiseToTop();
+        }
+    }
 }
 
 template<typename T>

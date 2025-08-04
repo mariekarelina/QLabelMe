@@ -7,11 +7,11 @@
     <x>0</x>
     <y>0</y>
     <width>931</width>
-    <height>797</height>
+    <height>677</height>
    </rect>
   </property>
   <property name="sizePolicy">
-   <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
@@ -29,9 +29,27 @@
    </size>
   </property>
   <widget class="QWidget" name="centralwidget">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+   <property name="autoFillBackground">
+    <bool>false</bool>
+   </property>
    <layout class="QHBoxLayout" name="horizontalLayout">
     <item>
-     <widget class="QSplitter" name="splitter">
+     <widget class="QSplitter" name="splitter2">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
       <property name="orientation">
        <enum>Qt::Horizontal</enum>
       </property>
@@ -46,20 +64,49 @@
         <set>QGraphicsView::CacheBackground</set>
        </property>
       </widget>
-      <widget class="QSplitter" name="splitter2">
+      <widget class="QSplitter" name="splitter">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="orientation">
         <enum>Qt::Vertical</enum>
        </property>
        <widget class="QWidget" name="layoutWidget">
-        <layout class="QVBoxLayout" name="verticalLayout">
-         <item>
+        <layout class="QGridLayout" name="gridLayout">
+         <item row="0" column="1">
           <widget class="QLabel" name="label_4">
            <property name="text">
-            <string>PolygonLabel</string>
+            <string>Классы</string>
            </property>
           </widget>
          </item>
-         <item>
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_5">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="text">
+            <string>Полигоны</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QListWidget" name="listWidget_PolygonList">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
           <widget class="QListWidget" name="listWidget_PolygonLabel">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -71,40 +118,19 @@
          </item>
         </layout>
        </widget>
-       <widget class="QWidget" name="verticalLayoutWidget_6">
-        <layout class="QVBoxLayout" name="verticalLayout_6">
-         <item>
-          <widget class="QLabel" name="label_5">
-           <property name="text">
-            <string>PolygonList</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QListWidget" name="listWidget_PolygonList">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-       <widget class="QWidget" name="verticalLayoutWidget_7">
+       <widget class="QWidget" name="layoutWidget">
         <layout class="QVBoxLayout" name="verticalLayout_7">
          <item>
           <widget class="QLabel" name="label_6">
            <property name="text">
-            <string>FileList</string>
+            <string>Список файлов</string>
            </property>
           </widget>
          </item>
          <item>
           <widget class="QLabel" name="labelFileListPath">
            <property name="text">
-            <string>FileList</string>
+            <string>Путь к папке</string>
            </property>
           </widget>
          </item>
@@ -137,22 +163,38 @@
    </property>
    <widget class="QMenu" name="menuFile">
     <property name="title">
-     <string>File</string>
+     <string>Файл</string>
     </property>
     <addaction name="actOpen"/>
     <addaction name="separator"/>
+    <addaction name="actSave"/>
     <addaction name="actClose"/>
    </widget>
    <widget class="QMenu" name="menuEdit">
     <property name="title">
-     <string>Edit</string>
+     <string>Правка</string>
     </property>
     <addaction name="actCreateRectangle"/>
     <addaction name="actCreateCircle"/>
     <addaction name="actCreateLine"/>
+    <addaction name="actDelete"/>
+   </widget>
+   <widget class="QMenu" name="menuSettings">
+    <property name="title">
+     <string>Настройки</string>
+    </property>
+    <addaction name="actSetting"/>
+   </widget>
+   <widget class="QMenu" name="menuAbout">
+    <property name="title">
+     <string>Справка</string>
+    </property>
+    <addaction name="actAbout"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
+   <addaction name="menuSettings"/>
+   <addaction name="menuAbout"/>
   </widget>
   <widget class="QToolBar" name="toolBar">
    <property name="windowTitle">
@@ -170,31 +212,20 @@
   </widget>
   <action name="actOpen">
    <property name="text">
-    <string>Open</string>
+    <string>Открыть папку</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+O</string>
    </property>
   </action>
-  <action name="actSave">
-   <property name="text">
-    <string>Save</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+S</string>
-   </property>
-  </action>
   <action name="actClose">
    <property name="text">
-    <string>Close</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+Q</string>
+    <string>Закрыть</string>
    </property>
   </action>
   <action name="actCreateRectangle">
    <property name="text">
-    <string>Create rectangle</string>
+    <string>Создать прямоугольник</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+N</string>
@@ -202,7 +233,7 @@
   </action>
   <action name="actCreateCircle">
    <property name="text">
-    <string>Create circle</string>
+    <string>Создать круг</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+T</string>
@@ -210,7 +241,7 @@
   </action>
   <action name="actCreateLine">
    <property name="text">
-    <string>Create line</string>
+    <string>Создать полилинию</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+L</string>
@@ -289,6 +320,52 @@
    </property>
    <property name="toolTip">
     <string>Line</string>
+   </property>
+  </action>
+  <action name="actSave">
+   <property name="text">
+    <string>Сохранить</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S</string>
+   </property>
+  </action>
+  <action name="actDelete">
+   <property name="text">
+    <string>Удалить</string>
+   </property>
+   <property name="shortcut">
+    <string>Del</string>
+   </property>
+  </action>
+  <action name="actAbout">
+   <property name="text">
+    <string>О программе QLabelMe</string>
+   </property>
+  </action>
+  <action name="actChLine">
+   <property name="text">
+    <string>Изменить толщину линии</string>
+   </property>
+  </action>
+  <action name="actChPoints">
+   <property name="text">
+    <string>Изменить размер точек</string>
+   </property>
+  </action>
+  <action name="actChNumbers">
+   <property name="text">
+    <string>Изменить размер нумерации</string>
+   </property>
+  </action>
+  <action name="actForm">
+   <property name="text">
+    <string>Внешний вид</string>
+   </property>
+  </action>
+  <action name="actSetting">
+   <property name="text">
+    <string>Настройки</string>
    </property>
   </action>
  </widget>

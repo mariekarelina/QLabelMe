@@ -17,13 +17,19 @@
 
 namespace qgraph {
 
-class Polyline : public QObject, public ShapeT<QGraphicsPathItem> //public QGraphicsPathItem
+// class Polyline : public QObject, public ShapeT<QGraphicsPathItem> //public QGraphicsPathItem
+// {
+//     Q_OBJECT
+class Polyline : public ShapeT<QGraphicsPathItem> //public QGraphicsPathItem
 {
-    Q_OBJECT
 public:
-    Polyline(QGraphicsScene*, const QPointF&);
+    enum {Type = toInt(qgraph::UserType::Rectangle)};
+    int type() const override {return Type;}
 
-    void setFrameScale(float newScale);
+    Polyline(QGraphicsScene*, const QPointF&);
+    ~Polyline();
+
+    void setFrameScale(float newScale) override;
     void setRealSceneRect(const QRectF&);
     void updateHandlePosition();
 
@@ -32,7 +38,7 @@ public:
     void insertPoint(QPointF position);
     void closePolyline();
     void updatePath(); // Метод для обновления пути на основе позиций кругов
-    QVariant itemChange(GraphicsItemChange change, const QVariant& value);
+    QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
 
     void handlePointDeletion(DragCircle* circle);
 
@@ -45,43 +51,62 @@ public:
         }
         return result;
     }
+    void updatePointNumbers();
+    void applyNumberStyle(qreal fontSize);
+    void rotatePointsClockwise();
+    void rotatePointsCounterClockwise();
+    void handleKeyPressEvent(QKeyEvent* event);
+
+    void togglePointNumbers();
+    bool isPointNumbersVisible() const { return _pointNumbersVisible; }
+
+    void updateHandlesZValue();
+    void raiseHandlesToTop() override;
+    void moveToBack();
+
 
 protected:
     // Переопределяем обработчик событий клавиатуры
     void keyPressEvent(QKeyEvent* event) override;
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
 
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
     void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
 
-    void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
     int findClosestSegment(const QPointF& pos) const;
     void insertPointAtSegment(int segmentIndex, const QPointF& pos);
 
 signals:
     void lineChanged(Polyline* line);
 
-private slots:
-    void dragCircleMove(DragCircle* circle);
-    void dragCircleRelease(DragCircle* circle);
+//private slots:
+    // void dragCircleMove(DragCircle* circle) override;
+    // void dragCircleRelease(DragCircle* circle) override;
+
+    // void handleHandleHoverEnter();
+    // void handleHandleHoverLeave();
 
 private:
     void updateConnections(); // Для обновления связей между точками
     void updateClosedState();
+    void updatePointNumbersAfterReorder(); // Обновление номеров после изменения порядка
+
+    void dragCircleMove(DragCircle* circle) override;
+    void dragCircleRelease(DragCircle* circle) override;
 
 public:
     QVector<DragCircle*> _circles;
     bool _isClosed;
 
-//    DragCircle* _circle1; // Начало линии
-//    DragCircle* _circle2; // Переходная точка
-//    DragCircle* _circle3; // Вторая переходная точка
-//    DragCircle* _circle4; // Конец линии
-
-
     float _frameScale = 1.0;
     const qreal _minSegmentLength = 10.0; // Минимальная длина отрезка
 
     QColor _highlightColor = Qt::transparent; // Цвет выделения
+    QList<QGraphicsSimpleTextItem*> pointNumbers;
+    QList<QGraphicsRectItem*> numberBackgrounds;
+    qreal _numberFontSize = 10.0; // Размер шрифта по умолчанию
+
+    bool _pointNumbersVisible = true; // Видимости нумерации
 };
 
 } // namespace qgraph

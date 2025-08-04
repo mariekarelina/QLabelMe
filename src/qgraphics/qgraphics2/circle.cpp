@@ -3,6 +3,8 @@
 
 #include <QtGui>
 #include <cmath>
+#include <QApplication>
+#include <QCursor>
 
 namespace qgraph {
 
@@ -10,6 +12,7 @@ Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
 {
     setFlags(ItemIsMovable | ItemIsFocusable);
     setAcceptHoverEvents(true); // Включаем обработку событий наведения
+    setAcceptedMouseButtons(Qt::LeftButton);
 
     _radius = 20;
     setRect(-_radius, -_radius, _radius * 2, _radius * 2);
@@ -27,8 +30,60 @@ Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
 
     _circle = new DragCircle(scene);
     _circle->setParent(this);
+    _circle->restoreBaseStyle();
     _circle->setVisible(false);
+    _circle->setZValue(this->zValue() + 1);
     _circle->setPos(rect().width() / 2, 0);
+    _circle->setHoverSizingEnabled(false);
+
+    // Создаем линии крестика
+    _verticalLine = new QGraphicsLineItem(this);
+    _horizontalLine = new QGraphicsLineItem(this);
+
+    // Устанавливаем флаги, чтобы линии нельзя было перемещать
+    _verticalLine->setFlag(QGraphicsItem::ItemIsMovable, false);
+    _verticalLine->setFlag(QGraphicsItem::ItemIsSelectable, false);
+    _verticalLine->setFlag(QGraphicsItem::ItemIsFocusable, false);
+    _verticalLine->setAcceptedMouseButtons(Qt::NoButton);
+
+    _horizontalLine->setFlag(QGraphicsItem::ItemIsMovable, false);
+    _horizontalLine->setFlag(QGraphicsItem::ItemIsSelectable, false);
+    _horizontalLine->setFlag(QGraphicsItem::ItemIsFocusable, false);
+    _horizontalLine->setAcceptedMouseButtons(Qt::NoButton);
+
+    // Отключаем обработку событий наведения для линий
+    _verticalLine->setAcceptHoverEvents(false);
+    _horizontalLine->setAcceptHoverEvents(false);
+    updateCrossLines();
+}
+
+Circle::~Circle()
+{
+    // // Удаляем ручку, если она была создана
+    if (_circle && _circle->scene())
+    {
+        _circle->scene()->removeItem(_circle);
+        delete _circle;
+    }
+    if (_verticalLine)
+    {
+        if (_verticalLine->scene())
+        {
+            _verticalLine->scene()->removeItem(_verticalLine);
+        }
+        delete _verticalLine;
+        _verticalLine = nullptr;
+    }
+
+    if (_horizontalLine)
+    {
+        if (_horizontalLine->scene())
+        {
+            _horizontalLine->scene()->removeItem(_horizontalLine);
+        }
+        delete _horizontalLine;
+        _horizontalLine = nullptr;
+    }
 }
 
 void Circle::setFrameScale(float newScale)
@@ -102,6 +157,13 @@ void Circle::setRealCenter(const QPointF& val)
     setPos(pos.x(), pos.y());
 
     _circle->setPos(rect().width() / 2, 0);
+    updateCrossLines();
+}
+
+QPoint Circle::center() const
+{
+    QPointF c = realCenter();
+    return {int(c.x()), int(c.y())};
 }
 
 int Circle::realRadius() const
@@ -130,41 +192,309 @@ void Circle::setRealRadius(int val)
 
 void Circle::updateHandlePosition()
 {
-    // Обновляем положение ручки (_circle) относительно центра круга
+    // Обновляем положение ручку относительно центра круга
     if (_circle)
     {
         _circle->setPos(rect().width() / 2, 0);
+        _circle->setVisible(false);
     }
+}
+
+void Circle::updateHandlePosition(const QPointF& scenePos)
+{
+    if (!_circle) return;
+
+    // Преобразуем координаты сцены в локальные координаты круга
+    QPointF localPos = mapFromScene(scenePos);
+    QPointF center = rect().center();
+
+    // Вычисляем вектор от центра к курсору
+    QPointF direction = localPos - center;
+    qreal distance = std::sqrt(direction.x() * direction.x() + direction.y() * direction.y());
+
+    // Нормализуем вектор и умножаем на радиус
+    if (distance > 0)
+    {
+        direction /= distance;
+        direction *= _radius;
+    }
+    else
+    {
+        // Если курсор в центре, направляем вправо
+        direction = QPointF(_radius, 0);
+    }
+    // Устанавливаем позицию ручки на окружности
+    _circle->setPos(center + direction);
+}
+
+void Circle::updateHandleZValue()
+{
+    if (_circle)
+    {
+        _circle->setZValue(this->zValue() + 1);
+    }
+}
+
+void Circle::updateCrossLines()
+{
+    if (!_verticalLine || !_horizontalLine)
+    {
+        return;
+    }
+    QRectF r = rect();
+    QPointF center = r.center();
+
+    _verticalLine->setFlag(QGraphicsItem::ItemIgnoresTransformations,
+                           this->flags() & QGraphicsItem::ItemIgnoresTransformations);
+    _horizontalLine->setFlag(QGraphicsItem::ItemIgnoresTransformations,
+                             this->flags() & QGraphicsItem::ItemIgnoresTransformations);
+
+    // Длина линий крестика (можно регулировать)
+    qreal lineLength = _radius * 0.5; // 80% от радиуса
+
+    // Вертикальная линия
+    QLineF verticalLine(center.x(), center.y() - lineLength,
+                        center.x(), center.y() + lineLength);
+
+    // Горизонтальная линия
+    QLineF horizontalLine(center.x() - lineLength, center.y(),
+                          center.x() + lineLength, center.y());
+
+    _verticalLine->setLine(verticalLine);
+    _horizontalLine->setLine(horizontalLine);
+
+    // Наследуем стиль пера от круга
+    QPen pen = this->pen();
+    _verticalLine->setPen(pen);
+    _horizontalLine->setPen(pen);
+}
+
+void Circle::applyLineStyle(qreal lineWidth)
+{
+    // Обновляем стиль круга
+    QPen pen = this->pen();
+    pen.setWidthF(lineWidth);
+    pen.setCosmetic(true);
+    setPen(pen);
+
+    if (_verticalLine)
+        _verticalLine->setPen(pen);
+    if (_horizontalLine)
+        _horizontalLine->setPen(pen);
+}
+
+void Circle::raiseHandleToTop()
+{
+    if (_circle)
+    {
+        _circle->raiseToTop();
+    }
+}
+
+QPointF Circle::pointOnCircle(const QRectF& rect, const QPointF& pos)
+{
+    const QPointF c = rect.center();
+    QPointF v = pos - c;
+    const qreal len = std::hypot(v.x(), v.y());
+    if (len <= 1e-6) // курсор в центре — направим вправо
+        return c + QPointF(rect.width()*0.5, 0.0);
+    const qreal r = rect.width()*0.5;
+    v /= len;
+    return c + v * r;
 }
 
 void Circle::keyPressEvent(QKeyEvent* event)
 {
-    if (event->key() == Qt::Key_Delete) {
+    if (event->key() == Qt::Key_Delete)
+    {
         auto scene = this->scene();
-        if (scene) {
+        if (scene)
+        {
             scene->removeItem(this);
             delete this; // Удаляем объект
         }
-    } else {
+    }
+    else if (event->key() == Qt::Key_B)
+    {
+        moveToBack();
+        event->accept();
+    }
+    else
+    {
         // Передаем событие дальше, если это не `Del`
         QGraphicsEllipseItem::keyPressEvent(event);
     }
 }
 
+void Circle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
+{
+    QMenu menu;
+
+    QAction* moveToBackAction = menu.addAction("Переместить на задний план (B)");
+
+    // Добавляем разделитель
+    menu.addSeparator();
+
+    // Добавляем действие удаления
+    QAction* deleteAction = menu.addAction("Удалить (Del)");
+
+    QObject::connect(moveToBackAction, &QAction::triggered, [this]() {
+        this->moveToBack();
+    });
+
+    QObject::connect(deleteAction, &QAction::triggered, [this]() {
+        auto scene = this->scene();
+        if (scene) {
+            scene->removeItem(this);
+            delete this;
+        }
+    });
+
+    menu.exec(event->screenPos());
+    event->accept();
+}
+
+void Circle::moveToBack()
+{
+    if (!scene()) return;
+
+    // Собираем информацию о всех фигурах
+    QList<QGraphicsItem*> allItems;
+    qreal photoZValue = 0;
+
+    for (QGraphicsItem* item : scene()->items())
+    {
+        if (dynamic_cast<DragCircle*>(item))
+            continue;
+
+        if (item->zValue() <= 1 && item != this)
+        {
+            photoZValue = item->zValue();
+        }
+
+        allItems.append(item);
+    }
+
+    // Сортируем по z-value
+    std::sort(allItems.begin(), allItems.end(),
+              [](QGraphicsItem* a, QGraphicsItem* b) {
+                  return a->zValue() < b->zValue();
+              });
+
+    // Находим индекс текущей фигуры
+    int currentIndex = -1;
+    for (int i = 0; i < allItems.size(); ++i)
+    {
+        if (allItems[i] == this)
+        {
+            currentIndex = i;
+            break;
+        }
+    }
+
+    if (currentIndex == -1) return;
+
+    // Если фигура уже самая нижняя (после фотографии)
+    if (currentIndex == 1) // индекс 0 - фотография, индекс 1 - самая нижняя фигура
+    {
+        // Перемещаем на самый верх
+        QGraphicsItem* topItem = allItems.last();
+        setZValue(topItem->zValue() + 1);
+    }
+    else
+    {
+        // Перемещаем на одну позицию ниже
+        QGraphicsItem* lowerItem = allItems[currentIndex - 1];
+        setZValue(lowerItem->zValue() - 0.1);
+    }
+
+    // Гарантируем, что остаемся над фотографией
+    if (zValue() <= photoZValue)
+    {
+        setZValue(photoZValue + 0.1);
+    }
+
+    // Ручка всегда поверх
+    if (_circle)
+    {
+        _circle->setZValue(10000);
+    }
+
+    scene()->update();
+}
+
 void Circle::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
 {
-    Q_UNUSED(event);
-    // Устанавливаем бледный цвет заливки при наведении
-    setBrush(QColor(255, 200, 200, 150)); // Бледно-красный с прозрачностью
-    update(); // Обновляем отображение
+    if (!_circle)
+        return;
+    // Проверяем, находится ли курсор рядом с окружностью
+    if (isCursorNearCircle(event->pos()))
+    {
+        // Обновляем позицию ручки в зависимости от положения курсора
+        updateHandlePosition(mapToScene(event->pos()));
+
+        const QPointF onCirc = pointOnCircle(rect(), event->pos());
+        qgraph::DragCircle::applyHoverStyle(_circle, true);
+        _circle->setPos(onCirc - _circle->boundingRect().center());
+        _circle->setVisible(true);
+    }
 }
+
+void Circle::hoverMoveEvent(QGraphicsSceneHoverEvent* event)
+{
+    if (_circle)
+    {
+        // Проверяем, находится ли курсор рядом с окружностью
+        if (isCursorNearCircle(event->pos()))
+        {
+            // Обновляем позицию ручки в зависимости от положения курсора
+            updateHandlePosition(mapToScene(event->pos()));
+            const QPointF onCirc = pointOnCircle(rect(), event->pos());
+            DragCircle::applyHoverStyle(_circle, true);
+            _circle->setPos(onCirc - _circle->boundingRect().center());
+            if (!_circle->isVisible())
+                _circle->setVisible(true);
+        }
+        else
+        {
+            // Курсор не рядом с окружностью - скрываем ручку
+            _circle->setVisible(false);
+            qgraph::DragCircle::applyHoverStyle(_circle, false);
+        }
+    }
+}
+
 
 void Circle::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
 {
-    Q_UNUSED(event);
-    // Возвращаем прозрачную заливку при уходе курсора
-    setBrush(Qt::transparent);
-    update(); // Обновляем отображение
+    if (!_circle)
+        return;
+
+    _circle->setVisible(false);
+    qgraph::DragCircle::applyHoverStyle(_circle, false);
+}
+
+void Circle::paint(QPainter* painter,
+                   const QStyleOptionGraphicsItem* option,
+                   QWidget* widget)
+{
+    // Сначала стандартная отрисовка окружности (контур, заливка, выделение и т.д.)
+    QGraphicsEllipseItem::paint(painter, option, widget);
+}
+
+bool Circle::isCursorNearCircle(const QPointF& cursorPos) const
+{
+    const QPointF center = rect().center();
+    const qreal radius = rect().width() / 2.0;
+
+    // Расстояние от центра до курсора
+    const qreal distanceToCenter = QLineF(center, cursorPos).length();
+
+    // Определяем зону вокруг окружности (например, ±10 пикселей)
+    const qreal margin = 10.0;
+
+    // Проверяем, находится ли курсор в зоне вокруг окружности
+    return std::abs(distanceToCenter - radius) <= margin;
 }
 
 } // namespace qgraph

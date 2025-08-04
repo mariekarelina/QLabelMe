@@ -1,6 +1,8 @@
 #pragma once
 
+#include "shared/container_ptr.h"
 #include "shared/simple_ptr.h"
+
 #include "pproto/func_invoker.h"
 #include "pproto/transport/tcp.h"
 
@@ -9,6 +11,8 @@
 
 #include "qgraphics2/video_rect.h"
 #include "qgraphics2/rectangle.h"
+#include "qgraphics2/drag_circle.h"
+
 //#include "qutils/video_widget.h"
 
 #include <QMainWindow>
@@ -20,6 +24,12 @@
 #include <QListWidget>
 #include <QMap>
 #include <QList>
+#include <QCheckBox>
+#include <QButtonGroup>
+#include <QHBoxLayout>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QTableWidgetItem>
 
 #include <QGraphicsView>
 #include <QGraphicsScene>
@@ -44,6 +54,53 @@ class MainWindow;
 
 class QLabel;
 
+struct Document
+{
+    typedef container_ptr<Document> Ptr;
+
+    QString filePath;  // Путь к файлу изображения
+    QGraphicsScene* scene = nullptr;  // Сцена с изображением и разметкой
+    qgraph::VideoRect* videoRect = nullptr;
+    QPixmap pixmap;  // Само изображение
+    bool isModified = false; // Флаг, указывающий на наличие несохраненных изменений
+
+    // Состояние просмотра
+    struct
+    {
+        int hScroll = 0;
+        int vScroll = 0;
+        qreal zoom = 1.0;
+        QPointF center;
+    } viewState;
+
+    static Ptr create(const QString& path)
+    {
+        Ptr doc {new Document};
+        doc->filePath = path;
+        return doc;
+    }
+
+    bool loadImage()
+    {
+        pixmap = QPixmap(filePath);
+        if (pixmap.isNull())
+        {
+            return false;
+        }
+        if (!scene)
+        {
+            scene = new QGraphicsScene();
+        }
+        if (!videoRect)
+        {
+            videoRect = new qgraph::VideoRect(scene);
+        }
+        videoRect->setPixmap(pixmap);
+        return true;
+    }
+};
+
+
 class MainWindow : public QMainWindow
 {
 public:
@@ -58,15 +115,18 @@ public:
     void graphicsView_mouseReleaseEvent(QMouseEvent*, GraphicsView*);
 
     void setSceneItemsMovable(bool movable);
+    Document::Ptr currentDocument() const;
 
 protected:
-    bool eventFilter(QObject *watched, QEvent *event);
-    void keyPressEvent(QKeyEvent *event) override;
+    bool eventFilter(QObject* obj, QEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
+    void closeEvent(QCloseEvent*) override;
 
 private slots:
     void togglePointerMode();
     void on_actOpen_triggered(bool);
     void on_actClose_triggered(bool);
+    void on_actSave_triggered(bool);
 
     void on_actExit_triggered(bool);
 
@@ -78,43 +138,124 @@ private slots:
     void on_btnLine_clicked(bool);
     void on_btnCircle_clicked(bool);
     void on_btnTest_clicked(bool);
-    void saveCurrentViewState();
-    void restoreViewState(const QString& filePath);
+
     void fitImageToView();
-    //void fitImageToView(bool);
     void fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem* previous);
+    void onSceneChanged();
 
     void on_actRect_triggered();
     void on_actCircle_triggered();
     void on_actLine_triggered();
 
-    void wheelEvent(QWheelEvent* event);
+    void wheelEvent(QWheelEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
-    void resizeEvent(QResizeEvent* event);
+    void onCheckBoxPolygonLabel(QAbstractButton *button);
+    void setWorkingFolder(const QString& folderPath);
 
+    void onSceneItemRemoved(QGraphicsItem* item);
+    void on_actDelete_triggered();
+    void on_actAbout_triggered();
+
+    // Настройки
+    void on_actSetting_triggered();
 
 private:
     Q_OBJECT
-    void closeEvent(QCloseEvent*) override;
     void loadFilesFromFolder(const QString& folderPath);
-    void loadPolygonLabelsFromFile(const QString& filePath);
 
-    // Обновляет список разметок для текущей сцены
     void updatePolygonListForCurrentScene();
 
     void loadGeometry();
     void saveGeometry();
 
-    void saveAnnotationToFile(const QString& imagePath);
-    void loadAnnotationFromFile(const QString& imagePath);
+
     QJsonObject serializeSceneToJson(QGraphicsScene* scene);
     void deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json);
     qgraph::VideoRect* findVideoRect(QGraphicsScene* scene);
     void resetViewToDefault();
 
-    void toggleRightSplitter(); // Функция переключения сплиттера
-    void updateWindowTitle(); // Обновление заголовка (путь к папке с файлами)
+    void toggleRightSplitter();
+    void updateWindowTitle();
     void updateFolderPathDisplay();
+
+    void saveAnnotationToFile(Document::Ptr doc);
+    void updateFileListDisplay(const QString& filePath);
+    void loadAnnotationFromFile(Document::Ptr doc);
+    void saveCurrentViewState(Document::Ptr doc);
+    void restoreViewState(Document::Ptr doc);
+
+    void handleCheckBoxClick(QCheckBox* clickedCheckBox);
+
+    void loadLastUsedFolder();
+    void saveLastUsedFolder();
+
+    bool hasAnnotationFile(const QString& imagePath) const;
+
+    bool loadClassesFromFile(const QString& filePath);
+
+    void onPolygonListItemClicked(QListWidgetItem* item);
+    void onPolygonListItemDoubleClicked(QListWidgetItem* item);
+    void onSceneSelectionChanged();
+
+    void updateFileListItemIcon(QListWidgetItem* item, bool hasAnnotations);
+    QListWidgetItem* findFileListItem(const QString& filePath);
+
+    // Удаление элемента со сцены и из списка
+    void removePolygonItem(QGraphicsItem* item);
+    void removePolygonListItem(QListWidgetItem* item);
+
+    // Связывание элементов сцены и списка
+    void linkSceneItemToList(QGraphicsItem* sceneItem);
+
+    void showPolygonListContextMenu(const QPoint &pos);
+
+    bool isYamlFileEmpty(const QString& yamlPath) const;
+    QString getAnnotationFilePath(const QString& imagePath) const;
+
+    void raiseAllHandlesToTop();
+    void moveSelectedItemsToBack();
+
+    bool hasUnsavedChanges() const;
+    QList<Document::Ptr> getUnsavedDocuments() const;
+    int showUnsavedChangesDialog(const QList<Document::Ptr> &unsavedDocs);
+    void saveAllDocuments();
+
+    qgraph::DragCircle* pickHiddenHandle(const QPointF& scenePos, bool& topIsHandle) const;
+    void ensureGhostAllocated();
+    void showGhostOver(qgraph::DragCircle* target, const QPointF& scenePos);
+    void moveGhostTo(const QPointF& scenePos);
+    void endGhost();
+    // Cтили призрака
+    void setGhostStyleHover();  // жёлтый + увеличенный
+    void setGhostStyleIdle();   // исходный размер/цвет
+    void showGhostPreview(qgraph::DragCircle* target, const QPointF& scenePos);
+    void startGhostDrag(const QPointF& scenePos);
+
+    qgraph::DragCircle* pickHandleAt(const QPointF& scenePos) const;
+    void startHandleDrag(qgraph::DragCircle* h, const QPointF& scenePos);
+    void updateHandleDrag(const QPointF& scenePos);
+    void finishHandleDrag();
+
+    void clearAllHandleHoverEffects();
+    void showGhostFor(qgraph::DragCircle* h);
+    void hideGhost();
+
+    void updateAllPointNumbers();
+
+
+    void loadVisualStyle();
+    void saveVisualStyle() const;
+
+    void applyStyle_AllDocuments();
+    void forEachScene(std::function<void(QGraphicsScene*)> fn);
+    void apply_LineWidth_ToScene(QGraphicsScene* sc);
+    void apply_PointSize_ToScene(QGraphicsScene* sc);
+    void apply_NumberSize_ToScene(QGraphicsScene* sc);
+
+    void apply_LineWidth_ToItem(QGraphicsItem* it);
+    void apply_PointSize_ToItem(QGraphicsItem* it);
+    void apply_NumberSize_ToItem(QGraphicsItem* it);
 
 
 private:
@@ -128,6 +269,7 @@ private:
 
     QString _windowTitle;
     QString _currentFolderPath; // Переменную для хранения пути
+    QString _lastUsedFolder; // Последняя открытая папка
     QLabel* _labelConnectStatus;
 
     QLabel* _folderPathLabel; // Для отображения пути к папке рядом с версией
@@ -154,6 +296,7 @@ private:
     bool _drawingPolyline = {false};      // Флаг, рисуется ли линия
     bool _drawingRectangle = {false};    // Флаг, рисуется ли прямоугольник
     bool _isInDrawingMode = false; // Флаг, указывающий что мы в режиме рисования новой фигуры
+    bool _isDraggingImage = false; // Флаг для перетаскивания изображения
     LineDrawingItem* _currentLine = {nullptr}; // Текущая линия
     SquareDrawingItem* _currentSquare = {nullptr}; // Текущий квадрат
     QList<QPointF> _polylinePoints;            // Точки текущей полилинии
@@ -181,34 +324,75 @@ private:
     };
     QMap<QString, ImageData> _imageDataMap; // Ключ - путь к файлу
 
-    QMap<QString, QGraphicsScene*> _scenesMap; // Ключ - путь к файлу, значение - сцена
+    //QMap<QString, QGraphicsScene*> _scenesMap; // Ключ - путь к файлу, значение - сцена
+    QMap<QString, Document::Ptr> _documentsMap;
 
     // Текущее изображение
-   QString _currentImagePath;
+    QString _currentImagePath;
 
-   // Временные данные для рисования
-   QGraphicsRectItem* _tempRectItem = nullptr;
-   QGraphicsEllipseItem* _tempCircleItem = nullptr;
-   qgraph::Polyline* _tempPolyline = nullptr;
+    // Временные данные для рисования
+    QGraphicsRectItem* _tempRectItem = nullptr;
+    QGraphicsEllipseItem* _tempCircleItem = nullptr;
+    qgraph::Polyline* _tempPolyline = nullptr;
 
 
-   struct ScrollState
-   {
+    struct ScrollState
+    {
        int hScroll = 0;
        int vScroll = 0;
        qreal zoom = 1.0;
        QPointF center; // Центр viewport'а (дополнительно для точного восстановления)
-   };
-   QMap<QString, ScrollState> _scrollStates; // Ключ — путь к файлу
+    };
+    QMap<QString, ScrollState> _scrollStates; // Ключ — путь к файлу
 
-   QList<int> _savedSplitterSizes; // Хранит нормальные размеры сплиттера
-   bool _isRightSplitterCollapsed = false;
-   bool _isRightPanelVisible = true;
-   QWidget* _rightPanel; // Указатель на правую панель
+    QList<int> _savedSplitterSizes; // Хранит нормальные размеры сплиттера
+    bool _isRightSplitterCollapsed = false;
+    bool _isRightPanelVisible = true;
+    QWidget* _rightPanel; // Указатель на правую панель
+
+    // Указатель на последний выбранный чекбокс в списке классов для полигонов
+    QCheckBox* _lastCheckedPolygonLabel = nullptr;
+
+    // --- Механика "призрачной" ручки ---
+    QGraphicsRectItem* _ghostHandle = nullptr;         // рисуемая сверху копия
+    qgraph::DragCircle* _ghostTarget = nullptr;        // настоящая цель (реальная ручка)
+    bool _ghostActive = false;
+    bool _ghostHover  = false;
+    QPointF _ghostGrabOffset;                          // смещение точки хвата
+    qreal _ghostPickRadius = 6.0;                     // радиус поиска ручки под курсором
+
+    QVector<qgraph::DragCircle*> m_circles;
+    qgraph::DragCircle* m_selectedCircle = nullptr;
+    QPointF m_dragOffset;
+
+    // Состояние перетаскивания
+    bool m_isDraggingHandle = false;
+    QPointer<qgraph::DragCircle> m_dragHandle;   // какую ручку тащим
+    QPointF m_pressLocalOffset;                  // смещение от центра ручки при захвате
 
 
+    qgraph::DragCircle* _currentDraggedCircle = nullptr;
+    QPointF _dragCircleStartPosition;
+    QPointF _dragCircleMouseOffset;
+
+    bool _loadingNow = false;
+    bool _editInProgress = false;
+    bool _handleDragging = false; // Флаг для отслеживания перетаскивания ручек
+
+    qgraph::DragCircle* _currentHoveredHandle = nullptr;
+
+    qgraph::DragCircle* _lastHoverHandle = nullptr; // кто сейчас в hover-стиле
+
+    struct VisualStyle {
+        qreal lineWidth = 2.0; // px
+        qreal handleSize = 10.0; // px (DragCircle/ручки вершин)
+        qreal numberFontPt = 10.0; // pt (кегль нумерации вершин/узлов)
+    };
+    VisualStyle _vis; // глобально для всех фигур
 
     // Позволяем стороннему классу видеть все
     //friend class GraphicsView;
 };
+
+Q_DECLARE_METATYPE(Document::Ptr)
 

@@ -1,6 +1,7 @@
 <RCC>
     <qresource prefix="/config">
         <file>resources/qlabelme.base.conf</file>
+        <file>resources/classes.base.yaml</file>
     </qresource>
     <qresource prefix="/images">
         <file>resources/authorize_gray.svg</file>
@@ -20,5 +21,7 @@
         <file>resources/circle.svg</file>
         <file>resources/rectangle.svg</file>
         <file>resources/hexagon.svg</file>
+        <file>resources/ok.svg</file>
+        <file>resources/not_ok.svg</file>
     </qresource>
 </RCC>

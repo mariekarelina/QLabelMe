@@ -1,11 +1,12 @@
 #include "rectangle.h"
 #include "drag_circle.h"
 #include <QtGui>
+#include <QMenu>
 
 namespace qgraph {
 
 Rectangle::Rectangle(QGraphicsScene* scene)
-    : _isDrawing(false) // Изначально режим рисования выключен
+    :_isDrawing(false), _pointNumbersVisible(true) // Изначально режим рисования выключен
 {
     setFlags(ItemIsMovable | ItemIsFocusable);
     setAcceptHoverEvents(true); // Включаем обработку событий наведения
@@ -22,22 +23,56 @@ Rectangle::Rectangle(QGraphicsScene* scene)
     scene->addItem(this);
 
     _circleTL = new DragCircle(scene);
-    _circleTL->setParent(this);
-    _circleTL->setVisible(false);
+    _circleTL->setParentItem(this);
+    _circleTL->setVisible(true);
+    _circleTL->setZValue(100000);
+    //_circleTL->raiseToTop();
 
     _circleTR = new DragCircle(scene);
-    _circleTR->setParent(this);
-    _circleTR->setVisible(false);
+    _circleTR->setParentItem(this);
+    _circleTR->setVisible(true);
+    _circleTR->setZValue(100000);
+    //_circleTR->raiseToTop();
 
     _circleBR = new DragCircle(scene);
-    _circleBR->setParent(this);
-    _circleBR->setVisible(false);
+    _circleBR->setParentItem(this);
+    _circleBR->setVisible(true);
+    _circleBR->setZValue(100000);
+    //_circleBR->raiseToTop();
 
     _circleBL = new DragCircle(scene);
-    _circleBL->setParent(this);
-    _circleBL->setVisible(false);
+    _circleBL->setParentItem(this);
+    _circleBL->setVisible(true);
+    _circleBL->setZValue(100000);
+    //_circleBL->raiseToTop();
+
+    _circleTL->show();
+    _circleTR->show();
+    _circleBR->show();
+    _circleBL->show();
 }
 
+Rectangle::~Rectangle()
+{
+    // Удаляем ручки из сцены при удалении прямоугольника
+    if (scene()) {
+        scene()->removeItem(_circleTL);
+        scene()->removeItem(_circleTR);
+        scene()->removeItem(_circleBR);
+        scene()->removeItem(_circleBL);
+    }
+
+    delete _circleTL;
+    delete _circleTR;
+    delete _circleBR;
+    delete _circleBL;
+
+
+    qDeleteAll(pointNumbers);    // Удаляем номера
+    qDeleteAll(numberBackgrounds); // Удаляем фоны
+    pointNumbers.clear();
+    numberBackgrounds.clear();
+}
 
 void Rectangle::setFrameScale(float newScale)
 {
@@ -60,10 +95,12 @@ void Rectangle::setFrameScale(float newScale)
 
     _frameScale = newScale;
     //changeSignal.emit_(this);
+    raiseHandlesToTop();
 }
 
 void Rectangle::dragCircleMove(DragCircle* circle)
 {
+    qgraph::Shape::HandleBlocker guard(this);
     QRectF r = rect();
 
     if (_circleTL == circle)
@@ -89,7 +126,6 @@ void Rectangle::dragCircleMove(DragCircle* circle)
 
         // Обновление позиций кругов, чтобы они были прикреплены к углам
         _circleTL->setPos(r.topLeft());
-
         _circleTR->setPos(r.topRight());
         _circleBL->setPos(r.bottomLeft());
         _circleBR->setPos(r.bottomRight());
@@ -177,8 +213,10 @@ void Rectangle::dragCircleMove(DragCircle* circle)
 
     prepareGeometryChange();
     setRect(r);
-
+    updatePointNumbers();
     circleMoveSignal.emit_(this);
+    updateHandlePosition();
+    raiseHandlesToTop();
 }
 
 void Rectangle::dragCircleRelease(DragCircle* circle)
@@ -217,7 +255,6 @@ void Rectangle::setRealSceneRect(const QRectF& r)
     setRect(rect);   // Обновляем размеры
     setPos(pos);     // Устанавливаем позицию
 
-    // Убедитесь, что ручки видимы
     _circleTL->setVisible(true);
     _circleTR->setVisible(true);
     _circleBL->setVisible(true);
@@ -225,6 +262,8 @@ void Rectangle::setRealSceneRect(const QRectF& r)
 
 
     updateHandlePosition(); // Обновляем позиции ручек
+    updatePointNumbers();
+    raiseHandlesToTop();
 
     //_circle->setPos(rect.width(), rect.height());
 }
@@ -236,6 +275,9 @@ void Rectangle::updateHandlePosition()
     _circleTR->setPos(this->rect().topRight());
     _circleBL->setPos(this->rect().bottomLeft());
     _circleBR->setPos(this->rect().bottomRight());
+
+    raiseHandlesToTop();
+    updatePointNumbers();
 }
 
 void Rectangle::keyPressEvent(QKeyEvent* event)
@@ -249,6 +291,26 @@ void Rectangle::keyPressEvent(QKeyEvent* event)
             delete this; // Удаляем объект
         }
     }
+    else if (event->key() == Qt::Key_E)
+    {
+        rotatePointsCounterClockwise();
+        event->accept();
+    }
+    else if (event->key() == Qt::Key_R)
+    {
+        rotatePointsClockwise();
+        event->accept();
+    }
+    else if (event->key() == Qt::Key_N)
+    {
+        togglePointNumbers();
+        event->accept();
+    }
+    else if (event->key() == Qt::Key_B)
+    {
+        moveToBack();
+        event->accept();
+    }
     else
     {
         // Передаем событие дальше, если это не `Del`
@@ -256,20 +318,370 @@ void Rectangle::keyPressEvent(QKeyEvent* event)
     }
 }
 
+void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
+{
+    // QMenu menu;
+
+    // // Добавляем меню для поворота точек
+    // QMenu* orderMenu = menu.addMenu("Порядок точек");
+    // QAction* cwAction = orderMenu->addAction("Сдвиг по часовой");
+    // QAction* ccwAction = orderMenu->addAction("Сдвиг против часовой");
+
+    // // connect(cwAction, &QAction::triggered, this, &Rectangle::rotatePointsClockwise);
+    // // connect(ccwAction, &QAction::triggered, this, &Rectangle::rotatePointsCounterClockwise);
+    // QObject::connect(cwAction, &QAction::triggered, [this]() {
+    //     this->rotatePointsClockwise();
+    // });
+
+    // QObject::connect(ccwAction, &QAction::triggered, [this]() {
+    //     this->rotatePointsCounterClockwise();
+    // });
+
+    // menu.exec(event->screenPos());
+    // event->accept();
+    QMenu menu;
+
+    QAction* cwAction = menu.addAction("Сдвиг по часовой (R)");
+    QAction* ccwAction = menu.addAction("Сдвиг против часовой (E)");
+    QString numbersText = _pointNumbersVisible ? "Скрыть нумерацию (N)" : "Показать нумерацию (N)";
+    QAction* moveToBackAction = menu.addAction("Переместить на задний план (B)");
+    QAction* toggleNumbersAction = menu.addAction(numbersText);
+
+    // Добавляем разделитель
+    menu.addSeparator();
+
+    // Добавляем действие удаления
+    QAction* deleteAction = menu.addAction("Удалить (Del)");
+
+    // Подключаем действия
+    QObject::connect(cwAction, &QAction::triggered, [this]() {
+        this->rotatePointsClockwise();
+    });
+
+    QObject::connect(ccwAction, &QAction::triggered, [this]() {
+        this->rotatePointsCounterClockwise();
+    });
+
+    QObject::connect(toggleNumbersAction, &QAction::triggered, [this]() {
+        this->togglePointNumbers();
+    });
+
+    QObject::connect(moveToBackAction, &QAction::triggered, [this]() {
+        this->moveToBack();
+    });
+
+    QObject::connect(deleteAction, &QAction::triggered, [this]() {
+        auto scene = this->scene();
+        if (scene) {
+            scene->removeItem(this);
+            delete this;
+        }
+    });
+
+    menu.exec(event->screenPos());
+    event->accept();
+}
+
 void Rectangle::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
 {
-    Q_UNUSED(event);
-    // Устанавливаем бледный цвет заливки при наведении
-    setBrush(QColor(200, 255, 200, 150)); // Бледно-красный с прозрачностью
-    update(); // Обновляем отображение
+    QGraphicsRectItem::hoverEnterEvent(event);
+    setBrush(QColor(200, 255, 200, 150));
+    //QGraphicsRectItem::hoverEnterEvent(event);
+
+    // if (Shape* item = dynamic_cast<Shape*>(parentItem()))
+    // {
+    //     item->setZLevel(1001);
+    // }
+
+    // Поднимаем ручки наверх при наведении
+    raiseHandlesToTop();
+    update();
 }
 
 void Rectangle::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
 {
-    Q_UNUSED(event);
-    // Возвращаем прозрачную заливку при уходе курсора
+    QGraphicsRectItem::hoverLeaveEvent(event);
     setBrush(Qt::transparent);
-    update(); // Обновляем отображение
+    //QGraphicsRectItem::hoverLeaveEvent(event);
+    updateHandlesZValue();
+}
+
+void Rectangle::updateHandleVisibility()
+{
+    // bool visible = isSelected(); // Или другая логика определения видимости
+    // _circleTL->setVisible(visible);
+    // _circleTR->setVisible(visible);
+    // _circleBL->setVisible(visible);
+    // _circleBR->setVisible(visible);
+    _circleTL->setVisible(true);
+    _circleTR->setVisible(true);
+    _circleBL->setVisible(true);
+    _circleBR->setVisible(true);
+
+    raiseHandlesToTop();
+}
+
+void Rectangle::handleHandleHoverEnter()
+{
+    // Поднимаем прямоугольник на верхний z-уровень временно
+    setZValue(1001);
+}
+
+void Rectangle::handleHandleHoverLeave()
+{
+    // Возвращаем исходный z-уровень
+    setZValue(1);
+    // Возвращаем видимость ручек в исходное состояние
+    //updateHandleVisibility();
+}
+
+void Rectangle::updatePointNumbers()
+{
+    // Удаляем старые номера и фоны
+    qDeleteAll(pointNumbers);
+    qDeleteAll(numberBackgrounds);
+    pointNumbers.clear();
+    numberBackgrounds.clear();
+
+    if (!_pointNumbersVisible) return; // Не показываем номера, если выключено
+
+    QRectF rect = this->rect();
+    QPointF points[4] = {
+        rect.topLeft(),
+        rect.topRight(),
+        rect.bottomRight(),
+        rect.bottomLeft()
+    };
+
+    // Определяем внешние направления для каждой точки
+    QPointF directions[4] ={
+        QPointF(-1, -1),
+        QPointF(1, -1),
+        QPointF(1, 1),
+        QPointF(-1, 1)
+    };
+    const qreal offsetDistance = 10.0; // Расстояние от точки до номера
+
+    for (int i = 0; i < 4; ++i)
+    {
+        // Вычисляем номер точки с учетом смещения
+        int numberedIndex = (i + _numberingOffset) % 4;
+
+        // Вычисляем позицию номера вне фигуры
+        QPointF direction = directions[i];
+        QPointF numberPos = points[i] + direction * offsetDistance;
+
+        QGraphicsSimpleTextItem* number = new QGraphicsSimpleTextItem(QString::number(numberedIndex), this);
+        number->setPos(points[i]);
+        number->setBrush(QBrush(Qt::white));
+        number->setZValue(1001);
+        number->setPen(Qt::NoPen);
+        number->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
+
+        // Применяем сохраненный стиль шрифта
+        if (_numberFontSize > 0)
+        {
+            QFont font = number->font();
+            font.setPointSizeF(_numberFontSize);
+            number->setFont(font);
+        }
+
+        // Центрируем номер относительно позиции
+        QRectF textRect = number->boundingRect();
+        QPointF finalNumberPos(numberPos.x() - textRect.width()/2,
+                               numberPos.y() - textRect.height()/2);
+        number->setPos(finalNumberPos);
+
+        // Добавляем прямоугольник фона
+        QGraphicsRectItem* bg = new QGraphicsRectItem(number->boundingRect(), this);
+        bg->setPos(finalNumberPos);
+        bg->setBrush(QBrush(QColor(0, 0, 0, 180)));
+        bg->setPen(Qt::NoPen);
+        bg->setZValue(1000);
+        bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
+
+
+        // Запрещаем взаимодействие с номером
+        number->setFlag(QGraphicsItem::ItemIsSelectable, false);
+        number->setFlag(QGraphicsItem::ItemIsMovable, false);
+        number->setFlag(QGraphicsItem::ItemIsFocusable, false);
+        bg->setFlag(QGraphicsItem::ItemIsSelectable, false);
+        bg->setFlag(QGraphicsItem::ItemIsMovable, false);
+        bg->setFlag(QGraphicsItem::ItemIsFocusable, false);
+
+        pointNumbers.append(number);
+        numberBackgrounds.append(bg);
+    }
+}
+
+void Rectangle::applyNumberStyle(qreal fontSize)
+{
+    _numberFontSize = fontSize; // Сохраняем размер шрифта
+
+    // Обновляем существующие номера
+    for (QGraphicsSimpleTextItem* number : pointNumbers)
+    {
+        if (number)
+        {
+            QFont font = number->font();
+            font.setPointSizeF(fontSize);
+            number->setFont(font);
+        }
+    }
+
+    // Обновляем фоны
+    for (int i = 0; i < pointNumbers.size() && i < numberBackgrounds.size(); ++i)
+    {
+        QGraphicsSimpleTextItem* number = pointNumbers[i];
+        QGraphicsRectItem* bg = numberBackgrounds[i];
+
+        if (number && bg)
+        {
+            QRectF textRect = number->boundingRect();
+            bg->setRect(textRect);
+            bg->setPos(number->pos());
+        }
+    }
+}
+
+void Rectangle::rotatePointsClockwise()
+{
+    _numberingOffset = (_numberingOffset - 1 + 4) % 4;
+    updatePointNumbers();
+}
+
+void Rectangle::rotatePointsCounterClockwise()
+{
+    _numberingOffset = (_numberingOffset + 1) % 4;
+    updatePointNumbers();
+}
+
+void Rectangle::deleteItem()
+{
+    auto scene = this->scene();
+    if (scene)
+    {
+        scene->removeItem(this);
+        delete this;
+    }
+}
+
+// Новый метод для внешней обработки клавиш
+void Rectangle::handleKeyPressEvent(QKeyEvent* event)
+{
+    keyPressEvent(event);
+}
+
+void Rectangle::togglePointNumbers()
+{
+    _pointNumbersVisible = !_pointNumbersVisible;
+    updatePointNumbers();
+}
+
+void Rectangle::updateHandlesZValue()
+{
+    _circleTL->setZValue(this->zValue() + 1000);
+    _circleTR->setZValue(this->zValue() + 1000);
+    _circleBR->setZValue(this->zValue() + 1000);
+    _circleBL->setZValue(this->zValue() + 1000);
+
+    raiseHandlesToTop();
+}
+
+void Rectangle::raiseHandlesToTop()
+{
+    // _circleTL->setZValue(100000);
+    // _circleTR->setZValue(100000);
+    // _circleBR->setZValue(100000);
+    // _circleBL->setZValue(100000);
+
+    // // _circleTL->raiseToTop();
+    // // _circleTR->raiseToTop();
+    // // _circleBR->raiseToTop();
+    // // _circleBL->raiseToTop();
+
+    // Временное повышение z-value ручек
+    _circleTL->setZValue(this->zValue() + 1000);
+    _circleTR->setZValue(this->zValue() + 1000);
+    _circleBR->setZValue(this->zValue() + 1000);
+    _circleBL->setZValue(this->zValue() + 1000);
+
+    // Принудительное обновление сцены
+    if (scene())
+    {
+        scene()->update();
+    }
+}
+
+void Rectangle::moveToBack()
+{
+    if (!scene()) return;
+
+    // Собираем информацию о всех фигурах
+    QList<QGraphicsItem*> allItems;
+    qreal photoZValue = 0;
+
+    for (QGraphicsItem* item : scene()->items())
+    {
+        if (dynamic_cast<DragCircle*>(item))
+            continue;
+
+        if (item->zValue() <= 1 && item != this)
+        {
+            photoZValue = item->zValue();
+        }
+        allItems.append(item);
+    }
+
+    // Сортируем по z-value
+    std::sort(allItems.begin(), allItems.end(),
+              [](QGraphicsItem* a, QGraphicsItem* b) {
+                  return a->zValue() < b->zValue();
+              });
+
+    // Находим индекс текущей фигуры
+    int currentIndex = -1;
+    for (int i = 0; i < allItems.size(); ++i)
+    {
+        if (allItems[i] == this)
+        {
+            currentIndex = i;
+            break;
+        }
+    }
+
+    if (currentIndex == -1) return;
+
+    // Если фигура уже самая нижняя (после фотографии)
+    if (currentIndex == 1) // индекс 0 - фотография, индекс 1 - самая нижняя фигура
+    {
+        // Перемещаем на самый верх
+        QGraphicsItem* topItem = allItems.last();
+        setZValue(topItem->zValue() + 1);
+    }
+    else
+    {
+        // Перемещаем на одну позицию ниже
+        QGraphicsItem* lowerItem = allItems[currentIndex - 1];
+        setZValue(lowerItem->zValue() - 0.1);
+    }
+
+    // Гарантируем, что остаемся над фотографией
+    if (zValue() <= photoZValue)
+    {
+        setZValue(photoZValue + 0.1);
+    }
+
+    // Ручки всегда поверх
+    for (QGraphicsItem* child : childItems())
+    {
+        if (DragCircle* circle = dynamic_cast<DragCircle*>(child))
+        {
+            circle->setZValue(10000);
+        }
+    }
+
+    scene()->update();
 }
 
 } // namespace qgraph

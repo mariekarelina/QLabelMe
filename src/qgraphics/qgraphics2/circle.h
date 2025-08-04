@@ -7,6 +7,8 @@
 #include <QGraphicsItem>
 #include <QGraphicsScene>
 #include <QMouseEvent>
+#include <QStyleOptionGraphicsItem>
+#include <QPainter>
 
 namespace qgraph {
 
@@ -19,6 +21,7 @@ public:
     int type() const override {return Type;}
 
     Circle(QGraphicsScene*, const QPointF&);
+    ~Circle();
 
     void setFrameScale(float) override;
     void dragCircleMove(DragCircle*) override;
@@ -29,24 +32,55 @@ public:
     QPointF realCenter() const;
     void setRealCenter(const QPointF&);
 
+    QPoint center() const;
+
     // Возвращает радиус окружности с учетом масштабного коэффициента
     int realRadius() const;
     void setRealRadius(int);
 
     void updateHandlePosition();
+    void updateHandlePosition(const QPointF& scenePos);
 
     int radius() const { return _radius; }
+    void updateHandleZValue();
+    void updateCrossLines();
+    void applyLineStyle(qreal lineWidth);
+    void raiseHandleToTop();
+    static QPointF pointOnCircle(const QRectF& rect, const QPointF& pos);
+    void moveToBack();
+
+    bool isCursorNearCircle(const QPointF& cursorPos) const;
+
 
 protected:
     // Переопределяем обработчик событий клавиатуры
     void keyPressEvent(QKeyEvent* event) override;
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
 
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
+    void hoverMoveEvent(QGraphicsSceneHoverEvent* event) override;
     void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
 
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
+               QWidget* widget = nullptr) override;
+
+
+private slots:
+    //void handleHandleHoverEnter();
+    //void handleHandleHoverLeave();
+
+
 private:
+
+
+private:
+    // Временная ручка при наведении
+    QPointer<DragCircle> _hoverHandle = nullptr;
     DragCircle* _circle;
     float _radius = {10};
+    // Линии крестика
+    QGraphicsLineItem* _verticalLine;
+    QGraphicsLineItem* _horizontalLine;
 
     QColor _highlightColor = Qt::transparent; // Цвет выделения
 };

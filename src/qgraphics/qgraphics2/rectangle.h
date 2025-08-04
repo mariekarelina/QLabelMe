@@ -8,6 +8,11 @@
 #include <QGraphicsScene>
 #include <QKeyEvent>
 #include <QGraphicsSceneMouseEvent>
+#include <QGraphicsRectItem>
+#include <QObject>
+#include <QMenu>
+#include <QGraphicsSceneContextMenuEvent>
+#include <QAction>
 
 
 namespace qgraph {
@@ -21,6 +26,7 @@ public:
     int type() const override {return Type;}
 
     Rectangle(QGraphicsScene*);
+    ~Rectangle();
 
     void setFrameScale(float) override;
     void dragCircleMove(DragCircle*) override;
@@ -31,13 +37,40 @@ public:
     QRectF realSceneRect() const;
     void setRealSceneRect(const QRectF&);
     void updateHandlePosition();
+    void updatePointNumbers();
+    void applyNumberStyle(qreal fontSize);
+
+    void rotatePointsClockwise();
+    void rotatePointsCounterClockwise();
+    void handleKeyPressEvent(QKeyEvent* event);
+
+    void togglePointNumbers();
+    bool isPointNumbersVisible() const { return _pointNumbersVisible; }
+
+    void updateHandlesZValue();
+    void raiseHandlesToTop() override;
+    void moveToBack();
+
+
+public slots:
+    void deleteItem();
+
 
 protected:
     // Переопределяем обработчик событий клавиатуры
     void keyPressEvent(QKeyEvent* event) override;
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
 
+    // Это не актуально, если ручки всегда видны
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
     void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
+    void updateHandleVisibility();
+
+
+private slots:
+    void handleHandleHoverEnter();
+    void handleHandleHoverLeave();
+
 
 private:
     DragCircle* _circleTL; // Левый верхний угол
@@ -52,6 +85,12 @@ private:
     QPointF _startPoint;
 
     QColor _highlightColor = Qt::transparent; // Цвет выделения
+    QList<QGraphicsSimpleTextItem*> pointNumbers;
+    QList<QGraphicsRectItem*> numberBackgrounds;
+    int _numberingOffset = 0; // Смещение для нумерации точек
+    qreal _numberFontSize = 10.0; // Размер шрифта по умолчанию
+
+    bool _pointNumbersVisible = true; // Видимости нумерации
 };
 
 } // namespace qgraph

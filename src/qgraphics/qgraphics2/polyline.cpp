@@ -27,49 +27,20 @@ Polyline::Polyline(QGraphicsScene* scene, const QPointF& scenePos)
     startCircle->setParentItem(this);
     startCircle->setVisible(true);
     startCircle->setPos(mapFromScene(scenePos));
+
     //startCircle->setPos(scenePos.x(), scenePos.y()); // Начальная позиция
     _circles.append(startCircle);
 
-    // Подключаем обработчики событий для точки
-    connect(startCircle, &DragCircle::moved, this, &Polyline::dragCircleMove);
-    connect(startCircle, &DragCircle::released, this, &Polyline::dragCircleRelease);
-
-    connect(startCircle, &DragCircle::deleteRequested, this, &Polyline::handlePointDeletion);
-
+    updateConnections();
     updatePath(); // Обновляем начальный путь
+}
 
-//    _circle1 = new DragCircle(scene);
-//    _circle1->setParentItem(this);
-//    _circle1->setVisible(true);
-//    _circle1->setPos(0, 0);
-
-//    _circle2 = new DragCircle(scene);
-//    _circle2->setParentItem(this);
-//    _circle2->setVisible(true);
-//    _circle2->setPos(50, 0);
-
-//    _circle3 = new DragCircle(scene);
-//    _circle3->setParentItem(this);
-//    _circle3->setVisible(true);
-//    _circle3->setPos(100, 50);
-
-//    _circle4 = new DragCircle(scene);
-//    _circle4->setParentItem(this);
-//    _circle4->setVisible(true);
-//    _circle4->setPos(150, 0);
-
-//    // Соединяем сигналы перемещения кругов с обновлением пути
-//    connect(_circle1, &DragCircle::moved, this, &Polyline::dragCircleMove);
-//    connect(_circle2, &DragCircle::moved, this, &Polyline::dragCircleMove);
-//    connect(_circle3, &DragCircle::moved, this, &Polyline::dragCircleMove);
-//    connect(_circle4, &DragCircle::moved, this, &Polyline::dragCircleMove);
-
-//    connect(_circle1, &DragCircle::released, this, &Polyline::dragCircleRelease);
-//    connect(_circle2, &DragCircle::released, this, &Polyline::dragCircleRelease);
-//    connect(_circle3, &DragCircle::released, this, &Polyline::dragCircleRelease);
-//    connect(_circle4, &DragCircle::released, this, &Polyline::dragCircleRelease);
-
-//    updatePath(); // Инициализируем начальный путь
+Polyline::~Polyline()
+{
+    qDeleteAll(pointNumbers);    // Удаляем номера
+    qDeleteAll(numberBackgrounds); // Удаляем фоны
+    pointNumbers.clear();
+    numberBackgrounds.clear();
 }
 
 void Polyline::setFrameScale(float newScale)
@@ -88,19 +59,8 @@ void Polyline::setFrameScale(float newScale)
 void Polyline::setRealSceneRect(const QRectF& r)
 {
     float s = frameScale();
-
-    // Задаем новую позицию полилинии
-    //QPointF pos = QPointF(r.left() * s, r.top() * s);
-
-    // Масштабируем позиции ручек по новому масштабу
-//    _circle1->setPos(pos + (_circle1->pos() - QPointF(0, 0)) * s);
-//    _circle2->setPos(pos + (_circle2->pos() - QPointF(0, 0)) * s);
-//    _circle3->setPos(pos + (_circle3->pos() - QPointF(0, 0)) * s);
-//    _circle4->setPos(pos + (_circle4->pos() - QPointF(0, 0)) * s);
-
     // Корректируем масштаб
     _frameScale = s;
-
     // Обновляем путь
     updatePath();
 }
@@ -132,10 +92,12 @@ void Polyline::addPoint(const QPointF& position, QGraphicsScene* scene)
     //newCircle->setPos(position); // Устанавливаем позицию новой точки
     QPointF localPos = mapFromScene(position);
     newCircle->setPos(localPos);
+    DragCircle::rememberCurrentAsBase(newCircle);
     _circles.append(newCircle);
 
     updateConnections();
     updatePath();
+    updatePointNumbers();
 }
 
 
@@ -162,45 +124,91 @@ void Polyline::removePoint(QPointF position)
     }
 
     // Удаляем круг, если он есть
-    if (closestCircle && minDistance < 10.0)
-    {  // 10.0 — радиус точности зоны удаления
-        handlePointDeletion(closestCircle); // Используем новый метод
+    if (closestCircle && minDistance < 10.0) // 10.0 — радиус точности зоны удаления
+    {
+        handlePointDeletion(closestCircle);
     }
 }
 
 void Polyline::insertPoint(QPointF position)
 {
-//    if (_circles.size() < 2)
-//    {
-//        return;  // Если точек меньше двух, вставка невозможна
-//    }
+    if (_circles.size() < 2)
+    {
+        return;  // Если точек меньше двух, вставка невозможна
+    }
 
-//    // Поиск ближайшего сегмента
-//    int insertIndex = -1;
-//    qreal minDistance = std::numeric_limits<qreal>::max();
-//    QPointF newPoint;
+    // Преобразуем позицию в локальные координаты
+    QPointF localPos = mapFromScene(position);
 
-//    for (int i = 0; i < _circles.size() - 1; ++i)
-//    {
-//        QPointF p1 = _circles[i]->pos();
-//        QPointF p2 = _circles[i + 1]->pos();
+    // Поиск ближайшего сегмента
+    int insertIndex = -1;
+    qreal minDistance = std::numeric_limits<qreal>::max();
+    QPointF closestPoint;
 
-//        // Вычисляем расстояние до сегмента
-//        QLineF segment(p1, p2);
-//        qreal distance = segment.normalVector().lengthTo(position);
+    for (int i = 0; i < _circles.size() - 1; ++i)
+    {
+        QPointF p1 = _circles[i]->pos();
+        QPointF p2 = _circles[i + 1]->pos();
 
-//        if (distance < minDistance) {
-//            minDistance = distance;
-//            insertIndex = i;
-//            newPoint = segment.pointAt(segment.projectedPointRatio(position));
-//        }
-//    }
+        // Вычисляем расстояние до сегмента и ближайшую точку
+        qreal u = ((localPos.x() - p1.x()) * (p2.x() - p1.x()) +
+                   (localPos.y() - p1.y()) * (p2.y() - p1.y())) /
+                  ((p2.x() - p1.x()) * (p2.x() - p1.x()) +
+                   (p2.y() - p1.y()) * (p2.y() - p1.y()));
 
-//    // Вставляем новую точку, если нашли допустимый сегмент
-//    if (insertIndex != -1 && minDistance < 10.0)
-//    {  // 10.0 — радиус точности добавления
-//        addPoint(mapToScene(newPoint), scene(), insertIndex + 1);
-//    }
+        u = qBound(0.0, u, 1.0); // Ограничиваем u между 0 и 1
+
+        QPointF projectedPoint = p1 + u * (p2 - p1);
+        qreal distance = QLineF(localPos, projectedPoint).length();
+
+        if (distance < minDistance)
+        {
+            minDistance = distance;
+            insertIndex = i;
+            closestPoint = projectedPoint;
+        }
+    }
+
+    // Проверяем замкнутую полилинию (последний сегмент)
+    if (_isClosed && _circles.size() > 2)
+    {
+        QPointF p1 = _circles.last()->pos();
+        QPointF p2 = _circles.first()->pos();
+
+        qreal u = ((localPos.x() - p1.x()) * (p2.x() - p1.x()) +
+                   (localPos.y() - p1.y()) * (p2.y() - p1.y())) /
+                  ((p2.x() - p1.x()) * (p2.x() - p1.x()) +
+                   (p2.y() - p1.y()) * (p2.y() - p1.y()));
+
+        u = qBound(0.0, u, 1.0);
+        QPointF projectedPoint = p1 + u * (p2 - p1);
+        qreal distance = QLineF(localPos, projectedPoint).length();
+
+        if (distance < minDistance)
+        {
+            minDistance = distance;
+            insertIndex = _circles.size() - 1;
+            closestPoint = projectedPoint;
+        }
+    }
+
+    // Вставляем новую точку, если нашли допустимый сегмент
+    if (insertIndex != -1 && minDistance < 20.0)
+    {
+        // Создаем новую точку
+        DragCircle* newCircle = new DragCircle(scene());
+        newCircle->setParentItem(this);
+        newCircle->setVisible(true);
+        newCircle->setPos(closestPoint);
+
+        // Вставляем точку в нужное место
+        _circles.insert(insertIndex + 1, newCircle);
+
+        updateConnections();
+        updatePath();
+        //updatePointNumbers();
+    }
+    updatePointNumbers();
 }
 
 
@@ -239,19 +247,14 @@ void Polyline::updatePath()
     }
 
     setPath(path);
+    updatePointNumbers();
 }
 
 QVariant Polyline::itemChange(GraphicsItemChange change, const QVariant& value)
 {
-    if (change == QGraphicsItem::ItemPositionChange)
+    if (change == QGraphicsItem::ItemPositionHasChanged)
     {
-        QPointF delta = value.toPointF() - pos(); // Разница между новой и старой позицией
-
-        // Корректируем положение ручек
-        for (auto circle : _circles)
-        {
-            circle->moveBy(delta.x(), delta.y());
-        }
+        updatePointNumbers();
     }
     return QGraphicsPathItem::itemChange(change, value);
 }
@@ -259,6 +262,8 @@ QVariant Polyline::itemChange(GraphicsItemChange change, const QVariant& value)
 
 void Polyline::handlePointDeletion(DragCircle* circle)
 {
+    if (!circle || !scene()) return;
+
     // Не позволяем удалять точки, если их меньше 3 в замкнутой полилинии
     if (_isClosed && _circles.size() <= 3)
         return;
@@ -280,6 +285,7 @@ void Polyline::handlePointDeletion(DragCircle* circle)
 
         updatePath();
         updateConnections();
+        updatePointNumbers();
     }
 }
 
@@ -293,6 +299,26 @@ void Polyline::keyPressEvent(QKeyEvent* event)
             scene->removeItem(this);
             delete this; // Удаляем объект
         }
+    }
+    else if (event->key() == Qt::Key_E)
+    {
+        rotatePointsCounterClockwise();
+        event->accept();
+    }
+    else if (event->key() == Qt::Key_R)
+    {
+        rotatePointsClockwise();
+        event->accept();
+    }
+    else if (event->key() == Qt::Key_N)
+    {
+        togglePointNumbers();
+        event->accept();
+    }
+    else if (event->key() == Qt::Key_B)
+    {
+        moveToBack();
+        event->accept();
     }
     else
     {
@@ -319,29 +345,58 @@ void Polyline::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
 
 void Polyline::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
 {
-    // Проверяем, не было ли клика по точке-ручке
     QGraphicsItem* item = scene()->itemAt(event->scenePos(), QTransform());
-    if (dynamic_cast<DragCircle*>(item))
+    if (DragCircle* circle = dynamic_cast<DragCircle*>(item))
     {
-        event->ignore(); // Игнорируем событие, если клик был по точке
+        // Контекстное меню для точки
+        QMenu menu;
+        QAction* deleteAction = menu.addAction("Удалить точку");
+        // Подключаем удаление точки
+        QObject::connect(deleteAction, &QAction::triggered, [this, circle]() {
+            this->handlePointDeletion(circle);
+        });
+
+        menu.exec(event->screenPos());
+        event->accept();
         return;
     }
 
     QMenu menu;
-    QAction* addPointAction = menu.addAction("Добавить точку");
 
-    // Подключаем действие добавления точки
-    connect(addPointAction, &QAction::triggered, [this, event]()
-    {
-        // Получаем позицию клика в координатах полилинии
-        QPointF clickPos = mapFromScene(event->scenePos());
+    QAction* cwAction = menu.addAction("Сдвиг по часовой (R)");
+    QAction* ccwAction = menu.addAction("Сдвиг против часовой (E)");
+    QString numbersText = _pointNumbersVisible ? "Скрыть нумерацию (N)" : "Показать нумерацию (N)";
+    QAction* moveToBackAction = menu.addAction("Переместить на задний план (B)");
+    QAction* toggleNumbersAction = menu.addAction(numbersText);
 
-        // Находим ближайший сегмент для вставки
-        int insertIndex = findClosestSegment(clickPos);
-        if (insertIndex != -1)
-        {
-            // Вставляем точку в найденный сегмент
-            insertPointAtSegment(insertIndex, clickPos);
+    // Добавляем разделитель
+    menu.addSeparator();
+
+    // Добавляем действие удаления
+    QAction* deleteAction = menu.addAction("Удалить (Del)");
+
+    // Подключаем действия
+    QObject::connect(cwAction, &QAction::triggered, [this]() {
+        this->rotatePointsClockwise();
+    });
+
+    QObject::connect(ccwAction, &QAction::triggered, [this]() {
+        this->rotatePointsCounterClockwise();
+    });
+
+    QObject::connect(toggleNumbersAction, &QAction::triggered, [this]() {
+        this->togglePointNumbers();
+    });
+
+    QObject::connect(moveToBackAction, &QAction::triggered, [this]() {
+        this->moveToBack();
+    });
+
+    QObject::connect(deleteAction, &QAction::triggered, [this]() {
+        auto scene = this->scene();
+        if (scene) {
+            scene->removeItem(this);
+            delete this;
         }
     });
 
@@ -411,48 +466,355 @@ void Polyline::dragCircleMove(DragCircle* circle)
 {
     Q_UNUSED(circle);
     updatePath(); // Обновляем путь при любом перемещении
+    updatePointNumbers();
 }
 
 void Polyline::dragCircleRelease(DragCircle* circle)
 {
     Q_UNUSED(circle);
-    emit lineChanged(this); // Сигнал о завершении изменения
+    updatePath(); // Обновляем путь при любом перемещении
+    updatePointNumbers(); // Обновляем позиции номеров
+    // emit lineChanged(this); // Сигнал о завершении изменения
 }
 
+void Polyline::updateHandlesZValue()
+{
+    for (DragCircle* circle : _circles)
+    {
+        circle->setZValue(this->zValue() + 1);
+    }
+}
+
+void Polyline::raiseHandlesToTop()
+{
+    for (DragCircle* circle : _circles)
+    {
+        circle->raiseToTop();
+        circle->setVisible(true);
+    }
+}
+
+void Polyline::moveToBack()
+{
+    if (!scene()) return;
+
+    // Собираем информацию о всех фигурах
+    QList<QGraphicsItem*> allItems;
+    qreal photoZValue = 0;
+
+    for (QGraphicsItem* item : scene()->items())
+    {
+        if (dynamic_cast<DragCircle*>(item))
+            continue;
+
+        if (item->zValue() <= 1 && item != this)
+        {
+            photoZValue = item->zValue();
+        }
+
+        allItems.append(item);
+    }
+
+    // Сортируем по z-value
+    std::sort(allItems.begin(), allItems.end(),
+              [](QGraphicsItem* a, QGraphicsItem* b) {
+                  return a->zValue() < b->zValue();
+              });
+
+    // Находим индекс текущей фигуры
+    int currentIndex = -1;
+    for (int i = 0; i < allItems.size(); ++i)
+    {
+        if (allItems[i] == this)
+        {
+            currentIndex = i;
+            break;
+        }
+    }
+
+    if (currentIndex == -1) return;
+
+    // Если фигура уже самая нижняя (после фотографии)
+    if (currentIndex == 1) // индекс 0 - фотография, индекс 1 - самая нижняя фигура
+    {
+        // Перемещаем на самый верх
+        QGraphicsItem* topItem = allItems.last();
+        setZValue(topItem->zValue() + 1);
+    }
+    else
+    {
+        // Перемещаем на одну позицию ниже
+        QGraphicsItem* lowerItem = allItems[currentIndex - 1];
+        setZValue(lowerItem->zValue() - 0.1);
+    }
+
+    // Гарантируем, что остаемся над фотографией
+    if (zValue() <= photoZValue)
+    {
+        setZValue(photoZValue + 0.1);
+    }
+
+    // Ручки всегда поверх
+    for (QGraphicsItem* child : childItems())
+    {
+        if (DragCircle* circle = dynamic_cast<DragCircle*>(child))
+        {
+            circle->setZValue(10000);
+        }
+    }
+
+    scene()->update();
+}
 
 void Polyline::updateConnections()
 {
-    // Отключаем все старые соединения
-    for (DragCircle* circle : _circles)
-    {
-        disconnect(circle, nullptr, this, nullptr);
-    }
+    // // Отключаем все старые соединения
+    // for (DragCircle* circle : _circles)
+    // {
+    //     QObject::disconnect(circle, nullptr, nullptr, nullptr);
+    // }
+    // // Устанавливаем новые соединения для всех точек
+    // for (DragCircle* circle : _circles)
+    // {
+    //     QObject::connect(circle, &DragCircle::moved, [this, circle]() {
+    //         this->dragCircleMove(circle);
+    //     });
 
-    // Устанавливаем новые соединения для перемещения точек
-    for (DragCircle* circle : _circles)
-    {
-        connect(circle, &DragCircle::moved, this, &Polyline::dragCircleMove);
-        connect(circle, &DragCircle::released, this, &Polyline::dragCircleRelease);
-        connect(circle, &DragCircle::deleteRequested, this, &Polyline::handlePointDeletion);
-    }
+    //     QObject::connect(circle, &DragCircle::released, [this, circle]() {
+    //         this->dragCircleRelease(circle);
+    //     });
 
-    // Для замкнутой полилинии не создаем специальных соединений между
-    // первой и последней точкой - они остаются независимыми
+    //     QObject::connect(circle, &DragCircle::deleteRequested, [this, circle]() {
+    //         this->handlePointDeletion(circle);
+    //     });
+    // }
 }
 
 void Polyline::updateClosedState()
 {
-    if (_isClosed && _circles.size() > 2)
-    {
-        // Связываем первую и последнюю точки
-        connect(_circles.first(), &DragCircle::moved, this, [this]() {
-            if (_isClosed) _circles.last()->setPos(_circles.first()->pos());
-        });
+    // if (_isClosed && _circles.size() > 2)
+    // {
+    //     // Удаляем все предыдущие соединения
+    //     for (DragCircle* circle : _circles)
+    //     {
+    //         QObject::disconnect(circle, nullptr, nullptr, nullptr);
+    //     }
 
-        connect(_circles.last(), &DragCircle::moved, this, [this]() {
-            if (_isClosed) _circles.first()->setPos(_circles.last()->pos());
-        });
+    //     // Устанавливаем новые соединения с помощью лямбда-функций
+    //     QObject::connect(_circles.first(), &DragCircle::moved, [this]() {
+    //         if (_isClosed && !_circles.isEmpty())
+    //             _circles.last()->setPos(_circles.first()->pos());
+    //     });
+
+    //     QObject::connect(_circles.last(), &DragCircle::moved, [this]() {
+    //         if (_isClosed && !_circles.isEmpty())
+    //             _circles.first()->setPos(_circles.last()->pos());
+    //     });
+
+    //     // Восстанавливаем остальные соединения
+    //     updateConnections();
+    // }
+}
+
+void Polyline::updatePointNumbersAfterReorder()
+{
+    // Удаляем старые номера и фоны
+    qDeleteAll(pointNumbers);
+    qDeleteAll(numberBackgrounds);
+    pointNumbers.clear();
+    numberBackgrounds.clear();
+
+    // Создаем новые номера с обновленными индексами
+    updatePointNumbers();
+}
+
+void Polyline::updatePointNumbers()
+{
+    // Удаляем старые номера и фоны
+    qDeleteAll(pointNumbers);
+    qDeleteAll(numberBackgrounds);
+    pointNumbers.clear();
+    numberBackgrounds.clear();
+
+    if (!_pointNumbersVisible) return;
+
+    for (int i = 0; i < _circles.size(); ++i)
+    {
+        QPointF circlePos = _circles[i]->pos();
+        QPointF direction(0, -1); // Направление по умолчанию (вверх)
+
+        // Вычисляем оптимальное внешнее направление для каждой точки
+        if (_circles.size() > 1)
+        {
+            if (i == 0) // Первая точка
+            {
+                QPointF nextPos = _circles[1]->pos();
+                QPointF segment = nextPos - circlePos;
+                if (segment.manhattanLength() > 0)
+                {
+                    // Для первой точки - перпендикуляр влево от направления сегмента
+                    direction = QPointF(-segment.y(), segment.x());
+                    direction = direction / QLineF(0, 0, direction.x(), direction.y()).length();
+
+                    // Всегда выбираем левое направление относительно сегмента
+                    QPointF segmentDir = segment / segment.manhattanLength();
+                    QPointF leftNormal(-segmentDir.y(), segmentDir.x());
+
+                    // Если наше направление не совпадает с левым нормалем, инвертируем
+                    if (QPointF::dotProduct(direction, leftNormal) < 0.9) // допуск 0.9
+                    {
+                        direction = -direction;
+                    }
+                }
+            }
+            else if (i == _circles.size() - 1) // Последняя точка
+            {
+                QPointF prevPos = _circles[i-1]->pos();
+                QPointF segment = circlePos - prevPos;
+                if (segment.manhattanLength() > 0)
+                {
+                    // Перпендикуляр к сегменту, направленный наружу
+                    // Для последней точки выбираем направление, противоположное сегменту
+                    direction = QPointF(-segment.y(), segment.x());
+                    direction = direction / QLineF(0, 0, direction.x(), direction.y()).length();
+
+                    // Убеждаемся, что направление наружу (вправо от направления сегмента)
+                    QPointF segmentDir = segment / QLineF(0, 0, segment.x(), segment.y()).length();
+                    if (QPointF::dotProduct(direction, QPointF(-segmentDir.y(), segmentDir.x())) > 0)
+                    {
+                        direction = -direction;
+                    }
+                }
+            }
+            else // Промежуточные точки
+            {
+                QPointF prevPos = _circles[i-1]->pos();
+                QPointF nextPos = _circles[i+1]->pos();
+
+                QPointF inSegment = circlePos - prevPos;
+                QPointF outSegment = nextPos - circlePos;
+
+                if (inSegment.manhattanLength() > 0 && outSegment.manhattanLength() > 0)
+                {
+                    // Нормализуем векторы
+                    inSegment = inSegment / QLineF(0, 0, inSegment.x(), inSegment.y()).length();
+                    outSegment = outSegment / QLineF(0, 0, outSegment.x(), outSegment.y()).length();
+
+                    // Вычисляем биссектрису угла
+                    QPointF bisector = inSegment + outSegment;
+
+                    if (bisector.manhattanLength() > 0)
+                    {
+                        // Перпендикуляр к биссектрисе для внешнего направления
+                        direction = QPointF(-bisector.y(), bisector.x());
+                        direction = direction / QLineF(0, 0, direction.x(), direction.y()).length();
+
+                        // Убеждаемся, что направление действительно наружу
+                        QPointF testPos = circlePos + direction * 10;
+                        if (QLineF(prevPos, testPos).length() < QLineF(prevPos, circlePos).length() ||
+                            QLineF(nextPos, testPos).length() < QLineF(nextPos, circlePos).length())
+                        {
+                            // Если направление внутрь, инвертируем
+                            direction = -direction;
+                        }
+                    }
+                }
+            }
+        }
+
+        const qreal offsetDistance = 20.0;
+        QPointF numberPos = circlePos + direction * offsetDistance;
+
+        // Создаем номер
+        QGraphicsSimpleTextItem* number = new QGraphicsSimpleTextItem(QString::number(i), this);
+        number->setBrush(QBrush(Qt::white));
+        number->setZValue(1001);
+        number->setPen(Qt::NoPen);
+        number->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
+
+        // Применяем стиль шрифта
+        if (_numberFontSize > 0)
+        {
+            QFont font = number->font();
+            font.setPointSizeF(_numberFontSize);
+            number->setFont(font);
+        }
+
+        // Центрируем номер
+        QRectF textRect = number->boundingRect();
+        QPointF finalNumberPos(numberPos.x() - textRect.width()/2,
+                               numberPos.y() - textRect.height()/2);
+        number->setPos(finalNumberPos);
+
+        // Создаем фон
+        QGraphicsRectItem* bg = new QGraphicsRectItem(textRect, this);
+        bg->setPos(finalNumberPos);
+        bg->setBrush(QBrush(QColor(0, 0, 0, 180)));
+        bg->setPen(Qt::NoPen);
+        bg->setZValue(1000);
+        bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
+
+        // Запрещаем взаимодействие
+        number->setFlag(QGraphicsItem::ItemIsSelectable, false);
+        number->setFlag(QGraphicsItem::ItemIsMovable, false);
+        number->setFlag(QGraphicsItem::ItemIsFocusable, false);
+        bg->setFlag(QGraphicsItem::ItemIsSelectable, false);
+        bg->setFlag(QGraphicsItem::ItemIsMovable, false);
+        bg->setFlag(QGraphicsItem::ItemIsFocusable, false);
+
+        pointNumbers.append(number);
+        numberBackgrounds.append(bg);
     }
+}
+
+void Polyline::applyNumberStyle(qreal fontSize)
+{
+    _numberFontSize = fontSize; // Сохраняем размер шрифта
+
+    // Сохраняем текущие позиции кругов
+    QVector<QPointF> circlePositions;
+    for (DragCircle* circle : _circles)
+    {
+        circlePositions.append(circle->pos());
+    }
+
+    // Полностью пересоздаем номера
+    updatePointNumbers();
+}
+
+void Polyline::rotatePointsClockwise()
+{
+    if (_circles.size() < 2) return;
+
+    // Сдвигаем точки по часовой стрелке
+    DragCircle* first = _circles.takeFirst();
+    _circles.append(first);
+
+    updatePath();
+    updatePointNumbers();
+}
+
+void Polyline::rotatePointsCounterClockwise()
+{
+    if (_circles.size() < 2) return;
+
+    // Сдвигаем точки против часовой стрелки
+    DragCircle* last = _circles.takeLast();
+    _circles.prepend(last);
+
+    updatePath();
+    updatePointNumbers();
+}
+
+void Polyline::handleKeyPressEvent(QKeyEvent* event)
+{
+    keyPressEvent(event);
+}
+
+void Polyline::togglePointNumbers()
+{
+    _pointNumbersVisible = !_pointNumbersVisible;
+    updatePointNumbers();
 }
 
 } // namespace qgraph
