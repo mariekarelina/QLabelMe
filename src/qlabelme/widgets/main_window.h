@@ -1,6 +1,8 @@
 #pragma once
 
+#include "shared/container_ptr.h"
 #include "shared/simple_ptr.h"
+
 #include "pproto/func_invoker.h"
 #include "pproto/transport/tcp.h"
 
@@ -43,6 +45,15 @@ class MainWindow;
 }
 
 class QLabel;
+
+struct Document
+{
+    typedef container_ptr<Document> Ptr;
+
+    QString filePath;
+
+};
+
 
 class MainWindow : public QMainWindow
 {
@@ -211,4 +222,6 @@ private:
     // Позволяем стороннему классу видеть все
     //friend class GraphicsView;
 };
+
+Q_DECLARE_METATYPE(Document::Ptr)
 

@@ -703,7 +703,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
     event->accept();
 }
 
-void MainWindow::loadFilesFromFolder(const QString &folderPath)
+void MainWindow::loadFilesFromFolder(const QString& folderPath)
 {
     QDir directory(folderPath);
     _currentFolderPath = folderPath; // Сохраняем путь
@@ -731,9 +731,17 @@ void MainWindow::loadFilesFromFolder(const QString &folderPath)
         {
             preview = preview.scaled(50, 50, Qt::KeepAspectRatio);
 
-            QListWidgetItem *item = new QListWidgetItem(QIcon(preview), filename);
+            QListWidgetItem* item = new QListWidgetItem(QIcon(preview), filename);
+
+            Document::Ptr document {new Document};
+
+            document->filePath = filename;
+
+            QVariant variantData = QVariant::fromValue(document);
+            //variantData.fromValue setValue(document);
+
             // Потом передаем структуру
-            item->setData(Qt::UserRole, filePath);
+            item->setData(Qt::UserRole, variantData);
 
             // Добавляем чекбокс
             item->setCheckState(Qt::Unchecked); // По умолчанию не отмечено
@@ -1207,7 +1215,13 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     // }
 
     // Получаем путь к новому изображению
-    QString filePath = current->data(Qt::UserRole).toString();
+    //QString filePath = current->data(Qt::UserRole).toString();
+
+    QVariant variantData = current->data(Qt::UserRole);
+
+    Document::Ptr document = variantData.value<Document::Ptr>();
+    QString filePath = document->filePath;
+
     _currentImagePath = filePath;
 
     // Проверяем, есть ли уже сцена для этого изображения
