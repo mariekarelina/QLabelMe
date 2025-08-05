@@ -50,8 +50,46 @@ struct Document
 {
     typedef container_ptr<Document> Ptr;
 
-    QString filePath;
+    QString filePath;  // Путь к файлу изображения
+    QGraphicsScene* scene = nullptr;  // Сцена с изображением и разметкой
+    qgraph::VideoRect* videoRect = nullptr;
+    QPixmap pixmap;  // Само изображение
 
+    // Состояние просмотра
+    struct ViewState
+    {
+        int hScroll = 0;
+        int vScroll = 0;
+        qreal zoom = 1.0;
+        QPointF center;
+    };
+    ViewState viewState;
+
+    static Ptr create(const QString& path)
+    {
+        Ptr doc(new Document);
+        doc->filePath = path;
+        return doc;
+    }
+
+    bool loadImage()
+    {
+        pixmap = QPixmap(filePath);
+        if (pixmap.isNull())
+        {
+            return false;
+        }
+        if (!scene)
+        {
+            scene = new QGraphicsScene();
+        }
+        if (!videoRect)
+        {
+            videoRect = new qgraph::VideoRect(scene);
+        }
+        videoRect->setPixmap(pixmap);
+        return true;
+    }
 };
 
 
@@ -69,6 +107,8 @@ public:
     void graphicsView_mouseReleaseEvent(QMouseEvent*, GraphicsView*);
 
     void setSceneItemsMovable(bool movable);
+
+    Document::Ptr currentDocument() const;
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
@@ -89,8 +129,8 @@ private slots:
     void on_btnLine_clicked(bool);
     void on_btnCircle_clicked(bool);
     void on_btnTest_clicked(bool);
-    void saveCurrentViewState();
-    void restoreViewState(const QString& filePath);
+    //void saveCurrentViewState();
+    //void restoreViewState(const QString& filePath);
     void fitImageToView();
     //void fitImageToView(bool);
     void fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem* previous);
@@ -99,9 +139,8 @@ private slots:
     void on_actCircle_triggered();
     void on_actLine_triggered();
 
-    void wheelEvent(QWheelEvent* event);
-
-    void resizeEvent(QResizeEvent* event);
+    void wheelEvent(QWheelEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 
 private:
@@ -116,8 +155,7 @@ private:
     void loadGeometry();
     void saveGeometry();
 
-    void saveAnnotationToFile(const QString& imagePath);
-    void loadAnnotationFromFile(const QString& imagePath);
+
     QJsonObject serializeSceneToJson(QGraphicsScene* scene);
     void deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json);
     qgraph::VideoRect* findVideoRect(QGraphicsScene* scene);
@@ -126,6 +164,13 @@ private:
     void toggleRightSplitter(); // Функция переключения сплиттера
     void updateWindowTitle(); // Обновление заголовка (путь к папке с файлами)
     void updateFolderPathDisplay();
+
+    //void saveAnnotationToFile(const QString& imagePath);
+    //void loadAnnotationFromFile(const QString& imagePath);
+    void saveAnnotationToFile(Document::Ptr doc);
+    void loadAnnotationFromFile(Document::Ptr doc);
+    void saveCurrentViewState(Document::Ptr doc);
+    void restoreViewState(Document::Ptr doc);
 
 
 private:
@@ -192,7 +237,8 @@ private:
     };
     QMap<QString, ImageData> _imageDataMap; // Ключ - путь к файлу
 
-    QMap<QString, QGraphicsScene*> _scenesMap; // Ключ - путь к файлу, значение - сцена
+    //QMap<QString, QGraphicsScene*> _scenesMap; // Ключ - путь к файлу, значение - сцена
+    QMap<QString, Document::Ptr> _documentsMap;
 
     // Текущее изображение
    QString _currentImagePath;

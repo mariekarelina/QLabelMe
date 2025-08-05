@@ -62,6 +62,7 @@ using namespace qgraph;
 
 QUuidEx MainWindow::_applId;
 
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
@@ -466,7 +467,6 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     //graphView->mouseReleaseEvent(mouseEvent);
 }
 
-
 void MainWindow::setSceneItemsMovable(bool movable)
 {
     for (QGraphicsItem* item : _scene->items())
@@ -476,6 +476,27 @@ void MainWindow::setSceneItemsMovable(bool movable)
     }
 }
 
+Document::Ptr MainWindow::currentDocument() const
+{
+    if (!ui || !ui->listWidget_FileList)
+    {
+        return nullptr;
+    }
+
+    QListWidgetItem* currentItem = ui->listWidget_FileList->currentItem();
+    if (!currentItem)
+    {
+        return nullptr;
+    }
+
+    QVariant data = currentItem->data(Qt::UserRole);
+    if (!data.isValid() || !data.canConvert<Document::Ptr>())
+    {
+        return nullptr;
+    }
+
+    return data.value<Document::Ptr>();
+}
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
@@ -525,7 +546,6 @@ void MainWindow::togglePointerMode()
 //    ui->graphView->setInteractive(_selectModeButton->isChecked());
 }
 
-
 void MainWindow::on_actOpen_triggered(bool)
 {
 //    QString fileName = QFileDialog::getOpenFileName(this,
@@ -556,7 +576,6 @@ void MainWindow::on_actOpen_triggered(bool)
 //createElementRectangle(table, tableRect,
 //                       QColor(0, 255, 0), ElementTag::Table);
 }
-
 
 void MainWindow::on_actClose_triggered(bool)
 {
@@ -651,7 +670,6 @@ void MainWindow::on_actCreateLine_triggered()
     }*/
 }
 
-
 void MainWindow::on_btnRect_clicked(bool)
 {
     _drawingRectangle= true;
@@ -670,14 +688,12 @@ void MainWindow::on_btnCircle_clicked(bool)
     setSceneItemsMovable(false);
 }
 
-
 void MainWindow::on_btnTest_clicked(bool)
 {
 
 }
 
-
-void MainWindow::closeEvent(QCloseEvent* event)
+/*void MainWindow::closeEvent(QCloseEvent* event)
 {
     // if (!_currentImagePath.isEmpty())
     // {
@@ -701,6 +717,16 @@ void MainWindow::closeEvent(QCloseEvent* event)
     // точке, иначе геометрия окна будет сохранятся по разному в разных ОС
     saveGeometry();
     event->accept();
+}*/
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    for (auto i = _documentsMap.begin(); i != _documentsMap.end(); ++i)
+    {
+        saveAnnotationToFile(i.value());
+    }
+    saveGeometry();
+    event->accept();
 }
 
 void MainWindow::loadFilesFromFolder(const QString& folderPath)
@@ -710,14 +736,12 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
 
     // Путь к папке в заголовке окна
     updateWindowTitle();
-
     //Путь к папке внизу окна
     updateFolderPathDisplay();
 
-    ui->listWidget_FileList->clear();  // Очищаем список перед добавлением
+    ui->listWidget_FileList->clear(); // Очищаем список перед добавлением
     // Путь к папке над полем FileList
     ui->labelFileListPath->setText(QDir::toNativeSeparators(folderPath));
-
 
     QStringList files = directory.entryList(QStringList() << "*.*", QDir::Files);
 
@@ -730,29 +754,16 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
         if (!preview.isNull())
         {
             preview = preview.scaled(50, 50, Qt::KeepAspectRatio);
-
             QListWidgetItem* item = new QListWidgetItem(QIcon(preview), filename);
 
-            Document::Ptr document {new Document};
+            // Создаем документ и сохраняем его
+            Document::Ptr doc = Document::create(filePath);
+            item->setData(Qt::UserRole, QVariant::fromValue(doc));
 
-            document->filePath = filename;
-
-            QVariant variantData = QVariant::fromValue(document);
-            //variantData.fromValue setValue(document);
-
-            // Потом передаем структуру
-            item->setData(Qt::UserRole, variantData);
-
-            // Добавляем чекбокс
-            item->setCheckState(Qt::Unchecked); // По умолчанию не отмечено
-            item->setFlags(item->flags() | Qt::ItemIsUserCheckable); // Разрешаем изменение состояния
-
+            item->setCheckState(Qt::Unchecked);
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
             ui->listWidget_FileList->addItem(item);
         }
-//        // Сохраняем полный путь в userRole (можно использовать Qt::UserRole)
-//        QListWidgetItem *item = new QListWidgetItem(filename);
-//        item->setData(Qt::UserRole, directory.filePath(filename));
-//        ui->listWidget_9->addItem(item);
     }
 }
 
@@ -761,7 +772,6 @@ void MainWindow::loadPolygonLabelsFromFile(const QString &filePath)
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
-        log_error_m << "Failed to open file:" << filePath;
         return;
     }
 
@@ -781,7 +791,6 @@ void MainWindow::loadPolygonLabelsFromFile(const QString &filePath)
 
     file.close();
 }
-
 
 void MainWindow::updatePolygonListForCurrentScene()
 {
@@ -855,7 +864,7 @@ void MainWindow::saveGeometry()
 //    config::base().setValue("windows.main_window.event_journal_header", QString::fromLatin1(ba));
 }
 
-void MainWindow::saveAnnotationToFile(const QString& imagePath)
+/*void MainWindow::saveAnnotationToFile(const QString& imagePath)
 {
     if (!_scenesMap.contains(imagePath))
         return;
@@ -884,9 +893,34 @@ void MainWindow::saveAnnotationToFile(const QString& imagePath)
     file.close();
 
     log_info_m << "Annotation saved to:" << jsonPath;
+}*/
+
+void MainWindow::saveAnnotationToFile(Document::Ptr doc)
+{
+    if (!doc || !doc->scene)
+    {
+        return;
+    }
+
+    QJsonObject json = serializeSceneToJson(doc->scene);
+    QFileInfo fileInfo(doc->filePath);
+    QString jsonPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".json";
+
+    if (json["shapes"].toArray().isEmpty())
+    {
+        QFile::remove(jsonPath);
+        return;
+    }
+
+    QFile file(jsonPath);
+    if (file.open(QIODevice::WriteOnly))
+    {
+        file.write(QJsonDocument(json).toJson());
+        file.close();
+    }
 }
 
-void MainWindow::loadAnnotationFromFile(const QString& imagePath)
+/*void MainWindow::loadAnnotationFromFile(const QString& imagePath)
 {
     // Создаем путь к JSON-файлу
     QFileInfo fileInfo(imagePath);
@@ -914,6 +948,28 @@ void MainWindow::loadAnnotationFromFile(const QString& imagePath)
 
     deserializeJsonToScene(_scene, doc.object());
     log_info_m << "Annotation loaded from:" << jsonPath;
+}*/
+
+void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
+{
+    if (!doc || !doc->scene)
+    {
+        return;
+    }
+
+    QFileInfo fileInfo(doc->filePath);
+    QString jsonPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".json";
+
+    if (QFile::exists(jsonPath))
+    {
+        QFile file(jsonPath);
+        if (file.open(QIODevice::ReadOnly))
+        {
+            QJsonDocument docJson = QJsonDocument::fromJson(file.readAll());
+            deserializeJsonToScene(doc->scene, docJson.object());
+            file.close();
+        }
+    }
 }
 
 void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json)
@@ -972,10 +1028,15 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
 
 qgraph::VideoRect* MainWindow::findVideoRect(QGraphicsScene* scene)
 {
-    if (!scene) return nullptr;
+    if (!scene)
+    {
+        return nullptr;
+    }
 
-    foreach(QGraphicsItem* item, scene->items()) {
-        if (auto* videoRect = dynamic_cast<qgraph::VideoRect*>(item)) {
+    foreach(QGraphicsItem* item, scene->items())
+    {
+        if (auto* videoRect = dynamic_cast<qgraph::VideoRect*>(item))
+        {
             return videoRect;
         }
     }
@@ -1053,7 +1114,7 @@ void MainWindow::updateWindowTitle()
             displayPath = "..." + displayPath.right(47);
         }
 
-        title = QString("%1 - QLabelMe").arg(displayPath);
+        title = QString("%1 ― QLabelMe").arg(displayPath);
     }
     else
     {
@@ -1145,7 +1206,8 @@ QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
     return root;
 }
 
-void MainWindow::saveCurrentViewState() {
+/*void MainWindow::saveCurrentViewState()
+{
     if (_currentImagePath.isEmpty()) return;
 
     _scrollStates[_currentImagePath] = {
@@ -1155,10 +1217,27 @@ void MainWindow::saveCurrentViewState() {
         ui->graphView->transform().m11(),
         ui->graphView->mapToScene(ui->graphView->viewport()->rect().center())
     };
+}*/
+
+void MainWindow::saveCurrentViewState(Document::Ptr doc)
+{
+    if (!doc || !ui->graphView)
+    {
+        return;
+    }
+
+    doc->viewState = {
+        ui->graphView->horizontalScrollBar()->value(),
+        ui->graphView->verticalScrollBar()->value(),
+        ui->graphView->transform().m11(),
+        ui->graphView->mapToScene(ui->graphView->viewport()->rect().center())
+    };
 }
 
-void MainWindow::restoreViewState(const QString& filePath) {
-    if (_scrollStates.contains(filePath)) {
+/*void MainWindow::restoreViewState(const QString& filePath)
+{
+    if (_scrollStates.contains(filePath))
+    {
         const ScrollState& state = _scrollStates[filePath];
 
         // Сначала устанавливаем масштаб
@@ -1171,15 +1250,35 @@ void MainWindow::restoreViewState(const QString& filePath) {
 
         // И центрируем (для точного восстановления)
         ui->graphView->centerOn(state.center);
-    } else {
+    }
+    else
+    {
         // Первый просмотр - подгоняем изображение
         fitImageToView();
     }
+}*/
+
+void MainWindow::restoreViewState(Document::Ptr doc)
+{
+    if (!doc || !ui->graphView)
+    {
+        fitImageToView();
+        return;
+    }
+
+    ui->graphView->resetTransform();
+    ui->graphView->scale(doc->viewState.zoom, doc->viewState.zoom);
+    ui->graphView->horizontalScrollBar()->setValue(doc->viewState.hScroll);
+    ui->graphView->verticalScrollBar()->setValue(doc->viewState.vScroll);
+    ui->graphView->centerOn(doc->viewState.center);
 }
 
-void MainWindow::fitImageToView()
+/*void MainWindow::fitImageToView()
 {
-    if (!_scene || !_videoRect) return;
+    if (!_scene || !_videoRect)
+    {
+        return;
+    }
 
     QRectF viewRect = ui->graphView->viewport()->rect();
     QRectF sceneRect = _videoRect->sceneBoundingRect();
@@ -1194,9 +1293,34 @@ void MainWindow::fitImageToView()
 
     // Сохраняем новое состояние
     saveCurrentViewState();
+}*/
+
+void MainWindow::fitImageToView()
+{
+    if (!_scene || !_videoRect)
+    {
+        return;
+    }
+
+    QRectF viewRect = ui->graphView->viewport()->rect();
+    QRectF sceneRect = _videoRect->sceneBoundingRect();
+
+    qreal xScale = viewRect.width() / sceneRect.width();
+    qreal yScale = viewRect.height() / sceneRect.height();
+    qreal scale = qMin(xScale, yScale);
+
+    ui->graphView->resetTransform();
+    ui->graphView->scale(scale, scale);
+    ui->graphView->centerOn(sceneRect.center());
+
+    // Сохраняем новое состояние
+    if (auto doc = currentDocument())
+    {
+        saveCurrentViewState(doc);
+    }
 }
 
-void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem *previous)
+/*void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem *previous)
 {
     if (!current) return;
 
@@ -1283,6 +1407,47 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
 
     // Помечаем текущий элемент как просмотренный
     current->setCheckState(Qt::Checked);
+}*/
+
+void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem *previous)
+{
+    if (!current) return;
+
+    // Сохраняем предыдущее состояние
+    if (previous)
+    {
+        QVariant prevData = previous->data(Qt::UserRole);
+        if (prevData.canConvert<Document::Ptr>())
+        {
+            saveCurrentViewState(prevData.value<Document::Ptr>());
+        }
+    }
+
+    // Получаем текущий документ
+    QVariant currentData = current->data(Qt::UserRole);
+    if (!currentData.canConvert<Document::Ptr>())
+    {
+        return;
+    }
+
+    Document::Ptr currentDoc = currentData.value<Document::Ptr>();
+    _currentImagePath = currentDoc->filePath;
+
+    // Загрузка и восстановление состояния
+    if (!currentDoc->scene && !currentDoc->loadImage())
+    {
+        return;
+    }
+
+    ui->graphView->setScene(currentDoc->scene);
+    _scene = currentDoc->scene;
+    _videoRect = currentDoc->videoRect;
+
+    loadAnnotationFromFile(currentDoc);
+    restoreViewState(currentDoc);
+
+    updatePolygonListForCurrentScene();
+    current->setCheckState(Qt::Checked);
 }
 
 void MainWindow::on_actRect_triggered()
@@ -1294,7 +1459,6 @@ void MainWindow::on_actRect_triggered()
     _drawingLine = false;
 }
 
-
 void MainWindow::on_actCircle_triggered()
 {
     _btnCircleFlag = true;
@@ -1305,7 +1469,6 @@ void MainWindow::on_actCircle_triggered()
 
 }
 
-
 void MainWindow::on_actLine_triggered()
 {
     _btnLineFlag = true;
@@ -1315,16 +1478,40 @@ void MainWindow::on_actLine_triggered()
     _drawingCircle = false;
 }
 
-void MainWindow::wheelEvent(QWheelEvent* event) {
+/*void MainWindow::wheelEvent(QWheelEvent* event)
+{
     // Сохраняем состояние при изменении масштаба
     saveCurrentViewState();
     QMainWindow::wheelEvent(event);
+}*/
+
+void MainWindow::wheelEvent(QWheelEvent* event)
+{
+    // Сохраняем состояние при изменении масштаба
+    if (auto doc = currentDocument())
+    {
+        saveCurrentViewState(doc);
+    }
+    QMainWindow::wheelEvent(event);
 }
 
-void MainWindow::resizeEvent(QResizeEvent* event) {
+/*void MainWindow::resizeEvent(QResizeEvent* event)
+{
     // При изменении размера сохраняем текущее состояние
     saveCurrentViewState();
     QMainWindow::resizeEvent(event);
     restoreViewState(_currentImagePath);
+}*/
+
+void MainWindow::resizeEvent(QResizeEvent* event)
+{
+    // При изменении размера сохраняем текущее состояние
+    if (auto doc = currentDocument())
+    {
+        saveCurrentViewState(doc);
+        QMainWindow::resizeEvent(event);
+        restoreViewState(doc);
+    }
+    QMainWindow::resizeEvent(event);
 }
 
