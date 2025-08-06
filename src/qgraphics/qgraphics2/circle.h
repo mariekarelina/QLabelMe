@@ -29,6 +29,8 @@ public:
     QPointF realCenter() const;
     void setRealCenter(const QPointF&);
 
+    QPoint center() const;
+
     // Возвращает радиус окружности с учетом масштабного коэффициента
     int realRadius() const;
     void setRealRadius(int);

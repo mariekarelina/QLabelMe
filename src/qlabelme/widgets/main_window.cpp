@@ -118,9 +118,11 @@ MainWindow::MainWindow(QWidget *parent) :
 
 
     // Загружаем файлы из папки при старте
-    loadFilesFromFolder("/home/marie/тестовые данные QLabelMe/фото");  // Укажите нужный путь
+    //loadFilesFromFolder("/home/marie/тестовые данные QLabelMe/фото");  // Укажите нужный путь
+    loadFilesFromFolder("/home/hkarel/Images/1");  // Укажите нужный путь
     // Загрузка данных из файла при запуске
-    loadPolygonLabelsFromFile("/home/marie/тестовые данные QLabelMe/список классов/список классов.txt"); // Укажите актуальный путь к файлу
+    //loadPolygonLabelsFromFile("/home/marie/тестовые данные QLabelMe/список классов/список классов.txt"); // Укажите актуальный путь к файлу
+    loadPolygonLabelsFromFile("/home/hkarel/Images/1/список классов.txt"); // Укажите актуальный путь к файлу
 
     connect(ui->listWidget_FileList, &QListWidget::currentItemChanged,
             this, &MainWindow::fileList_ItemChanged);
@@ -915,90 +917,178 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
         return;
     }
 
-    QFileInfo fileInfo(doc->filePath);
-    QString txtPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".txt";
 
-    QFile file(txtPath);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    YamlConfig::Func saveCircles = [&](YamlConfig* conf, YAML::Node& ycircles, bool)
     {
-        return;
-    }
-
-    QTextStream out(&file);
-    out.setCodec("UTF-8");
-    out.setRealNumberPrecision(10); // Устанавливаем 10 знаков после запятой
-    out.setRealNumberNotation(QTextStream::FixedNotation); // Фиксированная запись
-
-    int shapeIndex = -1;
-    out << "shapes:\n";
-    for (QGraphicsItem* item : doc->scene->items())
-    {
-        // Пропускаем само изображение и временные элементы
-        if (item == doc->videoRect || item == _tempRectItem ||
-            item == _tempCircleItem || item == _tempPolyline)
-        {
-            continue;
-        }
-
-        QString className = item->data(0).toString();
-        if (className.isEmpty())
-        {
-            continue;
-        }
-
-        out << "    " << ++shapeIndex << ":\n";
-        out << "    label:    \"" << className << "\"\n";
-        out << "    points:\n";
-
-        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
-        {
-            // Получаем координаты прямоугольника относительно изображения
-            QRectF sceneRect = rect->sceneBoundingRect();
-
-            QPointF topLeft = sceneRect.topLeft();
-            QPointF bottomRight = sceneRect.bottomRight();
-
-            QRectF r = rect->rect();
-            // Сохраняем 4 точки прямоугольника
-            out << "        0:\n";
-            out << "                0:    " << topLeft.x() << '\n';
-            out << "                1:    " << topLeft.y() << '\n';
-            out << "        1:\n";
-            out << "                0:    " << bottomRight.x() + r.width() << '\n';
-            out << "                1:    " << topLeft.y() << '\n';
-            out << "        2:\n";
-            out << "                0:    " << bottomRight.x() + r.width() << '\n';
-            out << "                1:    " << bottomRight.y() + r.height() << '\n';
-            out << "        3:\n";
-            out << "                0:    " << topLeft.x() << '\n';
-            out << "                1:    " << bottomRight.y() + r.height() << '\n';
-            out << "    shape_type:    \"rectangle\"\n\n";
-        }
-        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
-        {
-            QPointF center = circle->realCenter();
-            qreal radius = circle->realRadius();
-
-            // Сохраняем только центр и радиус
-            out << "        center:\n";
-            out << "                0:    " << center.x() << '\n';
-            out << "                1:    " << center.y() << '\n';
-            out << "        radius:       " << radius << '\n';
-            out << "    shape_type:    \"circle\"\n\n";
-        }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-        {
-            int pointIndex = -1;
-            for (const QPointF& point : polyline->points())
+        for (QGraphicsItem* item : doc->scene->items())
+            if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
             {
-                out << "        " << ++pointIndex << '\n';
-                out << "                0:    " << point.x() << "\n";
-                out << "                1:    " << point.y() << "\n";
+                YAML::Node ycircle;
+
+                QString className = circle->data(0).toString();
+                if (className.isEmpty())
+                    className = "none";
+
+                QPoint center = circle->center();
+                int radius = circle->realRadius();
+
+                conf->setValue(ycircle, "label",  className);
+                conf->setValue(ycircle, "center", center   );
+                conf->setValue(ycircle, "radius", radius   );
+
+                ycircles.push_back(ycircle);
             }
-            out << "    shape_type:    \"polygon\"\n\n";
-        }
-    }
-    file.close();
+
+        return true;
+    };
+
+    YamlConfig::Func savePolygons = [&](YamlConfig* conf, YAML::Node& ypolygons, bool)
+    {
+        for (QGraphicsItem* item : doc->scene->items())
+            if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
+            {
+                YAML::Node ypolygon;
+
+                QString className = polyline->data(0).toString();
+                if (className.isEmpty())
+                    className = "none";
+
+                conf->setValue(ypolygon, "label", className);
+
+                QVector<QPointF> points = polyline->points();
+                YamlConfig::Func savePoints = [&points](YamlConfig* conf, YAML::Node& ypoints, bool)
+                {
+                    for (const QPointF& point : points)
+                    {
+                        YAML::Node ypoint;
+                        conf->setValue(ypoint, "x", int(point.x()));
+                        conf->setValue(ypoint, "y", int(point.y()));
+                        ypoints.push_back(ypoint);
+                    }
+                    return true;
+                };
+                conf->setValue(ypolygon, "points", savePoints);
+                conf->setNodeStyle(ypolygon, "points", YAML::EmitterStyle::Flow);
+
+                ypolygons.push_back(ypolygon);
+            }
+
+        return true;
+    };
+
+    YamlConfig::Func saveFunc = [&](YamlConfig* conf, YAML::Node& shapes, bool /*logWarn*/)
+    {
+
+        conf->setValue(shapes, "circles", saveCircles);
+        conf->setValue(shapes, "polygons", savePolygons);
+
+
+//        for (Spammer* spammer : _spammers)
+//        {
+//            QString user {spammer->user->toJson()};
+
+//            YAML::Node spmr;
+//            conf->setValue(spmr, "chat_id", spammer->chatId);
+//            conf->setValue(spmr, "user", user);
+//            conf->setValue(spmr, "spam_times", spammer->spamTimes);
+
+//            node.push_back(spmr);
+//        }
+
+        return true;
+    };
+
+    YamlConfig yconfig;
+    yconfig.setValue("shapes", saveFunc);
+    yconfig.saveFile("/tmp/1.yaml");
+
+
+//-------------------------------------------------------------
+
+//    QFileInfo fileInfo(doc->filePath);
+//    QString txtPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".txt";
+
+//    QFile file(txtPath);
+//    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+//    {
+//        return;
+//    }
+
+//    QTextStream out(&file);
+//    out.setCodec("UTF-8");
+//    out.setRealNumberPrecision(10); // Устанавливаем 10 знаков после запятой
+//    out.setRealNumberNotation(QTextStream::FixedNotation); // Фиксированная запись
+
+//    int shapeIndex = -1;
+//    out << "shapes:\n";
+//    for (QGraphicsItem* item : doc->scene->items())
+//    {
+//        // Пропускаем само изображение и временные элементы
+//        if (item == doc->videoRect || item == _tempRectItem ||
+//            item == _tempCircleItem || item == _tempPolyline)
+//        {
+//            continue;
+//        }
+
+//        QString className = item->data(0).toString();
+//        if (className.isEmpty())
+//        {
+//            continue;
+//        }
+
+//        out << "    " << ++shapeIndex << ":\n";
+//        out << "    label:    \"" << className << "\"\n";
+//        out << "    points:\n";
+
+//        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+//        {
+//            // Получаем координаты прямоугольника относительно изображения
+//            QRectF sceneRect = rect->sceneBoundingRect();
+
+//            QPointF topLeft = sceneRect.topLeft();
+//            QPointF bottomRight = sceneRect.bottomRight();
+
+//            QRectF r = rect->rect();
+//            // Сохраняем 4 точки прямоугольника
+//            out << "        0:\n";
+//            out << "                0:    " << topLeft.x() << '\n';
+//            out << "                1:    " << topLeft.y() << '\n';
+//            out << "        1:\n";
+//            out << "                0:    " << bottomRight.x() + r.width() << '\n';
+//            out << "                1:    " << topLeft.y() << '\n';
+//            out << "        2:\n";
+//            out << "                0:    " << bottomRight.x() + r.width() << '\n';
+//            out << "                1:    " << bottomRight.y() + r.height() << '\n';
+//            out << "        3:\n";
+//            out << "                0:    " << topLeft.x() << '\n';
+//            out << "                1:    " << bottomRight.y() + r.height() << '\n';
+//            out << "    shape_type:    \"rectangle\"\n\n";
+//        }
+//        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+//        {
+//            QPointF center = circle->realCenter();
+//            qreal radius = circle->realRadius();
+
+//            // Сохраняем только центр и радиус
+//            out << "        center:\n";
+//            out << "                0:    " << center.x() << '\n';
+//            out << "                1:    " << center.y() << '\n';
+//            out << "        radius:       " << radius << '\n';
+//            out << "    shape_type:    \"circle\"\n\n";
+//        }
+//        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+//        {
+//            int pointIndex = -1;
+//            for (const QPointF& point : polyline->points())
+//            {
+//                out << "        " << ++pointIndex << '\n';
+//                out << "                0:    " << point.x() << "\n";
+//                out << "                1:    " << point.y() << "\n";
+//            }
+//            out << "    shape_type:    \"polygon\"\n\n";
+//        }
+//    }
+//    file.close();
 }
 
 void MainWindow::loadAnnotationFromFile(Document::Ptr doc)

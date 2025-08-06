@@ -104,6 +104,12 @@ void Circle::setRealCenter(const QPointF& val)
     _circle->setPos(rect().width() / 2, 0);
 }
 
+QPoint Circle::center() const
+{
+    QPointF c = realCenter();
+    return {int(c.x()), int(c.y())};
+}
+
 int Circle::realRadius() const
 {
     return _radius / frameScale();
