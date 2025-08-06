@@ -118,11 +118,11 @@ MainWindow::MainWindow(QWidget *parent) :
 
 
     // Загружаем файлы из папки при старте
-    //loadFilesFromFolder("/home/marie/тестовые данные QLabelMe/фото");  // Укажите нужный путь
-    loadFilesFromFolder("/home/hkarel/Images/1");  // Укажите нужный путь
+    loadFilesFromFolder("/home/marie/тестовые данные QLabelMe/фото");  // Укажите нужный путь
+    //loadFilesFromFolder("/home/hkarel/Images/1");  // Укажите нужный путь
     // Загрузка данных из файла при запуске
-    //loadPolygonLabelsFromFile("/home/marie/тестовые данные QLabelMe/список классов/список классов.txt"); // Укажите актуальный путь к файлу
-    loadPolygonLabelsFromFile("/home/hkarel/Images/1/список классов.txt"); // Укажите актуальный путь к файлу
+    loadPolygonLabelsFromFile("/home/marie/тестовые данные QLabelMe/список классов/список классов.txt"); // Укажите актуальный путь к файлу
+    //loadPolygonLabelsFromFile("/home/hkarel/Images/1/список классов.txt"); // Укажите актуальный путь к файлу
 
     connect(ui->listWidget_FileList, &QListWidget::currentItemChanged,
             this, &MainWindow::fileList_ItemChanged);
@@ -929,10 +929,11 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
                 if (className.isEmpty())
                     className = "none";
 
+                conf->setValue(ycircle, "label",  className);
+
                 QPoint center = circle->center();
                 int radius = circle->realRadius();
 
-                conf->setValue(ycircle, "label",  className);
                 conf->setValue(ycircle, "center", center   );
                 conf->setValue(ycircle, "radius", radius   );
 
@@ -975,12 +976,40 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 
         return true;
     };
+    YamlConfig::Func saveRectangles = [&](YamlConfig* conf, YAML::Node& yrectangles, bool)
+    {
+        for (QGraphicsItem* item : doc->scene->items())
+            if (qgraph::Rectangle* rect= dynamic_cast<qgraph::Rectangle*>(item))
+            {
+                YAML::Node yrectangle;
+
+                QString className = rect->data(0).toString();
+                if (className.isEmpty())
+                    className = "none";
+
+                conf->setValue(yrectangle, "label", className);
+
+                QRectF sceneRect = rect->sceneBoundingRect();
+                QPointF topLeft = sceneRect.topLeft();
+                QPointF bottomRight = sceneRect.bottomRight();
+
+                conf->setValue(yrectangle, "point.x", int(topLeft.x()));
+                conf->setValue(yrectangle, "point.y", int(topLeft.y()));
+                conf->setValue(yrectangle, "point2.x", int(bottomRight.x()));
+                conf->setValue(yrectangle, "point2.y", int(bottomRight.y()));
+
+                yrectangles.push_back(yrectangle);
+            }
+
+        return true;
+    };
 
     YamlConfig::Func saveFunc = [&](YamlConfig* conf, YAML::Node& shapes, bool /*logWarn*/)
     {
 
         conf->setValue(shapes, "circles", saveCircles);
         conf->setValue(shapes, "polygons", savePolygons);
+        conf->setValue(shapes, "rectangles", saveRectangles);
 
 
 //        for (Spammer* spammer : _spammers)
@@ -1000,7 +1029,7 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 
     YamlConfig yconfig;
     yconfig.setValue("shapes", saveFunc);
-    yconfig.saveFile("/tmp/1.yaml");
+    yconfig.saveFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml");
 
 
 //-------------------------------------------------------------
