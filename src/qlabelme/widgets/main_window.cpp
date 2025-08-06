@@ -582,6 +582,16 @@ void MainWindow::on_actClose_triggered(bool)
     close();
 }
 
+void MainWindow::on_actSave_triggered(bool)
+{
+    Document::Ptr doc = currentDocument();
+    if (!doc)
+    {
+        return;
+    }
+    saveAnnotationToFile(doc);
+}
+
 void MainWindow::on_actExit_triggered(bool)
 {
     //qApp->quit();
@@ -743,7 +753,12 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
     // Путь к папке над полем FileList
     ui->labelFileListPath->setText(QDir::toNativeSeparators(folderPath));
 
-    QStringList files = directory.entryList(QStringList() << "*.*", QDir::Files);
+
+    QStringList filters;
+    filters << "*.jpg";
+    filters << "*.jpeg";
+    filters << "*.png";
+    QStringList files = directory.entryList(filters, QDir::Files);
 
     // Добавляем файлы
     for (auto filename : files)
@@ -756,7 +771,7 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
             preview = preview.scaled(50, 50, Qt::KeepAspectRatio);
             QListWidgetItem* item = new QListWidgetItem(QIcon(preview), filename);
 
-            // Создаем документ и сохраняем его
+            // Создаем документ
             Document::Ptr doc = Document::create(filePath);
             item->setData(Qt::UserRole, QVariant::fromValue(doc));
 
@@ -778,18 +793,47 @@ void MainWindow::loadPolygonLabelsFromFile(const QString &filePath)
     QTextStream in(&file);
     in.setCodec("UTF-8");
     ui->listWidget_PolygonLabel->clear(); // Очищаем список перед загрузкой
+    // Сбрасываем указатель при загрузке новых данных
+    _lastCheckedPolygonLabel = nullptr;
+
+    // Группа для чекбоксов (для выбора только одного)
+    // QButtonGroup *checkBoxGroup = new QButtonGroup(this);
+    // checkBoxGroup->setExclusive(true); // Только один выбранный
 
     while (!in.atEnd())
     {
         QString line = in.readLine().trimmed();
         if (!line.isEmpty())
         {
-            // Добавляем текст в QListWidget
-            ui->listWidget_PolygonLabel->addItem(line);
+
+            QListWidgetItem *item = new QListWidgetItem(line);
+            ui->listWidget_PolygonLabel->addItem(item);
+
+
+            // Чекбоксы для выделения 1 класса
+
+            //QListWidgetItem *item = new QListWidgetItem(ui->listWidget_PolygonLabel);
+
+            // Создаем виджет с чекбоксом
+            QWidget* widget = new QWidget();
+            QCheckBox* checkBox = new QCheckBox(line); // Текст из файла
+            QHBoxLayout* layout = new QHBoxLayout(widget);
+            layout->addWidget(checkBox);
+
+            //item->setData(Qt::UserRole, QVariant::fromValue(checkBox));
+            //ui->listWidget_PolygonLabel->setItemWidget(item, widget);
+
+            // Подключаем обработчик клика
+            // connect(checkBox, &QCheckBox::clicked, this, [this, checkBox]() {
+            //     handleCheckBoxClick(checkBox);
+            // });
         }
     }
-
     file.close();
+
+    // // Подключаем обработчик изменения состояния
+    // connect(checkBoxGroup, QOverload<QAbstractButton *>::of(&QButtonGroup::buttonClicked),
+    //         this, &MainWindow::onCheckBoxPolygonLabel);
 }
 
 void MainWindow::updatePolygonListForCurrentScene()
@@ -864,91 +908,98 @@ void MainWindow::saveGeometry()
 //    config::base().setValue("windows.main_window.event_journal_header", QString::fromLatin1(ba));
 }
 
-/*void MainWindow::saveAnnotationToFile(const QString& imagePath)
-{
-    if (!_scenesMap.contains(imagePath))
-        return;
-
-    QGraphicsScene* scene = _scenesMap[imagePath];
-    QJsonObject json = serializeSceneToJson(scene);
-
-    // Создаем путь к JSON-файлу (тот же путь, но с расширением .json)
-    QFileInfo fileInfo(imagePath);
-    QString jsonPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".json";
-    if (json["shapes"].toArray().isEmpty())
-    {
-        // Удаляем пустой JSON-файл, если нет разметки
-        QFile::remove(jsonPath);
-        return;
-    }
-
-    QFile file(jsonPath);
-    if (!file.open(QIODevice::WriteOnly))
-    {
-        log_error_m << "Failed to open file for writing:" << jsonPath;
-        return;
-    }
-
-    file.write(QJsonDocument(json).toJson());
-    file.close();
-
-    log_info_m << "Annotation saved to:" << jsonPath;
-}*/
-
 void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 {
-    if (!doc || !doc->scene)
+    if (!doc || !doc->scene || !doc->videoRect)
     {
         return;
     }
 
-    QJsonObject json = serializeSceneToJson(doc->scene);
     QFileInfo fileInfo(doc->filePath);
-    QString jsonPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".json";
+    QString txtPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".txt";
 
-    if (json["shapes"].toArray().isEmpty())
+    QFile file(txtPath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
-        QFile::remove(jsonPath);
         return;
     }
 
-    QFile file(jsonPath);
-    if (file.open(QIODevice::WriteOnly))
+    QTextStream out(&file);
+    out.setCodec("UTF-8");
+    out.setRealNumberPrecision(10); // Устанавливаем 10 знаков после запятой
+    out.setRealNumberNotation(QTextStream::FixedNotation); // Фиксированная запись
+
+    int shapeIndex = -1;
+    out << "shapes:\n";
+    for (QGraphicsItem* item : doc->scene->items())
     {
-        file.write(QJsonDocument(json).toJson());
-        file.close();
+        // Пропускаем само изображение и временные элементы
+        if (item == doc->videoRect || item == _tempRectItem ||
+            item == _tempCircleItem || item == _tempPolyline)
+        {
+            continue;
+        }
+
+        QString className = item->data(0).toString();
+        if (className.isEmpty())
+        {
+            continue;
+        }
+
+        out << "    " << ++shapeIndex << ":\n";
+        out << "    label:    \"" << className << "\"\n";
+        out << "    points:\n";
+
+        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            // Получаем координаты прямоугольника относительно изображения
+            QRectF sceneRect = rect->sceneBoundingRect();
+
+            QPointF topLeft = sceneRect.topLeft();
+            QPointF bottomRight = sceneRect.bottomRight();
+
+            QRectF r = rect->rect();
+            // Сохраняем 4 точки прямоугольника
+            out << "        0:\n";
+            out << "                0:    " << topLeft.x() << '\n';
+            out << "                1:    " << topLeft.y() << '\n';
+            out << "        1:\n";
+            out << "                0:    " << bottomRight.x() + r.width() << '\n';
+            out << "                1:    " << topLeft.y() << '\n';
+            out << "        2:\n";
+            out << "                0:    " << bottomRight.x() + r.width() << '\n';
+            out << "                1:    " << bottomRight.y() + r.height() << '\n';
+            out << "        3:\n";
+            out << "                0:    " << topLeft.x() << '\n';
+            out << "                1:    " << bottomRight.y() + r.height() << '\n';
+            out << "    shape_type:    \"rectangle\"\n\n";
+        }
+        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        {
+            QPointF center = circle->realCenter();
+            qreal radius = circle->realRadius();
+
+            // Сохраняем только центр и радиус
+            out << "        center:\n";
+            out << "                0:    " << center.x() << '\n';
+            out << "                1:    " << center.y() << '\n';
+            out << "        radius:       " << radius << '\n';
+            out << "    shape_type:    \"circle\"\n\n";
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            int pointIndex = -1;
+            for (const QPointF& point : polyline->points())
+            {
+                out << "        " << ++pointIndex << '\n';
+                out << "                0:    " << point.x() << "\n";
+                out << "                1:    " << point.y() << "\n";
+            }
+            out << "    shape_type:    \"polygon\"\n\n";
+        }
     }
-}
-
-/*void MainWindow::loadAnnotationFromFile(const QString& imagePath)
-{
-    // Создаем путь к JSON-файлу
-    QFileInfo fileInfo(imagePath);
-    QString jsonPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".json";
-
-    if (!QFile::exists(jsonPath))
-        return;
-
-    QFile file(jsonPath);
-    if (!file.open(QIODevice::ReadOnly))
-    {
-        log_error_m << "Failed to open annotation file:" << jsonPath;
-        return;
-    }
-
-    QByteArray data = file.readAll();
     file.close();
-
-    QJsonDocument doc = QJsonDocument::fromJson(data);
-    if (doc.isNull())
-    {
-        log_error_m << "Invalid JSON format in file:" << jsonPath;
-        return;
-    }
-
-    deserializeJsonToScene(_scene, doc.object());
-    log_info_m << "Annotation loaded from:" << jsonPath;
-}*/
+}
 
 void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
 {
@@ -975,7 +1026,9 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
 void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json)
 {
     if (!scene)
+    {
         return;
+    }
 
     QJsonArray shapesArray = json["shapes"].toArray();
     for (const QJsonValue& shapeValue : shapesArray)
@@ -1273,6 +1326,26 @@ void MainWindow::restoreViewState(Document::Ptr doc)
     ui->graphView->centerOn(doc->viewState.center);
 }
 
+void MainWindow::handleCheckBoxClick(QCheckBox* clickedCheckBox)
+{
+    if (_lastCheckedPolygonLabel == clickedCheckBox)
+    {
+        // Клик на уже выбранный чекбокс — снимаем галочку
+        clickedCheckBox->setChecked(false);
+        _lastCheckedPolygonLabel = nullptr;
+    }
+    else
+    {
+        // Клик на новый чекбокс — снимаем предыдущий и выбираем текущий
+        if (_lastCheckedPolygonLabel)
+        {
+            _lastCheckedPolygonLabel->setChecked(false);
+        }
+        clickedCheckBox->setChecked(true);
+        _lastCheckedPolygonLabel = clickedCheckBox;
+    }
+}
+
 /*void MainWindow::fitImageToView()
 {
     if (!_scene || !_videoRect)
@@ -1514,4 +1587,17 @@ void MainWindow::resizeEvent(QResizeEvent* event)
     }
     QMainWindow::resizeEvent(event);
 }
+
+void MainWindow::onCheckBoxPolygonLabel(QAbstractButton *button)
+{
+    QCheckBox *checkBox = qobject_cast<QCheckBox*>(button);
+    if (checkBox)
+    {
+        QString selectedText = checkBox->property("itemText").toString();
+        // Дополнительные действия при выборе...
+    }
+}
+
+
+
 

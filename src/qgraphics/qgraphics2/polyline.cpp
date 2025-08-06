@@ -37,39 +37,6 @@ Polyline::Polyline(QGraphicsScene* scene, const QPointF& scenePos)
     connect(startCircle, &DragCircle::deleteRequested, this, &Polyline::handlePointDeletion);
 
     updatePath(); // Обновляем начальный путь
-
-//    _circle1 = new DragCircle(scene);
-//    _circle1->setParentItem(this);
-//    _circle1->setVisible(true);
-//    _circle1->setPos(0, 0);
-
-//    _circle2 = new DragCircle(scene);
-//    _circle2->setParentItem(this);
-//    _circle2->setVisible(true);
-//    _circle2->setPos(50, 0);
-
-//    _circle3 = new DragCircle(scene);
-//    _circle3->setParentItem(this);
-//    _circle3->setVisible(true);
-//    _circle3->setPos(100, 50);
-
-//    _circle4 = new DragCircle(scene);
-//    _circle4->setParentItem(this);
-//    _circle4->setVisible(true);
-//    _circle4->setPos(150, 0);
-
-//    // Соединяем сигналы перемещения кругов с обновлением пути
-//    connect(_circle1, &DragCircle::moved, this, &Polyline::dragCircleMove);
-//    connect(_circle2, &DragCircle::moved, this, &Polyline::dragCircleMove);
-//    connect(_circle3, &DragCircle::moved, this, &Polyline::dragCircleMove);
-//    connect(_circle4, &DragCircle::moved, this, &Polyline::dragCircleMove);
-
-//    connect(_circle1, &DragCircle::released, this, &Polyline::dragCircleRelease);
-//    connect(_circle2, &DragCircle::released, this, &Polyline::dragCircleRelease);
-//    connect(_circle3, &DragCircle::released, this, &Polyline::dragCircleRelease);
-//    connect(_circle4, &DragCircle::released, this, &Polyline::dragCircleRelease);
-
-//    updatePath(); // Инициализируем начальный путь
 }
 
 void Polyline::setFrameScale(float newScale)
@@ -88,19 +55,8 @@ void Polyline::setFrameScale(float newScale)
 void Polyline::setRealSceneRect(const QRectF& r)
 {
     float s = frameScale();
-
-    // Задаем новую позицию полилинии
-    //QPointF pos = QPointF(r.left() * s, r.top() * s);
-
-    // Масштабируем позиции ручек по новому масштабу
-//    _circle1->setPos(pos + (_circle1->pos() - QPointF(0, 0)) * s);
-//    _circle2->setPos(pos + (_circle2->pos() - QPointF(0, 0)) * s);
-//    _circle3->setPos(pos + (_circle3->pos() - QPointF(0, 0)) * s);
-//    _circle4->setPos(pos + (_circle4->pos() - QPointF(0, 0)) * s);
-
     // Корректируем масштаб
     _frameScale = s;
-
     // Обновляем путь
     updatePath();
 }

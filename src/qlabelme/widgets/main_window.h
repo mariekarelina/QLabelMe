@@ -22,6 +22,9 @@
 #include <QListWidget>
 #include <QMap>
 #include <QList>
+#include <QCheckBox>
+#include <QButtonGroup>
+#include <QHBoxLayout>
 
 #include <QGraphicsView>
 #include <QGraphicsScene>
@@ -56,18 +59,17 @@ struct Document
     QPixmap pixmap;  // Само изображение
 
     // Состояние просмотра
-    struct ViewState
+    struct
     {
         int hScroll = 0;
         int vScroll = 0;
         qreal zoom = 1.0;
         QPointF center;
-    };
-    ViewState viewState;
+    } viewState;
 
     static Ptr create(const QString& path)
     {
-        Ptr doc(new Document);
+        Ptr doc {new Document};
         doc->filePath = path;
         return doc;
     }
@@ -118,6 +120,7 @@ private slots:
     void togglePointerMode();
     void on_actOpen_triggered(bool);
     void on_actClose_triggered(bool);
+    void on_actSave_triggered(bool);
 
     void on_actExit_triggered(bool);
 
@@ -141,6 +144,8 @@ private slots:
 
     void wheelEvent(QWheelEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+
+    void onCheckBoxPolygonLabel(QAbstractButton *button);
 
 
 private:
@@ -171,6 +176,8 @@ private:
     void loadAnnotationFromFile(Document::Ptr doc);
     void saveCurrentViewState(Document::Ptr doc);
     void restoreViewState(Document::Ptr doc);
+
+    void handleCheckBoxClick(QCheckBox* clickedCheckBox);
 
 
 private:
@@ -263,6 +270,8 @@ private:
    bool _isRightPanelVisible = true;
    QWidget* _rightPanel; // Указатель на правую панель
 
+   // Указатель на последний выбранный чекбокс в списке классов для полигонов
+   QCheckBox* _lastCheckedPolygonLabel = nullptr;
 
 
     // Позволяем стороннему классу видеть все
