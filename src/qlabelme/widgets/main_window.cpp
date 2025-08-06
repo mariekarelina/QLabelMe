@@ -917,7 +917,6 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
         return;
     }
 
-
     YamlConfig::Func saveCircles = [&](YamlConfig* conf, YAML::Node& ycircles, bool)
     {
         for (QGraphicsItem* item : doc->scene->items())
@@ -1011,113 +1010,14 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
         conf->setValue(shapes, "polygons", savePolygons);
         conf->setValue(shapes, "rectangles", saveRectangles);
 
-
-//        for (Spammer* spammer : _spammers)
-//        {
-//            QString user {spammer->user->toJson()};
-
-//            YAML::Node spmr;
-//            conf->setValue(spmr, "chat_id", spammer->chatId);
-//            conf->setValue(spmr, "user", user);
-//            conf->setValue(spmr, "spam_times", spammer->spamTimes);
-
-//            node.push_back(spmr);
-//        }
-
         return true;
     };
 
     YamlConfig yconfig;
     yconfig.setValue("shapes", saveFunc);
-    yconfig.saveFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml");
+    yconfig.saveFile("/tmp/1.yaml");
+    //yconfig.saveFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml");
 
-
-//-------------------------------------------------------------
-
-//    QFileInfo fileInfo(doc->filePath);
-//    QString txtPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".txt";
-
-//    QFile file(txtPath);
-//    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-//    {
-//        return;
-//    }
-
-//    QTextStream out(&file);
-//    out.setCodec("UTF-8");
-//    out.setRealNumberPrecision(10); // Устанавливаем 10 знаков после запятой
-//    out.setRealNumberNotation(QTextStream::FixedNotation); // Фиксированная запись
-
-//    int shapeIndex = -1;
-//    out << "shapes:\n";
-//    for (QGraphicsItem* item : doc->scene->items())
-//    {
-//        // Пропускаем само изображение и временные элементы
-//        if (item == doc->videoRect || item == _tempRectItem ||
-//            item == _tempCircleItem || item == _tempPolyline)
-//        {
-//            continue;
-//        }
-
-//        QString className = item->data(0).toString();
-//        if (className.isEmpty())
-//        {
-//            continue;
-//        }
-
-//        out << "    " << ++shapeIndex << ":\n";
-//        out << "    label:    \"" << className << "\"\n";
-//        out << "    points:\n";
-
-//        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
-//        {
-//            // Получаем координаты прямоугольника относительно изображения
-//            QRectF sceneRect = rect->sceneBoundingRect();
-
-//            QPointF topLeft = sceneRect.topLeft();
-//            QPointF bottomRight = sceneRect.bottomRight();
-
-//            QRectF r = rect->rect();
-//            // Сохраняем 4 точки прямоугольника
-//            out << "        0:\n";
-//            out << "                0:    " << topLeft.x() << '\n';
-//            out << "                1:    " << topLeft.y() << '\n';
-//            out << "        1:\n";
-//            out << "                0:    " << bottomRight.x() + r.width() << '\n';
-//            out << "                1:    " << topLeft.y() << '\n';
-//            out << "        2:\n";
-//            out << "                0:    " << bottomRight.x() + r.width() << '\n';
-//            out << "                1:    " << bottomRight.y() + r.height() << '\n';
-//            out << "        3:\n";
-//            out << "                0:    " << topLeft.x() << '\n';
-//            out << "                1:    " << bottomRight.y() + r.height() << '\n';
-//            out << "    shape_type:    \"rectangle\"\n\n";
-//        }
-//        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
-//        {
-//            QPointF center = circle->realCenter();
-//            qreal radius = circle->realRadius();
-
-//            // Сохраняем только центр и радиус
-//            out << "        center:\n";
-//            out << "                0:    " << center.x() << '\n';
-//            out << "                1:    " << center.y() << '\n';
-//            out << "        radius:       " << radius << '\n';
-//            out << "    shape_type:    \"circle\"\n\n";
-//        }
-//        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-//        {
-//            int pointIndex = -1;
-//            for (const QPointF& point : polyline->points())
-//            {
-//                out << "        " << ++pointIndex << '\n';
-//                out << "                0:    " << point.x() << "\n";
-//                out << "                1:    " << point.y() << "\n";
-//            }
-//            out << "    shape_type:    \"polygon\"\n\n";
-//        }
-//    }
-//    file.close();
 }
 
 void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
@@ -1127,19 +1027,91 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
         return;
     }
 
-    QFileInfo fileInfo(doc->filePath);
-    QString jsonPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".json";
+    YamlConfig yconfig;
 
-    if (QFile::exists(jsonPath))
+    if (yconfig.readFile("/tmp/1.yaml"))
     {
-        QFile file(jsonPath);
-        if (file.open(QIODevice::ReadOnly))
-        {
-            QJsonDocument docJson = QJsonDocument::fromJson(file.readAll());
-            deserializeJsonToScene(doc->scene, docJson.object());
-            file.close();
-        }
+        // TODO написать что нибудь об ошибке
+        return;
     }
+
+    YamlConfig::Func loadCircles = [&](YamlConfig* conf, YAML::Node& ycircles, bool)
+    {
+        for (const YAML::Node& ycircle : ycircles)
+        {
+            QString label;
+            conf->getValue(ycircle, "name", label);
+
+            QPoint center;
+            conf->getValue(ycircle, "center", center);
+
+            int radius = 0;
+            conf->getValue(ycircle, "radius", radius);
+
+            // TODO создать circle на сцене
+
+        }
+        return true;
+    };
+
+    YamlConfig::Func loadPolygons = [&](YamlConfig* conf, YAML::Node& ypolygons, bool)
+    {
+        for (const YAML::Node& ypolygon : ypolygons)
+        {
+            QString label;
+            conf->getValue(ypolygon, "name", label);
+
+            QVector<QPointF> points;
+            YamlConfig::Func loadPoints = [&points](YamlConfig* conf, YAML::Node& ypoints, bool)
+            {
+                for (const YAML::Node& ypoint : ypoints)
+                {
+                    //QPointF point;
+                    int x = 0, y = 0;
+                    conf->getValue(ypoint, "x", x);
+                    conf->getValue(ypoint, "y", y);
+                    points.append(QPoint(x, y));
+                }
+                return true;
+            };
+            conf->getValue(ypolygon, "points", loadPoints);
+        }
+        return true;
+    };
+    YamlConfig::Func loadRectangles = [&](YamlConfig* conf, YAML::Node& yrectangles, bool)
+    {
+
+        return true;
+    };
+
+    YamlConfig::Func loadFunc = [&](YamlConfig* conf, YAML::Node& shapes, bool /*logWarn*/)
+    {
+
+        conf->getValue(shapes, "circles", loadCircles);
+        conf->getValue(shapes, "polygons", loadPolygons);
+        conf->getValue(shapes, "rectangles", loadRectangles);
+
+        return true;
+    };
+
+    if (!yconfig.getValue("shapes", loadFunc, false))
+    {
+        // TODO что нибудь написать об ошибке чтения
+    }
+
+//    QFileInfo fileInfo(doc->filePath);
+//    QString jsonPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".json";
+
+//    if (QFile::exists(jsonPath))
+//    {
+//        QFile file(jsonPath);
+//        if (file.open(QIODevice::ReadOnly))
+//        {
+//            QJsonDocument docJson = QJsonDocument::fromJson(file.readAll());
+//            deserializeJsonToScene(doc->scene, docJson.object());
+//            file.close();
+//        }
+//    }
 }
 
 void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json)
