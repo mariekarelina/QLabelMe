@@ -51,7 +51,6 @@ public:
 
     bool isCursorNearCircle(const QPointF& cursorPos) const;
 
-
 protected:
     // Переопределяем обработчик событий клавиатуры
     void keyPressEvent(QKeyEvent* event) override;
@@ -63,11 +62,6 @@ protected:
 
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
                QWidget* widget = nullptr) override;
-
-
-private slots:
-    //void handleHandleHoverEnter();
-    //void handleHandleHoverLeave();
 
 
 private:

@@ -52,7 +52,9 @@ public:
         return result;
     }
     void updatePointNumbers();
-    void applyNumberStyle(qreal fontSize);
+    QPointF findBestDirection(const QPointF& pointPos, const QPointF& initialDirection, int pointIndex);
+    int countIntersections(const QLineF& testLine, int excludePointIndex);
+    void applyNumberStyle(qreal fontSize, const QColor& textColor, const QColor& bgColor);
     void rotatePointsClockwise();
     void rotatePointsCounterClockwise();
     void handleKeyPressEvent(QKeyEvent* event);
@@ -79,13 +81,6 @@ protected:
 signals:
     void lineChanged(Polyline* line);
 
-//private slots:
-    // void dragCircleMove(DragCircle* circle) override;
-    // void dragCircleRelease(DragCircle* circle) override;
-
-    // void handleHandleHoverEnter();
-    // void handleHandleHoverLeave();
-
 private:
     void updateConnections(); // Для обновления связей между точками
     void updateClosedState();
@@ -105,6 +100,8 @@ public:
     QList<QGraphicsSimpleTextItem*> pointNumbers;
     QList<QGraphicsRectItem*> numberBackgrounds;
     qreal _numberFontSize = 10.0; // Размер шрифта по умолчанию
+    QColor _numberColor = Qt::white;
+    QColor _numberBgColor = QColor(0, 0, 0, 180);
 
     bool _pointNumbersVisible = true; // Видимости нумерации
 };

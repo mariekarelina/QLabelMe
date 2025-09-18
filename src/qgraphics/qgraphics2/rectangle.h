@@ -38,7 +38,7 @@ public:
     void setRealSceneRect(const QRectF&);
     void updateHandlePosition();
     void updatePointNumbers();
-    void applyNumberStyle(qreal fontSize);
+    void applyNumberStyle(qreal fontSize, const QColor& textColor, const QColor& bgColor);
 
     void rotatePointsClockwise();
     void rotatePointsCounterClockwise();
@@ -89,6 +89,8 @@ private:
     QList<QGraphicsRectItem*> numberBackgrounds;
     int _numberingOffset = 0; // Смещение для нумерации точек
     qreal _numberFontSize = 10.0; // Размер шрифта по умолчанию
+    QColor _numberColor = Qt::white;
+    QColor _numberBgColor = QColor(0, 0, 0, 180);
 
     bool _pointNumbersVisible = true; // Видимости нумерации
 };

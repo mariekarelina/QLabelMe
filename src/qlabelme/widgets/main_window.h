@@ -30,6 +30,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTableWidgetItem>
+#include <QColorDialog>
 
 #include <QGraphicsView>
 #include <QGraphicsScene>
@@ -115,6 +116,7 @@ public:
     void graphicsView_mouseReleaseEvent(QMouseEvent*, GraphicsView*);
 
     void setSceneItemsMovable(bool movable);
+    QColor selectedHandleColor() const { return _vis.selectedHandleColor; }
     Document::Ptr currentDocument() const;
 
 protected:
@@ -257,6 +259,8 @@ private:
     void apply_PointSize_ToItem(QGraphicsItem* it);
     void apply_NumberSize_ToItem(QGraphicsItem* it);
 
+    void updateLineColorsForScene(QGraphicsScene* scene);
+
 
 private:
     Ui::MainWindow* ui;
@@ -383,10 +387,20 @@ private:
 
     qgraph::DragCircle* _lastHoverHandle = nullptr; // кто сейчас в hover-стиле
 
-    struct VisualStyle {
-        qreal lineWidth = 2.0; // px
-        qreal handleSize = 10.0; // px (DragCircle/ручки вершин)
-        qreal numberFontPt = 10.0; // pt (кегль нумерации вершин/узлов)
+    struct VisualStyle
+    {
+        qreal lineWidth = 2.0;
+        qreal handleSize = 10.0;
+        qreal numberFontPt = 10.0;
+        QColor handleColor = Qt::red;
+        QColor selectedHandleColor = Qt::yellow;
+        QColor numberColor = Qt::white;
+        QColor numberBgColor = QColor(0, 0, 0, 180);
+
+        // Цвета линий для разных примитивов
+        QColor rectangleLineColor = Qt::green;
+        QColor circleLineColor = Qt::red;
+        QColor polylineLineColor = Qt::blue;
     };
     VisualStyle _vis; // глобально для всех фигур
 

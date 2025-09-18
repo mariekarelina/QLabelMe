@@ -17,8 +17,23 @@ DragCircle::DragCircle(QGraphicsScene* scene)
     setFlag(QGraphicsItem::ItemIsMovable, false);
 
     setRect(-_currentSize/2, -_currentSize/2, _currentSize, _currentSize);
-    // сохранить именно этот размер как базовый
+    // Сохранить именно этот размер как базовый
     rememberCurrentAsBase(this);
+
+    // Устанавливаем начальные значения
+    _baseColor = Qt::red; // Цвет по умолчанию, будет переопределен из настроек
+    _smallSize = 8.0;
+    _largeSize = 12.0;
+    _currentSize = _smallSize;
+
+    qreal half = _smallSize / 2.0;
+    _baseRect = QRectF(-half, -half, _smallSize, _smallSize);
+    _basePen = QPen(_baseColor.darker(150), 1);
+    _baseBrush = QBrush(_baseColor);
+
+    setRect(_baseRect);
+    setPen(_basePen);
+    setBrush(_baseBrush);
 
     if (_isGhost)
     {
@@ -48,6 +63,7 @@ DragCircle::DragCircle(QGraphicsScene* scene)
     setFlag(QGraphicsItem::ItemIgnoresTransformations); // Игнорируем трансформации вида
     scene->addItem(this);
 
+    _selectedHandleColor = Qt::yellow;
 
     // // Инициализация контекстного меню
     // _contextMenu = new QMenu();
@@ -72,21 +88,17 @@ void DragCircle::raiseToTop()
     setZValue(100000); // Всегда на самом верху
 }
 
-// void DragCircle::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
-// {
-//     if (_hoverSizingEnabled)
-//         applyHoverStyle(this, true);
+void DragCircle::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
+{
+    setHoverStyle(true);
+    QGraphicsRectItem::hoverEnterEvent(event);
+}
 
-//     QGraphicsRectItem::hoverEnterEvent(event);
-// }
-
-// void DragCircle::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
-// {
-//     if (_hoverSizingEnabled)
-//         applyHoverStyle(this, false);
-
-//     QGraphicsRectItem::hoverLeaveEvent(event);
-// }
+void DragCircle::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
+{
+    setHoverStyle(false);
+    QGraphicsRectItem::hoverLeaveEvent(event);
+}
 
 void DragCircle::setBaseSize(qreal size)
 {
@@ -180,7 +192,7 @@ void DragCircle::setHoverStyle(bool hover)
         // Увеличиваем размер
         const qreal side = _baseRect.width() * 1.5;
         setRect(-side/2.0, -side/2.0, side, side);
-        setBrush(QBrush(Qt::yellow));
+        setBrush(QBrush(_selectedHandleColor));
         setPen(QPen(Qt::black, 1));
     }
     else
@@ -213,9 +225,39 @@ void DragCircle::restoreBaseStyle()
     update();
 }
 
+void DragCircle::setBaseStyle(const QColor& color, qreal size)
+{
+    _baseColor = color;
+    _smallSize = size;
+    _largeSize = size * 1.5;
+    _currentSize = size;
+
+    // Обновляем базовые параметры
+    qreal half = size / 2.0;
+    _baseRect = QRectF(-half, -half, size, size);
+    _basePen = QPen(color.darker(150), 1);
+    _baseBrush = QBrush(color);
+
+    // Немедленно применяем стиль
+    restoreBaseStyle();
+}
+
+void DragCircle::setBaseColor(const QColor& color)
+{
+    _baseColor = color;
+    _basePen = QPen(color.darker(150), 1);
+    _baseBrush = QBrush(color);
+    restoreBaseStyle();
+}
+
 void DragCircle::setHoverSizingEnabled(bool on)
 {
     _hoverSizingEnabled = on;
+}
+
+void DragCircle::setSelectedHandleColor(const QColor& color)
+{
+    _selectedHandleColor = color;
 }
 
 bool DragCircle::containsPoint(const QPointF &point) const
@@ -244,6 +286,11 @@ QVariant DragCircle::itemChange(GraphicsItemChange change, const QVariant &value
     if (change == QGraphicsItem::ItemPositionChange ||
         change == QGraphicsItem::ItemPositionHasChanged)
     {
+        // Проверяем, что родительский элемент все еще существует
+        if (!parentItem())
+        {
+            return QGraphicsRectItem::itemChange(change, value);
+        }
         // если эту ручку прямо сейчас тянем мышью — не вмешиваемся
         if (scene() && scene()->mouseGrabberItem() == this)
             return QGraphicsRectItem::itemChange(change, value);

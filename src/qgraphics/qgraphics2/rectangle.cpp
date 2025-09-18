@@ -385,15 +385,11 @@ void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
 void Rectangle::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
 {
     QGraphicsRectItem::hoverEnterEvent(event);
-    setBrush(QColor(200, 255, 200, 150));
-    //QGraphicsRectItem::hoverEnterEvent(event);
+    QColor baseColor = pen().color();
+    QColor highlightColor = baseColor;
+    highlightColor.setAlpha(100);
+    setBrush(highlightColor);
 
-    // if (Shape* item = dynamic_cast<Shape*>(parentItem()))
-    // {
-    //     item->setZLevel(1001);
-    // }
-
-    // Поднимаем ручки наверх при наведении
     raiseHandlesToTop();
     update();
 }
@@ -402,8 +398,9 @@ void Rectangle::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
 {
     QGraphicsRectItem::hoverLeaveEvent(event);
     setBrush(Qt::transparent);
-    //QGraphicsRectItem::hoverLeaveEvent(event);
+
     updateHandlesZValue();
+    update();
 }
 
 void Rectangle::updateHandleVisibility()
@@ -437,6 +434,8 @@ void Rectangle::handleHandleHoverLeave()
 
 void Rectangle::updatePointNumbers()
 {
+    if (!this || !scene()) return;
+
     // Удаляем старые номера и фоны
     qDeleteAll(pointNumbers);
     qDeleteAll(numberBackgrounds);
@@ -460,7 +459,10 @@ void Rectangle::updatePointNumbers()
         QPointF(1, 1),
         QPointF(-1, 1)
     };
-    const qreal offsetDistance = 10.0; // Расстояние от точки до номера
+    // const qreal offsetDistance = 10.0; // Расстояние от точки до номера
+    const qreal handleRadius = _circleTL ? _circleTL->rect().width() / 2.0 : 5.0;
+    const qreal fontHeight = _numberFontSize > 0 ? _numberFontSize : 10.0;
+    const qreal offsetDistance = handleRadius + fontHeight * 0.8;
 
     for (int i = 0; i < 4; ++i)
     {
@@ -473,7 +475,7 @@ void Rectangle::updatePointNumbers()
 
         QGraphicsSimpleTextItem* number = new QGraphicsSimpleTextItem(QString::number(numberedIndex), this);
         number->setPos(points[i]);
-        number->setBrush(QBrush(Qt::white));
+        number->setBrush(_numberColor);
         number->setZValue(1001);
         number->setPen(Qt::NoPen);
         number->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
@@ -495,7 +497,7 @@ void Rectangle::updatePointNumbers()
         // Добавляем прямоугольник фона
         QGraphicsRectItem* bg = new QGraphicsRectItem(number->boundingRect(), this);
         bg->setPos(finalNumberPos);
-        bg->setBrush(QBrush(QColor(0, 0, 0, 180)));
+        bg->setBrush(_numberBgColor);
         bg->setPen(Qt::NoPen);
         bg->setZValue(1000);
         bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
@@ -514,9 +516,11 @@ void Rectangle::updatePointNumbers()
     }
 }
 
-void Rectangle::applyNumberStyle(qreal fontSize)
+void Rectangle::applyNumberStyle(qreal fontSize, const QColor& textColor, const QColor& bgColor)
 {
     _numberFontSize = fontSize; // Сохраняем размер шрифта
+    _numberColor = textColor;   // Сохраняем цвет текста
+    _numberBgColor = bgColor;   // Сохраняем цвет фона
 
     // Обновляем существующие номера
     for (QGraphicsSimpleTextItem* number : pointNumbers)
@@ -526,10 +530,20 @@ void Rectangle::applyNumberStyle(qreal fontSize)
             QFont font = number->font();
             font.setPointSizeF(fontSize);
             number->setFont(font);
+            number->setBrush(textColor);
         }
     }
 
     // Обновляем фоны
+    for (QGraphicsRectItem* bg : numberBackgrounds)
+    {
+        if (bg)
+        {
+            bg->setBrush(bgColor);
+        }
+    }
+
+    // Обновляем размеры фонов
     for (int i = 0; i < pointNumbers.size() && i < numberBackgrounds.size(); ++i)
     {
         QGraphicsSimpleTextItem* number = pointNumbers[i];

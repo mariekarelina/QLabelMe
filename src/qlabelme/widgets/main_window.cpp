@@ -61,7 +61,6 @@
 #include <QGraphicsSimpleTextItem>
 #include <QGraphicsRectItem>
 
-
 using namespace qgraph;
 
 //#include <view.h>
@@ -337,13 +336,10 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             _startPoint = graphView->mapToScene(mouseEvent->pos());
             if (!_currCircle)
             {
-                // Создаем временный круг с радиусом 0
                 _currCircle = new QGraphicsEllipseItem();
-                // _currCircle->setPen(QPen(Qt::green, 2));
-                // _currCircle->setBrush(Qt::transparent);
                 QPen pen;
                 pen.setWidthF(_vis.lineWidth);
-                pen.setColor(Qt::red);
+                pen.setColor(_vis.circleLineColor);
                 pen.setCosmetic(true);
                 _currCircle->setPen(pen);
                 _currCircle->setBrush(Qt::transparent);
@@ -392,18 +388,15 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             if (!_currRectangle)
             {
                 _currRectangle = new QGraphicsRectItem();
-                // _currRectangle->setPen(QPen(Qt::blue, 2));
-                // _currRectangle->setBrush(QBrush(Qt::transparent));
                 QPen pen;
                 pen.setWidthF(_vis.lineWidth);
-                pen.setColor(Qt::green);
+                pen.setColor(_vis.rectangleLineColor);
                 pen.setCosmetic(true);
                 _currRectangle->setPen(pen);
                 _currRectangle->setBrush(Qt::transparent);
 
                 _scene->addItem(_currRectangle);
             }
-            //_currRectangle->setRect(QRectF(_startPoint, _startPoint)); // Начальный размер равен нулю
             _currRectangle->setRect(QRectF(_startPoint, startPoint2));
             _isDrawingRectangle = true; // Включаем флаг рисования
         }
@@ -717,10 +710,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
     {
         clearAllHandleHoverEffects();
         hideGhost();
-        // if (_ghostActive)
-        // {
-        //     endGhost();
-        // }
         break;
     }
     case QEvent::MouseButtonPress:
@@ -734,17 +723,19 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
         if (auto* target = pickHiddenHandle(sp, topIsHandle))
         {
-            if (topIsHandle)
+            if (target->scene() && _scene->items().contains(target))
             {
-                startHandleDrag(target, sp);
+                if (topIsHandle)
+                {
+                    startHandleDrag(target, sp);
+                }
+                else
+                {
+                    showGhostFor(target);
+                    startGhostDrag(sp);
+                }
+                return true;
             }
-            else
-            {
-                showGhostFor(target);
-                //showGhostPreview(target, sp);
-                startGhostDrag(sp);
-            }
-            return true;
         }
         break;
     }
@@ -786,14 +777,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 _currentHoveredHandle = hoveredHandle;
             }
         }
-        // else
-        // {
-        //     if (auto* h = pickHandleAt(sp))
-        //         showGhostFor(h);
-        //     else
-        //         hideGhost();
-        // }
-        //updateGhostOnMove(sp);
         break;
     }
     case QEvent::MouseButtonRelease:
@@ -2420,9 +2403,10 @@ void MainWindow::showGhostOver(qgraph::DragCircle* target, const QPointF& sceneP
     _ghostTarget = target;
     _ghostActive = true;
 
+    QColor ghostColor = _vis.selectedHandleColor;
     _ghostHandle->setRect(target->baseRect());
     _ghostHandle->setPen (target->basePen());
-    _ghostHandle->setBrush(target->baseBrush());
+    _ghostHandle->setBrush(QBrush(ghostColor));
     DragCircle::rememberCurrentAsBase(_ghostHandle);
 
     // Поставим «призрака» поверх позиции настоящей ручки
@@ -2513,9 +2497,10 @@ void MainWindow::setGhostStyleHover()
     const QSizeF newSize(base.size() * scale);
     const QRectF newRect(QPointF(-newSize.width()/2.0, -newSize.height()/2.0), newSize);
 
+    QColor ghostColor = _vis.selectedHandleColor;
     _ghostHandle->setRect(newRect);
     _ghostHandle->setPen(QPen(Qt::black, 1));
-    _ghostHandle->setBrush(QBrush(Qt::yellow)); // подсветка при наведении
+    _ghostHandle->setBrush(QBrush(ghostColor));
     _ghostHandle->update();
 
     // Вернём центр в ту же точку
@@ -2586,6 +2571,11 @@ qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
                 {
                     // Обновляем позицию ручки перед показом
                     circle->updateHandlePosition(scenePos);
+                    if (!handle->isVisible())
+                    {
+                        handle->setVisible(true);
+                        handle->setHoverStyle(true);
+                    }
                     return handle;
                 }
             }
@@ -2610,7 +2600,6 @@ void MainWindow::startHandleDrag(qgraph::DragCircle* h, const QPointF& scenePos)
 
     const QPointF handleCenter = h->sceneBoundingRect().center();
     m_pressLocalOffset = scenePos - handleCenter;
-    //applyHoverStyleToHandle(h);
     h->setHoverStyle(true);
 }
 
@@ -2683,6 +2672,7 @@ void MainWindow::showGhostFor(qgraph::DragCircle* h)
         // Устанавливаем призрака в ту же позицию, что и реальную ручку
         const QPointF sceneHandlePos = h->scenePos();
         _ghostHandle->setPos(sceneHandlePos);
+        _ghostHandle->setVisible(true);
     }
     else
     {
@@ -2700,9 +2690,10 @@ void MainWindow::showGhostFor(qgraph::DragCircle* h)
     const QSizeF newSize(base.size() * scale);
     const QRectF newRect(QPointF(-newSize.width()/2.0, -newSize.height()/2.0), newSize);
 
+    QColor ghostColor = _vis.selectedHandleColor;
     _ghostHandle->setRect(newRect);
     _ghostHandle->setPen(QPen(Qt::black, 1));
-    _ghostHandle->setBrush(QBrush(Qt::yellow));
+    _ghostHandle->setBrush(QBrush(ghostColor));
     _ghostHandle->setPos(centerScene - newRect.center());
     _ghostHandle->setVisible(true);
     _ghostHandle->update();
@@ -2745,19 +2736,52 @@ void MainWindow::loadVisualStyle()
 {
     // Устанавливаем значения по умолчанию, если они не найдены в конфиге
     if (!config::base().getValue("vis.all.line_width", _vis.lineWidth))
-    {
         _vis.lineWidth = 2.0;
-    }
 
     if (!config::base().getValue("vis.all.handle_size", _vis.handleSize))
-    {
         _vis.handleSize = 10.0;
-    }
 
     if (!config::base().getValue("vis.all.number_font_pt", _vis.numberFontPt))
-    {
         _vis.numberFontPt = 10.0;
-    }
+
+    // Загружаем цвета
+    QString colorStr;
+    if (config::base().getValue("vis.all.handle_color", colorStr))
+        _vis.handleColor = QColor(colorStr);
+    else
+        _vis.handleColor = Qt::red;
+
+    if (config::base().getValue("vis.all.number_color", colorStr))
+        _vis.numberColor = QColor(colorStr);
+    else
+        _vis.numberColor = Qt::white;
+
+    if (config::base().getValue("vis.all.number_bg_color", colorStr))
+        _vis.numberBgColor = QColor(colorStr);
+    else
+        _vis.numberBgColor = QColor(0, 0, 0, 180);
+
+    // Загружаем цвета линий
+    if (config::base().getValue("vis.colors.rectangle", colorStr))
+        _vis.rectangleLineColor = QColor(colorStr);
+    else
+        _vis.rectangleLineColor = Qt::green;
+
+    if (config::base().getValue("vis.colors.circle", colorStr))
+        _vis.circleLineColor = QColor(colorStr);
+    else
+        _vis.circleLineColor = Qt::red;
+
+    if (config::base().getValue("vis.colors.polyline", colorStr))
+        _vis.polylineLineColor = QColor(colorStr);
+    else
+        _vis.polylineLineColor = Qt::blue;
+
+    if (config::base().getValue("vis.all.selected_handle_color", colorStr))
+        _vis.selectedHandleColor = QColor(colorStr);
+    else
+        _vis.selectedHandleColor = Qt::yellow;
+
     applyStyle_AllDocuments();
 }
 
@@ -2767,10 +2791,18 @@ void MainWindow::saveVisualStyle() const
     config::base().setValue("vis.all.line_width", _vis.lineWidth);
     config::base().setValue("vis.all.handle_size", _vis.handleSize);
     config::base().setValue("vis.all.number_font_pt", _vis.numberFontPt);
+    config::base().setValue("vis.all.handle_color", _vis.handleColor.name(QColor::HexArgb));
+    config::base().setValue("vis.all.selected_handle_color", _vis.selectedHandleColor.name(QColor::HexArgb));
+    config::base().setValue("vis.all.number_color", _vis.numberColor.name(QColor::HexArgb));
+    config::base().setValue("vis.all.number_bg_color", _vis.numberBgColor.name(QColor::HexArgb));
+    config::base().setValue("vis.colors.rectangle", _vis.rectangleLineColor.name(QColor::HexArgb));
+    config::base().setValue("vis.colors.circle", _vis.circleLineColor.name(QColor::HexArgb));
+    config::base().setValue("vis.colors.polyline", _vis.polylineLineColor.name(QColor::HexArgb));
 }
 
 void MainWindow::applyStyle_AllDocuments()
 {
+
     for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
     {
         auto doc = it.value();
@@ -2779,14 +2811,15 @@ void MainWindow::applyStyle_AllDocuments()
         apply_LineWidth_ToScene(doc->scene);
         apply_PointSize_ToScene(doc->scene);
         apply_NumberSize_ToScene(doc->scene);
+        updateLineColorsForScene(doc->scene);
     }
 
-    // Также применяем к текущей сцене, если она существует
     if (_scene)
     {
         apply_LineWidth_ToScene(_scene);
         apply_PointSize_ToScene(_scene);
         apply_NumberSize_ToScene(_scene);
+        updateLineColorsForScene(_scene);
     }
 }
 
@@ -2850,11 +2883,11 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
     if (!it) return;
     const auto w = _vis.lineWidth;
 
-    // Наши классы
     if (auto r = dynamic_cast<qgraph::Rectangle*>(it))
     {
         QPen p=r->pen();
         p.setWidthF(w);
+        p.setColor(_vis.rectangleLineColor);
         p.setCosmetic(true);
         r->setPen(p);
         return;
@@ -2863,6 +2896,7 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
     {
         QPen p=c->pen();
         p.setWidthF(w);
+        p.setColor(_vis.circleLineColor);
         p.setCosmetic(true);
         c->setPen(p);
         c->applyLineStyle(w);
@@ -2872,6 +2906,7 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
     {
         QPen p=pl->pen();
         p.setWidthF(w);
+        p.setColor(_vis.polylineLineColor);
         p.setCosmetic(true);
         pl->setPen(p);
         return;
@@ -2888,7 +2923,8 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
     }
 
     if (auto pth=qgraphicsitem_cast<QGraphicsPathItem*>(it))
-    { QPen p=pth->pen();
+    {
+        QPen p=pth->pen();
         p.setWidthF(w);
         p.setCosmetic(true);
         pth->setPen(p);
@@ -2915,22 +2951,16 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
 void MainWindow::apply_PointSize_ToItem(QGraphicsItem* it)
 {
     if (!it) return;
-    const qreal d = _vis.handleSize, half=d/2.0;
     // Ручки обычно лежат детьми нужной фигуры
     for (QGraphicsItem* ch : it->childItems())
         if (auto h = dynamic_cast<qgraph::DragCircle*>(ch))
         {
-            h->setRect(-half, -half, d, d);
-            // Обновляем базовые размеры
-            h->_baseRect = QRectF(-half, -half, d, d);
-            h->_currentSize = d;
-            qgraph::DragCircle::rememberCurrentAsBase(h); // синхронизируем hover‑масштаб
+            h->setBaseStyle(_vis.handleColor, _vis.handleSize);
+            h->setSelectedHandleColor(_vis.selectedHandleColor);
+            h->restoreBaseStyle();
+
+            qgraph::DragCircle::rememberCurrentAsBase(h);
         }
-    // Если точки представлены стандартными эллипсами (редкий случай)
-    if (auto e = qgraphicsitem_cast<QGraphicsEllipseItem*>(it))
-    {
-        e->setRect(-half, -half, d, d);
-    }
 }
 
 void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* it)
@@ -2940,12 +2970,12 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* it)
     // Для наших классов фигур
     if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(it))
     {
-        rectangle->applyNumberStyle(_vis.numberFontPt);
+        rectangle->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
         return;
     }
     if (auto* polyline = dynamic_cast<qgraph::Polyline*>(it))
     {
-        polyline->applyNumberStyle(_vis.numberFontPt);
+        polyline->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
         return;
     }
 
@@ -3020,13 +3050,41 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* it)
     }
 }
 
+void MainWindow::updateLineColorsForScene(QGraphicsScene* scene)
+{
+    if (!scene) return;
+
+    for (QGraphicsItem* item : scene->items())
+    {
+        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            QPen pen = rect->pen();
+            pen.setColor(_vis.rectangleLineColor);
+            rect->setPen(pen);
+        }
+        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        {
+            QPen pen = circle->pen();
+            pen.setColor(_vis.circleLineColor);
+            circle->setPen(pen);
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            QPen pen = polyline->pen();
+            pen.setColor(_vis.polylineLineColor);
+            polyline->setPen(pen);
+        }
+    }
+    scene->update();
+}
+
 void MainWindow::removePolygonListItem(QListWidgetItem* item)
 {
     if (!item) return;
 
     // Получаем связанный графический элемент
     QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
-    if (sceneItem)
+    if (sceneItem && sceneItem->scene() == _scene)
     {
         _scene->removeItem(sceneItem);
         delete sceneItem;
@@ -3058,11 +3116,20 @@ void MainWindow::fitImageToView()
     ui->graphView->resetTransform();
     ui->graphView->scale(scale, scale);
     ui->graphView->centerOn(sceneRect.center());
+    ui->graphView->horizontalScrollBar()->setValue(0);
+    ui->graphView->verticalScrollBar()->setValue(0);
 
-    // Сохраняем новое состояние
     if (auto doc = currentDocument())
     {
-        saveCurrentViewState(doc);
+        doc->viewState = {
+            ui->graphView->horizontalScrollBar()->value(),
+            ui->graphView->verticalScrollBar()->value(),
+            scale,
+            _videoRect->sceneBoundingRect().center() // Центр изображения, а не viewport
+        };
+
+        // Принудительно помечаем как инициализированное
+        doc->viewState.zoom = scale; // Гарантируем, что zoom > 0
     }
 }
 
@@ -3140,8 +3207,6 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     _scene = currentDoc->scene;
     _videoRect = currentDoc->videoRect;
 
-    if (_scene)   _scene->installEventFilter(this);
-
     ensureGhostAllocated();
     // Подключаем сигнал changed для новой сцены
     if (currentDoc->scene)
@@ -3151,9 +3216,7 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
                 Qt::UniqueConnection);
     }
 
-    // Восстанавливаем состояние просмотра
-    restoreViewState(currentDoc);
-
+    fitImageToView();
     updatePolygonListForCurrentScene();
     //current->setCheckState(Qt::Checked);
     clearAllHandleHoverEffects();
@@ -3411,7 +3474,7 @@ void MainWindow::on_actSetting_triggered()
     QWidget* generalTab = new QWidget();
     QVBoxLayout *generalLayout = new QVBoxLayout(generalTab);
     generalLayout->setContentsMargins(20, 20, 20, 20);
-    settingTab->addTab(generalTab, tr("Общее"));
+    settingTab->addTab(generalTab, tr("Общие"));
 
     // Вкладка "Интерфейс фигур"
     QWidget *shapesTab = new QWidget();
@@ -3424,30 +3487,68 @@ void MainWindow::on_actSetting_triggered()
     lineWidthSpin->setRange(0.5, 10.0);
     lineWidthSpin->setSingleStep(0.5);
     lineWidthSpin->setValue(_vis.lineWidth);
-    lineWidthSpin->setSuffix(tr(" px"));
     lineWidthSpin->setToolTip(tr("Толщина линий"));
 
     QDoubleSpinBox* handleSizeSpin = new QDoubleSpinBox();
     handleSizeSpin->setRange(2.0, 20.0);
     handleSizeSpin->setSingleStep(0.5);
     handleSizeSpin->setValue(_vis.handleSize);
-    handleSizeSpin->setSuffix(tr(" px"));
     handleSizeSpin->setToolTip(tr("Размер узлов управления фигурами"));
 
     QDoubleSpinBox* numberFontSpin = new QDoubleSpinBox();
     numberFontSpin->setRange(6.0, 20.0);
     numberFontSpin->setSingleStep(0.5);
     numberFontSpin->setValue(_vis.numberFontPt);
-    numberFontSpin->setSuffix(tr(" pt"));
     numberFontSpin->setToolTip(tr("Размер шрифта для нумерации узлов"));
 
-    shapesLayout->addRow(tr("Толщина линии:"), lineWidthSpin);
+    //Виджеты для выбора цвета
+    QPushButton *handleColorBtn = new QPushButton();
+    handleColorBtn->setFixedSize(30, 30);
+    handleColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
+                                      .arg(_vis.handleColor.name()));
+
+    QPushButton *numberColorBtn = new QPushButton();
+    numberColorBtn->setFixedSize(30, 30);
+    numberColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
+                                      .arg(_vis.numberColor.name()));
+
+    QPushButton *numberBgColorBtn = new QPushButton();
+    numberBgColorBtn->setFixedSize(30, 30);
+    numberBgColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
+                                        .arg(_vis.numberBgColor.name()));
+
+    // Кнопки для выбора цвета линий
+    QPushButton *rectColorBtn = new QPushButton();
+    rectColorBtn->setFixedSize(30, 30);
+    rectColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
+                                    .arg(_vis.rectangleLineColor.name()));
+
+    QPushButton *circleColorBtn = new QPushButton();
+    circleColorBtn->setFixedSize(30, 30);
+    circleColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
+                                      .arg(_vis.circleLineColor.name()));
+
+    QPushButton *polylineColorBtn = new QPushButton();
+    polylineColorBtn->setFixedSize(30, 30);
+    polylineColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
+                                        .arg(_vis.polylineLineColor.name()));
+
+    QPushButton *selectedHandleColorBtn = new QPushButton();
+    selectedHandleColorBtn->setFixedSize(30, 30);
+    selectedHandleColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
+                                              .arg(_vis.selectedHandleColor.name()));
+
+    shapesLayout->addRow(tr("Толщина линий:"), lineWidthSpin);
     shapesLayout->addRow(tr("Размер узлов управления фигурами:"), handleSizeSpin);
-    shapesLayout->addRow(tr("Размер шрифта для нумерации узлов:"), numberFontSpin);
-    QDoubleSpinBox* temp = new QDoubleSpinBox();;
-    shapesLayout->addRow(tr("Цвет узлов:"), temp);
-    shapesLayout->addRow(tr("Цвет нумерации узлов:"), temp);
-    shapesLayout->addRow(tr("Цвет фона нумерации узлов:"), temp);
+    shapesLayout->addRow(tr("Цвет узлов:"), handleColorBtn);
+    shapesLayout->addRow(tr("Цвет выделенных узлов:"), selectedHandleColorBtn);
+    shapesLayout->addRow(tr("Размер шрифта для нумерации узлов:"), numberFontSpin);    
+    shapesLayout->addRow(tr("Цвет нумерации узлов:"), numberColorBtn);
+    shapesLayout->addRow(tr("Цвет фона нумерации узлов:"), numberBgColorBtn);
+    shapesLayout->addRow(tr("Цвет линий прямоугольников:"), rectColorBtn);
+    shapesLayout->addRow(tr("Цвет линий окружностей:"), circleColorBtn);
+    shapesLayout->addRow(tr("Цвет линий полилиний:"), polylineColorBtn);
+
     settingTab->addTab(shapesTab, tr("Интерфейс фигур"));
 
     // Вкладка "Рабочая дирректория"
@@ -3487,6 +3588,19 @@ void MainWindow::on_actSetting_triggered()
         applyStyle_AllDocuments();
     };
 
+    // Функции для выбора цвета
+    auto selectColor = [](QPushButton* btn, QColor& color, const QString& title) {
+        QColorDialog dialog(color);
+        dialog.setWindowTitle(title);
+        dialog.setOptions(QColorDialog::ShowAlphaChannel | QColorDialog::DontUseNativeDialog);
+
+        if (dialog.exec() == QDialog::Accepted) {
+            color = dialog.selectedColor();
+            btn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
+                                   .arg(color.name()));
+        }
+    };
+
     // Подключаем кнопки
     connect(okButton, &QPushButton::clicked, [&]() {
         applySettings();
@@ -3502,9 +3616,38 @@ void MainWindow::on_actSetting_triggered()
         settingsDialog.reject();
     });
 
+    connect(handleColorBtn, &QPushButton::clicked, [&]() {
+        selectColor(handleColorBtn, _vis.handleColor, tr("Выбор цвета узлов"));
+    });
+
+    connect(numberColorBtn, &QPushButton::clicked, [&]() {
+        selectColor(numberColorBtn, _vis.numberColor, tr("Выбор цвета нумерации"));
+    });
+
+    connect(numberBgColorBtn, &QPushButton::clicked, [&]() {
+        selectColor(numberBgColorBtn, _vis.numberBgColor, tr("Выбор цвета фона нумерации"));
+    });
+
     // Обработка закрытия окна через крестик
     connect(&settingsDialog, &QDialog::rejected, [&]() {
         revertSettings();
+    });
+
+    // Функции для выбора цвета линий
+    connect(rectColorBtn, &QPushButton::clicked, [&]() {
+        selectColor(rectColorBtn, _vis.rectangleLineColor, tr("Выбор цвета линий прямоугольников"));
+    });
+
+    connect(circleColorBtn, &QPushButton::clicked, [&]() {
+        selectColor(circleColorBtn, _vis.circleLineColor, tr("Выбор цвета линий окружностей"));
+    });
+
+    connect(polylineColorBtn, &QPushButton::clicked, [&]() {
+        selectColor(polylineColorBtn, _vis.polylineLineColor, tr("Выбор цвета линий полилиний"));
+    });
+
+    connect(selectedHandleColorBtn, &QPushButton::clicked, [&]() {
+        selectColor(selectedHandleColorBtn, _vis.selectedHandleColor, tr("Выбор цвета выделенных узлов"));
     });
 
     // Основной layout

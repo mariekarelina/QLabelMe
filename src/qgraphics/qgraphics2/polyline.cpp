@@ -26,6 +26,11 @@ Polyline::Polyline(QGraphicsScene* scene, const QPointF& scenePos)
     DragCircle* startCircle = new DragCircle(scene);
     startCircle->setParentItem(this);
     startCircle->setVisible(true);
+    QPen circlePen(Qt::red);
+    circlePen.setWidth(2);
+    startCircle->setPen(circlePen);
+    startCircle->setBrush(Qt::white);
+    startCircle->setRect(QRectF(-5, -5, 10, 10));
     startCircle->setPos(mapFromScene(scenePos));
 
     //startCircle->setPos(scenePos.x(), scenePos.y()); // Начальная позиция
@@ -79,9 +84,9 @@ void Polyline::addPoint(const QPointF& position, QGraphicsScene* scene)
     if (!_circles.isEmpty())
     {
         QPointF lastPoint = _circles.last()->scenePos();
-        if (QLineF(lastPoint, position).length() < 0.1) // Учитываем погрешность (например, 0.1)
+        if (QLineF(lastPoint, position).length() < 0.1)
         {
-            return; // Новая точка не добавляется
+            return;
         }
     }
 
@@ -89,7 +94,15 @@ void Polyline::addPoint(const QPointF& position, QGraphicsScene* scene)
     DragCircle* newCircle = new DragCircle(scene);
     newCircle->setParentItem(this);
     newCircle->setVisible(true);
-    //newCircle->setPos(position); // Устанавливаем позицию новой точки
+    if (!_circles.isEmpty())
+    {
+        DragCircle* existingCircle = _circles.first();
+        newCircle->setPen(existingCircle->pen());
+        newCircle->setBrush(existingCircle->brush());
+        newCircle->setRect(existingCircle->rect());
+        newCircle->setZValue(existingCircle->zValue());
+    }
+
     QPointF localPos = mapFromScene(position);
     newCircle->setPos(localPos);
     DragCircle::rememberCurrentAsBase(newCircle);
@@ -199,6 +212,14 @@ void Polyline::insertPoint(QPointF position)
         DragCircle* newCircle = new DragCircle(scene());
         newCircle->setParentItem(this);
         newCircle->setVisible(true);
+
+        if (!_circles.isEmpty())
+        {
+            DragCircle* existingCircle = _circles.first();
+            newCircle->setBaseStyle(existingCircle->baseColor(), existingCircle->baseSize());
+            newCircle->setSelectedHandleColor(existingCircle->selectedHandleColor());
+            newCircle->restoreBaseStyle();
+        }
         newCircle->setPos(closestPoint);
 
         // Вставляем точку в нужное место
@@ -274,9 +295,11 @@ void Polyline::handlePointDeletion(DragCircle* circle)
 
     if (_circles.contains(circle))
     {
+        circle->disconnect();
         _circles.removeOne(circle);
         scene()->removeItem(circle);
         delete circle;
+        circle = nullptr;
 
         // Если удалили точку из замкнутой полилинии и осталось 2 точки,
         // автоматически размыкаем её
@@ -330,17 +353,19 @@ void Polyline::keyPressEvent(QKeyEvent* event)
 void Polyline::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
 {
     Q_UNUSED(event);
-    // Устанавливаем бледный цвет заливки при наведении
-    setBrush(QColor(2, 200, 255, 150)); // Бледно-красный с прозрачностью
-    update(); // Обновляем отображение
+    QColor baseColor = pen().color();
+    QColor highlightColor = baseColor;
+    highlightColor.setAlpha(100);
+
+    setBrush(highlightColor);
+    update();
 }
 
 void Polyline::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
 {
     Q_UNUSED(event);
-    // Возвращаем прозрачную заливку при уходе курсора
     setBrush(Qt::transparent);
-    update(); // Обновляем отображение
+    update();
 }
 
 void Polyline::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
@@ -643,47 +668,37 @@ void Polyline::updatePointNumbers()
         QPointF circlePos = _circles[i]->pos();
         QPointF direction(0, -1); // Направление по умолчанию (вверх)
 
-        // Вычисляем оптимальное внешнее направление для каждой точки
+        // Вычисляем нормаль к сегменту
         if (_circles.size() > 1)
         {
             if (i == 0) // Первая точка
             {
                 QPointF nextPos = _circles[1]->pos();
                 QPointF segment = nextPos - circlePos;
+
                 if (segment.manhattanLength() > 0)
                 {
-                    // Для первой точки - перпендикуляр влево от направления сегмента
+                    // Вычисляем нормаль (перпендикуляр к сегменту)
                     direction = QPointF(-segment.y(), segment.x());
                     direction = direction / QLineF(0, 0, direction.x(), direction.y()).length();
 
-                    // Всегда выбираем левое направление относительно сегмента
-                    QPointF segmentDir = segment / segment.manhattanLength();
-                    QPointF leftNormal(-segmentDir.y(), segmentDir.x());
-
-                    // Если наше направление не совпадает с левым нормалем, инвертируем
-                    if (QPointF::dotProduct(direction, leftNormal) < 0.9) // допуск 0.9
-                    {
-                        direction = -direction;
-                    }
+                    // Проверяем оба направления и выбираем то, которое не пересекает полилинию
+                    direction = findBestDirection(circlePos, direction, i);
                 }
             }
             else if (i == _circles.size() - 1) // Последняя точка
             {
                 QPointF prevPos = _circles[i-1]->pos();
                 QPointF segment = circlePos - prevPos;
+
                 if (segment.manhattanLength() > 0)
                 {
-                    // Перпендикуляр к сегменту, направленный наружу
-                    // Для последней точки выбираем направление, противоположное сегменту
+                    // Вычисляем нормаль (перпендикуляр к сегменту)
                     direction = QPointF(-segment.y(), segment.x());
                     direction = direction / QLineF(0, 0, direction.x(), direction.y()).length();
 
-                    // Убеждаемся, что направление наружу (вправо от направления сегмента)
-                    QPointF segmentDir = segment / QLineF(0, 0, segment.x(), segment.y()).length();
-                    if (QPointF::dotProduct(direction, QPointF(-segmentDir.y(), segmentDir.x())) > 0)
-                    {
-                        direction = -direction;
-                    }
+                    // Проверяем оба направления и выбираем то, которое не пересекает полилинию
+                    direction = findBestDirection(circlePos, direction, i);
                 }
             }
             else // Промежуточные точки
@@ -705,29 +720,25 @@ void Polyline::updatePointNumbers()
 
                     if (bisector.manhattanLength() > 0)
                     {
-                        // Перпендикуляр к биссектрисе для внешнего направления
+                        // Перпендикуляр к биссектрисе
                         direction = QPointF(-bisector.y(), bisector.x());
                         direction = direction / QLineF(0, 0, direction.x(), direction.y()).length();
 
-                        // Убеждаемся, что направление действительно наружу
-                        QPointF testPos = circlePos + direction * 10;
-                        if (QLineF(prevPos, testPos).length() < QLineF(prevPos, circlePos).length() ||
-                            QLineF(nextPos, testPos).length() < QLineF(nextPos, circlePos).length())
-                        {
-                            // Если направление внутрь, инвертируем
-                            direction = -direction;
-                        }
+                        // Проверяем оба направления и выбираем то, которое не пересекает полилинию
+                        direction = findBestDirection(circlePos, direction, i);
                     }
                 }
             }
         }
 
-        const qreal offsetDistance = 20.0;
+        const qreal handleRadius = _circles.isEmpty() ? 5.0 : _circles[0]->rect().width() / 2.0;
+        const qreal fontHeight = _numberFontSize > 0 ? _numberFontSize : 10.0;
+        const qreal offsetDistance = handleRadius + fontHeight * 0.8;
         QPointF numberPos = circlePos + direction * offsetDistance;
 
         // Создаем номер
         QGraphicsSimpleTextItem* number = new QGraphicsSimpleTextItem(QString::number(i), this);
-        number->setBrush(QBrush(Qt::white));
+        number->setBrush(_numberColor);
         number->setZValue(1001);
         number->setPen(Qt::NoPen);
         number->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
@@ -749,7 +760,7 @@ void Polyline::updatePointNumbers()
         // Создаем фон
         QGraphicsRectItem* bg = new QGraphicsRectItem(textRect, this);
         bg->setPos(finalNumberPos);
-        bg->setBrush(QBrush(QColor(0, 0, 0, 180)));
+        bg->setBrush(_numberBgColor);
         bg->setPen(Qt::NoPen);
         bg->setZValue(1000);
         bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
@@ -767,9 +778,90 @@ void Polyline::updatePointNumbers()
     }
 }
 
-void Polyline::applyNumberStyle(qreal fontSize)
+QPointF Polyline::findBestDirection(const QPointF& pointPos, const QPointF& initialDirection, int pointIndex)
+{
+    // Проверяем оба возможных направления
+    QPointF direction1 = initialDirection;
+    QPointF direction2 = -initialDirection;
+
+    // Создаем тестовые сегменты для проверки пересечений
+    const qreal testDistance = 50.0; // Достаточно большое расстояние для проверки
+    QPointF testEnd1 = pointPos + direction1 * testDistance;
+    QPointF testEnd2 = pointPos + direction2 * testDistance;
+
+    QLineF testLine1(pointPos, testEnd1);
+    QLineF testLine2(pointPos, testEnd2);
+
+    // Проверяем количество пересечений с полилинией для каждого направления
+    int intersections1 = countIntersections(testLine1, pointIndex);
+    int intersections2 = countIntersections(testLine2, pointIndex);
+
+    // Выбираем направление с меньшим количеством пересечений
+    // (меньше пересечений = больше вероятность, что направление наружу)
+    if (intersections1 < intersections2)
+    {
+        return direction1;
+    }
+    else
+    {
+        return direction2;
+    }
+}
+
+int Polyline::countIntersections(const QLineF& testLine, int excludePointIndex)
+{
+    int intersectionCount = 0;
+
+    // Проверяем пересечения со всеми сегментами полилинии
+    for (int i = 0; i < _circles.size() - 1; ++i)
+    {
+        QPointF p1 = _circles[i]->pos();
+        QPointF p2 = _circles[i + 1]->pos();
+        QLineF segment(p1, p2);
+
+        // Пропускаем сегменты, смежные с проверяемой точкой
+        if (i == excludePointIndex - 1 || i == excludePointIndex)
+        {
+            continue;
+        }
+
+        // Проверяем пересечение
+        QPointF intersectionPoint;
+        if (segment.intersect(testLine, &intersectionPoint) == QLineF::BoundedIntersection)
+        {
+            intersectionCount++;
+        }
+    }
+
+    // Проверяем последний сегмент для замкнутой полилинии
+    if (_isClosed && _circles.size() > 2)
+    {
+        QPointF p1 = _circles.last()->pos();
+        QPointF p2 = _circles.first()->pos();
+        QLineF segment(p1, p2);
+
+        // Пропускаем сегменты, смежные с проверяемой точкой
+        bool isAdjacent = (excludePointIndex == 0 && _circles.size() - 1 == excludePointIndex - 1) ||
+                          (excludePointIndex == _circles.size() - 1 && 0 == excludePointIndex + 1);
+
+        if (!isAdjacent)
+        {
+            QPointF intersectionPoint;
+            if (segment.intersect(testLine, &intersectionPoint) == QLineF::BoundedIntersection)
+            {
+                intersectionCount++;
+            }
+        }
+    }
+
+    return intersectionCount;
+}
+
+void Polyline::applyNumberStyle(qreal fontSize, const QColor& textColor, const QColor& bgColor)
 {
     _numberFontSize = fontSize; // Сохраняем размер шрифта
+    _numberColor = textColor;   // Сохраняем цвет текста
+    _numberBgColor = bgColor;   // Сохраняем цвет фона
 
     // Сохраняем текущие позиции кругов
     QVector<QPointF> circlePositions;
@@ -778,7 +870,7 @@ void Polyline::applyNumberStyle(qreal fontSize)
         circlePositions.append(circle->pos());
     }
 
-    // Полностью пересоздаем номера
+    // Полностью пересоздаем номера с новыми цветами
     updatePointNumbers();
 }
 

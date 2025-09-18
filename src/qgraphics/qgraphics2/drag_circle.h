@@ -43,14 +43,20 @@ public:
 
     void setHoverStyle(bool hover);
     void restoreBaseStyle();
+    void setBaseStyle(const QColor& color, qreal size);
+    void setBaseColor(const QColor& color);
+    QColor baseColor() const { return _baseColor; }
 
     QRectF baseRect() const { return _baseRect; }
     QPen basePen() const { return _basePen; }
     QBrush baseBrush() const { return _baseBrush; }
+    qreal baseSize() const { return _smallSize; }
 
     void setHover(bool on);
     void setHoverSizingEnabled(bool on);
     bool hoverSizingEnabled() const { return _hoverSizingEnabled; }
+    void setSelectedHandleColor(const QColor& color);
+    QColor selectedHandleColor() const { return _selectedHandleColor; }
 
     bool containsPoint(const QPointF &point) const;   // Проверка попадания в круг
     void setCenter(const QPointF &center);           // Перемещение центра
@@ -78,8 +84,8 @@ protected:
 
     QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
 
-    // void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
-    // void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
+    void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
+    void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
 
     // void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
     // void mouseMoveEvent(QGraphicsSceneMouseEvent*) override;
@@ -113,6 +119,8 @@ public:
 
     bool _isBeingDragged = false; // Добавить этот флаг
     int m_index = -1;
+    QColor _baseColor = Qt::gray; // Цвет по умолчанию
+    QColor _selectedHandleColor = Qt::yellow; // Цвет выделенной ручки
 
 
 public:
