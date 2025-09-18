@@ -16,3 +16,6 @@
 [submodule "src/qgraphics/qgraphics"]
 	path = src/qgraphics/qgraphics
 	url = https://github.com/hkarel/QGraphics.git
+[submodule "setup/scripts"]
+	path = setup/scripts
+	url = https://github.com/hkarel/InstallScripts.git

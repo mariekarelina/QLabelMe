@@ -5,6 +5,9 @@ Project {
     minimumQbsVersion: "1.23.0"
     qbsSearchPaths: ["qbs"]
 
+    // Интерпретировать варнинги как ошибки
+    property bool warnAsError: false
+
     //property bool useSodium: true
     //property string sodiumVersion: "1.0.18"
 
@@ -43,13 +46,23 @@ Project {
         return def;
     }
 
-    property var cxxFlags: [
-        "-ggdb3",
-        "-Wall",
-        "-Wextra",
-        "-Wno-unused-parameter",
-        "-Wno-variadic-macros",
-        "-Wno-register",
-    ]
+    property var cxxFlags: {
+        var flags = [
+            "-ggdb3",
+            "-Wall",
+            "-Wextra",
+            //"-Wswitch-enum",
+            "-Wdangling-else",
+            "-Wno-unused-parameter",
+            "-Wno-variadic-macros",
+            "-Wno-vla",
+        ];
+
+        if (warnAsError === true)
+            flags.push("-Werror");
+
+        return flags;
+    }
+
     property string cxxLanguageVersion: "c++17"
 }

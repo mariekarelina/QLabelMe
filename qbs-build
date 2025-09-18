@@ -1,0 +1,275 @@
+#!/bin/bash
+
+set -u
+
+product_name=qlabelme
+product_dir=qlabelme
+
+SUDO=
+rebuild=
+print_help=
+build_mode=release
+command_echo_mode=summary
+need_packages=
+
+#standalone=no
+#standalone_build=false
+#qbs_profile=qgit
+
+build_package=
+
+install_qlabelme=
+remove_qlabelme=
+
+# Directory of this script
+script_dir=$(dirname $(readlink -f $0))
+echo "script_dir: $script_dir"
+
+# Defining host parameters
+if [ ! -e $script_dir/setup/scripts/os_detect ]; then
+    echo "Error: os_detect script not found"
+    exit 1
+fi
+. $script_dir/setup/scripts/os_detect
+
+# Debug information removal function
+if [ ! -e $script_dir/setup/scripts/strip_debug_info ]; then
+    echo "Error: strip_debug_info script not found"
+    exit 1
+fi
+. $script_dir/setup/scripts/strip_debug_info
+# ---
+
+jobs=$(nproc)
+mem_size=$(free -m | sed '2!d' | sed 's/  */ /g' | cut -d' ' -f2)
+[ "$mem_size" -lt 2100 ] && jobs=4
+[ "$jobs" -gt 24 ] && jobs=$(($jobs - 6))
+echo "jobs: $jobs"
+
+if [ "$os_id" = "neon" ]; then
+    os_id="ubuntu"
+fi
+
+function display_help()
+{
+cat << EOF
+Usage: ${0##*/}
+  -h   display this help and exit
+  -r   full rebuild the project
+  -d   build in 'debug' mode
+  -D   build deb package
+  -E   Show QBS command echo
+  -i   install deb package $product_name
+  -R   remove installation $product_name and exit
+  -L   use 'lintian' utility to check deb-packages
+EOF
+}
+
+# Positional parameter processing:
+#    http://wiki.bash-hackers.org/scripting/posparams
+while test -n ${1:-""}
+do
+    case "$1" in
+        -h)
+            print_help=yes
+            shift
+            ;;
+        -r)
+            rebuild=yes
+            shift
+            ;;
+        -d)
+            build_mode=debug
+            shift
+            ;;
+        -D)
+            build_packages=yes
+            shift
+            ;;
+        -E)
+            command_echo_mode="command-line"
+            shift
+            ;;
+        -i)
+            install_qlabelme=yes
+            shift
+            ;;
+        -R)
+            remove_qlabelme=yes
+            shift
+            ;;
+        -L)
+           use_lintian=yes
+           shift
+           ;;
+        -*)
+            echo "Error: Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)  # No more options
+            #break
+            echo "Error: Unknown option: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [ "$print_help" = "yes" ]; then
+    display_help
+    exit 0
+fi
+
+if [ "$remove_qlabelme" = "yes" ]; then
+    echo -e "\nRemove $product_name..."
+
+    set +e
+    res=$(dpkg -l | grep -P "^ii\s+$product_name ")
+    set -e
+    if [ -z "$res" ]; then
+        echo "Nothing to remove, $product_name not installed"
+    else
+        sudo dpkg -r $product_name
+        echo "$product_name was removed"
+    fi
+fi
+[ "$remove_qlabelme" = "yes" ] && exit 0;
+
+function check_need_package()
+{
+    dpkg -s $1 &> /dev/null
+    [ "$?" -ne 0 ] && need_packages="$need_packages $1"
+}
+
+need_packages=
+
+# TODO уточнить список пакетов для Ubuntu 24.04
+# check_need_package 'qt5-default'
+# check_need_package 'qtbase5-dev'
+# check_need_package 'qtbase5-dev-tools'
+# check_need_package 'qtbase5-private-dev'
+# check_need_package 'libhunspell-dev'
+
+if [ "$build_package" = "yes" -o "$install_qlabelme" = "yes" ]; then
+    # Required packages
+    check_need_package 'fakeroot'
+    check_need_package 'debconf'
+    check_need_package 'debhelper'
+    check_need_package 'lintian'
+    check_need_package 'hashdeep'
+fi
+
+if [ -n "$need_packages" ]; then
+    echo "Error: Need to install packages:$need_packages"
+    echo "    Use: sudo apt-get install $need_packages"
+    exit 1
+fi
+
+if [ ! -x /usr/bin/md5deep ]; then
+    if [ ! -L /usr/local/bin/md5deep ]; then
+        echo "Need create symlink for md5deep"
+        sudo ln -sf /usr/bin/hashdeep /usr/local/bin/md5deep
+    fi
+fi
+
+git_branch=$(git status -b -s | head -n1 | sed 's/\./ /' | cut -d' ' -f2 | sed 's/\//_/g')
+build_config=${build_mode}-${git_branch}
+build_subdir=${build_config}
+build_dir=$script_dir/build/$build_subdir
+
+[ "$rebuild" = "yes"  ] && rm -rf $build_dir
+
+# # Print QBS profile
+# echo -e "\nQbs profile '$qbs_profile':"
+# echo "$(qbs config --list profiles.$qbs_profile)"
+# echo ""
+# if [ -z "$(qbs config --list profiles.$qbs_profile)" ]; then
+#     echo "Error: Qbs profile not found"
+#     exit 1
+# fi
+
+set -e
+qbs build \
+    --file qlabelme_project.qbs \
+    --build-directory ./build \
+    --command-echo-mode $command_echo_mode \
+    --jobs $jobs \
+    --no-install \
+    qbs.buildVariant:$build_mode \
+    config:$build_config
+    #project.warnAsError:true \
+    #profile:qt5sys
+
+echo "Build is complete (configuration: ${build_config})"
+
+if [ "$build_package" != "yes" ]; then
+    [ "$install_qlabelme" != "yes" ] && exit 0
+fi
+
+exit 0
+
+# #
+# # Generating deb-package
+# #
+# package_vers=$(head -n1 VERSION)
+# package_date=$(date +%Y%m%d)
+# gitrev=$(git log -1 --pretty=%h)
+# package_release=${package_date}git${gitrev}
+# full_package_vers=${package_vers}-${package_release}
+#
+# echo "---"
+# echo "package_vers ........ $package_vers"
+# echo "package_date ........ $package_date"
+# echo "gitrev .............. $gitrev"
+# echo "package_release ..... $package_release"
+# echo "full_package_vers ... $full_package_vers"
+#
+# if [ "$standalone" = "yes" ]; then
+#     . $script_dir/setup/deb-qgit-standalone
+# elif [ "$os_id" = "ubuntu" -a "$os_ver" \> "19.10" ]; then
+#     # for Ubuntu 20.04 and above
+#     . $script_dir/setup/deb-qgit
+# else
+#     echo "Unsupported OS: $os_id $os_ver"
+#     echo "Try using 'standalone' mode"
+#     exit 1
+# fi
+#
+# # Deb-package checksums
+# cd $package_dir
+# md5deep -rl -o f usr >> DEBIAN/md5sums
+# chmod  0644 DEBIAN/md5sums
+# cd $script_dir
+#
+# # Creating deb-package
+# fakeroot dpkg-deb --build $package_dir ${build_dir}/$package_name
+#
+# # Check deb-package
+# echo "Start 'lintian'"
+# set +e
+# lintian --suppress-tags \
+# hardening-no-relro,\
+# binary-or-shlib-defines-rpath,\
+# dir-or-file-in-opt,\
+# bad-package-name,\
+# package-not-lowercase,\
+# systemd-service-file-outside-lib,\
+# maintainer-script-calls-systemctl,\
+# file-in-etc-not-marked-as-conffile,\
+# maintainer-script-ignores-errors,\
+# maintainer-script-empty,\
+# file-in-unusual-dir \
+# ${build_dir}/$package_name
+# set -e
+#
+# if [ "$build_package" = "yes" ]; then
+#     cd $script_dir
+#     mkdir -p packages
+#     echo "Copying the file $package_name to directory ./packages"
+#     cp -f ${build_dir}/$package_name ./packages
+# fi
+#
+# if [ "$install_qgit" = "yes" ]; then
+#     echo "Install QGit..."
+#     sudo dpkg -i ${build_dir}/$package_name
+#     echo "QGit installation is complete"
+# fi
