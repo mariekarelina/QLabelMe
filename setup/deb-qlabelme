@@ -1,0 +1,105 @@
+#!/bin/bash
+
+#
+# Формирование deb-пакета qlanelme
+#
+package_dir=$script_dir/build/${build_subdir}/deb/$product_name
+echo -e "\npackage_dir: $package_dir"
+
+package_name="$product_name-${full_package_vers}-${os_id}${os_ver}-${os_arch}.deb"
+echo "package_name: $package_name"
+
+rm -rf $package_dir
+
+mkdir -p $package_dir/DEBIAN
+mkdir -p $package_dir/usr/bin
+mkdir -p $package_dir/usr/share/applications
+mkdir -p $package_dir/usr/share/icons/hicolor/48x48/apps
+
+cp $script_dir/setup/deb/qlabelme/DEBIAN/*          $package_dir/DEBIAN
+cp $script_dir/qlabelme.desktop                     $package_dir/usr/share/applications
+cp $script_dir/src/qlabelme/resources/qlabelme.png  $package_dir/usr/share/icons/hicolor/48x48/apps
+cp $build_dir/bin/qlabelme                          $package_dir/usr/bin
+
+chmod -R go-w        $package_dir
+chmod    u=rwx,go=rx $package_dir/DEBIAN/post*
+#chmod   u=rwx,go=rx $package_dir/DEBIAN/pre*
+chmod    u=rwx,go=rx $package_dir/usr/bin/qlabelme
+
+if [ "$build_mode" = "release" ]; then
+    set +e
+    echo "Removing debug info ... "
+    strip_debug_info $package_dir/usr/bin/qlabelme
+    set -e
+fi
+
+# Размер пакета
+installed_size=$(du -s $package_dir | sed -r 's/([0-9]+).*/\1/')
+echo "installed_size: $installed_size"
+
+# TODO уточнить зависимости для 24.04
+package_depends=
+
+# package_depends=$(cat <<-EOS
+# 	libc6, libstdc++6, libqt5core5a, libqt5gui5, libqt5widgets5
+# EOS
+# )
+
+os_arch_control=$os_arch
+[ "${os_arch:0:3}" = "arm" ] && os_arch_control=armhf
+
+sed -e "s/%VERSION%/${full_package_vers}/" \
+    -e "s/%ARCHITECTURE%/${os_arch_control}/" \
+    -e "s/%INSTALLED_SIZE%/${installed_size}/" \
+    -e "s/%DEPENDS%/${package_depends}/" \
+    -i $package_dir/DEBIAN/control
+
+# Контрольные суммы файлов пакета
+cd $package_dir
+#md5deep -rl -o f etc >> DEBIAN/md5sums
+#md5deep -rl -o f opt >> DEBIAN/md5sums
+#md5deep -rl -o f var >> DEBIAN/md5sums
+md5deep  -rl -o f usr >> DEBIAN/md5sums
+chmod 0644 DEBIAN/md5sums
+cd $script_dir
+
+# Создание deb-пакета
+fakeroot dpkg-deb --build $package_dir ${build_dir}/$package_name
+
+# Проверка deb-пакета
+if [ "$use_lintian" = "yes" ]; then
+    suppress_tags=$(cat <<-EOS
+		hardening-no-relro,
+		binary-or-shlib-defines-rpath,
+		dir-or-file-in-opt,
+		bad-package-name,
+		package-not-lowercase,
+		systemd-service-file-outside-lib,
+		maintainer-script-calls-systemctl,
+		file-in-etc-not-marked-as-conffile,
+		maintainer-script-ignores-errors,
+		maintainer-script-empty,
+		file-in-unusual-dir,
+		maintainer-script-should-not-use-recursive-chown-or-chmod
+	EOS
+    )
+    echo "Start 'lintian'"
+    set +e
+    suppress_tags=$(echo $suppress_tags | tr -d '\n' | tr -d ' ')
+    lintian --suppress-tags $suppress_tags ${build_dir}/$package_name
+    set -e
+fi
+
+cd $script_dir
+if [ "$build_package" = "yes" ]; then
+    cd $script_dir
+    echo "Copying file $package_name to directory ./packages"
+    cp -f ${build_dir}/$package_name ./packages
+    cp -f ${build_dir}/$package_name ./packages/last
+fi
+
+if [ "$install_qlabelme" = "yes" ]; then
+    echo "Install $product_name..."
+    sudo dpkg -i ${build_dir}/$package_name
+    echo "$product_name installation is complete"
+fi

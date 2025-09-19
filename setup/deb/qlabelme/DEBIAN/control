@@ -1,0 +1,11 @@
+Package: qlabelme
+Version: %VERSION%
+Architecture: %ARCHITECTURE%
+Maintainer: Karelina Maria <karelina-yar@yandex.ru>
+Installed-Size: %INSTALLED_SIZE%
+Depends: %DEPENDS%
+Suggests: source-highlight
+Section: vcs
+Priority: optional
+Homepage: https://github.com/mariekarelina/QLabelMe
+Description: QLabelMe

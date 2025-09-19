@@ -21,6 +21,8 @@ build_package=
 install_qlabelme=
 remove_qlabelme=
 
+use_lintian=no
+
 # Directory of this script
 script_dir=$(dirname $(readlink -f $0))
 echo "script_dir: $script_dir"
@@ -83,7 +85,7 @@ do
             shift
             ;;
         -D)
-            build_packages=yes
+            build_package=yes
             shift
             ;;
         -E)
@@ -205,71 +207,32 @@ if [ "$build_package" != "yes" ]; then
     [ "$install_qlabelme" != "yes" ] && exit 0
 fi
 
-exit 0
+#
+# Создание deb-пакетов
+#
+package_vers=$(head -n1 VERSION)
+package_date=$(date +%Y%m%d)
+gitrev=$(git log -1 --pretty=%h)
+package_release=${package_date}git${gitrev}
+full_package_vers=${package_vers}-${package_release}
 
-# #
-# # Generating deb-package
-# #
-# package_vers=$(head -n1 VERSION)
-# package_date=$(date +%Y%m%d)
-# gitrev=$(git log -1 --pretty=%h)
-# package_release=${package_date}git${gitrev}
-# full_package_vers=${package_vers}-${package_release}
+echo "---"
+echo "product_name ........ $product_name"
+echo "product_dir ......... $product_dir"
+echo "package_vers ........ $package_vers"
+echo "package_date ........ $package_date"
+echo "gitrev .............. $gitrev"
+echo "package_release ..... $package_release"
+echo "full_package_vers ... $full_package_vers"
+
+mkdir -p $script_dir/packages/last
+rm -rf   $script_dir/packages/last/*
+
 #
-# echo "---"
-# echo "package_vers ........ $package_vers"
-# echo "package_date ........ $package_date"
-# echo "gitrev .............. $gitrev"
-# echo "package_release ..... $package_release"
-# echo "full_package_vers ... $full_package_vers"
+# Формирование deb-пакета videtect
 #
-# if [ "$standalone" = "yes" ]; then
-#     . $script_dir/setup/deb-qgit-standalone
-# elif [ "$os_id" = "ubuntu" -a "$os_ver" \> "19.10" ]; then
-#     # for Ubuntu 20.04 and above
-#     . $script_dir/setup/deb-qgit
-# else
-#     echo "Unsupported OS: $os_id $os_ver"
-#     echo "Try using 'standalone' mode"
-#     exit 1
-# fi
-#
-# # Deb-package checksums
-# cd $package_dir
-# md5deep -rl -o f usr >> DEBIAN/md5sums
-# chmod  0644 DEBIAN/md5sums
-# cd $script_dir
-#
-# # Creating deb-package
-# fakeroot dpkg-deb --build $package_dir ${build_dir}/$package_name
-#
-# # Check deb-package
-# echo "Start 'lintian'"
-# set +e
-# lintian --suppress-tags \
-# hardening-no-relro,\
-# binary-or-shlib-defines-rpath,\
-# dir-or-file-in-opt,\
-# bad-package-name,\
-# package-not-lowercase,\
-# systemd-service-file-outside-lib,\
-# maintainer-script-calls-systemctl,\
-# file-in-etc-not-marked-as-conffile,\
-# maintainer-script-ignores-errors,\
-# maintainer-script-empty,\
-# file-in-unusual-dir \
-# ${build_dir}/$package_name
-# set -e
-#
-# if [ "$build_package" = "yes" ]; then
-#     cd $script_dir
-#     mkdir -p packages
-#     echo "Copying the file $package_name to directory ./packages"
-#     cp -f ${build_dir}/$package_name ./packages
-# fi
-#
-# if [ "$install_qgit" = "yes" ]; then
-#     echo "Install QGit..."
-#     sudo dpkg -i ${build_dir}/$package_name
-#     echo "QGit installation is complete"
-# fi
+if [ "$build_package" = "yes" \
+     -o "$install_qlabelme" = "yes" ]
+then
+    . $script_dir/setup/deb-${product_name}
+fi

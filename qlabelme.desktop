@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=qlabelme
+GenericName=QLabeMe
+Comment=TODO TEXT A git GUI viewer
+Exec=qlabelme
+Icon=qlabelme
+Categories=Graphics;2DGraphics;RasterGraphics;Qt
+Terminal=false
