@@ -47,6 +47,9 @@ public:
     void setBaseColor(const QColor& color);
     QColor baseColor() const { return _baseColor; }
 
+    bool isValid() const { return _isValid; }
+    void invalidate() { _isValid = false; }
+
     QRectF baseRect() const { return _baseRect; }
     QPen basePen() const { return _basePen; }
     QBrush baseBrush() const { return _baseBrush; }
@@ -126,6 +129,7 @@ public:
 public:
     QPointF m_center;
     float m_radius;
+    bool _isValid = true;
 
     // int _radius = {8};
     // int _smallSize = {6};  // Маленький размер (видимый)

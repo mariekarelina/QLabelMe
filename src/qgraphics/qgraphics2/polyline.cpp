@@ -111,6 +111,10 @@ void Polyline::addPoint(const QPointF& position, QGraphicsScene* scene)
     updateConnections();
     updatePath();
     updatePointNumbers();
+    if (_modificationCallback)
+    {
+        _modificationCallback();
+    }
 }
 
 
@@ -227,7 +231,10 @@ void Polyline::insertPoint(QPointF position)
 
         updateConnections();
         updatePath();
-        //updatePointNumbers();
+        if (_modificationCallback)
+        {
+            _modificationCallback();
+        }
     }
     updatePointNumbers();
 }
@@ -295,21 +302,39 @@ void Polyline::handlePointDeletion(DragCircle* circle)
 
     if (_circles.contains(circle))
     {
+        // Помечаем как невалидный перед удалением
+        circle->invalidate();
+        // Отключаем все сигналы
         circle->disconnect();
         _circles.removeOne(circle);
-        scene()->removeItem(circle);
-        delete circle;
-        circle = nullptr;
 
+        if (scene())
+        {
+            scene()->removeItem(circle);
+        }
+        delete circle;
         // Если удалили точку из замкнутой полилинии и осталось 2 точки,
         // автоматически размыкаем её
         if (_isClosed && _circles.size() <= 2)
             _isClosed = false;
 
         updatePath();
-        updateConnections();
         updatePointNumbers();
+        if (_modificationCallback)
+        {
+            _modificationCallback();
+        }
     }
+}
+
+QVector<QPointF> Polyline::points() const
+{
+    QVector<QPointF> result;
+    for (DragCircle* circle : _circles)
+    {
+        result.append(circle->scenePos());
+    }
+    return result;
 }
 
 void Polyline::keyPressEvent(QKeyEvent* event)
@@ -499,7 +524,10 @@ void Polyline::dragCircleRelease(DragCircle* circle)
     Q_UNUSED(circle);
     updatePath(); // Обновляем путь при любом перемещении
     updatePointNumbers(); // Обновляем позиции номеров
-    // emit lineChanged(this); // Сигнал о завершении изменения
+    if (_modificationCallback)
+    {
+        _modificationCallback();
+    }
 }
 
 void Polyline::updateHandlesZValue()
@@ -589,6 +617,11 @@ void Polyline::moveToBack()
     }
 
     scene()->update();
+}
+
+void Polyline::setModificationCallback(std::function<void()> callback)
+{
+    _modificationCallback = callback;
 }
 
 void Polyline::updateConnections()

@@ -75,6 +75,7 @@ DragCircle::DragCircle(QGraphicsScene* scene)
 
 DragCircle::~DragCircle()
 {
+    _isValid = false;
 }
 
 void DragCircle::setParent(QGraphicsItem* newParent)
@@ -187,6 +188,8 @@ void DragCircle::rememberCurrentAsBase(QGraphicsRectItem* item)
 
 void DragCircle::setHoverStyle(bool hover)
 {
+    if (!_isValid) return;
+
     if (hover)
     {
         // Увеличиваем размер
@@ -205,6 +208,8 @@ void DragCircle::setHoverStyle(bool hover)
 
 void DragCircle::restoreBaseStyle()
 {
+    if (!_isValid) return;
+
     // Определяем, является ли родителем Circle
     bool isCircleHandle = (dynamic_cast<qgraph::Circle*>(parentItem()) != nullptr);
 

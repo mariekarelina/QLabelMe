@@ -186,6 +186,8 @@ MainWindow::MainWindow(QWidget *parent) :
             this, &MainWindow::onPolygonListItemDoubleClicked);
     connect(_scene, &QGraphicsScene::selectionChanged,
             this, &MainWindow::onSceneSelectionChanged);
+    connect(_scene, &QGraphicsScene::changed,
+            this,  &MainWindow::onSceneChanged);
 
     ui->listWidget_PolygonList->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->listWidget_PolygonList, &QListWidget::customContextMenuRequested,
@@ -295,6 +297,13 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             if (auto* polyline = dynamic_cast<qgraph::Polyline*>(parent))
             {
                 polyline->handlePointDeletion(circle);
+                // Помечаем документ как измененный
+                Document::Ptr doc = currentDocument();
+                if (doc && !doc->isModified)
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
                 mouseEvent->accept();
                 return;
             }
@@ -304,6 +313,13 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             polyline->insertPoint(scenePos);
+            // Помечаем документ как измененный
+            Document::Ptr doc = currentDocument();
+            if (doc && !doc->isModified)
+            {
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
+            }
             mouseEvent->accept();
             return;
         }
@@ -723,7 +739,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
         if (auto* target = pickHiddenHandle(sp, topIsHandle))
         {
-            if (target->scene() && _scene->items().contains(target))
+            if (target->scene() && _scene && _scene->items().contains(target))
             {
                 if (topIsHandle)
                 {
@@ -746,30 +762,53 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
         if (m_isDraggingHandle && m_dragHandle)
         {
-            updateHandleDrag(sp);
-            return true;
+            // Проверяем валидность указателя перед обновлением
+            if (m_dragHandle && m_dragHandle->scene())
+            {
+                updateHandleDrag(sp);
+                return true;
+            }
+            else
+            {
+                // Если указатель невалиден, сбрасываем состояние
+                finishHandleDrag();
+            }
         }
         else if (_ghostTarget && _ghostHandle && _ghostHandle->isVisible())
         {
-            moveGhostTo(sp);
-            return true;
+            // Проверяем валидность ghost target
+            if (_ghostTarget->scene())
+            {
+                moveGhostTo(sp);
+                return true;
+            }
+            else
+            {
+                hideGhost();
+            }
         }
         else
         {
             // Ищем ручку под курсором
             qgraph::DragCircle* hoveredHandle = pickHandleAt(sp);
 
+            // Проверяем, что найденная ручка все еще валидна
+            if (hoveredHandle && !hoveredHandle->isValid())
+            {
+                hoveredHandle = nullptr;
+            }
+
             // Если нашли новую ручку, отличающуюся от текущей
             if (hoveredHandle != _currentHoveredHandle)
             {
-                // Убираем hover с предыдущей ручки
-                if (_currentHoveredHandle)
+                // Убираем hover с предыдущей ручки (если она валидна)
+                    if (_currentHoveredHandle && _currentHoveredHandle->isValid())
                 {
-                    _currentHoveredHandle->restoreBaseStyle();
+                    _currentHoveredHandle->setHoverStyle(false);
                 }
 
-                // Устанавливаем hover на новую ручку
-                if (hoveredHandle)
+                // Устанавливаем hover на новую ручку (если она валидна)
+                if (hoveredHandle && hoveredHandle->isValid())
                 {
                     hoveredHandle->setHoverStyle(true);
                 }
@@ -792,7 +831,15 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         }
         else if (_ghostTarget && _ghostHandle && _ghostHandle->isVisible())
         {
-            endGhost();
+            // Проверяем валидность перед завершением
+            if (_ghostTarget->scene())
+            {
+                endGhost();
+            }
+            else
+            {
+                hideGhost();
+            }
             return true;
         }
         break;
@@ -2554,14 +2601,22 @@ void MainWindow::startGhostDrag(const QPointF& scenePos)
 
 qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
 {
+    if (!_scene) return nullptr;
+
     const qreal pickRadius = 10.0; // Радиус поиска
     const QRectF probe(scenePos - QPointF(pickRadius, pickRadius),
                        QSizeF(pickRadius * 2, pickRadius * 2));
 
     for (QGraphicsItem* item : _scene->items(probe, Qt::IntersectsItemShape))
     {
+        // Проверяем, что элемент все еще существует и валиден
+        if (!item || !item->scene()) continue;
+
         if (auto* handle = dynamic_cast<qgraph::DragCircle*>(item))
         {
+            // Дополнительная проверка валидности
+            if (!handle->isValid()) continue;
+
             // Для кругов используем специальную логику проверки
             if (auto* circle = dynamic_cast<qgraph::Circle*>(handle->parentItem()))
             {
@@ -2574,7 +2629,10 @@ qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
                     if (!handle->isVisible())
                     {
                         handle->setVisible(true);
-                        handle->setHoverStyle(true);
+                        if (handle->isValid())
+                        {
+                            handle->setHoverStyle(true);
+                        }
                     }
                     return handle;
                 }
@@ -2643,11 +2701,11 @@ void MainWindow::finishHandleDrag()
 
 void MainWindow::clearAllHandleHoverEffects()
 {
-    if (_currentHoveredHandle)
+    if (_currentHoveredHandle && _currentHoveredHandle->isValid())
     {
-        _currentHoveredHandle->setHoverStyle(false);
-        _currentHoveredHandle = nullptr;
+         _currentHoveredHandle->setHoverStyle(false);
     }
+    _currentHoveredHandle = nullptr;
     hideGhost();
 }
 
@@ -3137,6 +3195,11 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
 {
     if (!current) return;
 
+    // При смене документа сбрасываем все указатели
+    _currentHoveredHandle = nullptr;
+    _ghostTarget = nullptr;
+    m_dragHandle = nullptr;
+
     // Сохраняем предыдущее состояние
     if (previous)
     {
@@ -3211,6 +3274,14 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     // Подключаем сигнал changed для новой сцены
     if (currentDoc->scene)
     {
+        // for (QGraphicsItem* item : currentDoc->scene->items())
+        // {
+        //     if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        //     {
+        //         connect(polyline, &qgraph::Polyline::polylineModified,
+        //                 this, &MainWindow::onPolylineModified, Qt::UniqueConnection);
+        //     }
+        // }
         connect(currentDoc->scene, &QGraphicsScene::changed,
                 this, &MainWindow::onSceneChanged,
                 Qt::UniqueConnection);
@@ -3223,6 +3294,17 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     // Обновляем отображение звездочки
     updateFileListDisplay(currentDoc->filePath);
     raiseAllHandlesToTop();
+}
+
+void MainWindow::onPolylineModified()
+{
+    // Любое изменение полилинии помечает документ как измененный
+    Document::Ptr doc = currentDocument();
+    if (doc && !doc->isModified)
+    {
+        doc->isModified = true;
+        updateFileListDisplay(doc->filePath);
+    }
 }
 
 void MainWindow::onSceneChanged()

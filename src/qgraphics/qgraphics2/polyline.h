@@ -1,4 +1,4 @@
-#pragma once
+ #pragma once
 
 #include "user_type.h"
 #include "shape.h"
@@ -42,15 +42,7 @@ public:
 
     void handlePointDeletion(DragCircle* circle);
 
-    QVector<QPointF> points() const
-    {
-        QVector<QPointF> result;
-        for (DragCircle* circle : _circles)
-        {
-            result.append(circle->scenePos());
-        }
-        return result;
-    }
+    QVector<QPointF> points() const;
     void updatePointNumbers();
     QPointF findBestDirection(const QPointF& pointPos, const QPointF& initialDirection, int pointIndex);
     int countIntersections(const QLineF& testLine, int excludePointIndex);
@@ -66,6 +58,9 @@ public:
     void raiseHandlesToTop() override;
     void moveToBack();
 
+    // callback для уведомлений об изменениях
+    void setModificationCallback(std::function<void()> callback);
+
 
 protected:
     // Переопределяем обработчик событий клавиатуры
@@ -80,6 +75,7 @@ protected:
 
 signals:
     void lineChanged(Polyline* line);
+    void polylineModified();
 
 private:
     void updateConnections(); // Для обновления связей между точками
@@ -104,6 +100,7 @@ public:
     QColor _numberBgColor = QColor(0, 0, 0, 180);
 
     bool _pointNumbersVisible = true; // Видимости нумерации
+    std::function<void()> _modificationCallback; // callback для уведомлений
 };
 
 } // namespace qgraph

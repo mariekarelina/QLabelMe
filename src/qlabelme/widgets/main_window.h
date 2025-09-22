@@ -143,6 +143,7 @@ private slots:
 
     void fitImageToView();
     void fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem* previous);
+    void onPolylineModified();
     void onSceneChanged();
 
     void on_actRect_triggered();
