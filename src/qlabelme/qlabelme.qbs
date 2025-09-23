@@ -40,7 +40,7 @@ Product {
         name: "resources"
         files: [
             "qlabelme.qrc",
-            //"qlabelme.rc",
+            "qlabelme.rc",
         ]
     }
 

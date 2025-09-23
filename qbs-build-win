@@ -1,0 +1,116 @@
+#!/bin/bash
+
+# Для создания профиля QBS qt515
+# 1) qbs setup-toolchains --type mingw c:/opt/qt/Tools/mingw810_64/bin/g++.exe mingw81
+# 2) qbs-setup-qt c:/opt/qt/5.15.2/mingw81_64/bin/qmake.exe qt5win
+
+set -e
+set -u 
+
+build_mode=release
+
+# Директория этого скрипта
+script_dir=$(dirname $(readlink -f $0))
+echo "script_dir: $script_dir"
+
+#prefix=/C
+#if [ "$(uname -o)" = "Cygwin" ]; then
+#    prefix=/cygdrive/c
+#fi
+
+#mingw_bin=$prefix/Qt/5.15.2/Tools/mingw810_64/bin
+#qt_bin=$prefix/Qt/5.15.2/5.15.2/mingw81_64/bin
+
+git_branch=$(git status -b -s | head -n1 | sed 's/\./ /' | cut -d' ' -f2 | sed 's/\//_/g')
+build_config=${build_mode}-${git_branch}
+build_subdir=${build_config}
+build_dir=$script_dir/build/$build_subdir
+
+strip_utl=$(qbs-config profiles.mingw81.cpp.stripPath | cut -d' ' -f2 | sed 's/"//'g)
+echo "strip_utl: $strip_utl"
+
+qt_bin_dir=$(qbs-config profiles.qt5win.moduleProviders.Qt.qmakeFilePaths | cut -d' ' -f2 | sed -e 's|/qmake.exe||' | sed 's/"//'g)
+echo "qt_bin_dir: $qt_bin_dir"
+
+inno_setup_utl="C:/Program Files (x86)/Inno Setup 6/ISCC.exe"
+echo "inno_setup_utl: $inno_setup_utl"
+
+if [ ! -e "$inno_setup_utl" ]; then
+    echo "Error: Inno setup not found"
+    exit 1
+fi
+
+rm -rf $build_dir
+
+qbs build \
+    --file qlabelme_project.qbs \
+    --build-directory $script_dir/build \
+    --command-echo-mode command-line \
+    --no-install \
+    qbs.buildVariant:$build_mode \
+    config:$build_config \
+    profile:qt5win
+
+
+mkdir -p ${build_dir}/win/plugins
+
+cp ${build_dir}/bin//qlabelme.exe ${build_dir}/win
+
+#${strip_utl} -g ${build_dir}/win//qlabelme.exe
+C:/opt/qt/Tools/mingw810_64/bin/strip.exe -g ${build_dir}/win//qlabelme.exe
+
+qt_copy_list=$(cat <<-EOS
+	libwinpthread-1.dll
+	libgcc_s_seh-1.dll
+	libstdc++-6.dll
+EOS
+)
+for f in $qt_copy_list; do
+    cp $qt_bin_dir/$f ${build_dir}/win
+done
+
+qt_copy_list=$(cat <<-EOS
+	Qt5Core.dll
+	Qt5Gui.dll
+	Qt5Network.dll
+	Qt5Svg.dll
+	Qt5Widgets.dll
+EOS
+)
+for f in $qt_copy_list; do
+    cp $qt_bin_dir/$f ${build_dir}/win
+done
+
+qt_copy_plugins=$(cat <<-EOS
+	iconengines
+	imageformats
+	platforms
+	styles
+EOS
+)
+for f in $qt_copy_plugins; do
+    cp -r $qt_bin_dir/../plugins/$f ${build_dir}/win/plugins
+done
+
+package_vers=$(head -n1 ./VERSION | sed 's/^ *//' | sed 's/ *$//')
+package_date=$(date +%Y%m%d)
+gitrev=$(git log -1 --pretty=%h)
+package_release=${package_date}git${gitrev}
+full_package_vers=${package_vers}-${package_release}
+
+appl_id="297a7a58-2ccb-4a93-adca-cf0b69ae2ac2$(echo $full_package_vers | sed 's/\.//g')"
+echo "full_package_vers: $full_package_vers"
+echo "appl_id: $appl_id"
+
+#build_dir=./build/${build_config}/win
+sed -e "s|%APPL_VERSION%|$package_vers|" \
+    -e "s|%APPL_ID%|$appl_id|" \
+	-e "s|%FULL_PACKAGE_VERSION%|$full_package_vers|" \
+    ./setup/setup-template.iss > ${build_dir}/win/setup.iss
+
+"${inno_setup_utl}" ${build_dir}/win/setup.iss
+
+#rm ./build/${build_config}/win/ztz_term.exe
+
+mkdir -p $script_dir/packages
+cp -f $build_dir/win/qlabelme-*.exe $script_dir/packages
