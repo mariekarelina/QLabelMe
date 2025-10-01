@@ -13,6 +13,8 @@ Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
     setFlags(ItemIsMovable | ItemIsFocusable);
     setAcceptHoverEvents(true); // Включаем обработку событий наведения
     setAcceptedMouseButtons(Qt::LeftButton);
+    setFlag(QGraphicsItem::ItemIsSelectable, true);
+
 
     _radius = 20;
     setRect(-_radius, -_radius, _radius * 2, _radius * 2);
@@ -232,6 +234,14 @@ void Circle::updateHandlePosition(const QPointF& scenePos)
     _circle->setHoverStyle(true);
 }
 
+QVariant Circle::itemChange(GraphicsItemChange change, const QVariant& value)
+{
+    if (change == QGraphicsItem::ItemSelectedHasChanged) {
+        update();
+    }
+    return QGraphicsItem::itemChange(change, value);
+}
+
 void Circle::updateHandleZValue()
 {
     if (_circle)
@@ -369,6 +379,9 @@ void Circle::moveToBack()
 
     for (QGraphicsItem* item : scene()->items())
     {
+        if (!item)
+            continue;
+
         if (dynamic_cast<DragCircle*>(item))
             continue;
 
@@ -492,8 +505,28 @@ void Circle::paint(QPainter* painter,
                    const QStyleOptionGraphicsItem* option,
                    QWidget* widget)
 {
-    // Сначала стандартная отрисовка окружности (контур, заливка, выделение и т.д.)
-    QGraphicsEllipseItem::paint(painter, option, widget);
+    Q_UNUSED(option);
+    Q_UNUSED(option);
+
+    QPainterPath path;
+    path.addEllipse(rect());
+
+    if (isSelected() || isUnderMouse())
+    {
+        QColor fill = pen().color();
+        fill.setAlpha(80);
+        painter->save();
+        painter->setBrush(fill);
+        painter->setPen(Qt::NoPen);
+        painter->drawPath(path);
+        painter->restore();
+    }
+
+    painter->save();
+    painter->setBrush(Qt::NoBrush);
+    painter->setPen(pen());
+    painter->drawPath(path);
+    painter->restore();
 }
 
 bool Circle::isCursorNearCircle(const QPointF& cursorPos) const

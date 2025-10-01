@@ -61,7 +61,6 @@ public:
     // callback для уведомлений об изменениях
     void setModificationCallback(std::function<void()> callback);
 
-
 protected:
     // Переопределяем обработчик событий клавиатуры
     void keyPressEvent(QKeyEvent* event) override;
@@ -73,6 +72,8 @@ protected:
     int findClosestSegment(const QPointF& pos) const;
     void insertPointAtSegment(int segmentIndex, const QPointF& pos);
 
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
+               QWidget* widget = nullptr) override;
 signals:
     void lineChanged(Polyline* line);
     void polylineModified();
@@ -84,6 +85,7 @@ private:
 
     void dragCircleMove(DragCircle* circle) override;
     void dragCircleRelease(DragCircle* circle) override;
+    QColor selectionFillColor() const;
 
 public:
     QVector<DragCircle*> _circles;

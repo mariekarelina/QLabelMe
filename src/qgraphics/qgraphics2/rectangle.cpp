@@ -10,6 +10,7 @@ Rectangle::Rectangle(QGraphicsScene* scene)
 {
     setFlags(ItemIsMovable | ItemIsFocusable);
     setAcceptHoverEvents(true); // Включаем обработку событий наведения
+    setFlag(QGraphicsItem::ItemIsSelectable, true);
 
     setRect({0, 0, 50, 100});
 
@@ -241,12 +242,12 @@ QRectF Rectangle::realSceneRect() const
 
 void Rectangle::setRealSceneRect(const QRectF& r)
 {
-    float s = frameScale();
+    //float s = frameScale();
     // Если масштаб равен нулю
-    if (qFuzzyCompare(s, 0))
-    {
-        s = 1.0f; // Устанавливаем значение по умолчанию
-    }
+    // if (qFuzzyCompare(s, 0))
+    // {
+    //     s = 1.0f; // Устанавливаем значение по умолчанию
+    // }
 
     QPointF pos = r.topLeft(); // Верхний левый угол
     QRectF rect(0, 0, r.width(), r.height()); // Размеры прямоугольника без учета масштаба
@@ -418,6 +419,31 @@ void Rectangle::updateHandleVisibility()
     raiseHandlesToTop();
 }
 
+void Rectangle::paint(QPainter* painter,
+                     const QStyleOptionGraphicsItem* option,
+                     QWidget* widget)
+{
+    Q_UNUSED(option);
+    Q_UNUSED(widget);
+
+    const QRectF r = rect();
+
+    if (isSelected() || isUnderMouse()) {
+        QColor fill = pen().color();
+        fill.setAlpha(80);
+        painter->save();
+        painter->setBrush(fill);
+        painter->setPen(Qt::NoPen);
+        painter->drawRect(r);
+        painter->restore();
+    }
+
+    painter->save();
+    painter->setBrush(Qt::NoBrush);
+    painter->setPen(pen());
+    painter->drawRect(r);
+    painter->restore();
+}
 void Rectangle::handleHandleHoverEnter()
 {
     // Поднимаем прямоугольник на верхний z-уровень временно
@@ -434,7 +460,7 @@ void Rectangle::handleHandleHoverLeave()
 
 void Rectangle::updatePointNumbers()
 {
-    if (!this || !scene()) return;
+    if (!scene()) return;
 
     // Удаляем старые номера и фоны
     qDeleteAll(pointNumbers);
@@ -479,6 +505,8 @@ void Rectangle::updatePointNumbers()
         number->setZValue(1001);
         number->setPen(Qt::NoPen);
         number->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
+        number->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+        number->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
 
         // Применяем сохраненный стиль шрифта
         if (_numberFontSize > 0)
@@ -501,7 +529,8 @@ void Rectangle::updatePointNumbers()
         bg->setPen(Qt::NoPen);
         bg->setZValue(1000);
         bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
-
+        bg->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+        bg->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
 
         // Запрещаем взаимодействие с номером
         number->setFlag(QGraphicsItem::ItemIsSelectable, false);
@@ -556,6 +585,14 @@ void Rectangle::applyNumberStyle(qreal fontSize, const QColor& textColor, const 
             bg->setPos(number->pos());
         }
     }
+}
+
+QVariant Rectangle::itemChange(GraphicsItemChange change, const QVariant& value)
+{
+    if (change == QGraphicsItem::ItemSelectedHasChanged) {
+        update();
+    }
+    return QGraphicsRectItem::itemChange(change, value);
 }
 
 void Rectangle::rotatePointsClockwise()
@@ -637,6 +674,9 @@ void Rectangle::moveToBack()
 
     for (QGraphicsItem* item : scene()->items())
     {
+        if (!item)
+            continue;
+
         if (dynamic_cast<DragCircle*>(item))
             continue;
 

@@ -38,7 +38,7 @@ void GraphicsView::wheelEvent(QWheelEvent* wheelEvent)
     if (wheelEvent->modifiers() & Qt::ControlModifier)
     {
         // Получаем позицию курсора в координатах сцены
-        QPointF scenePos = mapToScene(wheelEvent->pos());
+        QPointF scenePos = mapToScene(wheelEvent->position().toPoint());
         if (wheelEvent->angleDelta().y() > 0)
         {
             scale(1.1, 1.1);

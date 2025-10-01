@@ -5,7 +5,7 @@
 #include <QPointF>
 #include <QList>
 
-#include "main_window.h"
+//#include "main_window.h"
 
 class GraphicsScene : public QGraphicsScene
 {

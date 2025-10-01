@@ -1,9 +1,9 @@
 #pragma once
 
 #include "shared/container_ptr.h"
-#include "shared/simple_ptr.h"
+//#include "shared/simple_ptr.h"
 
-#include "pproto/func_invoker.h"
+//#include "pproto/func_invoker.h"
 #include "pproto/transport/tcp.h"
 
 //#include "commands/commands.h"
@@ -34,20 +34,18 @@
 
 #include <QGraphicsView>
 #include <QGraphicsScene>
-#include "graphicsscene.h"
+//#include "graphicsscene.h"
 #include "graphics_view.h"
 #include "line.h"
 #include "square.h"
-
-#include "selectiondialog.h"
 
 #include "qgraphics2/circle.h"
 #include "qgraphics2/rectangle.h"
 #include "qgraphics2/polyline.h"
 
-using namespace std;
-using namespace pproto;
-using namespace pproto::transport;
+// using namespace std;
+// using namespace pproto;
+// using namespace pproto::transport;
 
 namespace Ui {
 class MainWindow;
@@ -145,6 +143,7 @@ private slots:
     void fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem* previous);
     void onPolylineModified();
     void onSceneChanged();
+    void onPolygonListSelectionChanged();
 
     void on_actRect_triggered();
     void on_actCircle_triggered();
@@ -176,7 +175,7 @@ private:
     QJsonObject serializeSceneToJson(QGraphicsScene* scene);
     void deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json);
     qgraph::VideoRect* findVideoRect(QGraphicsScene* scene);
-    void resetViewToDefault();
+    //void resetViewToDefault();
 
     void toggleRightSplitter();
     void updateWindowTitle();
@@ -261,6 +260,8 @@ private:
     void apply_NumberSize_ToItem(QGraphicsItem* it);
 
     void updateLineColorsForScene(QGraphicsScene* scene);
+
+    void applyZoom(qreal z);
 
 
 private:
@@ -349,6 +350,12 @@ private:
        QPointF center; // Центр viewport'а (дополнительно для точного восстановления)
     };
     QMap<QString, ScrollState> _scrollStates; // Ключ — путь к файлу
+    // double currentScale = 1.0;
+    // const double scaleStep = 1.1;
+    qreal m_zoom = 1.0;
+    static constexpr qreal kZoomStep = 1.1;
+    static constexpr qreal kMinZoom  = 0.10;
+    static constexpr qreal kMaxZoom  = 10.0;
 
     QList<int> _savedSplitterSizes; // Хранит нормальные размеры сплиттера
     bool _isRightSplitterCollapsed = false;

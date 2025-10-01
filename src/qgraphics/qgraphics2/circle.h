@@ -41,6 +41,8 @@ public:
     void updateHandlePosition();
     void updateHandlePosition(const QPointF& scenePos);
 
+    QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
+
     int radius() const { return _radius; }
     void updateHandleZValue();
     void updateCrossLines();

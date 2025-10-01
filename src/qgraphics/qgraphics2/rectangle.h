@@ -39,6 +39,7 @@ public:
     void updateHandlePosition();
     void updatePointNumbers();
     void applyNumberStyle(qreal fontSize, const QColor& textColor, const QColor& bgColor);
+    QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
 
     void rotatePointsClockwise();
     void rotatePointsCounterClockwise();
@@ -65,6 +66,8 @@ protected:
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
     void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
     void updateHandleVisibility();
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
+               QWidget* widget = nullptr) override;
 
 
 private slots:

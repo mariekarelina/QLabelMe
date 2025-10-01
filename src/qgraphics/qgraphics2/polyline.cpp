@@ -4,6 +4,7 @@
 #include <QKeyEvent>
 #include <QRectF>
 #include <QGraphicsSceneMouseEvent>
+#include <QStyleOptionGraphicsItem>
 
 namespace qgraph {
 
@@ -12,6 +13,7 @@ Polyline::Polyline(QGraphicsScene* scene, const QPointF& scenePos)
 {
     setFlags(ItemIsMovable | ItemIsFocusable);
     setAcceptHoverEvents(true); // Включаем обработку событий наведения
+    setFlag(QGraphicsItem::ItemIsSelectable, true);
 
     QPen pen = this->pen();
     pen.setColor(QColor(0, 0, 255));
@@ -284,6 +286,11 @@ QVariant Polyline::itemChange(GraphicsItemChange change, const QVariant& value)
     {
         updatePointNumbers();
     }
+    else if (change == QGraphicsItem::ItemSelectedHasChanged)
+    {
+        update();              // перерисовать заливку/контур
+        updatePointNumbers();  // чтобы номера/фон у номеров тоже реагировали
+    }
     return QGraphicsPathItem::itemChange(change, value);
 }
 
@@ -512,6 +519,33 @@ void Polyline::insertPointAtSegment(int segmentIndex, const QPointF& pos)
     updatePath();
 }
 
+void Polyline::paint(QPainter* painter,
+                     const QStyleOptionGraphicsItem* option,
+                     QWidget* widget)
+{
+    Q_UNUSED(option);
+    Q_UNUSED(option);
+
+    const QPainterPath path = this->path();
+
+    if (isSelected() || isUnderMouse())
+    {
+        QColor fill = pen().color();
+        fill.setAlpha(80);
+        painter->save();
+        painter->setBrush(fill);
+        painter->setPen(Qt::NoPen);
+        painter->drawPath(path);
+        painter->restore();
+    }
+
+    painter->save();
+    painter->setBrush(Qt::NoBrush);
+    painter->setPen(pen());
+    painter->drawPath(path);
+    painter->restore();
+}
+
 void Polyline::dragCircleMove(DragCircle* circle)
 {
     Q_UNUSED(circle);
@@ -557,6 +591,9 @@ void Polyline::moveToBack()
 
     for (QGraphicsItem* item : scene()->items())
     {
+        if (!item)
+            continue;
+
         if (dynamic_cast<DragCircle*>(item))
             continue;
 
@@ -775,6 +812,8 @@ void Polyline::updatePointNumbers()
         number->setZValue(1001);
         number->setPen(Qt::NoPen);
         number->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
+        number->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+        number->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
 
         // Применяем стиль шрифта
         if (_numberFontSize > 0)
@@ -797,6 +836,8 @@ void Polyline::updatePointNumbers()
         bg->setPen(Qt::NoPen);
         bg->setZValue(1000);
         bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
+        bg->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+        bg->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
 
         // Запрещаем взаимодействие
         number->setFlag(QGraphicsItem::ItemIsSelectable, false);
@@ -860,9 +901,9 @@ int Polyline::countIntersections(const QLineF& testLine, int excludePointIndex)
 
         // Проверяем пересечение
         QPointF intersectionPoint;
-        if (segment.intersect(testLine, &intersectionPoint) == QLineF::BoundedIntersection)
+        if (segment.intersects(testLine, &intersectionPoint) == QLineF::BoundedIntersection)
         {
-            intersectionCount++;
+            ++intersectionCount;
         }
     }
 
@@ -880,7 +921,7 @@ int Polyline::countIntersections(const QLineF& testLine, int excludePointIndex)
         if (!isAdjacent)
         {
             QPointF intersectionPoint;
-            if (segment.intersect(testLine, &intersectionPoint) == QLineF::BoundedIntersection)
+            if (segment.intersects(testLine, &intersectionPoint) == QLineF::BoundedIntersection)
             {
                 intersectionCount++;
             }

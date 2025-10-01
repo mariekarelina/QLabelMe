@@ -2,27 +2,28 @@
 #include "ui_main_window.h"
 //#include "event_window.h"
 
-#include "shared/defmac.h"
+//#include "shared/defmac.h"
 #include "shared/logger/logger.h"
-#include "shared/logger/format.h"
+//#include "shared/logger/format.h"
 #include "shared/config/appl_conf.h"
-#include "shared/qt/logger_operators.h"
+//#include "shared/qt/logger_operators.h"
 
-#include "pproto/commands/base.h"
-#include "pproto/commands/pool.h"
-#include "pproto/logger_operators.h"
+// #include "pproto/commands/base.h"
+// #include "pproto/commands/pool.h"
+// #include "pproto/logger_operators.h"
 
 #include "qgraphics2/circle.h"
 #include "qgraphics2/rectangle.h"
 #include "qgraphics2/polyline.h"
 #include "qgraphics2/square.h"
 #include "line.h"
-#include "square.h"
+// #include "square.h"
 #include "circle.h"
 //#include "qgraphics/functions.h"
 //#include "qutils/message_box.h"
 #include <QSlider>
 
+#include "selectiondialog.h"
 #include <QApplication>
 #include <QHostInfo>
 #include <QScreen>
@@ -60,9 +61,10 @@
 #include <QAction>
 #include <QGraphicsSimpleTextItem>
 #include <QGraphicsRectItem>
+#include <QAbstractItemView>
+#include <QMetaType>
 
 using namespace qgraph;
-
 //#include <view.h>
 
 #define log_error_m   alog::logger().error   (alog_line_location, "MainWin")
@@ -106,8 +108,40 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
+
+    //ui->menuBar->setAttribute(Qt::WA_TransparentForMouseEvents, false);
+
+    ui->toolBar->setAllowedAreas(Qt::TopToolBarArea);
+    ui->toolBar->setMovable(false);
+    ui->toolBar->setFloatable(false);
+    addToolBarBreak(Qt::TopToolBarArea);
+
+    ui->menuBar->raise();
+
     ui->graphView->setMouseTracking(true);
     ui->graphView->viewport()->setMouseTracking(true);
+
+    // Сделать подсветку одинаковой яркой, даже когда список без фокуса
+    auto fixSelectionPalette = [](QListWidget* w){
+        QPalette pal = w->palette();
+        const QColor hiA  = pal.color(QPalette::Active,   QPalette::Highlight);
+        const QColor txtA = pal.color(QPalette::Active,   QPalette::HighlightedText);
+
+        pal.setColor(QPalette::Inactive, QPalette::Highlight,       hiA);
+        pal.setColor(QPalette::Inactive, QPalette::HighlightedText,  txtA);
+        pal.setColor(QPalette::Disabled, QPalette::Highlight,       hiA);
+        pal.setColor(QPalette::Disabled, QPalette::HighlightedText,  txtA);
+
+        w->setPalette(pal);
+        if (w->viewport()) w->viewport()->setPalette(pal);
+    };
+
+    fixSelectionPalette(ui->listWidget_PolygonList);
+    // fixSelectionPalette(ui->listWidget_Classes);
+    fixSelectionPalette(ui->listWidget_FileList);
+
+
+    qRegisterMetaType<QGraphicsItem*>("QGraphicsItem*");
 
     if (_scene) _scene->installEventFilter(this);
     ui->graphView->viewport()->installEventFilter(this);
@@ -142,7 +176,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->statusBar->addWidget(_labelConnectStatus);
 
     ui->graphView->viewport()->installEventFilter(this);
-    ui->graphView->setMouseTracking(true);
+    ui->graphView->setMouseTracking(true);    
 
     // Создаем и настраиваем метки
     _folderPathLabel = new QLabel(this);
@@ -188,8 +222,11 @@ MainWindow::MainWindow(QWidget *parent) :
             this, &MainWindow::onSceneSelectionChanged);
     connect(_scene, &QGraphicsScene::changed,
             this,  &MainWindow::onSceneChanged);
+    connect(ui->listWidget_PolygonList, &QListWidget::itemSelectionChanged,
+            this, &MainWindow::onPolygonListSelectionChanged);
 
     ui->listWidget_PolygonList->setContextMenuPolicy(Qt::CustomContextMenu);
+    ui->listWidget_PolygonList->setSelectionMode(QAbstractItemView::ExtendedSelection);
     connect(ui->listWidget_PolygonList, &QListWidget::customContextMenuRequested,
             this, &MainWindow::showPolygonListContextMenu);
 
@@ -470,6 +507,9 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
             // Обновляем положение всех фигур относительно изображения
             for (QGraphicsItem* item : _scene->items())
             {
+                if (!item)
+                    continue;
+
                 if (item != _videoRect &&
                     !dynamic_cast<DragCircle*>(item) &&
                     item->parentItem() == nullptr)
@@ -852,6 +892,30 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
+    if (event->modifiers() == Qt::ControlModifier)
+    {
+        const int key = event->key();
+
+        // На некоторых раскладках "+" приходит как Key_Equal
+        if (key == Qt::Key_Plus || key == Qt::Key_Equal)
+        {
+            applyZoom(m_zoom * kZoomStep);
+            event->accept();
+            return;
+        }
+        else if (key == Qt::Key_Minus)
+        {
+            applyZoom(m_zoom / kZoomStep);
+            event->accept();
+            return;
+        }
+        else if (key == Qt::Key_0)
+        {
+            applyZoom(1.0); // сброс
+            event->accept();
+            return;
+        }
+    }
     if (event->key() == Qt::Key_Delete)
     {
         QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
@@ -925,12 +989,6 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     else if (event->modifiers() == Qt::ControlModifier && event->key() == Qt::Key_S)
     {
         on_actSave_triggered(true);
-        event->accept();
-        return;
-    }
-    else if (event->modifiers() == Qt::ControlModifier && event->key() == Qt::Key_I)
-    {
-        resetViewToDefault();
         event->accept();
         return;
     }
@@ -1398,7 +1456,12 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
     //yconfig.saveFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml");
     QFileInfo fileInfo(doc->filePath);
     QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
-    yconfig.saveFile(yamlPath.toStdString());
+    //yconfig.saveFile(yamlPath.toStdString());
+    #ifdef Q_OS_WIN
+        yconfig.saveFile(yamlPath.toStdWString()); // wide-путь для Windows
+    #else
+        yconfig.saveFile(QString::fromUtf8(yamlPath.toUtf8()).toStdString());
+    #endif
 
 
     // После успешного сохранения обновляем отображение в списке файлов
@@ -1498,13 +1561,20 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
     QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
 
     YamlConfig yconfig;
-    if (!yconfig.readFile(yamlPath.toStdString()))
+    //if (!yconfig.readFile(yamlPath.toStdString()))
+    #ifdef Q_OS_WIN
+        if (!yconfig.readFile(yamlPath.toStdWString()))
+    #else
+        if (!yconfig.readFile(QString::fromUtf8(yamlPath.toUtf8()).toStdString()))
+    #endif
+        {
+            log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
+            _loadingNow = false;
+            return;
+        }
     //if (yconfig.readFile("/tmp/1.yaml"))
     //if (!yconfig.readFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml"))
-    {
-        log_error_m << "Failed to load annotation file:" << yamlPath;
-        return;
-    }
+
 
     // Очищаем сцену только если нет несохраненных изменений
     if (!doc->isModified)
@@ -1619,9 +1689,10 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
     {
         // TODO что нибудь написать об ошибке чтения
         log_error_m << "Failed to parse annotation file:" << yamlPath;
+        _loadingNow = false;
         return;
     }
-    _loadingNow = true;
+    _loadingNow = false;
     // После загрузки всех элементов обновляем список
     updatePolygonListForCurrentScene();
 }
@@ -1708,7 +1779,7 @@ qgraph::VideoRect* MainWindow::findVideoRect(QGraphicsScene* scene)
     return nullptr;
 }
 
-void MainWindow::resetViewToDefault()
+/*void MainWindow::resetViewToDefault()
 {
     if (!_scene || !_videoRect)
         return;
@@ -1736,7 +1807,7 @@ void MainWindow::resetViewToDefault()
             sceneRect.center()
         };
     }
-}
+}*/
 
 void MainWindow::toggleRightSplitter()
 {
@@ -3136,6 +3207,40 @@ void MainWindow::updateLineColorsForScene(QGraphicsScene* scene)
     scene->update();
 }
 
+void MainWindow::applyZoom(qreal z)
+{
+    if (!ui->graphView) return;
+
+    // Ограничим диапазон
+    if (z < kMinZoom) z = kMinZoom;
+    if (z > kMaxZoom) z = kMaxZoom;
+
+    // Сохраним текущий центр сцены, чтобы картинка не «уезжала»
+    const QPointF centerScene =
+        ui->graphView->mapToScene(ui->graphView->viewport()->rect().center());
+
+    // Абсолютно задаём трансформацию (не накапливаем relative scale)
+    QTransform t;
+    t.scale(z, z);
+    ui->graphView->setTransform(t);
+
+    // Вернём центр
+    ui->graphView->centerOn(centerScene);
+
+    m_zoom = z;
+
+    // Если ты хранишь viewState — обновим его здесь, чтобы затем restore не «перебивал» зум
+    if (auto doc = currentDocument())
+    {
+        doc->viewState = {
+            ui->graphView->horizontalScrollBar()->value(),
+            ui->graphView->verticalScrollBar()->value(),
+            m_zoom,
+            centerScene
+        };
+    }
+}
+
 void MainWindow::removePolygonListItem(QListWidgetItem* item)
 {
     if (!item) return;
@@ -3159,7 +3264,7 @@ void MainWindow::removePolygonListItem(QListWidgetItem* item)
 
 void MainWindow::fitImageToView()
 {
-    if (!_scene || !_videoRect)
+    if (!_scene || !_videoRect || !ui->graphView)
     {
         return;
     }
@@ -3282,9 +3387,14 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
         //                 this, &MainWindow::onPolylineModified, Qt::UniqueConnection);
         //     }
         // }
+        connect(currentDoc->scene, &QGraphicsScene::selectionChanged,
+                this, &MainWindow::onSceneSelectionChanged,
+                Qt::UniqueConnection);
+
         connect(currentDoc->scene, &QGraphicsScene::changed,
                 this, &MainWindow::onSceneChanged,
                 Qt::UniqueConnection);
+
     }
 
     fitImageToView();
@@ -3318,6 +3428,30 @@ void MainWindow::onSceneChanged()
     // Любое изменение сцены помечает документ как измененный
     doc->isModified = true;
     updateFileListDisplay(doc->filePath);
+}
+
+void MainWindow::onPolygonListSelectionChanged()
+{
+    if (!_scene) return;
+    QList<QListWidgetItem*> selected = ui->listWidget_PolygonList->selectedItems();
+
+    _scene->blockSignals(true);
+    for (QGraphicsItem* it : _scene->items()) {
+        if (it == _videoRect || it == _tempRectItem || it == _tempCircleItem || it == _tempPolyline) continue;
+        if (it->isSelected()) it->setSelected(false);
+    }
+    for (auto* li : selected) {
+        if (!li) continue;
+        if (QGraphicsItem* scItem = li->data(Qt::UserRole).value<QGraphicsItem*>())
+            scItem->setSelected(true);
+    }
+    _scene->blockSignals(false);
+
+    if (!selected.isEmpty()) {
+        if (QGraphicsItem* scItem = selected.first()->data(Qt::UserRole).value<QGraphicsItem*>())
+            ui->graphView->ensureVisible(scItem);
+    }
+    raiseAllHandlesToTop();
 }
 
 void MainWindow::on_actRect_triggered()
