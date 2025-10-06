@@ -8,6 +8,8 @@
 
 namespace qgraph {
 
+struct SceneFilter;
+
 Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
 {
     setFlags(ItemIsMovable | ItemIsFocusable);
@@ -31,12 +33,15 @@ Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
     scene->addItem(this);
 
     _circle = new DragCircle(scene);
-    _circle->setParent(this);
+    _circle->setParentItem(this);
     _circle->restoreBaseStyle();
-    _circle->setVisible(false);
+    _circle->setVisible(true);
     _circle->setZValue(this->zValue() + 1);
     _circle->setPos(rect().width() / 2, 0);
     _circle->setHoverSizingEnabled(false);
+
+    if (scene)
+        attachSceneFilter(scene);
 
     // Создаем линии крестика
     _verticalLine = new QGraphicsLineItem(this);
@@ -86,6 +91,7 @@ Circle::~Circle()
         delete _horizontalLine;
         _horizontalLine = nullptr;
     }
+    detachSceneFilter();
 }
 
 void Circle::setFrameScale(float newScale)
@@ -198,7 +204,7 @@ void Circle::updateHandlePosition()
     if (_circle)
     {
         _circle->setPos(rect().width() / 2, 0);
-        _circle->setVisible(false);
+        //_circle->setVisible(false);
     }
 }
 
@@ -236,7 +242,8 @@ void Circle::updateHandlePosition(const QPointF& scenePos)
 
 QVariant Circle::itemChange(GraphicsItemChange change, const QVariant& value)
 {
-    if (change == QGraphicsItem::ItemSelectedHasChanged) {
+    if (change == QGraphicsItem::ItemSelectedHasChanged)
+    {
         update();
     }
     return QGraphicsItem::itemChange(change, value);
@@ -529,6 +536,40 @@ void Circle::paint(QPainter* painter,
     painter->restore();
 }
 
+struct Circle::SceneFilter : public QObject
+{
+    Circle* owner = nullptr;
+    explicit SceneFilter(Circle* o) : owner(o) {}
+    bool eventFilter(QObject* obj, QEvent* ev) override
+    {
+        if (!owner) return false;
+        if (ev->type() == QEvent::GraphicsSceneMouseMove)
+        {
+            auto* me = static_cast<QGraphicsSceneMouseEvent*>(ev);
+            owner->updateHandlePosition(me->scenePos()); // уже есть у вас
+        }
+        return false;
+    }
+};
+
+void Circle::attachSceneFilter(QGraphicsScene* s)
+{
+    if (!s || _sceneFilter)
+        return;
+    _sceneFilter = new SceneFilter(this);
+    s->installEventFilter(_sceneFilter);
+}
+
+void Circle::detachSceneFilter()
+{
+    if (!_sceneFilter)
+        return;
+    if (scene())
+        scene()->removeEventFilter(_sceneFilter);
+    delete _sceneFilter;
+    _sceneFilter = nullptr;
+}
+
 bool Circle::isCursorNearCircle(const QPointF& cursorPos) const
 {
     // Преобразуем координаты в систему сцены
@@ -546,6 +587,31 @@ bool Circle::isCursorNearCircle(const QPointF& cursorPos) const
 
     // Проверяем, находится ли курсор в зоне вокруг окружности
     return std::abs(distanceToCenter - sceneRadius) <= margin;
+}
+
+QVariant Circle::saveState() const
+{
+    QVariantMap m;
+    m["type"]    = "circle";
+    m["center"]  = realCenter();
+    m["radius"]  = realRadius();
+    m["z"]       = int(zValue());
+    m["visible"] = isVisible();
+    return m;
+}
+
+void Circle::loadState(const QVariant& v)
+{
+    const auto m = v.toMap();
+    if (m.contains("center"))  setRealCenter(m["center"].toPointF());
+    if (m.contains("radius"))  setRealRadius(m["radius"].toInt());
+    if (m.contains("z"))       setZValue(m["z"].toInt());
+    if (m.contains("visible")) setVisible(m["visible"].toBool());
+
+    updateHandlePosition();
+    updateCrossLines();
+    raiseHandleToTop();
+    update();
 }
 
 } // namespace qgraph

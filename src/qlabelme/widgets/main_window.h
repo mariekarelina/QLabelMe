@@ -31,6 +31,10 @@
 #include <QPushButton>
 #include <QTableWidgetItem>
 #include <QColorDialog>
+#include <QUndoStack>
+#include <QUndoCommand>
+#include <QShortcut>
+#include <QPointer>
 
 #include <QGraphicsView>
 #include <QGraphicsScene>
@@ -99,6 +103,19 @@ struct Document
     }
 };
 
+// struct ShapeSnapshot
+// {
+//     QString type;
+//     QVariant state;
+//     int zvalue = 0;
+//     bool visible = true;
+//     QPointF pos;
+// };
+struct ShapeSnapshot
+{
+    QString type;      // circle/rectangle/polyline/...
+    QVariant state;    // то, что вернул shape->saveState()
+};
 
 class MainWindow : public QMainWindow
 {
@@ -171,7 +188,6 @@ private:
     void loadGeometry();
     void saveGeometry();
 
-
     QJsonObject serializeSceneToJson(QGraphicsScene* scene);
     void deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json);
     qgraph::VideoRect* findVideoRect(QGraphicsScene* scene);
@@ -181,6 +197,7 @@ private:
     void updateWindowTitle();
     void updateFolderPathDisplay();
 
+    static QString annotationPathFor(const QString& imagePath);
     void saveAnnotationToFile(Document::Ptr doc);
     void updateFileListDisplay(const QString& filePath);
     void loadAnnotationFromFile(Document::Ptr doc);
@@ -262,7 +279,6 @@ private:
     void updateLineColorsForScene(QGraphicsScene* scene);
 
     void applyZoom(qreal z);
-
 
 private:
     Ui::MainWindow* ui;

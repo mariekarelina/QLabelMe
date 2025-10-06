@@ -99,7 +99,6 @@ private:
     QDoubleSpinBox* _spin = nullptr;
 };
 
-
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
@@ -146,7 +145,7 @@ MainWindow::MainWindow(QWidget *parent) :
     if (_scene) _scene->installEventFilter(this);
     ui->graphView->viewport()->installEventFilter(this);
 
-    void loadVisualStyle();
+    loadVisualStyle();
 
     bool ultraHD = false;
     QList<QScreen*> screens = QGuiApplication::screens();
@@ -230,8 +229,8 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->listWidget_PolygonList, &QListWidget::customContextMenuRequested,
             this, &MainWindow::showPolygonListContextMenu);
 
-    QLabel* pathHeader = new QLabel(this);
-    pathHeader->setAlignment(Qt::AlignCenter);
+    //QLabel* pathHeader = new QLabel(this);
+    //pathHeader->setAlignment(Qt::AlignCenter);
     // Добавляем заголовок над listWidget
     //ui->verticalLayout->insertWidget(0, pathHeader);
 
@@ -280,7 +279,6 @@ MainWindow::MainWindow(QWidget *parent) :
     // _ghostHandle->setBrush(QBrush(Qt::white));
     // _scene->addItem(_ghostHandle);
     ensureGhostAllocated();
-
 }
 
 MainWindow::~MainWindow()
@@ -1337,6 +1335,15 @@ void MainWindow::saveGeometry()
     saveVisualStyle();
 }
 
+QString MainWindow::annotationPathFor(const QString& imagePath)
+{
+    QFileInfo fileInfo(imagePath);
+    QDir dir(fileInfo.absolutePath());
+    // QDir::filePath() расставит правильные разделители для платформы
+    // QFileInfo::completeBaseName() корректно берет имя без расширения
+    return dir.filePath(fileInfo.completeBaseName() + ".yaml");
+}
+
 void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 {
     if (!doc || !doc->scene || !doc->videoRect)
@@ -1454,15 +1461,15 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
     yconfig.setValue("shapes", saveFunc);
     //yconfig.saveFile("/tmp/1.yaml");
     //yconfig.saveFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml");
-    QFileInfo fileInfo(doc->filePath);
-    QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
-    //yconfig.saveFile(yamlPath.toStdString());
-    #ifdef Q_OS_WIN
-        yconfig.saveFile(yamlPath.toStdWString()); // wide-путь для Windows
-    #else
-        yconfig.saveFile(QString::fromUtf8(yamlPath.toUtf8()).toStdString());
-    #endif
 
+    // QFileInfo fileInfo(doc->filePath);
+    // QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
+    // yconfig.saveFile(yamlPath.toStdString());
+
+    const QString yamlPath = annotationPathFor(doc->filePath);
+    // ВАЖНО: для внешних C/STD API на Windows используем нативную кодировку ОС
+    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(yamlPath));
+    yconfig.saveFile(std::string(encoded.constData(), encoded.size()));
 
     // После успешного сохранения обновляем отображение в списке файлов
     if (QFile::exists(yamlPath))
@@ -1557,21 +1564,28 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
     QSignalBlocker blocker(doc->scene); // временно глушим QGraphicsScene::changed
 
     // Получаем путь к файлу аннотаций (заменяем расширение изображения на .yaml)
-    QFileInfo fileInfo(doc->filePath);
-    QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
+    // QFileInfo fileInfo(doc->filePath);
+    // QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
 
+    // YamlConfig yconfig;
+    // if (!yconfig.readFile(yamlPath.toStdString()))
+    // {
+    //     log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
+    //     _loadingNow = false;
+    //     return;
+    // }
+
+    const QString yamlPath = annotationPathFor(doc->filePath);
     YamlConfig yconfig;
-    //if (!yconfig.readFile(yamlPath.toStdString()))
-    #ifdef Q_OS_WIN
-        if (!yconfig.readFile(yamlPath.toStdWString()))
-    #else
-        if (!yconfig.readFile(QString::fromUtf8(yamlPath.toUtf8()).toStdString()))
-    #endif
-        {
-            log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
-            _loadingNow = false;
-            return;
-        }
+
+    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(yamlPath));
+    if (!yconfig.readFile(std::string(encoded.constData(), encoded.size())))
+    {
+        log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
+        _loadingNow = false;
+        return;
+    }
+
     //if (yconfig.readFile("/tmp/1.yaml"))
     //if (!yconfig.readFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml"))
 
@@ -3397,6 +3411,7 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
 
     }
 
+    _loadingNow = false;
     fitImageToView();
     updatePolygonListForCurrentScene();
     //current->setCheckState(Qt::Checked);
@@ -3422,12 +3437,12 @@ void MainWindow::onSceneChanged()
     // Игнорируем изменения во время загрузки
     if (_loadingNow) return;
 
-    Document::Ptr doc = currentDocument();
-    if (!doc || doc->isModified) return;
+    // Document::Ptr doc = currentDocument();
+    // if (!doc || doc->isModified) return;
 
-    // Любое изменение сцены помечает документ как измененный
-    doc->isModified = true;
-    updateFileListDisplay(doc->filePath);
+    // // Любое изменение сцены помечает документ как измененный
+    // doc->isModified = true;
+    // updateFileListDisplay(doc->filePath);
 }
 
 void MainWindow::onPolygonListSelectionChanged()
@@ -3530,7 +3545,9 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
     updateWindowTitle();
     updateFolderPathDisplay();
     loadFilesFromFolder(folderPath);
-    loadClassesFromFile(folderPath + "/classes.yaml");
+    //loadClassesFromFile(folderPath + "/classes.yaml");
+    QDir dir(folderPath);
+    loadClassesFromFile(dir.filePath("classes.yaml"));
 }
 
 void MainWindow::onSceneItemRemoved(QGraphicsItem* item)

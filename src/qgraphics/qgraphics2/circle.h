@@ -53,6 +53,9 @@ public:
 
     bool isCursorNearCircle(const QPointF& cursorPos) const;
 
+    QVariant saveState() const;
+    void loadState(const QVariant& v);
+
 protected:
     // Переопределяем обработчик событий клавиатуры
     void keyPressEvent(QKeyEvent* event) override;
@@ -65,9 +68,9 @@ protected:
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
                QWidget* widget = nullptr) override;
 
-
 private:
-
+    void attachSceneFilter(QGraphicsScene* s);
+    void detachSceneFilter();
 
 private:
     // Временная ручка при наведении
@@ -79,6 +82,9 @@ private:
     QGraphicsLineItem* _horizontalLine;
 
     QColor _highlightColor = Qt::transparent; // Цвет выделения
+
+    struct SceneFilter;
+    SceneFilter* _sceneFilter = nullptr;
 };
 
 } // namespace qgraph

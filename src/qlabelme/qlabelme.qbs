@@ -50,8 +50,8 @@ Product {
         files: [
             "graphics_view.cpp",
             "graphics_view.h",
-            "graphicsscene.cpp",
-            "graphicsscene.h",
+            //"graphicsscene.cpp",
+            //"graphicsscene.h",
             "handle.cpp",
             "handle.h",
             "line.cpp",
