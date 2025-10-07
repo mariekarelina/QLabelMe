@@ -35,7 +35,7 @@ Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
     _circle = new DragCircle(scene);
     _circle->setParentItem(this);
     _circle->restoreBaseStyle();
-    _circle->setVisible(true);
+    _circle->setVisible(false);
     _circle->setZValue(this->zValue() + 1);
     _circle->setPos(rect().width() / 2, 0);
     _circle->setHoverSizingEnabled(false);
@@ -62,6 +62,8 @@ Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
     _verticalLine->setAcceptHoverEvents(false);
     _horizontalLine->setAcceptHoverEvents(false);
     updateCrossLines();
+
+    _ghostLocalPos = QPointF(rect().right(), rect().center().y());
 }
 
 Circle::~Circle()
@@ -204,7 +206,7 @@ void Circle::updateHandlePosition()
     if (_circle)
     {
         _circle->setPos(rect().width() / 2, 0);
-        //_circle->setVisible(false);
+        _circle->setVisible(false);
     }
 }
 
@@ -212,32 +214,36 @@ void Circle::updateHandlePosition(const QPointF& scenePos)
 {
     if (!_circle) return;
 
-    // Преобразуем координаты сцены в локальные координаты круга
     QPointF localPos = mapFromScene(scenePos);
-    QPointF center = rect().center();
 
-    // Вычисляем вектор от центра к курсору
-    QPointF direction = localPos - center;
-    qreal distance = std::sqrt(direction.x() * direction.x() + direction.y() * direction.y());
-
-    // Нормализуем вектор и умножаем на радиус
-    if (distance > 0)
+    // Проверяем, находится ли курсор рядом с окружностью
+    if (isCursorNearCircle(localPos))
     {
-        direction /= distance;
-        direction *= _radius;
+        QPointF center = rect().center();
+        QPointF direction = localPos - center;
+        qreal distance = std::sqrt(direction.x() * direction.x() + direction.y() * direction.y());
+
+        if (distance > 0)
+        {
+            direction /= distance;
+            direction *= _radius;
+        }
+        else
+        {
+            direction = QPointF(_radius, 0);
+        }
+
+        QPointF handlePos = center + direction;
+        _circle->setPos(handlePos);
+        _circle->setVisible(true);
+        _circle->setHoverStyle(true);
     }
     else
     {
-        // Если курсор в центре, направляем вправо
-        direction = QPointF(_radius, 0);
+        // Курсор не рядом - скрываем ручку
+        _circle->setVisible(false);
+        _circle->setHoverStyle(false);
     }
-    // Устанавливаем позицию ручки на окружности
-    QPointF handlePos = center + direction;
-    _circle->setPos(handlePos);
-
-    // Убедимся, что ручка видима
-    _circle->setVisible(true);
-    _circle->setHoverStyle(true);
 }
 
 QVariant Circle::itemChange(GraphicsItemChange change, const QVariant& value)
@@ -467,8 +473,15 @@ void Circle::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
         const QPointF onCirc = pointOnCircle(rect(), event->pos());
         _circle->setHoverStyle(true);
         _circle->setPos(onCirc - _circle->boundingRect().center());
+        _circle->setVisible(true);
+    }
+    else
+    {
+        _circle->setHoverStyle(false);
         _circle->setVisible(false);
     }
+    _ghostLocalPos = pointOnCircle(rect(), event->pos());
+    update();
 }
 
 void Circle::hoverMoveEvent(QGraphicsSceneHoverEvent* event)
@@ -494,6 +507,8 @@ void Circle::hoverMoveEvent(QGraphicsSceneHoverEvent* event)
 
         }
     }
+    _ghostLocalPos = pointOnCircle(rect(), event->pos());
+    update();
 }
 
 void Circle::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
@@ -506,6 +521,8 @@ void Circle::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
 
     _circle->setVisible(false);
     _circle->setHoverStyle(false);
+
+    update();
 }
 
 void Circle::paint(QPainter* painter,

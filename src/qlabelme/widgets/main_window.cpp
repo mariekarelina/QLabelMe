@@ -1467,7 +1467,7 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
     // yconfig.saveFile(yamlPath.toStdString());
 
     const QString yamlPath = annotationPathFor(doc->filePath);
-    // ВАЖНО: для внешних C/STD API на Windows используем нативную кодировку ОС
+    // Для внешних C/STD API на Windows используем нативную кодировку ОС
     const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(yamlPath));
     yconfig.saveFile(std::string(encoded.constData(), encoded.size()));
 
@@ -1701,8 +1701,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
     // Загружаем данные из YAML
     if (!yconfig.getValue("shapes", loadFunc, false))
     {
-        // TODO что нибудь написать об ошибке чтения
-        log_error_m << "Failed to parse annotation file:" << yamlPath;
+        log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
         _loadingNow = false;
         return;
     }
@@ -2487,6 +2486,27 @@ qgraph::DragCircle* MainWindow::pickHiddenHandle(const QPointF& scenePos, bool& 
 
     for (auto* it : items)
     {
+        if (auto* circle = dynamic_cast<qgraph::Circle*>(it))
+        {
+            QPointF localCursorPos = circle->mapFromScene(scenePos);
+            if (circle->isCursorNearCircle(localCursorPos))
+            {
+                auto* handle = circle->getDragCircle();
+                if (handle && handle->isValid())
+                {
+                    const QPointF c = handle->mapToScene(handle->rect().center());
+                    const qreal dx = c.x() - scenePos.x();
+                    const qreal dy = c.y() - scenePos.y();
+                    const qreal d2 = dx*dx + dy*dy;
+                    if (d2 <= bestD2)
+                    {
+                        bestD2 = d2;
+                        best = handle;
+                    }
+                }
+            }
+            continue;
+        }
         if (auto* dc = dynamic_cast<qgraph::DragCircle*>(it))
         {
             const QPointF c = dc->mapToScene(dc->rect().center());
@@ -2697,38 +2717,30 @@ qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
         // Проверяем, что элемент все еще существует и валиден
         if (!item || !item->scene()) continue;
 
-        if (auto* handle = dynamic_cast<qgraph::DragCircle*>(item))
+        if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
         {
-            // Дополнительная проверка валидности
-            if (!handle->isValid()) continue;
-
-            // Для кругов используем специальную логику проверки
-            if (auto* circle = dynamic_cast<qgraph::Circle*>(handle->parentItem()))
+            // Для кругов всегда возвращаем их ручку, если курсор рядом с окружностью
+            if (circle->isCursorNearCircle(circle->mapFromScene(scenePos)))
             {
-                // Проверяем, находится ли курсор рядом с окружностью
-                QPointF localPos = circle->mapFromScene(scenePos);
-                if (circle->isCursorNearCircle(localPos))
+                // Получаем ручку круга и обновляем ее позицию
+                auto* handle = circle->getDragCircle();
+                if (handle && handle->isValid())
                 {
-                    // Обновляем позицию ручки перед показом
                     circle->updateHandlePosition(scenePos);
-                    if (!handle->isVisible())
-                    {
-                        handle->setVisible(true);
-                        if (handle->isValid())
-                        {
-                            handle->setHoverStyle(true);
-                        }
-                    }
                     return handle;
                 }
             }
-            else
+            continue;
+        }
+
+        if (auto* handle = dynamic_cast<qgraph::DragCircle*>(item))
+        {
+            if (!handle->isValid())
+                continue;
+            // Для других фигур используем стандартную проверку
+            if (handle->contains(handle->mapFromScene(scenePos)))
             {
-                // Для других фигур используем стандартную проверку
-                if (handle->contains(handle->mapFromScene(scenePos)))
-                {
-                    return handle;
-                }
+                return handle;
             }
         }
     }
@@ -2809,13 +2821,23 @@ void MainWindow::showGhostFor(qgraph::DragCircle* h)
         // Получаем позицию курсора в сцене
         QPointF cursorPos = ui->graphView->mapToScene(ui->graphView->mapFromGlobal(QCursor::pos()));
 
-        // Обновляем позицию ручки круга относительно курсора
-        circle->updateHandlePosition(cursorPos);
+        // Проверяем, что курсор действительно рядом с окружностью
+        QPointF localCursorPos = circle->mapFromScene(cursorPos);
+        if (circle->isCursorNearCircle(localCursorPos))
+        {
+            // Обновляем позицию реальной ручки
+            circle->updateHandlePosition(cursorPos);
 
-        // Устанавливаем призрака в ту же позицию, что и реальную ручку
-        const QPointF sceneHandlePos = h->scenePos();
-        _ghostHandle->setPos(sceneHandlePos);
-        _ghostHandle->setVisible(true);
+            const QPointF sceneHandlePos = h->scenePos();
+            _ghostHandle->setPos(sceneHandlePos);
+            _ghostHandle->setVisible(true);
+        }
+        else
+        {
+            // Курсор не рядом с окружностью - не показываем призрак
+            hideGhost();
+            return;
+        }
     }
     else
     {
@@ -2825,8 +2847,6 @@ void MainWindow::showGhostFor(qgraph::DragCircle* h)
     }
 
     const QPointF centerScene = h->sceneBoundingRect().center();
-    _ghostHandle->setVisible(true);
-
     const QRectF base = _ghostTarget->baseRect();
     const qreal scale = 1.5;
     //const qreal scale = 1;

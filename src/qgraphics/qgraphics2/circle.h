@@ -53,6 +53,8 @@ public:
 
     bool isCursorNearCircle(const QPointF& cursorPos) const;
 
+    DragCircle* getDragCircle() const { return _circle; }
+
     QVariant saveState() const;
     void loadState(const QVariant& v);
 
@@ -74,8 +76,10 @@ private:
 
 private:
     // Временная ручка при наведении
-    QPointer<DragCircle> _hoverHandle = nullptr;
-    DragCircle* _circle;
+    QPointer<DragCircle> _hoverHandle = {nullptr};
+    //DragCircle* _circle;
+    QPointer<DragCircle> _circle = {nullptr};
+    QPointF _ghostLocalPos {0, 0};
     float _radius = {10};
     // Линии крестика
     QGraphicsLineItem* _verticalLine;
@@ -84,7 +88,7 @@ private:
     QColor _highlightColor = Qt::transparent; // Цвет выделения
 
     struct SceneFilter;
-    SceneFilter* _sceneFilter = nullptr;
+    SceneFilter* _sceneFilter = {nullptr};
 };
 
 } // namespace qgraph
