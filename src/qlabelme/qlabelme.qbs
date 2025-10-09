@@ -50,8 +50,6 @@ Product {
         files: [
             "graphics_view.cpp",
             "graphics_view.h",
-            //"graphicsscene.cpp",
-            //"graphicsscene.h",
             "handle.cpp",
             "handle.h",
             "line.cpp",
@@ -61,6 +59,8 @@ Product {
             "main_window.ui",
             "selectiondialog.cpp",
             "selectiondialog.h",
+            "settingsdialog.cpp",
+            "settingsdialog.h",
             "square.cpp",
             "square.h",
         ]

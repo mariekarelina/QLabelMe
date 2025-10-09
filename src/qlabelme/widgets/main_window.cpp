@@ -24,6 +24,8 @@
 #include <QSlider>
 
 #include "selectiondialog.h"
+#include "settingsdialog.h"
+
 #include <QApplication>
 #include <QHostInfo>
 #include <QScreen>
@@ -1291,7 +1293,7 @@ void MainWindow::updatePolygonListForCurrentScene()
 
 void MainWindow::loadGeometry()
 {
-    QVector<int> v {10, 10, 800, 600};
+    QVector<int> v {100, 100, 800, 600};
     config::base().getValue("windows.main_window.geometry", v);
     setGeometry(v[0], v[1], v[2], v[3]);
 
@@ -3704,222 +3706,82 @@ void MainWindow::on_actAbout_triggered()
 
 void MainWindow::on_actSetting_triggered()
 {
-    // Диалоговое окно настроек
-    QDialog settingsDialog(
-        this,
-        Qt::Dialog |
-            Qt::CustomizeWindowHint |
-            Qt::WindowTitleHint |
-            Qt::WindowCloseButtonHint
-        );
+    // Сохраняем текущие значения для возможного отката
+    auto visBackup = _vis;
 
-    settingsDialog.setWindowTitle(tr("Настройки"));
-    settingsDialog.resize(500, 300);
-    settingsDialog.setMinimumSize(450, 250);
+    // Создаем диалог с текущими параметрами
+    SettingsDialog dlg(
+        _vis.lineWidth,
+        _vis.handleSize,
+        _vis.numberFontPt,
+        _vis.handleColor,
+        _vis.selectedHandleColor,
+        _vis.numberColor,
+        _vis.numberBgColor,
+        _vis.rectangleLineColor,
+        _vis.circleLineColor,
+        _vis.polylineLineColor,
+        this);
 
-    // Сохраняем оригинальные значения для возможности отмены
-    VisualStyle originalVis = _vis;
-
-    QTabWidget* settingTab= new QTabWidget(&settingsDialog);
-
-    // Вкладки
-    // Вкладка "Общее"
-    QWidget* generalTab = new QWidget();
-    QVBoxLayout *generalLayout = new QVBoxLayout(generalTab);
-    generalLayout->setContentsMargins(20, 20, 20, 20);
-    settingTab->addTab(generalTab, tr("Общие"));
-
-    // Вкладка "Интерфейс фигур"
-    QWidget *shapesTab = new QWidget();
-    QFormLayout *shapesLayout = new QFormLayout(shapesTab);
-    shapesLayout->setContentsMargins(20, 20, 20, 20);
-    shapesLayout->setSpacing(15);
-    shapesLayout->setLabelAlignment(Qt::AlignLeft);
-
-    QDoubleSpinBox* lineWidthSpin = new QDoubleSpinBox();
-    lineWidthSpin->setRange(0.5, 10.0);
-    lineWidthSpin->setSingleStep(0.5);
-    lineWidthSpin->setValue(_vis.lineWidth);
-    lineWidthSpin->setToolTip(tr("Толщина линий"));
-
-    QDoubleSpinBox* handleSizeSpin = new QDoubleSpinBox();
-    handleSizeSpin->setRange(2.0, 20.0);
-    handleSizeSpin->setSingleStep(0.5);
-    handleSizeSpin->setValue(_vis.handleSize);
-    handleSizeSpin->setToolTip(tr("Размер узлов управления фигурами"));
-
-    QDoubleSpinBox* numberFontSpin = new QDoubleSpinBox();
-    numberFontSpin->setRange(6.0, 20.0);
-    numberFontSpin->setSingleStep(0.5);
-    numberFontSpin->setValue(_vis.numberFontPt);
-    numberFontSpin->setToolTip(tr("Размер шрифта для нумерации узлов"));
-
-    //Виджеты для выбора цвета
-    QPushButton *handleColorBtn = new QPushButton();
-    handleColorBtn->setFixedSize(30, 30);
-    handleColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
-                                      .arg(_vis.handleColor.name()));
-
-    QPushButton *numberColorBtn = new QPushButton();
-    numberColorBtn->setFixedSize(30, 30);
-    numberColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
-                                      .arg(_vis.numberColor.name()));
-
-    QPushButton *numberBgColorBtn = new QPushButton();
-    numberBgColorBtn->setFixedSize(30, 30);
-    numberBgColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
-                                        .arg(_vis.numberBgColor.name()));
-
-    // Кнопки для выбора цвета линий
-    QPushButton *rectColorBtn = new QPushButton();
-    rectColorBtn->setFixedSize(30, 30);
-    rectColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
-                                    .arg(_vis.rectangleLineColor.name()));
-
-    QPushButton *circleColorBtn = new QPushButton();
-    circleColorBtn->setFixedSize(30, 30);
-    circleColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
-                                      .arg(_vis.circleLineColor.name()));
-
-    QPushButton *polylineColorBtn = new QPushButton();
-    polylineColorBtn->setFixedSize(30, 30);
-    polylineColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
-                                        .arg(_vis.polylineLineColor.name()));
-
-    QPushButton *selectedHandleColorBtn = new QPushButton();
-    selectedHandleColorBtn->setFixedSize(30, 30);
-    selectedHandleColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
-                                              .arg(_vis.selectedHandleColor.name()));
-
-    shapesLayout->addRow(tr("Толщина линий:"), lineWidthSpin);
-    shapesLayout->addRow(tr("Размер узлов управления фигурами:"), handleSizeSpin);
-    shapesLayout->addRow(tr("Цвет узлов:"), handleColorBtn);
-    shapesLayout->addRow(tr("Цвет выделенных узлов:"), selectedHandleColorBtn);
-    shapesLayout->addRow(tr("Размер шрифта для нумерации узлов:"), numberFontSpin);    
-    shapesLayout->addRow(tr("Цвет нумерации узлов:"), numberColorBtn);
-    shapesLayout->addRow(tr("Цвет фона нумерации узлов:"), numberBgColorBtn);
-    shapesLayout->addRow(tr("Цвет линий прямоугольников:"), rectColorBtn);
-    shapesLayout->addRow(tr("Цвет линий окружностей:"), circleColorBtn);
-    shapesLayout->addRow(tr("Цвет линий полилиний:"), polylineColorBtn);
-
-    settingTab->addTab(shapesTab, tr("Интерфейс фигур"));
-
-    // Вкладка "Рабочая дирректория"
-    QWidget* directoryTab = new QWidget();
-    QVBoxLayout *directoryLayout = new QVBoxLayout(directoryTab);
-    directoryLayout->setContentsMargins(20, 20, 20, 20);
-    settingTab->addTab(directoryTab, tr("Рабочая дирректория"));
-
-    // Кнопки с русскими названиями
-    QDialogButtonBox *buttonBox = new QDialogButtonBox(&settingsDialog);
-
-    QPushButton *okButton = new QPushButton(tr("ОК"));
-    QPushButton *applyButton = new QPushButton(tr("Применить"));
-    QPushButton *cancelButton = new QPushButton(tr("Отмена"));
-
-    buttonBox->addButton(okButton, QDialogButtonBox::AcceptRole);
-    buttonBox->addButton(applyButton, QDialogButtonBox::ApplyRole);
-    buttonBox->addButton(cancelButton, QDialogButtonBox::RejectRole);
-
-    // Функция для применения настроек
-    auto applySettings = [&]() {
-        _vis.lineWidth = lineWidthSpin->value();
-        _vis.handleSize = handleSizeSpin->value();
-        _vis.numberFontPt = numberFontSpin->value();
-
-        // Сохраняем в конфиг
-        saveVisualStyle();
-
-        // Применяем новые настройки ко всем документам
-        applyStyle_AllDocuments();
-    };
-
-    // Функция для отмены изменений
-    auto revertSettings = [&]() {
-        _vis = originalVis;
-        // Восстанавливаем оригинальные настройки
-        applyStyle_AllDocuments();
-    };
-
-    // Функции для выбора цвета
-    auto selectColor = [](QPushButton* btn, QColor& color, const QString& title) {
-        QColorDialog dialog(color);
-        dialog.setWindowTitle(title);
-        dialog.setOptions(QColorDialog::ShowAlphaChannel | QColorDialog::DontUseNativeDialog);
-
-        if (dialog.exec() == QDialog::Accepted) {
-            color = dialog.selectedColor();
-            btn->setStyleSheet(QString("background-color: %1; border: 1px solid gray;")
-                                   .arg(color.name()));
-        }
-    };
-
-    // Подключаем кнопки
-    connect(okButton, &QPushButton::clicked, [&]() {
-        applySettings();
-        settingsDialog.accept();
-    });
-
-    connect(applyButton, &QPushButton::clicked, [&]() {
-        applySettings();
-    });
-
-    connect(cancelButton, &QPushButton::clicked, [&]() {
-        revertSettings();
-        settingsDialog.reject();
-    });
-
-    connect(handleColorBtn, &QPushButton::clicked, [&]() {
-        selectColor(handleColorBtn, _vis.handleColor, tr("Выбор цвета узлов"));
-    });
-
-    connect(numberColorBtn, &QPushButton::clicked, [&]() {
-        selectColor(numberColorBtn, _vis.numberColor, tr("Выбор цвета нумерации"));
-    });
-
-    connect(numberBgColorBtn, &QPushButton::clicked, [&]() {
-        selectColor(numberBgColorBtn, _vis.numberBgColor, tr("Выбор цвета фона нумерации"));
-    });
-
-    // Обработка закрытия окна через крестик
-    connect(&settingsDialog, &QDialog::rejected, [&]() {
-        revertSettings();
-    });
-
-    // Функции для выбора цвета линий
-    connect(rectColorBtn, &QPushButton::clicked, [&]() {
-        selectColor(rectColorBtn, _vis.rectangleLineColor, tr("Выбор цвета линий прямоугольников"));
-    });
-
-    connect(circleColorBtn, &QPushButton::clicked, [&]() {
-        selectColor(circleColorBtn, _vis.circleLineColor, tr("Выбор цвета линий окружностей"));
-    });
-
-    connect(polylineColorBtn, &QPushButton::clicked, [&]() {
-        selectColor(polylineColorBtn, _vis.polylineLineColor, tr("Выбор цвета линий полилиний"));
-    });
-
-    connect(selectedHandleColorBtn, &QPushButton::clicked, [&]() {
-        selectColor(selectedHandleColorBtn, _vis.selectedHandleColor, tr("Выбор цвета выделенных узлов"));
-    });
-
-    // Основной layout
-    QVBoxLayout *mainLayout = new QVBoxLayout(&settingsDialog);
-    mainLayout->addWidget(settingTab);
-    mainLayout->addWidget(buttonBox);
-
-    // Загружаем геометрию из конфига
-    QVector<int> dlgGeom {100, 100, 500, 300};
-    config::base().getValue("windows.settings_dialog.geometry", dlgGeom);
-    settingsDialog.setGeometry(dlgGeom[0], dlgGeom[1], dlgGeom[2], dlgGeom[3]);
-
-    settingsDialog.exec();
-
-    // Сохраняем геометрию только если окно не было развернуто на весь экран
-    if (!settingsDialog.isMaximized() && !settingsDialog.isFullScreen())
+    // Восстановление/сохранение геометрии
     {
-        QRect g = settingsDialog.geometry();
-        QVector<int> v {g.x(), g.y(), g.width(), g.height()};
+        QVector<int> geom {100, 100, 500, 300};
+        config::base().getValue("windows.settings_dialog.geometry", geom);
+        dlg.setGeometry(geom[0], geom[1], geom[2], geom[3]);
+    }
+
+    // «Применить» — обновляем визуальный стиль на лету (без закрытия диалога)
+    connect(&dlg, &SettingsDialog::settingsApplied, this,
+        [this](qreal lineWidth, qreal handleSize, qreal numberFontPt,
+               const QColor& handleColor, const QColor& selectedHandleColor,
+               const QColor& numberColor, const QColor& numberBgColor,
+               const QColor& rectColor, const QColor& circleColor, const QColor& polylineColor)
+        {
+            _vis.lineWidth           = lineWidth;
+            _vis.handleSize          = handleSize;
+            _vis.numberFontPt        = numberFontPt;
+            _vis.handleColor         = handleColor;
+            _vis.selectedHandleColor = selectedHandleColor;
+            _vis.numberColor         = numberColor;
+            _vis.numberBgColor       = numberBgColor;
+            _vis.rectangleLineColor  = rectColor;
+            _vis.circleLineColor     = circleColor;
+            _vis.polylineLineColor   = polylineColor;
+
+            saveVisualStyle();
+            apply_LineWidth_ToScene(nullptr);
+            apply_PointSize_ToScene(nullptr);
+            apply_NumberSize_ToScene(nullptr);
+        });
+
+    // Запуск диалога
+    const int rc = dlg.exec();
+
+    // Сохраняем геометрию, если окно не было развернуто
+    if (!dlg.isMaximized() && !dlg.isFullScreen())
+    {
+        const QRect g = dlg.geometry();
+        QVector<int> v { g.x(), g.y(), g.width(), g.height() };
         config::base().setValue("windows.settings_dialog.geometry", v);
+    }
+
+    // Если «Отмена» — откатываемся к резервной копии и применяем
+    if (rc != QDialog::Accepted)
+    {
+        _vis = visBackup;
+        saveVisualStyle();
+        apply_LineWidth_ToScene(nullptr);
+        apply_PointSize_ToScene(nullptr);
+        apply_NumberSize_ToScene(nullptr);
+    }
+    else
+    {
+        // На «ОК» у нас уже были применены значения через settingsApplied,
+        // но можно продублировать финальное сохранение (на случай если пользователь не нажимал «Применить»)
+        emit dlg.settingsApplied(
+            dlg.lineWidth(), dlg.handleSize(), dlg.numberFontPt(),
+            dlg.handleColor(), dlg.selectedHandleColor(),
+            dlg.numberColor(), dlg.numberBgColor(),
+            dlg.rectangleLineColor(), dlg.circleLineColor(), dlg.polylineLineColor());
     }
 }

@@ -175,8 +175,6 @@ private slots:
     void onSceneItemRemoved(QGraphicsItem* item);
     void on_actDelete_triggered();
     void on_actAbout_triggered();
-
-    // Настройки
     void on_actSetting_triggered();
 
 private:
