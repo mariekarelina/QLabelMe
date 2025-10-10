@@ -277,6 +277,16 @@ void DragCircle::setCenter(const QPointF &center)
     m_center = center;
 }
 
+void DragCircle::setUserHidden(bool on)
+{
+    if (_userHidden == on)
+           return;
+
+       _userHidden = on;
+       // Фактическая видимость = runtimeVisible И не скрыто пользователем
+       QGraphicsItem::setVisible(!_userHidden && _runtimeVisible);
+}
+
 void DragCircle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
 {
     if (_contextMenu)
@@ -315,6 +325,18 @@ QVariant DragCircle::itemChange(GraphicsItemChange change, const QVariant &value
             }
         }
     }
+
+    if (change == QGraphicsItem::ItemVisibleChange)
+    {
+        const bool requested = value.toBool(); // что пытаются установить извне
+        _runtimeVisible = requested;           // запоминаем «желание» логики
+
+        // Если ручка скрыта пользователем, запрещаем включать видимость
+        if (_userHidden && requested)
+            return false; // блокируем попытку сделать видимой
+        // Если requested == false — позволяем скрыть (это не конфликтует)
+    }
+
     return QGraphicsRectItem::itemChange(change, value);
 }
 

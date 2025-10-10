@@ -5,6 +5,8 @@
 #include <QRectF>
 #include <QGraphicsSceneMouseEvent>
 #include <QStyleOptionGraphicsItem>
+#include <QCursor>
+#include <QGraphicsView>
 
 namespace qgraph {
 

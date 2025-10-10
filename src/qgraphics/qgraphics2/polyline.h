@@ -17,9 +17,6 @@
 
 namespace qgraph {
 
-// class Polyline : public QObject, public ShapeT<QGraphicsPathItem> //public QGraphicsPathItem
-// {
-//     Q_OBJECT
 class Polyline : public ShapeT<QGraphicsPathItem> //public QGraphicsPathItem
 {
 public:
@@ -61,6 +58,8 @@ public:
     // callback для уведомлений об изменениях
     void setModificationCallback(std::function<void()> callback);
 
+    const QVector<DragCircle*>& circles() const { return _circles; }
+
 protected:
     // Переопределяем обработчик событий клавиатуры
     void keyPressEvent(QKeyEvent* event) override;
@@ -74,6 +73,7 @@ protected:
 
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
                QWidget* widget = nullptr) override;
+
 signals:
     void lineChanged(Polyline* line);
     void polylineModified();

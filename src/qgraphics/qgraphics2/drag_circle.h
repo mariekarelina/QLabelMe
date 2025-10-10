@@ -67,6 +67,9 @@ public:
     int index() const { return m_index; }
     void setIndex(int idx) { m_index = idx; }
 
+    // Пользовательское скрытие (переключатель)
+    void setUserHidden(bool on);
+    bool isUserHidden() const { return _userHidden; }
 
 signals:
     void moved(DragCircle* circle);      // Сигнал, вызываемый при перемещении
@@ -130,6 +133,9 @@ public:
     QPointF m_center;
     float m_radius;
     bool _isValid = true;
+
+    bool _userHidden = false;     // скрыто пользователем
+    bool _runtimeVisible = true;  // «желание» фигуры показывать ручку (hover и пр.)
 
     // int _radius = {8};
     // int _smallSize = {6};  // Маленький размер (видимый)

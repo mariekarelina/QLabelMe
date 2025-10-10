@@ -321,20 +321,52 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     {
         return;
     }
+    if ((mouseEvent->modifiers() & Qt::ControlModifier) &&
+        (mouseEvent->button() == Qt::RightButton))
+    {
+        if (!graphView || !graphView->scene())
+            return;
+
+        const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
+
+        // Находим полилинию под курсором (самую верхнюю)
+        Polyline* poly = nullptr;
+        const auto itemsAtPos = graphView->scene()->items(scenePos);
+        for (QGraphicsItem* it : itemsAtPos) {
+            if (auto* p = dynamic_cast<Polyline*>(it)) { poly = p; break; }
+        }
+        if (!poly) return;
+
+        // Ищем ближайшую точку (берём и скрытые тоже — по их координатам)
+        DragCircle* nearest = nullptr;
+        qreal bestDist2 = 10.0 * 10.0; // радиус 10 px
+        for (DragCircle* c : poly->circles()) {
+            const QPointF p = c->scenePos();
+            const qreal dx = p.x() - scenePos.x();
+            const qreal dy = p.y() - scenePos.y();
+            const qreal d2 = dx*dx + dy*dy;
+            if (d2 < bestDist2) { bestDist2 = d2; nearest = c; }
+        }
+
+        if (nearest)
+        {
+            nearest->setUserHidden(!nearest->isUserHidden());
+        }
+
+        return; // обработали событие
+    }
+
     if (mouseEvent->button() == Qt::RightButton)
     {
         QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
         QGraphicsItem* item = graphView->itemAt(mouseEvent->pos());
 
-        // Проверяем, кликнули ли на точку полилинии
         if (auto* circle = dynamic_cast<DragCircle*>(item))
         {
-            // Ищем родительскую полилинию
             QGraphicsItem* parent = circle->parentItem();
             if (auto* polyline = dynamic_cast<qgraph::Polyline*>(parent))
             {
                 polyline->handlePointDeletion(circle);
-                // Помечаем документ как измененный
                 Document::Ptr doc = currentDocument();
                 if (doc && !doc->isModified)
                 {
@@ -345,7 +377,6 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 return;
             }
         }
-
         // Проверяем, кликнули ли на саму полилинию (для добавления точки)
         if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
@@ -892,26 +923,50 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
-    if (event->modifiers() == Qt::ControlModifier)
+    if (event->modifiers() & Qt::ControlModifier)
     {
+        QTransform base = ui->graphView->transform();
+        if (m_zoom != 0.0)
+        {
+            QTransform inv; inv.scale(1.0 / m_zoom, 1.0 / m_zoom);
+            base = base * inv;
+        }
+
+        constexpr double kZoomStep = 1.10;
+        constexpr double kZoomMin  = 0.10;
+        constexpr double kZoomMax  = 8.00;
+
         const int key = event->key();
 
-        // На некоторых раскладках "+" приходит как Key_Equal
         if (key == Qt::Key_Plus || key == Qt::Key_Equal)
         {
-            applyZoom(m_zoom * kZoomStep);
+            double nz = m_zoom * kZoomStep;
+            if (nz < kZoomMin) nz = kZoomMin;
+            if (nz > kZoomMax) nz = kZoomMax;
+
+            m_zoom = nz;
+            ui->graphView->setTransform(base);      // Вернуть базу
+            ui->graphView->scale(m_zoom, m_zoom);   // Применить абсолютный масштаб
             event->accept();
             return;
         }
         else if (key == Qt::Key_Minus)
         {
-            applyZoom(m_zoom / kZoomStep);
+            double nz = m_zoom / kZoomStep;
+            if (nz < kZoomMin) nz = kZoomMin;
+            if (nz > kZoomMax) nz = kZoomMax;
+
+            m_zoom = nz;
+            ui->graphView->setTransform(base);
+            ui->graphView->scale(m_zoom, m_zoom);
             event->accept();
             return;
         }
         else if (key == Qt::Key_0)
         {
-            applyZoom(1.0); // сброс
+            // Сброс к базе
+            m_zoom = 1.0;
+            ui->graphView->setTransform(base);
             event->accept();
             return;
         }
