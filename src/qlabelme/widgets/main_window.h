@@ -40,6 +40,7 @@
 #include <QGraphicsScene>
 //#include "graphicsscene.h"
 #include "graphics_view.h"
+#include "settingsdialog.h"
 #include "line.h"
 #include "square.h"
 
@@ -277,6 +278,11 @@ private:
     void updateLineColorsForScene(QGraphicsScene* scene);
 
     void applyZoom(qreal z);
+
+    SettingsDialog::PolylineCloseMode polylineCloseMode_ =
+            SettingsDialog::PolylineCloseMode::CtrlModifier;
+
+    void applyPolylineCloseMode();
 
 private:
     Ui::MainWindow* ui;

@@ -7,6 +7,7 @@
 #include <QPushButton>
 #include <QDoubleSpinBox>
 #include <QColor>
+#include <QRadioButton>
 
 class SettingsDialog : public QDialog
 {
@@ -37,6 +38,17 @@ public:
     QColor rectangleLineColor() const;
     QColor circleLineColor() const;
     QColor polylineLineColor() const;
+
+    enum class PolylineCloseMode
+    {
+        DoubleClickOnAnyPoint = 0,
+        SingleClickOnFirstPoint = 1,
+        CtrlModifier = 2,
+        KeyCWithoutNewPoint = 3
+    };
+
+    PolylineCloseMode polylineCloseMode() const;
+    void setPolylineCloseMode(PolylineCloseMode m);
 
 signals:
     // Для кнопки «Применить»
@@ -81,4 +93,11 @@ private:
     QPushButton* m_rectLineColorBtn = {nullptr};
     QPushButton* m_circleLineColorBtn = {nullptr};
     QPushButton* m_polylineLineColorBtn = {nullptr};
+
+    QWidget* tabPolylineClose = {nullptr};
+    QButtonGroup* polylineCloseGroup = {nullptr};
+    QRadioButton* rbDblOnAny = {nullptr};
+    QRadioButton* rbSingleOnFirst = {nullptr};
+    QRadioButton* rbCtrl = {nullptr};
+    QRadioButton* rbKeyC = {nullptr};
 };

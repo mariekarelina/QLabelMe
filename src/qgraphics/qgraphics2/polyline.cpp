@@ -8,7 +8,11 @@
 #include <QCursor>
 #include <QGraphicsView>
 
+
 namespace qgraph {
+
+qgraph::Polyline::CloseMode qgraph::Polyline::s_closeMode =
+    qgraph::Polyline::CloseMode::CtrlModifier;
 
 Polyline::Polyline(QGraphicsScene* scene, const QPointF& scenePos)
     : _isClosed(false)
@@ -120,7 +124,6 @@ void Polyline::addPoint(const QPointF& position, QGraphicsScene* scene)
         _modificationCallback();
     }
 }
-
 
 void Polyline::removePoint(QPointF position)
 {
@@ -254,7 +257,30 @@ void Polyline::closePolyline()
        // и обновляем соединения между точками
        updateConnections();
        updatePath();
+
+       if (_modificationCallback)
+            _modificationCallback();
    }
+}
+
+bool Polyline::isClickOnFirstPoint(const QPointF& scenePos) const
+{
+    if (_circles.isEmpty()) return false;
+    const QPointF p0 = _circles.first()->scenePos();
+    return QLineF(scenePos, p0).length() <= 8.0; // допуск 8 px, при желании вынесите в настройки
+}
+
+bool Polyline::isClickOnAnyPoint(const QPointF& scenePos, int* idx) const
+{
+    for (int i = 0; i < _circles.size(); ++i) {
+        const QPointF pi = _circles[i]->scenePos();
+        if (QLineF(scenePos, pi).length() <= 8.0)
+        {
+            if (idx) *idx = i;
+            return true;
+        }
+    }
+    return false;
 }
 
 void Polyline::updatePath()
@@ -377,11 +403,55 @@ void Polyline::keyPressEvent(QKeyEvent* event)
         moveToBack();
         event->accept();
     }
+    else if (s_closeMode == CloseMode::KeyC &&
+            (event->key() == Qt::Key_C))
+    {
+        closePolyline();
+        event->accept();
+        return;
+    }
     else
     {
         // Передаем событие дальше, если это не `Del`
         QGraphicsPathItem::keyPressEvent(event);
     }
+}
+
+void Polyline::mousePressEvent(QGraphicsSceneMouseEvent* event)
+{
+    if (s_closeMode == CloseMode::SingleClickOnFirstPoint &&
+        event->button() == Qt::LeftButton)
+    {
+        if (isClickOnFirstPoint(event->scenePos()))
+        {
+            closePolyline();
+            event->accept();
+            return; // не даем базовой логике добавить новую точку поверх
+        }
+    }
+
+    // CHAIN: существующая логика (добавление точки, перетаскивание и т.п.)
+    //QGraphicsPathItem::mousePressEvent(event);
+}
+
+void Polyline::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event)
+{
+    // NEW PART: замыкание по двойному клику на любой существующей точке
+    if (s_closeMode == CloseMode::DoubleClickOnAnyPoint &&
+        event->button() == Qt::LeftButton)
+    {
+        int idx = -1;
+        if (isClickOnAnyPoint(event->scenePos(), &idx))
+        {
+            // можно доп. проверить: не первая ли точка, если хотите
+            closePolyline();
+            event->accept();
+            return;
+        }
+    }
+
+    // // CHAIN: базовая/существующая логика при необходимости
+    // QGraphicsPathItem::mouseDoubleClickEvent(event);
 }
 
 void Polyline::hoverEnterEvent(QGraphicsSceneHoverEvent* event)

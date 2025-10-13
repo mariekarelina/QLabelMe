@@ -34,10 +34,24 @@ public:
     void removePoint(QPointF position);
     void insertPoint(QPointF position);
     void closePolyline();
+    bool isClickOnFirstPoint(const QPointF& scenePos) const; // точка 0
+    bool isClickOnAnyPoint(const QPointF& scenePos, int* idx = nullptr) const;
     void updatePath(); // Метод для обновления пути на основе позиций кругов
     QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
 
     void handlePointDeletion(DragCircle* circle);
+
+    enum class CloseMode
+    {
+        DoubleClickOnAnyPoint,      // 1) По двойному клику ЛКМ
+        SingleClickOnFirstPoint,    // 2) По одинарному клику ЛКМ на нулевой точке
+        CtrlModifier,               // 3) Через Ctrl
+        KeyC                        // 4) Нажатие 'C'
+    };
+
+    bool isClosed() const { return _isClosed; }
+    static void setGlobalCloseMode(CloseMode m) { s_closeMode = m; }
+    static CloseMode globalCloseMode() { return s_closeMode; }
 
     QVector<QPointF> points() const;
     void updatePointNumbers();
@@ -63,6 +77,8 @@ public:
 protected:
     // Переопределяем обработчик событий клавиатуры
     void keyPressEvent(QKeyEvent* event) override;
+    void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
+    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
     void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
 
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
@@ -93,6 +109,8 @@ public:
 
     float _frameScale = 1.0;
     const qreal _minSegmentLength = 10.0; // Минимальная длина отрезка
+
+    static CloseMode s_closeMode;
 
     QColor _highlightColor = Qt::transparent; // Цвет выделения
     QList<QGraphicsSimpleTextItem*> pointNumbers;

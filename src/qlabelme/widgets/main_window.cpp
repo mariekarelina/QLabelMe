@@ -240,6 +240,8 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->graphView->viewport()->setMouseTracking(true);
     ui->graphView->setMouseTracking(true);
 
+    _scene->installEventFilter(this);
+
 //    chk_connect_q(_socket.get(), &tcp::Socket::message,
 //                  this, &MainWindow::message)
 
@@ -272,6 +274,12 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->graphView->viewport()->setMouseTracking(true);
 
     _lastHoverHandle = nullptr;
+
+    int cm = static_cast<int>(SettingsDialog::PolylineCloseMode::CtrlModifier);
+    config::base().getValue("polyline.close_mode", cm);
+
+    polylineCloseMode_ = static_cast<SettingsDialog::PolylineCloseMode>(cm);
+    applyPolylineCloseMode();
 
     // создаём «призрачную» ручку 1 раз
     // _ghostHandle = new QGraphicsRectItem(QRectF(-5, -5, 10, 10));
@@ -453,6 +461,44 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             apply_LineWidth_ToItem(_polyline);
             apply_PointSize_ToItem(_polyline);
             apply_NumberSize_ToItem(_polyline);
+            _polyline->setFocus();
+            _polyline->setModificationCallback([this]()
+            {
+                if (_drawingLine && _polyline && _polyline->isClosed())
+                {
+                    _drawingLine = false;
+
+                    _polyline->updatePointNumbers();
+                    apply_LineWidth_ToItem(_polyline);
+                    apply_PointSize_ToItem(_polyline);
+                    apply_NumberSize_ToItem(_polyline);
+
+                    // выбор класса — как в Ctrl-ветке
+                    QStringList classes;
+                    for (int i = 0; i < ui->listWidget_PolygonLabel->count(); ++i)
+                        classes << ui->listWidget_PolygonLabel->item(i)->text();
+
+                    SelectionDialog dialog(classes, this);
+                    if (dialog.exec() == QDialog::Accepted)
+                    {
+                        const QString selectedClass = dialog.selectedClass();
+                        if (!selectedClass.isEmpty())
+                        {
+                            _polyline->setData(0, selectedClass);
+                            linkSceneItemToList(_polyline);
+                        }
+                    }
+
+                    _polyline = nullptr;
+
+                    if (auto doc = currentDocument())
+                    {
+                        doc->isModified = true;
+                        updateFileListDisplay(doc->filePath);
+                    }
+                    raiseAllHandlesToTop();
+                }
+            });
         }
         _polyline->addPoint(_startPoint, _scene);
     }
@@ -699,6 +745,46 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
        apply_PointSize_ToItem(_polyline);
        apply_NumberSize_ToItem(_polyline);
 
+       // Завершать рисование, если полилиния замкнулась не через Ctrl
+       _polyline->setModificationCallback([this]()
+       {
+           if (_drawingLine && _polyline && _polyline->isClosed())
+           {
+               _drawingLine = false;
+
+               // то же, что в Ctrl-ветке:
+               _polyline->updatePointNumbers();
+               apply_LineWidth_ToItem(_polyline);
+               apply_PointSize_ToItem(_polyline);
+               apply_NumberSize_ToItem(_polyline);
+
+               // выбор класса — тот же код, что и в Ctrl-ветке
+               QStringList classes;
+               for (int i = 0; i < ui->listWidget_PolygonLabel->count(); ++i)
+                   classes << ui->listWidget_PolygonLabel->item(i)->text();
+
+               SelectionDialog dialog(classes, this);
+               if (dialog.exec() == QDialog::Accepted)
+               {
+                   const QString selectedClass = dialog.selectedClass();
+                   if (!selectedClass.isEmpty())
+                   {
+                       _polyline->setData(0, selectedClass);
+                       linkSceneItemToList(_polyline);
+                   }
+               }
+
+               _polyline = nullptr;
+
+               if (auto doc = currentDocument())
+               {
+                   doc->isModified = true;
+                   updateFileListDisplay(doc->filePath);
+               }
+               raiseAllHandlesToTop();
+           }
+       });
+
        // Получаем список классов из listWidget_PolygonLabel
        QStringList classes;
        for (int i = 0; i < ui->listWidget_PolygonLabel->count(); ++i)
@@ -727,6 +813,42 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
        }
        raiseAllHandlesToTop();
     }
+    if (_drawingLine && _polyline && _polyline->isClosed())
+    {
+        _drawingLine = false;
+
+        _polyline->updatePointNumbers();
+        apply_LineWidth_ToItem(_polyline);
+        apply_PointSize_ToItem(_polyline);
+        apply_NumberSize_ToItem(_polyline);
+
+        // Получаем список классов из listWidget_PolygonLabel
+        QStringList classes;
+        for (int i = 0; i < ui->listWidget_PolygonLabel->count(); ++i)
+            classes << ui->listWidget_PolygonLabel->item(i)->text();
+
+        // Показываем диалог выбора класса
+        SelectionDialog dialog(classes, this);
+        if (dialog.exec() == QDialog::Accepted)
+        {
+            const QString selectedClass = dialog.selectedClass();
+            if (!selectedClass.isEmpty())
+            {
+                _polyline->setData(0, selectedClass);
+                linkSceneItemToList(_polyline);
+            }
+        }
+
+        _polyline = nullptr;
+
+        if (auto doc = currentDocument())
+        {
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
+        }
+        raiseAllHandlesToTop();
+    }
+
     Document::Ptr doc = currentDocument();
     if (doc && mouseEvent->button() == Qt::LeftButton) {
         // Проверяем, были ли перемещены какие-либо фигуры
@@ -793,130 +915,228 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
     switch (event->type())
     {
-    case QEvent::Leave:
-    {
-        clearAllHandleHoverEffects();
-        hideGhost();
-        break;
-    }
-    case QEvent::MouseButtonPress:
-    {
-        auto* me = static_cast<QMouseEvent*>(event);
-        if (me->button() != Qt::LeftButton)
-            break;
-
-        const QPointF sp = ui->graphView->mapToScene(me->pos());
-        bool topIsHandle = false;
-
-        if (auto* target = pickHiddenHandle(sp, topIsHandle))
+        case QEvent::Leave:
         {
-            if (target->scene() && _scene && _scene->items().contains(target))
+            clearAllHandleHoverEffects();
+            hideGhost();
+            break;
+        }
+        case QEvent::MouseButtonPress:
+        {
+            auto* me = static_cast<QMouseEvent*>(event);
+            if (me->button() != Qt::LeftButton)
+                break;
+
+            const QPointF sp = ui->graphView->mapToScene(me->pos());
+            bool topIsHandle = false;
+
+            if (_drawingLine && _polyline &&
+                qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::SingleClickOnFirstPoint)
             {
-                if (topIsHandle)
+                const auto& circles = _polyline->circles();
+                if (!circles.isEmpty())
                 {
-                    startHandleDrag(target, sp);
+                    const QPointF p0 = circles.first()->scenePos();
+                    constexpr qreal kHit = 8.0;
+                    if (QLineF(sp, p0).length() <= kHit)
+                    {
+                        _drawingLine = false;
+                        _polyline->closePolyline();
+
+                        _polyline->updatePointNumbers();
+                        apply_LineWidth_ToItem(_polyline);
+                        apply_PointSize_ToItem(_polyline);
+                        apply_NumberSize_ToItem(_polyline);
+
+                        // выбор класса
+                        QStringList classes;
+                        for (int i = 0; i < ui->listWidget_PolygonLabel->count(); ++i)
+                            classes << ui->listWidget_PolygonLabel->item(i)->text();
+
+                        SelectionDialog dialog(classes, this);
+                        if (dialog.exec() == QDialog::Accepted)
+                        {
+                            const QString selectedClass = dialog.selectedClass();
+                            if (!selectedClass.isEmpty())
+                            {
+                                _polyline->setData(0, selectedClass);
+                                linkSceneItemToList(_polyline);
+                            }
+                        }
+
+                        _polyline = nullptr;
+
+                        if (auto doc = currentDocument())
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                        raiseAllHandlesToTop();
+
+                        event->accept();
+                        return true;
+                    }
+                }
+            }
+
+            if (auto* target = pickHiddenHandle(sp, topIsHandle))
+            {
+                if (target->scene() && _scene && _scene->items().contains(target))
+                {
+                    if (topIsHandle)
+                    {
+                        startHandleDrag(target, sp);
+                    }
+                    else
+                    {
+                        showGhostFor(target);
+                        startGhostDrag(sp);
+                    }
+                    return true;
+                }
+            }
+            break;
+        }
+        case QEvent::MouseMove:
+        {
+            auto* me = static_cast<QMouseEvent*>(event);
+            const QPointF sp = ui->graphView->mapToScene(me->pos());
+
+            if (m_isDraggingHandle && m_dragHandle)
+            {
+                // Проверяем валидность указателя перед обновлением
+                if (m_dragHandle && m_dragHandle->scene())
+                {
+                    updateHandleDrag(sp);
+                    return true;
                 }
                 else
                 {
-                    showGhostFor(target);
-                    startGhostDrag(sp);
+                    // Если указатель невалиден, сбрасываем состояние
+                    finishHandleDrag();
                 }
-                return true;
             }
-        }
-        break;
-    }
-    case QEvent::MouseMove:
-    {
-        auto* me = static_cast<QMouseEvent*>(event);
-        const QPointF sp = ui->graphView->mapToScene(me->pos());
-
-        if (m_isDraggingHandle && m_dragHandle)
-        {
-            // Проверяем валидность указателя перед обновлением
-            if (m_dragHandle && m_dragHandle->scene())
+            else if (_ghostTarget && _ghostHandle && _ghostHandle->isVisible())
             {
-                updateHandleDrag(sp);
-                return true;
+                // Проверяем валидность ghost target
+                if (_ghostTarget->scene())
+                {
+                    moveGhostTo(sp);
+                    return true;
+                }
+                else
+                {
+                    hideGhost();
+                }
             }
             else
             {
-                // Если указатель невалиден, сбрасываем состояние
-                finishHandleDrag();
-            }
-        }
-        else if (_ghostTarget && _ghostHandle && _ghostHandle->isVisible())
-        {
-            // Проверяем валидность ghost target
-            if (_ghostTarget->scene())
-            {
-                moveGhostTo(sp);
-                return true;
-            }
-            else
-            {
-                hideGhost();
-            }
-        }
-        else
-        {
-            // Ищем ручку под курсором
-            qgraph::DragCircle* hoveredHandle = pickHandleAt(sp);
+                // Ищем ручку под курсором
+                qgraph::DragCircle* hoveredHandle = pickHandleAt(sp);
 
-            // Проверяем, что найденная ручка все еще валидна
-            if (hoveredHandle && !hoveredHandle->isValid())
-            {
-                hoveredHandle = nullptr;
-            }
-
-            // Если нашли новую ручку, отличающуюся от текущей
-            if (hoveredHandle != _currentHoveredHandle)
-            {
-                // Убираем hover с предыдущей ручки (если она валидна)
-                    if (_currentHoveredHandle && _currentHoveredHandle->isValid())
+                // Проверяем, что найденная ручка все еще валидна
+                if (hoveredHandle && !hoveredHandle->isValid())
                 {
-                    _currentHoveredHandle->setHoverStyle(false);
+                    hoveredHandle = nullptr;
                 }
 
-                // Устанавливаем hover на новую ручку (если она валидна)
-                if (hoveredHandle && hoveredHandle->isValid())
+                // Если нашли новую ручку, отличающуюся от текущей
+                if (hoveredHandle != _currentHoveredHandle)
                 {
-                    hoveredHandle->setHoverStyle(true);
-                }
+                    // Убираем hover с предыдущей ручки (если она валидна)
+                        if (_currentHoveredHandle && _currentHoveredHandle->isValid())
+                    {
+                        _currentHoveredHandle->setHoverStyle(false);
+                    }
 
-                _currentHoveredHandle = hoveredHandle;
+                    // Устанавливаем hover на новую ручку (если она валидна)
+                    if (hoveredHandle && hoveredHandle->isValid())
+                    {
+                        hoveredHandle->setHoverStyle(true);
+                    }
+
+                    _currentHoveredHandle = hoveredHandle;
+                }
             }
-        }
-        break;
-    }
-    case QEvent::MouseButtonRelease:
-    {
-        auto* me = static_cast<QMouseEvent*>(event);
-        if (me->button() != Qt::LeftButton)
             break;
+        }
+        case QEvent::MouseButtonRelease:
+        {
+            auto* me = static_cast<QMouseEvent*>(event);
+            if (me->button() != Qt::LeftButton)
+                break;
 
-        if (m_isDraggingHandle && m_dragHandle)
-        {
-            finishHandleDrag();
-            return true;
-        }
-        else if (_ghostTarget && _ghostHandle && _ghostHandle->isVisible())
-        {
-            // Проверяем валидность перед завершением
-            if (_ghostTarget->scene())
+            if (m_isDraggingHandle && m_dragHandle)
             {
-                endGhost();
+                finishHandleDrag();
+                return true;
             }
-            else
+            else if (_ghostTarget && _ghostHandle && _ghostHandle->isVisible())
             {
-                hideGhost();
+                // Проверяем валидность перед завершением
+                if (_ghostTarget->scene())
+                {
+                    endGhost();
+                }
+                else
+                {
+                    hideGhost();
+                }
+                return true;
             }
-            return true;
+            break;
         }
-        break;
-    }
-    default:
-        break;
+        case QEvent::ShortcutOverride:
+        case QEvent::KeyPress:
+        {
+            auto* ke = static_cast<QKeyEvent*>(event);
+
+            // Завершение рисования по 'C' при выбранном режиме KeyC
+            if (_drawingLine && _polyline &&
+                qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::KeyC &&
+                ke->key() == Qt::Key_C)
+            {
+                _drawingLine = false;
+                _polyline->closePolyline();
+
+                _polyline->updatePointNumbers();
+                apply_LineWidth_ToItem(_polyline);
+                apply_PointSize_ToItem(_polyline);
+                apply_NumberSize_ToItem(_polyline);
+
+                // выбор класса
+                QStringList classes;
+                for (int i = 0; i < ui->listWidget_PolygonLabel->count(); ++i)
+                    classes << ui->listWidget_PolygonLabel->item(i)->text();
+
+                SelectionDialog dialog(classes, this);
+                if (dialog.exec() == QDialog::Accepted)
+                {
+                    const QString selectedClass = dialog.selectedClass();
+                    if (!selectedClass.isEmpty())
+                    {
+                        _polyline->setData(0, selectedClass);
+                        linkSceneItemToList(_polyline);
+                    }
+                }
+
+                _polyline = nullptr;
+
+                if (auto doc = currentDocument())
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+                raiseAllHandlesToTop();
+
+                event->accept();
+                return true;
+            }
+            break;
+        }
+
+        default:
+            break;
     }
     return QMainWindow::eventFilter(obj, event);
 }
@@ -3332,6 +3552,22 @@ void MainWindow::applyZoom(qreal z)
     }
 }
 
+void MainWindow::applyPolylineCloseMode()
+{
+    using SDM = SettingsDialog::PolylineCloseMode;
+    using PLM = qgraph::Polyline::CloseMode;
+
+    qgraph::Polyline::CloseMode mode = PLM::CtrlModifier;
+    switch (polylineCloseMode_)
+    {
+        case SDM::DoubleClickOnAnyPoint:   mode = PLM::DoubleClickOnAnyPoint;   break;
+        case SDM::SingleClickOnFirstPoint: mode = PLM::SingleClickOnFirstPoint; break;
+        case SDM::CtrlModifier:            mode = PLM::CtrlModifier;            break;
+        case SDM::KeyCWithoutNewPoint:     mode = PLM::KeyC;                    break;
+    }
+    qgraph::Polyline::setGlobalCloseMode(mode);
+}
+
 void MainWindow::removePolygonListItem(QListWidgetItem* item)
 {
     if (!item) return;
@@ -3785,9 +4021,14 @@ void MainWindow::on_actSetting_triggered()
         dlg.setGeometry(geom[0], geom[1], geom[2], geom[3]);
     }
 
+    // polylineCloseMode_ = dlg.polylineCloseMode();
+    // applyPolylineCloseMode();
+    // config::base().setValue("polyline.close_mode",
+    //                         static_cast<int>(polylineCloseMode_));
+
     // «Применить» — обновляем визуальный стиль на лету (без закрытия диалога)
     connect(&dlg, &SettingsDialog::settingsApplied, this,
-        [this](qreal lineWidth, qreal handleSize, qreal numberFontPt,
+        [this, &dlg](qreal lineWidth, qreal handleSize, qreal numberFontPt,
                const QColor& handleColor, const QColor& selectedHandleColor,
                const QColor& numberColor, const QColor& numberBgColor,
                const QColor& rectColor, const QColor& circleColor, const QColor& polylineColor)
@@ -3807,7 +4048,16 @@ void MainWindow::on_actSetting_triggered()
             apply_LineWidth_ToScene(nullptr);
             apply_PointSize_ToScene(nullptr);
             apply_NumberSize_ToScene(nullptr);
+
+            polylineCloseMode_ = dlg.polylineCloseMode();
+            applyPolylineCloseMode();
+
+            config::base().setValue("polyline.close_mode",
+                                    static_cast<int>(polylineCloseMode_));
+            config::base().saveFile();
         });
+
+    dlg.setPolylineCloseMode(polylineCloseMode_);
 
     // Запуск диалога
     const int rc = dlg.exec();
@@ -3838,5 +4088,11 @@ void MainWindow::on_actSetting_triggered()
             dlg.handleColor(), dlg.selectedHandleColor(),
             dlg.numberColor(), dlg.numberBgColor(),
             dlg.rectangleLineColor(), dlg.circleLineColor(), dlg.polylineLineColor());
+
+        polylineCloseMode_ = dlg.polylineCloseMode();
+        applyPolylineCloseMode();
+        config::base().setValue("polyline.close_mode",
+                                static_cast<int>(polylineCloseMode_));
+        config::base().saveFile();
     }
 }

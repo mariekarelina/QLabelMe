@@ -126,6 +126,28 @@ SettingsDialog::SettingsDialog(
     auto* workdirTab = new QWidget(this);
     tabs->addTab(workdirTab, tr("Рабочая директория"));
 
+    // Вкладка "Замыкание полилинии"
+    tabPolylineClose = new QWidget(this);
+    auto* lay = new QVBoxLayout(tabPolylineClose);
+
+    polylineCloseGroup = new QButtonGroup(this);
+    rbDblOnAny = new QRadioButton(tr("По двойному клику ЛКМ"), tabPolylineClose);
+    rbSingleOnFirst = new QRadioButton(tr("По одинарному клику ЛКМ на нулевой точке"), tabPolylineClose);
+    rbCtrl = new QRadioButton(tr("Поставить последнюю точку с зажатым Ctrl"), tabPolylineClose);
+    rbKeyC = new QRadioButton(tr("По клавише C"), tabPolylineClose);
+
+    polylineCloseGroup->addButton(rbDblOnAny, 0);
+    polylineCloseGroup->addButton(rbSingleOnFirst, 1);
+    polylineCloseGroup->addButton(rbCtrl, 2);
+    polylineCloseGroup->addButton(rbKeyC, 3);
+
+    lay->addWidget(rbDblOnAny);
+    lay->addWidget(rbSingleOnFirst);
+    lay->addWidget(rbCtrl);
+    lay->addWidget(rbKeyC);
+    lay->addStretch();
+
+    tabs->addTab(tabPolylineClose, tr("Замыкание полилинии"));
 
     // Кнопки
     auto* box = new QDialogButtonBox(this);
@@ -204,6 +226,27 @@ QColor SettingsDialog::circleLineColor() const
 QColor SettingsDialog::polylineLineColor() const
 {
     return m_polylineLineColor;
+}
+
+SettingsDialog::PolylineCloseMode SettingsDialog::polylineCloseMode() const
+{
+    switch (polylineCloseGroup->checkedId())
+    {
+        case 0: return PolylineCloseMode::DoubleClickOnAnyPoint;
+        case 1: return PolylineCloseMode::SingleClickOnFirstPoint;
+        case 2: return PolylineCloseMode::CtrlModifier;
+        case 3: return PolylineCloseMode::KeyCWithoutNewPoint;
+    }
+    return PolylineCloseMode::CtrlModifier;
+}
+
+void SettingsDialog::setPolylineCloseMode(SettingsDialog::PolylineCloseMode m)
+{
+    const int id = static_cast<int>(m);
+    if (auto* btn = polylineCloseGroup->button(id))
+    {
+        btn->setChecked(true);
+    }
 }
 
 void SettingsDialog::paintColorButton(QPushButton* btn, const QColor& color)
