@@ -226,6 +226,14 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->listWidget_PolygonList, &QListWidget::itemSelectionChanged,
             this, &MainWindow::onPolygonListSelectionChanged);
 
+    auto shNext = new QShortcut(QKeySequence(Qt::Key_D), this);
+    shNext->setContext(Qt::ApplicationShortcut);
+    connect(shNext, &QShortcut::activated, this, &MainWindow::nextImage);
+
+    auto shPrev = new QShortcut(QKeySequence(Qt::Key_A), this);
+    shPrev->setContext(Qt::ApplicationShortcut);
+    connect(shPrev, &QShortcut::activated, this, &MainWindow::prevImage);
+
     ui->listWidget_PolygonList->setContextMenuPolicy(Qt::CustomContextMenu);
     ui->listWidget_PolygonList->setSelectionMode(QAbstractItemView::ExtendedSelection);
     connect(ui->listWidget_PolygonList, &QListWidget::customContextMenuRequested,
@@ -1278,6 +1286,21 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         close();
         event->accept();
         return;
+    }
+    if (event->modifiers() == Qt::NoModifier)
+    {
+        if (event->key() == Qt::Key_D)
+        {
+            nextImage();
+            event->accept();
+            return;
+        }
+        if (event->key() == Qt::Key_A)
+        {
+            prevImage();
+            event->accept();
+            return;
+        }
     }
     QMainWindow::keyPressEvent(event);
 }
@@ -4095,4 +4118,42 @@ void MainWindow::on_actSetting_triggered()
                                 static_cast<int>(polylineCloseMode_));
         config::base().saveFile();
     }
+}
+
+void MainWindow::nextImage()
+{
+    if (!ui || !ui->listWidget_FileList) return;
+
+    QListWidget* list = ui->listWidget_FileList;
+    const int n = list->count();
+    if (n <= 0) return;
+
+    int row = list->currentRow();
+    if (row < 0)
+        row = 0;
+
+    const int newRow = (row + 1) % n; // Зацикливание вперед
+    if (newRow == row && n == 1)
+        return; // Единственный файл — ничего не делаем
+
+    list->setCurrentRow(newRow);
+}
+
+void MainWindow::prevImage()
+{
+    if (!ui || !ui->listWidget_FileList) return;
+
+    QListWidget* list = ui->listWidget_FileList;
+    const int n = list->count();
+    if (n <= 0) return;
+
+    int row = list->currentRow();
+    if (row < 0)
+        row = 0;
+
+    const int newRow = (row - 1 + n) % n; // Зацикливание назад
+    if (newRow == row && n == 1)
+        return;
+
+    list->setCurrentRow(newRow);
 }
