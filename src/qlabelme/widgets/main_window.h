@@ -178,6 +178,9 @@ private slots:
     void on_actAbout_triggered();
     void on_actSetting_triggered();
 
+    void nextImage();
+    void prevImage();
+
 private:
     Q_OBJECT
     void loadFilesFromFolder(const QString& folderPath);
