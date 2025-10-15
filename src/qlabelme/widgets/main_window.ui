@@ -74,7 +74,7 @@
        <property name="orientation">
         <enum>Qt::Vertical</enum>
        </property>
-       <widget class="QWidget" name="layoutWidget">
+       <widget class="QWidget" name="layoutWidget1">
         <layout class="QGridLayout" name="gridLayout">
          <item row="0" column="1">
           <widget class="QLabel" name="label_4">
@@ -92,7 +92,7 @@
             </sizepolicy>
            </property>
            <property name="text">
-            <string>Полигоны</string>
+            <string>Фигуры</string>
            </property>
           </widget>
          </item>

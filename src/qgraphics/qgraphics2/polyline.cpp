@@ -437,7 +437,7 @@ void Polyline::mousePressEvent(QGraphicsSceneMouseEvent* event)
 void Polyline::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event)
 {
     // NEW PART: замыкание по двойному клику на любой существующей точке
-    if (s_closeMode == CloseMode::DoubleClickOnAnyPoint &&
+    if (s_closeMode == CloseMode::DoubleClick &&
         event->button() == Qt::LeftButton)
     {
         int idx = -1;

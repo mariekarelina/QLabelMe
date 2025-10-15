@@ -61,6 +61,7 @@ Product {
             "selectiondialog.h",
             "settingsdialog.cpp",
             "settingsdialog.h",
+            "settingsdialog.ui",
             "square.cpp",
             "square.h",
         ]

@@ -62,6 +62,9 @@ Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
     _verticalLine->setAcceptHoverEvents(false);
     _horizontalLine->setAcceptHoverEvents(false);
     updateCrossLines();
+    _horizontalLine->setVisible(true);
+    _verticalLine->setVisible(true);
+
 
     _ghostLocalPos = QPointF(rect().right(), rect().center().y());
 }
@@ -277,7 +280,7 @@ void Circle::updateCrossLines()
     _horizontalLine->setFlag(QGraphicsItem::ItemIgnoresTransformations,
                              this->flags() & QGraphicsItem::ItemIgnoresTransformations);
 
-    // Длина линий крестика (можно регулировать)
+    // Длина линий крестика
     qreal lineLength = _radius * 0.5; // 80% от радиуса
 
     // Вертикальная линия

@@ -3577,13 +3577,14 @@ void MainWindow::applyZoom(qreal z)
 
 void MainWindow::applyPolylineCloseMode()
 {
+    //using SDV = SettingsDialog::Values;
     using SDM = SettingsDialog::PolylineCloseMode;
     using PLM = qgraph::Polyline::CloseMode;
 
     qgraph::Polyline::CloseMode mode = PLM::CtrlModifier;
     switch (polylineCloseMode_)
     {
-        case SDM::DoubleClickOnAnyPoint:   mode = PLM::DoubleClickOnAnyPoint;   break;
+        case SDM::DoubleClick:             mode = PLM::DoubleClick;   break;
         case SDM::SingleClickOnFirstPoint: mode = PLM::SingleClickOnFirstPoint; break;
         case SDM::CtrlModifier:            mode = PLM::CtrlModifier;            break;
         case SDM::KeyCWithoutNewPoint:     mode = PLM::KeyC;                    break;
@@ -4020,103 +4021,95 @@ void MainWindow::on_actAbout_triggered()
 
 void MainWindow::on_actSetting_triggered()
 {
-    // Сохраняем текущие значения для возможного отката
-    auto visBackup = _vis;
+    const auto visBackup = _vis;
 
-    // Создаем диалог с текущими параметрами
-    SettingsDialog dlg(
-        _vis.lineWidth,
-        _vis.handleSize,
-        _vis.numberFontPt,
-        _vis.handleColor,
-        _vis.selectedHandleColor,
-        _vis.numberColor,
-        _vis.numberBgColor,
-        _vis.rectangleLineColor,
-        _vis.circleLineColor,
-        _vis.polylineLineColor,
-        this);
+    SettingsDialog dlg(this);
 
-    // Восстановление/сохранение геометрии
-    {
-        QVector<int> geom {100, 100, 500, 300};
-        config::base().getValue("windows.settings_dialog.geometry", geom);
-        dlg.setGeometry(geom[0], geom[1], geom[2], geom[3]);
-    }
+    QVector<int> geom{ -1, -1, 520, 360 };
+    config::base().getValue("windows.settings_dialog.geometry", geom);
+    if (geom.size() == 4) {
+        // защита от слишком маленького размера
+        if (geom[2] < 320)
+            geom[2] = 320;
+        if (geom[3] < 220)
+            geom[3] = 220;
 
-    // polylineCloseMode_ = dlg.polylineCloseMode();
-    // applyPolylineCloseMode();
-    // config::base().setValue("polyline.close_mode",
-    //                         static_cast<int>(polylineCloseMode_));
-
-    // «Применить» — обновляем визуальный стиль на лету (без закрытия диалога)
-    connect(&dlg, &SettingsDialog::settingsApplied, this,
-        [this, &dlg](qreal lineWidth, qreal handleSize, qreal numberFontPt,
-               const QColor& handleColor, const QColor& selectedHandleColor,
-               const QColor& numberColor, const QColor& numberBgColor,
-               const QColor& rectColor, const QColor& circleColor, const QColor& polylineColor)
+        if (geom[0] >= 0 && geom[1] >= 0)
         {
-            _vis.lineWidth           = lineWidth;
-            _vis.handleSize          = handleSize;
-            _vis.numberFontPt        = numberFontPt;
-            _vis.handleColor         = handleColor;
-            _vis.selectedHandleColor = selectedHandleColor;
-            _vis.numberColor         = numberColor;
-            _vis.numberBgColor       = numberBgColor;
-            _vis.rectangleLineColor  = rectColor;
-            _vis.circleLineColor     = circleColor;
-            _vis.polylineLineColor   = polylineColor;
-
-            saveVisualStyle();
-            apply_LineWidth_ToScene(nullptr);
-            apply_PointSize_ToScene(nullptr);
-            apply_NumberSize_ToScene(nullptr);
-
-            polylineCloseMode_ = dlg.polylineCloseMode();
-            applyPolylineCloseMode();
-
-            config::base().setValue("polyline.close_mode",
-                                    static_cast<int>(polylineCloseMode_));
-            config::base().saveFile();
-        });
-
-    dlg.setPolylineCloseMode(polylineCloseMode_);
-
-    // Запуск диалога
-    const int rc = dlg.exec();
-
-    // Сохраняем геометрию, если окно не было развернуто
-    if (!dlg.isMaximized() && !dlg.isFullScreen())
-    {
-        const QRect g = dlg.geometry();
-        QVector<int> v { g.x(), g.y(), g.width(), g.height() };
-        config::base().setValue("windows.settings_dialog.geometry", v);
+            dlg.setGeometry(geom[0], geom[1], geom[2], geom[3]);
+        }
+        else
+        {
+            dlg.resize(geom[2], geom[3]);
+        }
     }
 
-    // Если «Отмена» — откатываемся к резервной копии и применяем
-    if (rc != QDialog::Accepted)
+    SettingsDialog::Values init;
+    init.lineWidth         = _vis.lineWidth;
+    init.handleSize        = _vis.handleSize;
+    init.numberFontPt      = _vis.numberFontPt;
+
+    init.nodeColor         = _vis.handleColor;           // «Цвет узла»
+    init.nodeSelectedColor = _vis.selectedHandleColor;   // «Цвет выбранного узла»
+    init.numberColor       = _vis.numberColor;           // «Цвет нумерации»
+    init.numberBgColor     = _vis.numberBgColor;         // «Фон нумерации»
+    init.rectLineColor     = _vis.rectangleLineColor;    // «Линии прямоугольника»
+    init.circleLineColor   = _vis.circleLineColor;       // «Линии окружности»
+    init.polylineLineColor = _vis.polylineLineColor;     // «Линии полилинии»
+
+    init.closeMethod       = polylineCloseMode_;         // Текущий режим замыкания
+
+    dlg.setValues(init);
+
+
+    connect(&dlg, &SettingsDialog::settingsApplied, this,
+                [this](const SettingsDialog::Values& v)
+    {
+        // 1) Обновляем визуальные настройки из v
+        _vis.lineWidth            = v.lineWidth;
+        _vis.handleSize           = v.handleSize;
+        _vis.numberFontPt         = v.numberFontPt;
+
+        _vis.handleColor          = v.nodeColor;
+        _vis.selectedHandleColor  = v.nodeSelectedColor;
+        _vis.numberColor          = v.numberColor;
+        _vis.numberBgColor        = v.numberBgColor;
+        _vis.rectangleLineColor   = v.rectLineColor;
+        _vis.circleLineColor      = v.circleLineColor;
+        _vis.polylineLineColor    = v.polylineLineColor;
+
+        // 2) Сохраняем и применяем
+        saveVisualStyle();
+        apply_LineWidth_ToScene(nullptr);
+        apply_PointSize_ToScene(nullptr);
+        apply_NumberSize_ToScene(nullptr);
+
+        // 3) Режим замыкания полилинии
+        polylineCloseMode_ = v.closeMethod;
+        applyPolylineCloseMode();
+
+        config::base().setValue("polyline.close_mode",
+                                static_cast<int>(polylineCloseMode_));
+        config::base().saveFile();
+    });
+
+    const int rc = dlg.exec();
+    // Геометрию восстановить/сохранить
+    const QRect r = dlg.isMaximized() || dlg.isFullScreen()
+                    ? dlg.normalGeometry()
+                    : dlg.geometry();
+    QVector<int> out { r.x(), r.y(), r.width(), r.height() };
+    config::base().setValue("windows.settings_dialog.geometry", out);
+    config::base().saveFile();
+
+    // Если нажали "Отмена" — откатываем визуальный стиль
+    if (rc == QDialog::Rejected)
     {
         _vis = visBackup;
         saveVisualStyle();
         apply_LineWidth_ToScene(nullptr);
         apply_PointSize_ToScene(nullptr);
         apply_NumberSize_ToScene(nullptr);
-    }
-    else
-    {
-        // На «ОК» у нас уже были применены значения через settingsApplied,
-        // но можно продублировать финальное сохранение (на случай если пользователь не нажимал «Применить»)
-        emit dlg.settingsApplied(
-            dlg.lineWidth(), dlg.handleSize(), dlg.numberFontPt(),
-            dlg.handleColor(), dlg.selectedHandleColor(),
-            dlg.numberColor(), dlg.numberBgColor(),
-            dlg.rectangleLineColor(), dlg.circleLineColor(), dlg.polylineLineColor());
-
-        polylineCloseMode_ = dlg.polylineCloseMode();
-        applyPolylineCloseMode();
-        config::base().setValue("polyline.close_mode",
-                                static_cast<int>(polylineCloseMode_));
-        config::base().saveFile();
     }
 }
 
