@@ -137,9 +137,9 @@ MainWindow::MainWindow(QWidget *parent) :
         if (w->viewport()) w->viewport()->setPalette(pal);
     };
 
-    fixSelectionPalette(ui->listWidget_PolygonList);
+    fixSelectionPalette(ui->polygonList);
     // fixSelectionPalette(ui->listWidget_Classes);
-    fixSelectionPalette(ui->listWidget_FileList);
+    fixSelectionPalette(ui->fileList);
 
 
     qRegisterMetaType<QGraphicsItem*>("QGraphicsItem*");
@@ -211,19 +211,19 @@ MainWindow::MainWindow(QWidget *parent) :
     _currentFolderPath = "";
 
 
-    connect(ui->listWidget_FileList, &QListWidget::currentItemChanged,
+    connect(ui->fileList, &QListWidget::currentItemChanged,
             this, &MainWindow::fileList_ItemChanged);
 
 
-    connect(ui->listWidget_PolygonList, &QListWidget::itemClicked,
+    connect(ui->polygonList, &QListWidget::itemClicked,
             this, &MainWindow::onPolygonListItemClicked);
-    connect(ui->listWidget_PolygonList, &QListWidget::itemDoubleClicked,
+    connect(ui->polygonList, &QListWidget::itemDoubleClicked,
             this, &MainWindow::onPolygonListItemDoubleClicked);
     connect(_scene, &QGraphicsScene::selectionChanged,
             this, &MainWindow::onSceneSelectionChanged);
     connect(_scene, &QGraphicsScene::changed,
             this,  &MainWindow::onSceneChanged);
-    connect(ui->listWidget_PolygonList, &QListWidget::itemSelectionChanged,
+    connect(ui->polygonList, &QListWidget::itemSelectionChanged,
             this, &MainWindow::onPolygonListSelectionChanged);
 
     auto shNext = new QShortcut(QKeySequence(Qt::Key_D), this);
@@ -234,9 +234,9 @@ MainWindow::MainWindow(QWidget *parent) :
     shPrev->setContext(Qt::ApplicationShortcut);
     connect(shPrev, &QShortcut::activated, this, &MainWindow::prevImage);
 
-    ui->listWidget_PolygonList->setContextMenuPolicy(Qt::CustomContextMenu);
-    ui->listWidget_PolygonList->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    connect(ui->listWidget_PolygonList, &QListWidget::customContextMenuRequested,
+    ui->polygonList->setContextMenuPolicy(Qt::CustomContextMenu);
+    ui->polygonList->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    connect(ui->polygonList, &QListWidget::customContextMenuRequested,
             this, &MainWindow::showPolygonListContextMenu);
 
     //QLabel* pathHeader = new QLabel(this);
@@ -483,8 +483,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
                     // выбор класса — как в Ctrl-ветке
                     QStringList classes;
-                    for (int i = 0; i < ui->listWidget_PolygonLabel->count(); ++i)
-                        classes << ui->listWidget_PolygonLabel->item(i)->text();
+                    for (int i = 0; i < ui->polygonLabel->count(); ++i)
+                        classes << ui->polygonLabel->item(i)->text();
 
                     SelectionDialog dialog(classes, this);
                     if (dialog.exec() == QDialog::Accepted)
@@ -670,9 +670,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
         // Получаем список классов из listWidget_PolygonLabel
         QStringList classes;
-        for (int i = 0; i < ui->listWidget_PolygonLabel->count(); ++i)
+        for (int i = 0; i < ui->polygonLabel->count(); ++i)
         {
-            classes << ui->listWidget_PolygonLabel->item(i)->text();
+            classes << ui->polygonLabel->item(i)->text();
         }
 
         // Показываем диалог выбора класса
@@ -719,9 +719,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         apply_PointSize_ToItem(circle);
 
         QStringList classes;
-        for (int i = 0; i < ui->listWidget_PolygonLabel->count(); ++i)
+        for (int i = 0; i < ui->polygonLabel->count(); ++i)
         {
-            classes << ui->listWidget_PolygonLabel->item(i)->text();
+            classes << ui->polygonLabel->item(i)->text();
         }
 
         SelectionDialog dialog(classes, this);
@@ -768,8 +768,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                // выбор класса — тот же код, что и в Ctrl-ветке
                QStringList classes;
-               for (int i = 0; i < ui->listWidget_PolygonLabel->count(); ++i)
-                   classes << ui->listWidget_PolygonLabel->item(i)->text();
+               for (int i = 0; i < ui->polygonLabel->count(); ++i)
+                   classes << ui->polygonLabel->item(i)->text();
 
                SelectionDialog dialog(classes, this);
                if (dialog.exec() == QDialog::Accepted)
@@ -795,9 +795,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
        // Получаем список классов из listWidget_PolygonLabel
        QStringList classes;
-       for (int i = 0; i < ui->listWidget_PolygonLabel->count(); ++i)
+       for (int i = 0; i < ui->polygonLabel->count(); ++i)
        {
-           classes << ui->listWidget_PolygonLabel->item(i)->text();
+           classes << ui->polygonLabel->item(i)->text();
        }
 
        // Показываем диалог выбора класса
@@ -832,8 +832,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
         // Получаем список классов из listWidget_PolygonLabel
         QStringList classes;
-        for (int i = 0; i < ui->listWidget_PolygonLabel->count(); ++i)
-            classes << ui->listWidget_PolygonLabel->item(i)->text();
+        for (int i = 0; i < ui->polygonLabel->count(); ++i)
+            classes << ui->polygonLabel->item(i)->text();
 
         // Показываем диалог выбора класса
         SelectionDialog dialog(classes, this);
@@ -896,12 +896,12 @@ void MainWindow::setSceneItemsMovable(bool movable)
 
 Document::Ptr MainWindow::currentDocument() const
 {
-    if (!ui || !ui->listWidget_FileList)
+    if (!ui || !ui->fileList)
     {
         return nullptr;
     }
 
-    QListWidgetItem* currentItem = ui->listWidget_FileList->currentItem();
+    QListWidgetItem* currentItem = ui->fileList->currentItem();
     if (!currentItem)
     {
         return nullptr;
@@ -958,8 +958,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                         // выбор класса
                         QStringList classes;
-                        for (int i = 0; i < ui->listWidget_PolygonLabel->count(); ++i)
-                            classes << ui->listWidget_PolygonLabel->item(i)->text();
+                        for (int i = 0; i < ui->polygonLabel->count(); ++i)
+                            classes << ui->polygonLabel->item(i)->text();
 
                         SelectionDialog dialog(classes, this);
                         if (dialog.exec() == QDialog::Accepted)
@@ -1114,8 +1114,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                 // выбор класса
                 QStringList classes;
-                for (int i = 0; i < ui->listWidget_PolygonLabel->count(); ++i)
-                    classes << ui->listWidget_PolygonLabel->item(i)->text();
+                for (int i = 0; i < ui->polygonLabel->count(); ++i)
+                    classes << ui->polygonLabel->item(i)->text();
 
                 SelectionDialog dialog(classes, this);
                 if (dialog.exec() == QDialog::Accepted)
@@ -1517,9 +1517,9 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
     //Путь к папке внизу окна
     updateFolderPathDisplay();
 
-    ui->listWidget_FileList->clear(); // Очищаем список перед добавлением
+    ui->fileList->clear(); // Очищаем список перед добавлением
     // Путь к папке над полем FileList
-    ui->labelFileListPath->setText(QDir::toNativeSeparators(folderPath));
+    ui->listPath->setText(QDir::toNativeSeparators(folderPath));
 
 
     QStringList filters;
@@ -1565,13 +1565,13 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
         // Убираем чекбоксы
         //item->setFlags(item->flags() & ~Qt::ItemIsUserCheckable);
 
-        ui->listWidget_FileList->addItem(item);
+        ui->fileList->addItem(item);
     }
 }
 
 void MainWindow::updatePolygonListForCurrentScene()
 {
-    ui->listWidget_PolygonList->clear();
+    ui->polygonList->clear();
     if (!_scene) return;
 
     for (QGraphicsItem* item : _scene->items())
@@ -1775,9 +1775,9 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
     if (QFile::exists(yamlPath))
     {
         // Находим соответствующий элемент в списке и убираем звездочку
-        for (int i = 0; i < ui->listWidget_FileList->count(); ++i)
+        for (int i = 0; i < ui->fileList->count(); ++i)
         {
-            QListWidgetItem* item = ui->listWidget_FileList->item(i);
+            QListWidgetItem* item = ui->fileList->item(i);
             QVariant data = item->data(Qt::UserRole);
             if (data.canConvert<Document::Ptr>())
             {
@@ -1808,9 +1808,9 @@ void MainWindow::updateFileListDisplay(const QString& filePath)
     QIcon savedIcon(":/images/resources/ok.svg");           // Зеленая иконка - сохранено
     QIcon noAnnotationIcon(":/images/resources/not_ok.svg"); // Красная иконка - нет аннотаций
 
-    for (int i = 0; i < ui->listWidget_FileList->count(); ++i)
+    for (int i = 0; i < ui->fileList->count(); ++i)
     {
-        QListWidgetItem* item = ui->listWidget_FileList->item(i);
+        QListWidgetItem* item = ui->fileList->item(i);
         QVariant data = item->data(Qt::UserRole);
         if (data.canConvert<Document::Ptr>())
         {
@@ -2391,10 +2391,10 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
         return false;
     }
 
-    ui->listWidget_PolygonLabel->clear();
+    ui->polygonLabel->clear();
     for (const QString& className : classes)
     {
-        ui->listWidget_PolygonLabel->addItem(className);
+        ui->polygonLabel->addItem(className);
     }
 
     return true;
@@ -2434,30 +2434,30 @@ void MainWindow::onPolygonListItemDoubleClicked(QListWidgetItem* item)
 void MainWindow::onSceneSelectionChanged()
 {
     // Блокируем сигналы списка, чтобы избежать рекурсии
-    ui->listWidget_PolygonList->blockSignals(true);
+    ui->polygonList->blockSignals(true);
 
     // Снимаем выделение со всех элементов в списке
-    for (int i = 0; i < ui->listWidget_PolygonList->count(); ++i)
+    for (int i = 0; i < ui->polygonList->count(); ++i)
     {
-        ui->listWidget_PolygonList->item(i)->setSelected(false);
+        ui->polygonList->item(i)->setSelected(false);
     }
 
     // Выделяем соответствующие элементы в списке
     for (QGraphicsItem* item : _scene->selectedItems())
     {
-        for (int i = 0; i < ui->listWidget_PolygonList->count(); ++i)
+        for (int i = 0; i < ui->polygonList->count(); ++i)
         {
-            QListWidgetItem* listItem = ui->listWidget_PolygonList->item(i);
+            QListWidgetItem* listItem = ui->polygonList->item(i);
             if (listItem->data(Qt::UserRole).value<QGraphicsItem*>() == item)
             {
                 listItem->setSelected(true);
-                ui->listWidget_PolygonList->scrollToItem(listItem);
+                ui->polygonList->scrollToItem(listItem);
                 break;
             }
         }
     }
     // Разблокируем сигналы списка
-    ui->listWidget_PolygonList->blockSignals(false);
+    ui->polygonList->blockSignals(false);
     raiseAllHandlesToTop();
 }
 
@@ -2489,9 +2489,9 @@ void MainWindow::updateFileListItemIcon(QListWidgetItem* item, bool hasAnnotatio
 
 QListWidgetItem* MainWindow::findFileListItem(const QString& filePath)
 {
-    for (int i = 0; i < ui->listWidget_FileList->count(); ++i)
+    for (int i = 0; i < ui->fileList->count(); ++i)
     {
-        QListWidgetItem* item = ui->listWidget_FileList->item(i);
+        QListWidgetItem* item = ui->fileList->item(i);
         Document::Ptr doc = item->data(Qt::UserRole).value<Document::Ptr>();
         if (doc && doc->filePath == filePath)
         {
@@ -2508,18 +2508,18 @@ void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem)
 
     QListWidgetItem* listItem = new QListWidgetItem(className);
     listItem->setData(Qt::UserRole, QVariant::fromValue(sceneItem));
-    ui->listWidget_PolygonList->addItem(listItem);
+    ui->polygonList->addItem(listItem);
 }
 
 void MainWindow::showPolygonListContextMenu(const QPoint &pos)
 {
-    QListWidgetItem* item = ui->listWidget_PolygonList->itemAt(pos);
+    QListWidgetItem* item = ui->polygonList->itemAt(pos);
     if (!item) return;
 
     QMenu menu;
     QAction* deleteAction = menu.addAction("Удалить");
 
-    if (menu.exec(ui->listWidget_PolygonList->viewport()->mapToGlobal(pos)) == deleteAction)
+    if (menu.exec(ui->polygonList->viewport()->mapToGlobal(pos)) == deleteAction)
     {
         removePolygonListItem(item);
     }
@@ -2570,12 +2570,12 @@ void MainWindow::removePolygonItem(QGraphicsItem* item)
     if (!item) return;
 
     // Удаляем из списка
-    for (int i = 0; i < ui->listWidget_PolygonList->count(); ++i)
+    for (int i = 0; i < ui->polygonList->count(); ++i)
     {
-        QListWidgetItem* listItem = ui->listWidget_PolygonList->item(i);
+        QListWidgetItem* listItem = ui->polygonList->item(i);
         if (listItem && listItem->data(Qt::UserRole).value<QGraphicsItem*>() == item)
         {
-            delete ui->listWidget_PolygonList->takeItem(i);
+            delete ui->polygonList->takeItem(i);
             break;
         }
     }
@@ -3604,7 +3604,7 @@ void MainWindow::removePolygonListItem(QListWidgetItem* item)
         delete sceneItem;
     }
     // Удаляем из списка
-    delete ui->listWidget_PolygonList->takeItem(ui->listWidget_PolygonList->row(item));
+    delete ui->polygonList->takeItem(ui->polygonList->row(item));
     // Помечаем документ как измененный
     if (auto doc = currentDocument())
     {
@@ -3785,7 +3785,7 @@ void MainWindow::onSceneChanged()
 void MainWindow::onPolygonListSelectionChanged()
 {
     if (!_scene) return;
-    QList<QListWidgetItem*> selected = ui->listWidget_PolygonList->selectedItems();
+    QList<QListWidgetItem*> selected = ui->polygonList->selectedItems();
 
     _scene->blockSignals(true);
     for (QGraphicsItem* it : _scene->items()) {
@@ -3897,14 +3897,14 @@ void MainWindow::onSceneItemRemoved(QGraphicsItem* item)
     }
 
     // Ищем соответствующий элемент в списке полигонов
-    for (int i = 0; i < ui->listWidget_PolygonList->count(); ++i)
+    for (int i = 0; i < ui->polygonList->count(); ++i)
     {
-        QListWidgetItem* listItem = ui->listWidget_PolygonList->item(i);
+        QListWidgetItem* listItem = ui->polygonList->item(i);
         QVariant itemData = listItem->data(Qt::UserRole);
 
         if (itemData.isValid() && itemData.value<QGraphicsItem*>() == item)
         {
-            delete ui->listWidget_PolygonList->takeItem(i);
+            delete ui->polygonList->takeItem(i);
             break;
         }
     }
@@ -3913,7 +3913,7 @@ void MainWindow::onSceneItemRemoved(QGraphicsItem* item)
 void MainWindow::on_actDelete_triggered()
 {
     // Удаляем выбранные элементы из списка
-    QList<QListWidgetItem*> selectedItems = ui->listWidget_PolygonList->selectedItems();
+    QList<QListWidgetItem*> selectedItems = ui->polygonList->selectedItems();
     for (QListWidgetItem* listItem : selectedItems)
     {
         QGraphicsItem* graphicsItem = listItem->data(Qt::UserRole).value<QGraphicsItem*>();
@@ -3922,7 +3922,7 @@ void MainWindow::on_actDelete_triggered()
             _scene->removeItem(graphicsItem);
             delete graphicsItem;
         }
-        delete ui->listWidget_PolygonList->takeItem(ui->listWidget_PolygonList->row(listItem));
+        delete ui->polygonList->takeItem(ui->polygonList->row(listItem));
     }
 
     // Помечаем документ как измененный
@@ -4115,9 +4115,9 @@ void MainWindow::on_actSetting_triggered()
 
 void MainWindow::nextImage()
 {
-    if (!ui || !ui->listWidget_FileList) return;
+    if (!ui || !ui->fileList) return;
 
-    QListWidget* list = ui->listWidget_FileList;
+    QListWidget* list = ui->fileList;
     const int n = list->count();
     if (n <= 0) return;
 
@@ -4134,9 +4134,9 @@ void MainWindow::nextImage()
 
 void MainWindow::prevImage()
 {
-    if (!ui || !ui->listWidget_FileList) return;
+    if (!ui || !ui->fileList) return;
 
-    QListWidget* list = ui->listWidget_FileList;
+    QListWidget* list = ui->fileList;
     const int n = list->count();
     if (n <= 0) return;
 
