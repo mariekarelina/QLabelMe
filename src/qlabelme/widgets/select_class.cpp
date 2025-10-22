@@ -1,37 +1,42 @@
 #include "select_class.h"
+#include "ui_select_class.h"
 
-Selection_class::Selection_class(const QStringList &classes, QWidget *parent)
-    : QDialog(parent)
+
+Select_class::Select_class(const QStringList &classes, QWidget *parent)
+    : QDialog(parent),
+      ui(new Ui::Select_class)
 {
-    setWindowTitle("Выберите класс для фигуры");
+    ui->setupUi(this);
 
     // Убираем кнопки свернуть/развернуть/закрыть в заголовке
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
     setWindowFlags(windowFlags() & ~Qt::WindowMinMaxButtonsHint);
 
     // Запрещаем изменение размера окна
-    setFixedSize(300, 400);
+    setFixedSize(400, 500);
 
-    _listWidget = new QListWidget(this);
-    _listWidget->addItems(classes);
-    _listWidget->setSelectionMode(QListWidget::SingleSelection);
+    // Заполняем список классами
+    ui->_listWidget->clear();
+    ui->_listWidget->addItems(classes);
+    if (!classes.isEmpty())
+        ui->_listWidget->setCurrentRow(0);
 
-    //buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    //connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    //connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    // Выбор по клику сразу закрываем диалог
+    connect(ui->_listWidget, &QListWidget::itemClicked, this,
+            [this](QListWidgetItem* item) {
+                _selectedClass = item ? item->text() : QString();
+                accept();
+            });
 
-    // Закрываем диалог сразу при выборе элемента
-    connect(_listWidget, &QListWidget::itemClicked, [this](QListWidgetItem* item) {
-        _selectedClass = item->text();
-        accept(); // Закрываем диалог с результатом Accepted
-    });
-
-    QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->addWidget(_listWidget);
-    //layout->addWidget(buttonBox);
+    // Двойной щелчок тоже подтверждает
+    connect(ui->_listWidget, &QListWidget::itemDoubleClicked, this,
+            [this](QListWidgetItem* item) {
+                _selectedClass = item ? item->text() : QString();
+                accept();
+            });
 }
 
-QString Selection_class::selectedClass() const
+QString Select_class::selectedClass() const
 {
     return _selectedClass;
 }

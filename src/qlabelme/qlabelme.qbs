@@ -59,6 +59,7 @@ Product {
             "main_window.ui",
             "select_class.cpp",
             "select_class.h",
+            "select_class.ui",
             "settings.cpp",
             "settings.h",
             "settings.ui",

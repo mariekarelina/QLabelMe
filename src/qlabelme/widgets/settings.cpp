@@ -141,6 +141,8 @@ void Settings::applyModelToUi()
         updateColorPreview(_btnCircle, _values.circleLineColor);
     if (_btnPolyline)
         updateColorPreview(_btnPolyline, _values.polylineLineColor);
+    if (_btnLine)
+        updateColorPreview(_btnLine, _values.lineLineColor);
 
     switch (_values.closePolyline)
     {

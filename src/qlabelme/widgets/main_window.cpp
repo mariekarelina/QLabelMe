@@ -515,7 +515,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                     for (int i = 0; i < ui->polygonLabel->count(); ++i)
                         classes << ui->polygonLabel->item(i)->text();
 
-                    Selection_class dialog(classes, this);
+                    Select_class dialog(classes, this);
                     if (dialog.exec() == QDialog::Accepted)
                     {
                         const QString selectedClass = dialog.selectedClass();
@@ -595,7 +595,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         for (int i = 0; i < ui->polygonLabel->count(); ++i)
             classes << ui->polygonLabel->item(i)->text();
 
-        Selection_class dialog(classes, this);
+        Select_class dialog(classes, this);
         if (dialog.exec() == QDialog::Accepted)
         {
             const QString selectedClass = dialog.selectedClass();
@@ -650,7 +650,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                     for (int i = 0; i < ui->polygonLabel->count(); ++i)
                         classes << ui->polygonLabel->item(i)->text();
 
-                    Selection_class dialog(classes, this);
+                    Select_class dialog(classes, this);
                     if (dialog.exec() == QDialog::Accepted)
                     {
                         const QString selectedClass = dialog.selectedClass();
@@ -801,7 +801,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         }
 
         // Показываем диалог выбора класса
-        Selection_class dialog(classes, this);
+        Select_class dialog(classes, this);
         if (dialog.exec() == QDialog::Accepted)
         {
             QString selectedClass = dialog.selectedClass();
@@ -848,7 +848,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             classes << ui->polygonLabel->item(i)->text();
         }
 
-        Selection_class dialog(classes, this);
+        Select_class dialog(classes, this);
         if (dialog.exec() == QDialog::Accepted)
         {
             QString selectedClass = dialog.selectedClass();
@@ -880,7 +880,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             classes << ui->polygonLabel->item(i)->text();
 
         // Показываем диалог выбора класса
-        Selection_class dialog(classes, this);
+        Select_class dialog(classes, this);
         if (dialog.exec() == QDialog::Accepted)
         {
             const QString selectedClass = dialog.selectedClass();
@@ -914,7 +914,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             classes << ui->polygonLabel->item(i)->text();
 
         // Показываем диалог выбора класса
-        Selection_class dialog(classes, this);
+        Select_class dialog(classes, this);
         if (dialog.exec() == QDialog::Accepted)
         {
             const QString selectedClass = dialog.selectedClass();
@@ -1041,7 +1041,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         for (int i = 0; i < ui->polygonLabel->count(); ++i)
                             classes << ui->polygonLabel->item(i)->text();
 
-                        Selection_class dialog(classes, this);
+                        Select_class dialog(classes, this);
                         if (dialog.exec() == QDialog::Accepted)
                         {
                             const QString selectedClass = dialog.selectedClass();
@@ -1193,7 +1193,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 for (int i = 0; i < ui->polygonLabel->count(); ++i)
                     classes << ui->polygonLabel->item(i)->text();
 
-                Selection_class dialog(classes, this);
+                Select_class dialog(classes, this);
                 if (dialog.exec() == QDialog::Accepted)
                 {
                     const QString selectedClass = dialog.selectedClass();
@@ -1235,7 +1235,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 for (int i = 0; i < ui->polygonLabel->count(); ++i)
                     classes << ui->polygonLabel->item(i)->text();
 
-                Selection_class dialog(classes, this);
+                Select_class dialog(classes, this);
                 if (dialog.exec() == QDialog::Accepted)
                 {
                     const QString selectedClass = dialog.selectedClass();
@@ -2487,6 +2487,7 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
 {
     YamlConfig yconfig;
     //config::dirExpansion(configFile);
+    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(filePath));
     if (!QFile::exists(filePath))
     {
         QFile file;
@@ -2503,7 +2504,7 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
             //alog::stop();
             return false;
         }
-        if (!yconfig.saveFile(filePath.toStdString()))
+        if (!yconfig.saveFile(std::string(encoded.constData(), encoded.size())))
         {
             QMessageBox::warning(this, tr("Ошибка"),
                                  tr("Ошибка при сохранении в базовый файл с классами! "
@@ -2514,7 +2515,7 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
     }
     else
     {
-        if (!yconfig.readFile(filePath.toStdString()))
+        if (!yconfig.readFile(std::string(encoded.constData(), encoded.size())))
         {
             QMessageBox::warning(this, tr("Ошибка"),
                                  tr("Ошибка при чтении файла с классами!"
