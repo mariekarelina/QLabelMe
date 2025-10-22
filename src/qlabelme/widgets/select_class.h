@@ -6,11 +6,11 @@
 #include <QDialogButtonBox>
 #include <QListWidgetItem>
 
-class SelectionDialog : public QDialog
+class Selection_class : public QDialog
 {
     Q_OBJECT
 public:
-    explicit SelectionDialog(const QStringList &classes, QWidget *parent = nullptr);
+    explicit Selection_class(const QStringList &classes, QWidget *parent = nullptr);
     QString selectedClass() const;
 
 private:

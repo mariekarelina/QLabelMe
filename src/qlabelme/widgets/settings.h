@@ -10,10 +10,12 @@
 #include <QRadioButton>
 
 namespace Ui {
-class SettingsDialog;
+class Settings;
 }
 
-class SettingsDialog : public QDialog
+class QShowEvent;
+
+class Settings : public QDialog
 {
     Q_OBJECT
 public:
@@ -24,6 +26,12 @@ public:
         SingleClickOnFirstPoint = 1,
         CtrlModifier = 2,
         KeyCWithoutNewPoint = 3
+    };
+    enum class LineFinishMode
+    {
+        DoubleClick = 0,
+        CtrlModifier = 1,
+        KeyCWithoutNewPoint = 2
     };
 
     struct Values
@@ -39,18 +47,25 @@ public:
         QColor rectLineColor = QColor("#3b6cff");
         QColor circleLineColor = QColor("#6aa7ff");
         QColor polylineLineColor = QColor("#40ff40");
+        QColor lineLineColor = QColor("#40ff40");
+        QColor pointColor = QColor("#00ff00");
+        int pointOutlineWidth = 1;
 
-        PolylineCloseMode closeMethod = PolylineCloseMode::KeyCWithoutNewPoint;
+        PolylineCloseMode closePolyline = PolylineCloseMode::DoubleClick;
+        LineFinishMode finishLine = LineFinishMode::DoubleClick;
     };
 
-    explicit SettingsDialog(QWidget *parent = nullptr);
-    ~SettingsDialog();
+    explicit Settings(QWidget *parent = nullptr);
+    ~Settings();
 
     void   setValues(const Values& v);
-    Values values() const { return m_values; }
+    Values values() const { return _values; }
+
+protected:
+    void showEvent(QShowEvent* e) override;
 
 signals:
-    void settingsApplied(const SettingsDialog::Values& v);
+    void settingsApplied(const Settings::Values& v);
 
 private slots:
     void on_buttonBox_accepted();
@@ -62,6 +77,7 @@ private:
     void applyModelToUi();
     void applyUiToModel();
     void setupCloseMethodGroup();
+    void setupFinishMethodGroup();
 
     static void updateColorPreview(QPushButton *btn, const QColor &c);
     static bool pickColor(QWidget *parent, const QString &title,
@@ -69,14 +85,16 @@ private:
     void attachColorPicker(QPushButton *btn, QColor *target);
 
 private:
-    Ui::SettingsDialog* ui = {nullptr};
-    Values m_values;
+    Ui::Settings* ui = {nullptr};
+    Values _values;
 
-    QPushButton* m_btnNode = {nullptr};
-    QPushButton* m_btnNodeSel = {nullptr};
-    QPushButton* m_btnNumber = {nullptr};
-    QPushButton* m_btnNumberBg = {nullptr};
-    QPushButton* m_btnRect = {nullptr};
-    QPushButton* m_btnCircle = {nullptr};
-    QPushButton* m_btnPolyline = {nullptr};
+    QPushButton* _btnNode = {nullptr};
+    QPushButton* _btnNodeSel = {nullptr};
+    QPushButton* _btnNumber = {nullptr};
+    QPushButton* _btnNumberBg = {nullptr};
+    QPushButton* _btnRect = {nullptr};
+    QPushButton* _btnCircle = {nullptr};
+    QPushButton* _btnPolyline = {nullptr};
+    QPushButton* _btnLine = {nullptr};
+    QPushButton* _btnPoint = {nullptr};
 };

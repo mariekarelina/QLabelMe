@@ -1,4 +1,4 @@
- #pragma once
+#pragma once
 
 #include "user_type.h"
 #include "shape.h"
@@ -69,7 +69,7 @@ public:
     void raiseHandlesToTop() override;
     void moveToBack();
 
-    // callback для уведомлений об изменениях
+    // Сallback для уведомлений об изменениях
     void setModificationCallback(std::function<void()> callback);
 
     const QVector<DragCircle*>& circles() const { return _circles; }
@@ -90,15 +90,15 @@ protected:
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
                QWidget* widget = nullptr) override;
 
+    void updateConnections(); // Для обновления связей между точками
+    void updateClosedState();
+    void updatePointNumbersAfterReorder(); // Обновление номеров после изменения порядка
+
 signals:
     void lineChanged(Polyline* line);
     void polylineModified();
 
 private:
-    void updateConnections(); // Для обновления связей между точками
-    void updateClosedState();
-    void updatePointNumbersAfterReorder(); // Обновление номеров после изменения порядка
-
     void dragCircleMove(DragCircle* circle) override;
     void dragCircleRelease(DragCircle* circle) override;
     QColor selectionFillColor() const;
@@ -120,7 +120,7 @@ public:
     QColor _numberBgColor = QColor(0, 0, 0, 180);
 
     bool _pointNumbersVisible = true; // Видимости нумерации
-    std::function<void()> _modificationCallback; // callback для уведомлений
+    std::function<void()> _modificationCallback; // Сallback для уведомлений
 };
 
 } // namespace qgraph

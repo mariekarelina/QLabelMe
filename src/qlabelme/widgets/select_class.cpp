@@ -1,6 +1,6 @@
-#include "selectiondialog.h"
+#include "select_class.h"
 
-SelectionDialog::SelectionDialog(const QStringList &classes, QWidget *parent)
+Selection_class::Selection_class(const QStringList &classes, QWidget *parent)
     : QDialog(parent)
 {
     setWindowTitle("Выберите класс для фигуры");
@@ -31,7 +31,7 @@ SelectionDialog::SelectionDialog(const QStringList &classes, QWidget *parent)
     //layout->addWidget(buttonBox);
 }
 
-QString SelectionDialog::selectedClass() const
+QString Selection_class::selectedClass() const
 {
     return _selectedClass;
 }

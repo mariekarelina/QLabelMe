@@ -16,15 +16,15 @@
 #include "qgraphics2/rectangle.h"
 #include "qgraphics2/polyline.h"
 #include "qgraphics2/square.h"
-#include "line.h"
-// #include "square.h"
-#include "circle.h"
+#include "qgraphics2/point.h"
+#include "qgraphics2/line.h"
+
 //#include "qgraphics/functions.h"
 //#include "qutils/message_box.h"
 #include <QSlider>
 
-#include "selectiondialog.h"
-#include "settingsdialog.h"
+#include "select_class.h"
+#include "settings.h"
 
 #include <QApplication>
 #include <QHostInfo>
@@ -283,19 +283,16 @@ MainWindow::MainWindow(QWidget *parent) :
 
     _lastHoverHandle = nullptr;
 
-    int cm = static_cast<int>(SettingsDialog::PolylineCloseMode::CtrlModifier);
-    config::base().getValue("polyline.close_mode", cm);
+    int cmPolyline = static_cast<int>(Settings::PolylineCloseMode::CtrlModifier);
+    config::base().getValue("polyline.close_mode", cmPolyline);
+    _polylineCloseMode = static_cast<Settings::PolylineCloseMode>(cmPolyline);
+    applyClosePolyline();
 
-    polylineCloseMode_ = static_cast<SettingsDialog::PolylineCloseMode>(cm);
-    applyPolylineCloseMode();
+    int cmLine = static_cast<int>(Settings::LineFinishMode::CtrlModifier);
+    config::base().getValue("line.finish_mode", cmLine);
+    _lineFinishMode = static_cast<Settings::LineFinishMode>(cmLine);
+    applyFinishLine();
 
-    // создаём «призрачную» ручку 1 раз
-    // _ghostHandle = new QGraphicsRectItem(QRectF(-5, -5, 10, 10));
-    // _ghostHandle->setZValue(1000);
-    // _ghostHandle->setVisible(false);
-    // _ghostHandle->setPen(QPen(Qt::black, 1));
-    // _ghostHandle->setBrush(QBrush(Qt::white));
-    // _scene->addItem(_ghostHandle);
     ensureGhostAllocated();
 }
 
@@ -337,6 +334,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     {
         return;
     }
+    // Было написано для создания иконки
     if ((mouseEvent->modifiers() & Qt::ControlModifier) &&
         (mouseEvent->button() == Qt::RightButton))
     {
@@ -353,7 +351,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         }
         if (!poly) return;
 
-        // Ищем ближайшую точку (берём и скрытые тоже — по их координатам)
+        // Ищем ближайшую точку (берем и скрытые тоже — по их координатам)
         DragCircle* nearest = nullptr;
         qreal bestDist2 = 10.0 * 10.0; // радиус 10 px
         for (DragCircle* c : poly->circles()) {
@@ -369,7 +367,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             nearest->setUserHidden(!nearest->isUserHidden());
         }
 
-        return; // обработали событие
+        return;
     }
 
     if (mouseEvent->button() == Qt::RightButton)
@@ -397,6 +395,37 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             polyline->insertPoint(scenePos);
+            // Помечаем документ как измененный
+            Document::Ptr doc = currentDocument();
+            if (doc && !doc->isModified)
+            {
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
+            }
+            mouseEvent->accept();
+            return;
+        }
+
+        if (auto* circle = dynamic_cast<DragCircle*>(item))
+        {
+            QGraphicsItem* parent = circle->parentItem();
+            if (auto* line = dynamic_cast<qgraph::Line*>(parent))
+            {
+                line->handlePointDeletion(circle);
+                Document::Ptr doc = currentDocument();
+                if (doc && !doc->isModified)
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+                mouseEvent->accept();
+                return;
+            }
+        }
+        // Проверяем, кликнули ли на саму линию (для добавления точки)
+        if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            line->insertPoint(scenePos);
             // Помечаем документ как измененный
             Document::Ptr doc = currentDocument();
             if (doc && !doc->isModified)
@@ -457,7 +486,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         _drawingCircle = false;
     }
 
-    else if (_drawingLine)
+    else if (_drawingPolyline)
     {
         _isInDrawingMode = true;
         setSceneItemsMovable(false);
@@ -472,21 +501,21 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             _polyline->setFocus();
             _polyline->setModificationCallback([this]()
             {
-                if (_drawingLine && _polyline && _polyline->isClosed())
+                if (_drawingPolyline && _polyline && _polyline->isClosed())
                 {
-                    _drawingLine = false;
+                    _drawingPolyline = false;
 
                     _polyline->updatePointNumbers();
                     apply_LineWidth_ToItem(_polyline);
                     apply_PointSize_ToItem(_polyline);
                     apply_NumberSize_ToItem(_polyline);
 
-                    // выбор класса — как в Ctrl-ветке
+                    // Выбор класса — как в Ctrl-ветке
                     QStringList classes;
                     for (int i = 0; i < ui->polygonLabel->count(); ++i)
                         classes << ui->polygonLabel->item(i)->text();
 
-                    SelectionDialog dialog(classes, this);
+                    Selection_class dialog(classes, this);
                     if (dialog.exec() == QDialog::Accepted)
                     {
                         const QString selectedClass = dialog.selectedClass();
@@ -544,6 +573,108 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         }
         _drawingRectangle = false;
     }
+
+    else if (_drawingPoint)
+    {
+        _isInDrawingMode = true;
+        setSceneItemsMovable(false);
+
+        const QPointF sceneP = graphView->mapToScene(mouseEvent->pos());
+
+        _currPoint = new qgraph::Point(_scene);
+
+        QStringList classes;
+
+        // Применяем стили из настроек
+        apply_PointSize_ToItem(_currPoint);
+        apply_NumberSize_ToItem(_currPoint);
+
+        _currPoint->setCenter(sceneP);
+        _currPoint->setFocus();
+
+        for (int i = 0; i < ui->polygonLabel->count(); ++i)
+            classes << ui->polygonLabel->item(i)->text();
+
+        Selection_class dialog(classes, this);
+        if (dialog.exec() == QDialog::Accepted)
+        {
+            const QString selectedClass = dialog.selectedClass();
+            if (!selectedClass.isEmpty())
+            {
+                _currPoint->setData(0, selectedClass);
+                linkSceneItemToList(_currPoint);
+            }
+        }
+
+        _currPoint = nullptr;
+
+        if (auto doc = currentDocument())
+        {
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
+        }
+
+        // Сразу завершаем (точка - единичный клик)
+        _drawingPoint = false;
+        _isInDrawingMode = false;
+        setSceneItemsMovable(true);
+
+        raiseAllHandlesToTop();
+        return;
+    }
+    else if (_drawingLine)
+    {
+        _isInDrawingMode = true;
+        setSceneItemsMovable(false);
+        _startPoint = graphView->mapToScene(mouseEvent->pos());
+        if (!_line)
+        {
+            // Если линия еще не создана, создаем объект
+            _line = new qgraph::Line(_scene, _startPoint);
+            apply_LineWidth_ToItem(_line);
+            apply_PointSize_ToItem(_line);
+            apply_NumberSize_ToItem(_line);
+            _line->setFocus();
+            _line->setModificationCallback([this]()
+            {
+                if (_drawingLine && _line && _line->isClosed())
+                {
+                    _drawingLine = false;
+
+                    _line->updatePointNumbers();
+                    apply_LineWidth_ToItem(_line);
+                    apply_PointSize_ToItem(_line);
+                    apply_NumberSize_ToItem(_line);
+
+                    QStringList classes;
+                    for (int i = 0; i < ui->polygonLabel->count(); ++i)
+                        classes << ui->polygonLabel->item(i)->text();
+
+                    Selection_class dialog(classes, this);
+                    if (dialog.exec() == QDialog::Accepted)
+                    {
+                        const QString selectedClass = dialog.selectedClass();
+                        if (!selectedClass.isEmpty())
+                        {
+                            _line->setData(0, selectedClass);
+                            linkSceneItemToList(_line);
+                        }
+                    }
+
+                    _line = nullptr;
+
+                    if (auto doc = currentDocument())
+                    {
+                        doc->isModified = true;
+                        updateFileListDisplay(doc->filePath);
+                    }
+                    raiseAllHandlesToTop();
+                }
+            });
+        }
+        _line->addPoint(_startPoint, _scene);
+    }
+
     //graphView->mousePressEvent(mouseEvent);
 }
 
@@ -556,7 +687,7 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
             // Обновляем размеры прямоугольника, пока пользователь тянет мышь
             QRectF newRect(_startPoint, graphView->mapToScene(mouseEvent->pos()));
             _currRectangle->setRect(newRect.normalized());
-            // normalizing: приводит координаты к нужному порядку (левый верхний угол — начальный)
+            // normalized: приводит координаты к нужному порядку (левый верхний угол - начальный)
         }
 
         else if (_isDrawingCircle && _currCircle)
@@ -570,12 +701,6 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
                               radius * 2, radius * 2);
             // Устанавливаем обновленный прямоугольник
             _currCircle->setRect(circleRect);
-        }
-
-        else if (_isDrawingPolyline && _currPolyline)
-        {
-            QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
-            _currentLine->setEndHandle(scenePos.x(), scenePos.y()); // Обновление линии
         }
         return;
     }
@@ -676,7 +801,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         }
 
         // Показываем диалог выбора класса
-        SelectionDialog dialog(classes, this);
+        Selection_class dialog(classes, this);
         if (dialog.exec() == QDialog::Accepted)
         {
             QString selectedClass = dialog.selectedClass();
@@ -684,7 +809,6 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             {
                 rectangle->setData(0, selectedClass);
                 linkSceneItemToList(rectangle); // Связываем новый элемент с списком
-                //ui->listWidget_PolygonList->addItem(selectedClass);
             }
         }
         if (auto doc = currentDocument())
@@ -724,7 +848,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             classes << ui->polygonLabel->item(i)->text();
         }
 
-        SelectionDialog dialog(classes, this);
+        Selection_class dialog(classes, this);
         if (dialog.exec() == QDialog::Accepted)
         {
             QString selectedClass = dialog.selectedClass();
@@ -732,7 +856,6 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             {
                 circle->setData(0, selectedClass);
                 linkSceneItemToList(circle); // Связываем новый элемент с списком
-                //ui->listWidget_PolygonList->addItem(selectedClass);
             }
         }
         if (auto doc = currentDocument())
@@ -742,88 +865,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         }
         raiseAllHandlesToTop();
     }
-    else if (mouseEvent->button() == Qt::LeftButton && _drawingLine && _polyline &&
-                (mouseEvent->modifiers() & Qt::ControlModifier))
+    else if (_drawingPolyline && _polyline && _polyline->isClosed())
     {
-       // Завершаем рисование полилинии при зажатом Ctrl
-       _drawingLine = false;
-       _polyline->closePolyline();
-       _polyline->updatePointNumbers();
-       apply_LineWidth_ToItem(_polyline);
-       apply_PointSize_ToItem(_polyline);
-       apply_NumberSize_ToItem(_polyline);
-
-       // Завершать рисование, если полилиния замкнулась не через Ctrl
-       _polyline->setModificationCallback([this]()
-       {
-           if (_drawingLine && _polyline && _polyline->isClosed())
-           {
-               _drawingLine = false;
-
-               // то же, что в Ctrl-ветке:
-               _polyline->updatePointNumbers();
-               apply_LineWidth_ToItem(_polyline);
-               apply_PointSize_ToItem(_polyline);
-               apply_NumberSize_ToItem(_polyline);
-
-               // выбор класса — тот же код, что и в Ctrl-ветке
-               QStringList classes;
-               for (int i = 0; i < ui->polygonLabel->count(); ++i)
-                   classes << ui->polygonLabel->item(i)->text();
-
-               SelectionDialog dialog(classes, this);
-               if (dialog.exec() == QDialog::Accepted)
-               {
-                   const QString selectedClass = dialog.selectedClass();
-                   if (!selectedClass.isEmpty())
-                   {
-                       _polyline->setData(0, selectedClass);
-                       linkSceneItemToList(_polyline);
-                   }
-               }
-
-               _polyline = nullptr;
-
-               if (auto doc = currentDocument())
-               {
-                   doc->isModified = true;
-                   updateFileListDisplay(doc->filePath);
-               }
-               raiseAllHandlesToTop();
-           }
-       });
-
-       // Получаем список классов из listWidget_PolygonLabel
-       QStringList classes;
-       for (int i = 0; i < ui->polygonLabel->count(); ++i)
-       {
-           classes << ui->polygonLabel->item(i)->text();
-       }
-
-       // Показываем диалог выбора класса
-       SelectionDialog dialog(classes, this);
-       if (dialog.exec() == QDialog::Accepted)
-       {
-           QString selectedClass = dialog.selectedClass();
-           if (!selectedClass.isEmpty())
-           {
-               // Устанавливаем класс для полилинии
-               _polyline->setData(0, selectedClass);
-               linkSceneItemToList(_polyline); // Связываем новый элемент с списком
-               //ui->listWidget_PolygonList->addItem(selectedClass);
-           }
-       }
-       _polyline = nullptr; // Сбрасываем указатель
-       if (auto doc = currentDocument())
-       {
-           doc->isModified = true;
-           updateFileListDisplay(doc->filePath);
-       }
-       raiseAllHandlesToTop();
-    }
-    if (_drawingLine && _polyline && _polyline->isClosed())
-    {
-        _drawingLine = false;
+        _drawingPolyline = false;
 
         _polyline->updatePointNumbers();
         apply_LineWidth_ToItem(_polyline);
@@ -836,7 +880,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             classes << ui->polygonLabel->item(i)->text();
 
         // Показываем диалог выбора класса
-        SelectionDialog dialog(classes, this);
+        Selection_class dialog(classes, this);
         if (dialog.exec() == QDialog::Accepted)
         {
             const QString selectedClass = dialog.selectedClass();
@@ -846,8 +890,41 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 linkSceneItemToList(_polyline);
             }
         }
-
         _polyline = nullptr;
+
+        if (auto doc = currentDocument())
+        {
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
+        }
+        raiseAllHandlesToTop();
+    }
+    else if (_drawingLine && _line && _line->isClosed())
+    {
+        _drawingLine = false;
+
+        _line->updatePointNumbers();
+        apply_LineWidth_ToItem(_line);
+        apply_PointSize_ToItem(_line);
+        apply_NumberSize_ToItem(_line);
+
+        // Получаем список классов из listWidget_PolygonLabel
+        QStringList classes;
+        for (int i = 0; i < ui->polygonLabel->count(); ++i)
+            classes << ui->polygonLabel->item(i)->text();
+
+        // Показываем диалог выбора класса
+        Selection_class dialog(classes, this);
+        if (dialog.exec() == QDialog::Accepted)
+        {
+            const QString selectedClass = dialog.selectedClass();
+            if (!selectedClass.isEmpty())
+            {
+                _line->setData(0, selectedClass);
+                linkSceneItemToList(_line);
+            }
+        }
+        _line = nullptr;
 
         if (auto doc = currentDocument())
         {
@@ -858,14 +935,17 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     }
 
     Document::Ptr doc = currentDocument();
-    if (doc && mouseEvent->button() == Qt::LeftButton) {
+    if (doc && mouseEvent->button() == Qt::LeftButton)
+    {
         // Проверяем, были ли перемещены какие-либо фигуры
         bool anyItemMoved = false;
-        for (QGraphicsItem* item : _scene->items()) {
+        for (QGraphicsItem* item : _scene->items())
+        {
             if (item != _videoRect &&
                 !dynamic_cast<DragCircle*>(item) &&
                 item->flags() & QGraphicsItem::ItemIsMovable &&
-                item->pos() != QPointF(0, 0)) {
+                item->pos() != QPointF(0, 0))
+            {
                 anyItemMoved = true;
                 break;
             }
@@ -938,7 +1018,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             const QPointF sp = ui->graphView->mapToScene(me->pos());
             bool topIsHandle = false;
 
-            if (_drawingLine && _polyline &&
+            if (_drawingPolyline && _polyline &&
                 qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::SingleClickOnFirstPoint)
             {
                 const auto& circles = _polyline->circles();
@@ -948,7 +1028,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     constexpr qreal kHit = 8.0;
                     if (QLineF(sp, p0).length() <= kHit)
                     {
-                        _drawingLine = false;
+                        _drawingPolyline = false;
                         _polyline->closePolyline();
 
                         _polyline->updatePointNumbers();
@@ -956,12 +1036,12 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         apply_PointSize_ToItem(_polyline);
                         apply_NumberSize_ToItem(_polyline);
 
-                        // выбор класса
+                        // Выбор класса
                         QStringList classes;
                         for (int i = 0; i < ui->polygonLabel->count(); ++i)
                             classes << ui->polygonLabel->item(i)->text();
 
-                        SelectionDialog dialog(classes, this);
+                        Selection_class dialog(classes, this);
                         if (dialog.exec() == QDialog::Accepted)
                         {
                             const QString selectedClass = dialog.selectedClass();
@@ -1026,7 +1106,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             }
             else if (_ghostTarget && _ghostHandle && _ghostHandle->isVisible())
             {
-                // Проверяем валидность ghost target
                 if (_ghostTarget->scene())
                 {
                     moveGhostTo(sp);
@@ -1042,7 +1121,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 // Ищем ручку под курсором
                 qgraph::DragCircle* hoveredHandle = pickHandleAt(sp);
 
-                // Проверяем, что найденная ручка все еще валидна
                 if (hoveredHandle && !hoveredHandle->isValid())
                 {
                     hoveredHandle = nullptr;
@@ -1051,13 +1129,12 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 // Если нашли новую ручку, отличающуюся от текущей
                 if (hoveredHandle != _currentHoveredHandle)
                 {
-                    // Убираем hover с предыдущей ручки (если она валидна)
+                    // Убираем hover с предыдущей ручки
                         if (_currentHoveredHandle && _currentHoveredHandle->isValid())
                     {
                         _currentHoveredHandle->setHoverStyle(false);
                     }
-
-                    // Устанавливаем hover на новую ручку (если она валидна)
+                    // Устанавливаем hover на новую ручку
                     if (hoveredHandle && hoveredHandle->isValid())
                     {
                         hoveredHandle->setHoverStyle(true);
@@ -1081,7 +1158,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             }
             else if (_ghostTarget && _ghostHandle && _ghostHandle->isVisible())
             {
-                // Проверяем валидность перед завершением
                 if (_ghostTarget->scene())
                 {
                     endGhost();
@@ -1100,11 +1176,11 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             auto* ke = static_cast<QKeyEvent*>(event);
 
             // Завершение рисования по 'C' при выбранном режиме KeyC
-            if (_drawingLine && _polyline &&
+            if (_drawingPolyline && _polyline &&
                 qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::KeyC &&
                 ke->key() == Qt::Key_C)
             {
-                _drawingLine = false;
+                _drawingPolyline = false;
                 _polyline->closePolyline();
 
                 _polyline->updatePointNumbers();
@@ -1112,12 +1188,12 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 apply_PointSize_ToItem(_polyline);
                 apply_NumberSize_ToItem(_polyline);
 
-                // выбор класса
+                // Выбор класса
                 QStringList classes;
                 for (int i = 0; i < ui->polygonLabel->count(); ++i)
                     classes << ui->polygonLabel->item(i)->text();
 
-                SelectionDialog dialog(classes, this);
+                Selection_class dialog(classes, this);
                 if (dialog.exec() == QDialog::Accepted)
                 {
                     const QString selectedClass = dialog.selectedClass();
@@ -1129,6 +1205,48 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 }
 
                 _polyline = nullptr;
+
+                if (auto doc = currentDocument())
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+                raiseAllHandlesToTop();
+
+                event->accept();
+                return true;
+            }
+
+            // Завершение рисования по 'C' при выбранном режиме KeyC для линии
+            if (_drawingLine && _line &&
+                qgraph::Line::globalCloseMode() == qgraph::Line::CloseMode::KeyC &&
+                ke->key() == Qt::Key_C)
+            {
+                _drawingLine = false;
+                _line->closeLine();
+
+                _line->updatePointNumbers();
+                apply_LineWidth_ToItem(_line);
+                apply_PointSize_ToItem(_line);
+                apply_NumberSize_ToItem(_line);
+
+                // Выбор класса
+                QStringList classes;
+                for (int i = 0; i < ui->polygonLabel->count(); ++i)
+                    classes << ui->polygonLabel->item(i)->text();
+
+                Selection_class dialog(classes, this);
+                if (dialog.exec() == QDialog::Accepted)
+                {
+                    const QString selectedClass = dialog.selectedClass();
+                    if (!selectedClass.isEmpty())
+                    {
+                        _line->setData(0, selectedClass);
+                        linkSceneItemToList(_line);
+                    }
+                }
+
+                _line = nullptr;
 
                 if (auto doc = currentDocument())
                 {
@@ -1204,9 +1322,17 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
         for (QGraphicsItem* item : selectedItems)
         {
-            // Сначала удаляем из списка
+            // Если выделена ручка, удаляем её владельца (фигуру), а не саму ручку
+            if (auto* h = dynamic_cast<qgraph::DragCircle*>(item))
+            {
+                if (h->parentItem())
+                    item = h->parentItem();
+            }
+
+            // Сначала убираемм связанный пункт из списка фигур
             onSceneItemRemoved(item);
-            // Удаление через сцену
+
+            // Затем удалим со сцены и из памяти
             _scene->removeItem(item);
             delete item;
         }
@@ -1360,84 +1486,17 @@ void MainWindow::on_actExit_triggered(bool)
 
 void MainWindow::on_actCreateRectangle_triggered()
 {
-//    ui->graphView->setMouseTracking(true);
-//    qgraph::Rectangle* rect = new qgraph::Rectangle(&_scene);
-//    if (!point.isNull())
-//    {
-//        rect->setRect({qreal(point.x()), qreal(point.y()), 100, 100});
-//    }
-//    else
-//    {
-//    }
-
-
-//    _scene.addRect(QRectF(50, 50, 100, 100), QPen(Qt::red));
-//    qgraph::Rectangle* rect = new qgraph::Rectangle(&_scene);
-//    rect->setRect({0, 0, 100, 100});
-//    rect->setRect({0, 0, 100, 100});
-//    rect->moveBy(100, 100);
-//    //rect->setFrameScale(float(frameScale) / 100);
-//    rect->setFrameScale(1.0);
-//    rect->shapeVisible(true);
-//    rect->setZLevel(1);
-//    //rect->circleMoveSignal.connect(CLOSURE(&MainWindow::graphicShapeChange, this));
-//    rect->setPenColor(QColor(0, 255, 0));
-    //rect->setTag(toInt(tag));
-    //Ловим координаты курсора
-    /*if (event->button() == Qt::LeftButton)
-    {
-        //QPoint QCursor::pos ();
-        qgraph::Rectangle* rect = new qgraph::Rectangle(&_scene);
-        rect->setRect({0, 0, 100, 100});
-        rect->moveBy(100, 100);
-        //rect->setFrameScale(float(frameScale) / 100);
-        rect->setFrameScale(1.0);
-        rect->shapeVisible(true);
-        rect->setZLevel(1);
-        //rect->circleMoveSignal.connect(CLOSURE(&MainWindow::graphicShapeChange, this));
-        rect->setPenColor(QColor(0, 255, 0));
-        //rect->setTag(toInt(tag));
-    }*/
-
-
 
 }
 
 void MainWindow::on_actCreateCircle_triggered()
 {
-//    _scene.addRect(QRectF(100, 100, 100, 100), QPen(Qt::green));
-//    QGraphicsView* graphView = new QGraphicsView;
-//    GraphicsScene* scene = new GraphicsScene();
-//    //qgraph:: Circle* circ = new qgraph::Circle();
-//    graphView->setScene(scene);
-//    graphView->setSceneRect(-300,-300, 300, 300);
-//    this->setCentralWidget(graphView);
-//    this->resize(600, 600);
+
 }
 
-void MainWindow::on_actCreateLine_triggered()
+void MainWindow::on_actCreatePolyline_triggered()
 {
-    /*QVBoxLayout *layout = new QVBoxLayout(this);
-    setLayout(layout);
-    // Создаем QGraphicsScene и QGraphicsView
-    QGraphicsScene *scene = new QGraphicsScene(this);
-    QGraphicsView *view = new QGraphicsView(scene);
-    layout->addWidget(view);
-    // Создаем полилинию с несколькими точками
-    QPolygonF points;
-    points << QPointF(50, 50) << QPointF(150, 150) << QPointF(250, 50);
-    Polyline *polyline = new Polyline(points);
 
-    // Добавляем полилинию в сцену
-    scene->addItem(polyline);
-
-    // Кнопка для добавления точки
-    QPushButton *addPointButton = new QPushButton("Добавить точку");
-    layout->addWidget(addPointButton);
-
-    connect(addPointButton, &QPushButton::clicked, [polyline]() {
-        polyline->addPoint(QPointF(300, 200)); // Добавляем новую точку
-    }*/
 }
 
 void MainWindow::on_btnRect_clicked(bool)
@@ -1447,9 +1506,9 @@ void MainWindow::on_btnRect_clicked(bool)
     setSceneItemsMovable(false);
 }
 
-void MainWindow::on_btnLine_clicked(bool)
+void MainWindow::on_btnPolyline_clicked(bool)
 {
-    _drawingLine = true;
+    _drawingPolyline = true;
     _isInDrawingMode = true;
     setSceneItemsMovable(false);
 }
@@ -1639,8 +1698,6 @@ QString MainWindow::annotationPathFor(const QString& imagePath)
 {
     QFileInfo fileInfo(imagePath);
     QDir dir(fileInfo.absolutePath());
-    // QDir::filePath() расставит правильные разделители для платформы
-    // QFileInfo::completeBaseName() корректно берет имя без расширения
     return dir.filePath(fileInfo.completeBaseName() + ".yaml");
 }
 
@@ -1680,18 +1737,18 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
         return true;
     };
 
-    YamlConfig::Func savePolygons = [&](YamlConfig* conf, YAML::Node& ypolygons, bool)
+    YamlConfig::Func savePolylines = [&](YamlConfig* conf, YAML::Node& ypolylines, bool)
     {
         for (QGraphicsItem* item : doc->scene->items())
             if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
             {
-                YAML::Node ypolygon;
+                YAML::Node ypolyline;
 
                 QString className = polyline->data(0).toString();
                 if (className.isEmpty())
                     className = "none";
 
-                conf->setValue(ypolygon, "label", className);
+                conf->setValue(ypolyline, "label", className);
 
                 QVector<QPointF> points = polyline->points();
                 YamlConfig::Func savePoints = [&points](YamlConfig* conf, YAML::Node& ypoints, bool)
@@ -1704,16 +1761,14 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
                         int y = std::round(point.y());
                         conf->setValue(ypoint, "x", x);
                         conf->setValue(ypoint, "y", y);
-                        // conf->setValue(ypoint, "x", int(point.x()));
-                        // conf->setValue(ypoint, "y", int(point.y()));
                         ypoints.push_back(ypoint);
                     }
                     return true;
                 };
-                conf->setValue(ypolygon, "points", savePoints);
-                conf->setNodeStyle(ypolygon, "points", YAML::EmitterStyle::Flow);
+                conf->setValue(ypolyline, "points", savePoints);
+                conf->setNodeStyle(ypolyline, "points", YAML::EmitterStyle::Flow);
 
-                ypolygons.push_back(ypolygon);
+                ypolylines.push_back(ypolyline);
             }
 
         return true;
@@ -1746,13 +1801,70 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 
         return true;
     };
+    YamlConfig::Func savePoints = [&](YamlConfig* conf, YAML::Node& ypoints, bool)
+    {
+        for (QGraphicsItem* item : doc->scene->items())
+            if (qgraph::Point* p = dynamic_cast<qgraph::Point*>(item))
+            {
+                YAML::Node ypoint;
+
+                QString className = p->data(0).toString();
+                if (className.isEmpty())
+                    className = "none";
+
+                conf->setValue(ypoint, "label", className);
+
+                QPoint center = p->center();
+                conf->setValue(ypoint, "point", center);
+
+                ypoints.push_back(ypoint);
+            }
+        return true;
+    };
+    YamlConfig::Func saveLines = [&](YamlConfig* conf, YAML::Node& ylines, bool)
+    {
+        for (QGraphicsItem* item : doc->scene->items())
+            if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
+            {
+                YAML::Node yline;
+
+                QString className = line->data(0).toString();
+                if (className.isEmpty())
+                    className = "none";
+
+                conf->setValue(yline, "label", className);
+
+                QVector<QPointF> points = line->points();
+                YamlConfig::Func savePoints = [&points](YamlConfig* conf, YAML::Node& ypoints, bool)
+                {
+                    for (const QPointF& point : points)
+                    {
+                        YAML::Node ypoint;
+                        // Математическое округление координат точек
+                        int x = std::round(point.x());
+                        int y = std::round(point.y());
+                        conf->setValue(ypoint, "x", x);
+                        conf->setValue(ypoint, "y", y);
+                        ypoints.push_back(ypoint);
+                    }
+                    return true;
+                };
+                conf->setValue(yline, "points", savePoints);
+                conf->setNodeStyle(yline, "points", YAML::EmitterStyle::Flow);
+
+                ylines.push_back(yline);
+            }
+        return true;
+    };
 
     YamlConfig::Func saveFunc = [&](YamlConfig* conf, YAML::Node& shapes, bool /*logWarn*/)
     {
 
         conf->setValue(shapes, "circles", saveCircles);
-        conf->setValue(shapes, "polygons", savePolygons);
+        conf->setValue(shapes, "polylines", savePolylines);
         conf->setValue(shapes, "rectangles", saveRectangles);
+        conf->setValue(shapes, "points", savePoints);
+        conf->setValue(shapes, "lines", saveLines);
 
         return true;
     };
@@ -1926,12 +2038,12 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
         return true;
     };
 
-    YamlConfig::Func loadPolygons = [&](YamlConfig* conf, YAML::Node& ypolygons, bool)
+    YamlConfig::Func loadPolylines = [&](YamlConfig* conf, YAML::Node& ypolylines, bool)
     {
-        for (const YAML::Node& ypolygon : ypolygons)
+        for (const YAML::Node& ypolyline : ypolylines)
         {
             QString label;
-            conf->getValue(ypolygon, "label", label);
+            conf->getValue(ypolyline, "label", label);
 
             QVector<QPointF> points;
             YamlConfig::Func loadPoints = [&points](YamlConfig* conf, YAML::Node& ypoints, bool)
@@ -1945,7 +2057,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
                 }
                 return true;
             };
-            conf->getValue(ypolygon, "points", loadPoints);
+            conf->getValue(ypolyline, "points", loadPoints);
 
             if (points.isEmpty())
                 continue;
@@ -1987,13 +2099,73 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
 
         return true;
     };
+    YamlConfig::Func loadPoints = [&](YamlConfig* conf, YAML::Node& ypoints, bool)
+    {
+        for (const YAML::Node& ypoint : ypoints)
+        {
+            QString label;
+            conf->getValue(ypoint, "label", label);
+
+            QPoint center;
+            conf->getValue(ypoint, "point", center);
+
+            qgraph::Point* p = new qgraph::Point(doc->scene);
+            p->setCenter(center);
+            p->setData(0, label);
+
+            apply_PointSize_ToItem(p);
+            apply_NumberSize_ToItem(p);
+        }
+        return true;
+    };
+    YamlConfig::Func loadLines = [&](YamlConfig* conf, YAML::Node& ylines, bool)
+    {
+        for (const YAML::Node& yline : ylines)
+        {
+            QString label;
+            conf->getValue(yline, "label", label);
+
+            QVector<QPointF> points;
+            YamlConfig::Func loadPoints = [&points](YamlConfig* conf, YAML::Node& ypoints, bool)
+            {
+                for (const YAML::Node& ypoint : ypoints)
+                {
+                    int x = 0, y = 0;
+                    conf->getValue(ypoint, "x", x);
+                    conf->getValue(ypoint, "y", y);
+                    points.append(QPoint(x, y));
+                }
+                return true;
+            };
+            conf->getValue(yline, "points", loadPoints);
+
+            if (points.isEmpty())
+                continue;
+
+            // Создаем линию на сцене
+            qgraph::Line* line = new qgraph::Line(doc->scene, points.first());
+            for (int i = 1; i < points.size(); ++i)
+            {
+                line->addPoint(points[i], doc->scene);
+            }
+            line->closeLine();
+            line->updatePath();
+            line->setData(0, label);
+            apply_LineWidth_ToItem(line);
+            apply_PointSize_ToItem(line);
+            apply_NumberSize_ToItem(line);
+        }
+        return true;
+    };
 
     YamlConfig::Func loadFunc = [&](YamlConfig* conf, YAML::Node& shapes, bool /*logWarn*/)
     {
 
         conf->getValue(shapes, "circles", loadCircles);
-        conf->getValue(shapes, "polygons", loadPolygons);
+        conf->getValue(shapes, "polylines", loadPolylines);
         conf->getValue(shapes, "rectangles", loadRectangles);
+        conf->getValue(shapes, "points", loadPoints);
+        conf->getValue(shapes, "lines", loadLines);
 
         return true;
     };
@@ -2036,7 +2208,7 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
             rect->setData(0, className);
             apply_LineWidth_ToItem(rect);
             apply_PointSize_ToItem(rect);
-            //apply_NumberSize_ToItem(rect);
+            apply_NumberSize_ToItem(rect);
         }
         else if (type == "circle")
         {
@@ -2092,39 +2264,8 @@ qgraph::VideoRect* MainWindow::findVideoRect(QGraphicsScene* scene)
     return nullptr;
 }
 
-/*void MainWindow::resetViewToDefault()
-{
-    if (!_scene || !_videoRect)
-        return;
-
-    // Вычисляем масштаб для полного отображения
-    QRectF viewRect = ui->graphView->viewport()->rect();
-    QRectF sceneRect = _videoRect->sceneBoundingRect();
-
-    qreal xScale = viewRect.width() / sceneRect.width();
-    qreal yScale = viewRect.height() / sceneRect.height();
-    qreal scale = qMin(xScale, yScale);
-
-    // Сбрасываем трансформацию
-    ui->graphView->resetTransform();
-    ui->graphView->scale(scale, scale);
-    ui->graphView->centerOn(sceneRect.center());
-
-    // Обновляем сохраненное состояние
-    if (!_currentImagePath.isEmpty())
-    {
-        _scrollStates[_currentImagePath] = {
-            ui->graphView->horizontalScrollBar()->value(),
-            ui->graphView->verticalScrollBar()->value(),
-            scale,
-            sceneRect.center()
-        };
-    }
-}*/
-
 void MainWindow::toggleRightSplitter()
 {
-    // Предполагаем, что правый сплиттер - это ui->splitter2
     QSplitter* rightSplitter = ui->splitter;
 
     if (_isRightSplitterCollapsed)
@@ -2547,13 +2688,13 @@ bool MainWindow::isYamlFileEmpty(const QString& yamlPath) const
         {
             // Проверяем наличие ключа shapes (основная структура аннотаций)
             if (trimmed.contains("shapes:") || trimmed.contains("circles:") ||
-                trimmed.contains("rectangles:") || trimmed.contains("polygons:"))
+                trimmed.contains("rectangles:") || trimmed.contains("polylines:") ||
+                trimmed.contains("points:") || trimmed.contains("lines:"))
             {
                 return false; // Файл не пустой
             }
         }
     }
-
     return true; // Файл пустой
 }
 
@@ -2614,6 +2755,8 @@ void MainWindow::raiseAllHandlesToTop()
         {
             circle->raiseHandlesToTop();
         }
+        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
+            point->raiseHandlesToTop();
     }
 }
 
@@ -2766,13 +2909,13 @@ qgraph::DragCircle* MainWindow::pickHiddenHandle(const QPointF& scenePos, bool& 
     topIsHandle = false;
     if (!_scene) return nullptr;
 
-    // Берём все элементы под курсором в окрестности
+    // Берем все элементы под курсором в окрестности
     const QRectF pickRect(scenePos - QPointF(_ghostPickRadius, _ghostPickRadius),
                           QSizeF(2 * _ghostPickRadius, 2 * _ghostPickRadius));
 
     const auto items = _scene->items(pickRect, Qt::IntersectsItemShape, Qt::DescendingOrder);
 
-    // Если верхний элемент уже ручка — «обманка» не нужна, пусть работает стандартный drag
+    // Если верхний элемент уже ручка - «обманка» не нужна, пусть работает стандартный drag
     if (!items.isEmpty())
         if (auto* dc = dynamic_cast<qgraph::DragCircle*>(items.front()))
         {
@@ -2844,8 +2987,6 @@ void MainWindow::ensureGhostAllocated()
 
     // Держим «призрака» поверх всего
     _ghostHandle->setZValue(1e9);
-
-    // По умолчанию скрыт; show() вызывается в showGhostFor()/showGhostOver()
     _ghostHandle->hide();
 }
 
@@ -2895,12 +3036,10 @@ void MainWindow::endGhost()
 {
     if (_ghostTarget)
     {
-        //restoreOriginalHandleStyle(_ghostTarget);
         _ghostTarget->setHoverStyle(false);
     }
     if (_lastHoverHandle)
     {
-        //restoreOriginalHandleStyle(_lastHoverHandle);
         _ghostTarget->setHoverStyle(false);
         _lastHoverHandle = nullptr;
     }
@@ -2910,7 +3049,6 @@ void MainWindow::endGhost()
         if (auto* shape = dynamic_cast<qgraph::Shape*>(_ghostTarget->parentItem()))
             shape->dragCircleRelease(_ghostTarget);
         _ghostTarget->setHoverStyle(false);
-        //restoreOriginalHandleStyle(_ghostTarget);
         _ghostTarget->setGhostDriven(false);
 
         // Помечаем документ как измененный после завершения перетаскивания
@@ -2955,7 +3093,6 @@ void MainWindow::setGhostStyleHover()
     _ghostHandle->setBrush(QBrush(ghostColor));
     _ghostHandle->update();
 
-    // Вернём центр в ту же точку
     _ghostHandle->setPos(centerScene - newRect.center());
 }
 
@@ -3167,14 +3304,12 @@ void MainWindow::hideGhost()
     // Восстанавливаем оригинальный стиль реальной ручки, если она была подсвечена
     if (_ghostTarget)
     {
-        //restoreOriginalHandleStyle(_ghostTarget);
         _ghostTarget->setHoverStyle(false);
     }
     _ghostTarget = nullptr;
     if (_ghostHandle)
     {
         _ghostHandle->setVisible(false);
-        //setGhostStyleIdle();
     }
 }
 
@@ -3245,6 +3380,18 @@ void MainWindow::loadVisualStyle()
     else
         _vis.selectedHandleColor = Qt::yellow;
 
+    if (config::base().getValue("vis.colors.line", colorStr))
+        _vis.lineLineColor = QColor(colorStr);
+
+    if (config::base().getValue("vis.colors.point", colorStr))
+        _vis.pointColor = QColor(colorStr);
+
+    int ow = 1;
+    if (config::base().getValue("vis.point.outline_width", ow))
+        _vis.pointOutlineWidth = ow;
+    else
+        _vis.pointOutlineWidth = 1;
+
     applyStyle_AllDocuments();
 }
 
@@ -3261,6 +3408,9 @@ void MainWindow::saveVisualStyle() const
     config::base().setValue("vis.colors.rectangle", _vis.rectangleLineColor.name(QColor::HexArgb));
     config::base().setValue("vis.colors.circle", _vis.circleLineColor.name(QColor::HexArgb));
     config::base().setValue("vis.colors.polyline", _vis.polylineLineColor.name(QColor::HexArgb));
+    config::base().setValue("vis.colors.line",  _vis.lineLineColor.name(QColor::HexArgb));
+    config::base().setValue("vis.colors.point", _vis.pointColor.name(QColor::HexArgb));
+    config::base().setValue("vis.point.outline_width", _vis.pointOutlineWidth);
 }
 
 void MainWindow::applyStyle_AllDocuments()
@@ -3374,6 +3524,23 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
         pl->setPen(p);
         return;
     }
+    if (auto l = dynamic_cast<qgraph::Line*>(it))
+    {
+        QPen p = l->pen();
+        p.setWidthF(_vis.lineWidth);
+        p.setColor(_vis.lineLineColor);
+        p.setCosmetic(true);
+        l->setPen(p);
+        return;
+    }
+    if (auto pnt = dynamic_cast<qgraph::Point*>(it))
+    {
+        QPen p = pnt->pen();
+        p.setWidthF(_vis.pointOutlineWidth); // Отдельная толщина для точки
+        p.setCosmetic(true);
+        pnt->setPen(p);
+        return;
+    }
 
     // Базовые Qt‑элементы
     if (auto l = qgraphicsitem_cast<QGraphicsLineItem*>(it))
@@ -3416,6 +3583,7 @@ void MainWindow::apply_PointSize_ToItem(QGraphicsItem* it)
     if (!it) return;
     // Ручки обычно лежат детьми нужной фигуры
     for (QGraphicsItem* ch : it->childItems())
+    {
         if (auto h = dynamic_cast<qgraph::DragCircle*>(ch))
         {
             h->setBaseStyle(_vis.handleColor, _vis.handleSize);
@@ -3424,13 +3592,14 @@ void MainWindow::apply_PointSize_ToItem(QGraphicsItem* it)
 
             qgraph::DragCircle::rememberCurrentAsBase(h);
         }
+    }
 }
 
 void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* it)
 {
     if (!it) return;
 
-    // Для наших классов фигур
+    // Для классов фигур
     if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(it))
     {
         rectangle->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
@@ -3441,8 +3610,13 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* it)
         polyline->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
         return;
     }
+    if (auto* line = dynamic_cast<qgraph::Line*>(it))
+    {
+        line->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
+        return;
+    }
 
-    // Для стандартных Qt элементов (если нужно)
+    // Для стандартных Qt элементов
     QVector<QGraphicsSimpleTextItem*> texts;
     QVector<QGraphicsRectItem*> backgrounds;
 
@@ -3452,7 +3626,7 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* it)
         {
             // Проверяем, что это номер (короткое число)
             QString text = t->text();
-            if (text.length() <= 2)
+            if (text.length() <= 3)
             {
                 bool ok;
                 text.toInt(&ok);
@@ -3537,6 +3711,20 @@ void MainWindow::updateLineColorsForScene(QGraphicsScene* scene)
             pen.setColor(_vis.polylineLineColor);
             polyline->setPen(pen);
         }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            QPen pen = line->pen();
+            pen.setColor(_vis.lineLineColor);
+            line->setPen(pen);
+        }
+        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
+        {
+            QPen pen = point->pen();
+            pen.setColor(_vis.pointColor);
+            pen.setWidthF(_vis.pointOutlineWidth);
+            pen.setCosmetic(true);
+            point->setPen(pen);
+        }
     }
     scene->update();
 }
@@ -3553,7 +3741,6 @@ void MainWindow::applyZoom(qreal z)
     const QPointF centerScene =
         ui->graphView->mapToScene(ui->graphView->viewport()->rect().center());
 
-    // Абсолютно задаём трансформацию (не накапливаем relative scale)
     QTransform t;
     t.scale(z, z);
     ui->graphView->setTransform(t);
@@ -3563,7 +3750,6 @@ void MainWindow::applyZoom(qreal z)
 
     m_zoom = z;
 
-    // Если ты хранишь viewState — обновим его здесь, чтобы затем restore не «перебивал» зум
     if (auto doc = currentDocument())
     {
         doc->viewState = {
@@ -3575,14 +3761,14 @@ void MainWindow::applyZoom(qreal z)
     }
 }
 
-void MainWindow::applyPolylineCloseMode()
+void MainWindow::applyClosePolyline()
 {
-    //using SDV = SettingsDialog::Values;
-    using SDM = SettingsDialog::PolylineCloseMode;
+    //using SDV = Settings::Values;
+    using SDM = Settings::PolylineCloseMode;
     using PLM = qgraph::Polyline::CloseMode;
 
     qgraph::Polyline::CloseMode mode = PLM::CtrlModifier;
-    switch (polylineCloseMode_)
+    switch (_polylineCloseMode)
     {
         case SDM::DoubleClick:             mode = PLM::DoubleClick;   break;
         case SDM::SingleClickOnFirstPoint: mode = PLM::SingleClickOnFirstPoint; break;
@@ -3590,6 +3776,22 @@ void MainWindow::applyPolylineCloseMode()
         case SDM::KeyCWithoutNewPoint:     mode = PLM::KeyC;                    break;
     }
     qgraph::Polyline::setGlobalCloseMode(mode);
+}
+
+void MainWindow::applyFinishLine()
+{
+    //using SDV = Settings::Values;
+    using SDM = Settings::LineFinishMode;
+    using PLM = qgraph::Line::CloseMode;
+
+    qgraph::Line::CloseMode mode = PLM::CtrlModifier;
+    switch (_lineFinishMode)
+    {
+        case SDM::DoubleClick:             mode = PLM::DoubleClick;   break;
+        case SDM::CtrlModifier:            mode = PLM::CtrlModifier;            break;
+        case SDM::KeyCWithoutNewPoint:     mode = PLM::KeyC;                    break;
+    }
+    qgraph::Line::setGlobalCloseMode(mode);
 }
 
 void MainWindow::removePolygonListItem(QListWidgetItem* item)
@@ -3730,14 +3932,6 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     // Подключаем сигнал changed для новой сцены
     if (currentDoc->scene)
     {
-        // for (QGraphicsItem* item : currentDoc->scene->items())
-        // {
-        //     if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-        //     {
-        //         connect(polyline, &qgraph::Polyline::polylineModified,
-        //                 this, &MainWindow::onPolylineModified, Qt::UniqueConnection);
-        //     }
-        // }
         connect(currentDoc->scene, &QGraphicsScene::selectionChanged,
                 this, &MainWindow::onSceneSelectionChanged,
                 Qt::UniqueConnection);
@@ -3745,15 +3939,13 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
         connect(currentDoc->scene, &QGraphicsScene::changed,
                 this, &MainWindow::onSceneChanged,
                 Qt::UniqueConnection);
-
     }
 
     _loadingNow = false;
     fitImageToView();
     updatePolygonListForCurrentScene();
-    //current->setCheckState(Qt::Checked);
     clearAllHandleHoverEffects();
-    // Обновляем отображение звездочки
+    // Обновляем отображение звездочки (файл изменен)
     updateFileListDisplay(currentDoc->filePath);
     raiseAllHandlesToTop();
 }
@@ -3772,7 +3964,8 @@ void MainWindow::onPolylineModified()
 void MainWindow::onSceneChanged()
 {
     // Игнорируем изменения во время загрузки
-    if (_loadingNow) return;
+    if (_loadingNow)
+        return;
 
     // Document::Ptr doc = currentDocument();
     // if (!doc || doc->isModified) return;
@@ -3784,22 +3977,29 @@ void MainWindow::onSceneChanged()
 
 void MainWindow::onPolygonListSelectionChanged()
 {
-    if (!_scene) return;
+    if (!_scene)
+        return;
     QList<QListWidgetItem*> selected = ui->polygonList->selectedItems();
 
     _scene->blockSignals(true);
-    for (QGraphicsItem* it : _scene->items()) {
-        if (it == _videoRect || it == _tempRectItem || it == _tempCircleItem || it == _tempPolyline) continue;
-        if (it->isSelected()) it->setSelected(false);
+    for (QGraphicsItem* it : _scene->items())
+    {
+        if (it == _videoRect || it == _tempRectItem || it == _tempCircleItem || it == _tempPolyline)
+            continue;
+        if (it->isSelected())
+            it->setSelected(false);
     }
-    for (auto* li : selected) {
-        if (!li) continue;
+    for (auto* li : selected)
+    {
+        if (!li)
+            continue;
         if (QGraphicsItem* scItem = li->data(Qt::UserRole).value<QGraphicsItem*>())
             scItem->setSelected(true);
     }
     _scene->blockSignals(false);
 
-    if (!selected.isEmpty()) {
+    if (!selected.isEmpty())
+    {
         if (QGraphicsItem* scItem = selected.first()->data(Qt::UserRole).value<QGraphicsItem*>())
             ui->graphView->ensureVisible(scItem);
     }
@@ -3812,7 +4012,9 @@ void MainWindow::on_actRect_triggered()
 
     _drawingRectangle = true;
     _drawingCircle = false;
+    _drawingPolyline = false;
     _drawingLine = false;
+    _drawingPoint = false;
 }
 
 void MainWindow::on_actCircle_triggered()
@@ -3820,18 +4022,45 @@ void MainWindow::on_actCircle_triggered()
     _btnCircleFlag = true;
 
     _drawingCircle = true;
-    _drawingLine = false;
+    _drawingPolyline = false;
     _drawingRectangle= false;
+    _drawingLine = false;
+    _drawingPoint = false;
 
 }
+
+void MainWindow::on_actPolyline_triggered()
+{
+    _btnPolylineFlag = true;
+
+    _drawingPolyline = true;
+    _drawingRectangle= false;
+    _drawingCircle = false;
+    _drawingLine = false;
+    _drawingPoint = false;
+}
+
+void MainWindow::on_actPoint_triggered()
+{
+    _btnPointFlag = true;
+
+    _drawingPoint = true;
+    _drawingRectangle = false;
+    _drawingCircle    = false;
+    _drawingPolyline      = false;
+    _drawingLine = false;
+}
+
 
 void MainWindow::on_actLine_triggered()
 {
     _btnLineFlag = true;
 
     _drawingLine = true;
-    _drawingRectangle= false;
-    _drawingCircle = false;
+    _drawingPoint = false;
+    _drawingRectangle = false;
+    _drawingCircle    = false;
+    _drawingPolyline      = false;
 }
 
 void MainWindow::wheelEvent(QWheelEvent* event)
@@ -3862,7 +4091,6 @@ void MainWindow::onCheckBoxPolygonLabel(QAbstractButton *button)
     if (checkBox)
     {
         QString selectedText = checkBox->property("itemText").toString();
-        // Дополнительные действия при выборе...
     }
 }
 
@@ -4023,7 +4251,7 @@ void MainWindow::on_actSetting_triggered()
 {
     const auto visBackup = _vis;
 
-    SettingsDialog dlg(this);
+    Settings dlg(this);
 
     QVector<int> geom{ -1, -1, 520, 360 };
     config::base().getValue("windows.settings_dialog.geometry", geom);
@@ -4044,7 +4272,7 @@ void MainWindow::on_actSetting_triggered()
         }
     }
 
-    SettingsDialog::Values init;
+    Settings::Values init;
     init.lineWidth         = _vis.lineWidth;
     init.handleSize        = _vis.handleSize;
     init.numberFontPt      = _vis.numberFontPt;
@@ -4056,27 +4284,33 @@ void MainWindow::on_actSetting_triggered()
     init.rectLineColor     = _vis.rectangleLineColor;    // «Линии прямоугольника»
     init.circleLineColor   = _vis.circleLineColor;       // «Линии окружности»
     init.polylineLineColor = _vis.polylineLineColor;     // «Линии полилинии»
+    init.lineLineColor = _vis.lineLineColor;
+    init.pointColor = _vis.pointColor;
 
-    init.closeMethod       = polylineCloseMode_;         // Текущий режим замыкания
+    init.closePolyline       = _polylineCloseMode;         // Текущий режим замыкания
+    init.finishLine       = _lineFinishMode;               // Текущий режим завершения рисования линии
 
     dlg.setValues(init);
 
 
-    connect(&dlg, &SettingsDialog::settingsApplied, this,
-                [this](const SettingsDialog::Values& v)
+    connect(&dlg, &Settings::settingsApplied, this,
+                [this](const Settings::Values& v)
     {
         // 1) Обновляем визуальные настройки из v
-        _vis.lineWidth            = v.lineWidth;
-        _vis.handleSize           = v.handleSize;
-        _vis.numberFontPt         = v.numberFontPt;
+        _vis.lineWidth = v.lineWidth;
+        _vis.handleSize = v.handleSize;
+        _vis.numberFontPt = v.numberFontPt;
 
-        _vis.handleColor          = v.nodeColor;
-        _vis.selectedHandleColor  = v.nodeSelectedColor;
-        _vis.numberColor          = v.numberColor;
-        _vis.numberBgColor        = v.numberBgColor;
-        _vis.rectangleLineColor   = v.rectLineColor;
-        _vis.circleLineColor      = v.circleLineColor;
-        _vis.polylineLineColor    = v.polylineLineColor;
+        _vis.handleColor = v.nodeColor;
+        _vis.selectedHandleColor = v.nodeSelectedColor;
+        _vis.numberColor = v.numberColor;
+        _vis.numberBgColor = v.numberBgColor;
+        _vis.rectangleLineColor = v.rectLineColor;
+        _vis.circleLineColor = v.circleLineColor;
+        _vis.polylineLineColor = v.polylineLineColor;
+        _vis.lineLineColor = v.lineLineColor;
+        _vis.pointColor = v.pointColor;
+        _vis.pointOutlineWidth = v.pointOutlineWidth;
 
         // 2) Сохраняем и применяем
         saveVisualStyle();
@@ -4085,12 +4319,22 @@ void MainWindow::on_actSetting_triggered()
         apply_NumberSize_ToScene(nullptr);
 
         // 3) Режим замыкания полилинии
-        polylineCloseMode_ = v.closeMethod;
-        applyPolylineCloseMode();
+        _polylineCloseMode = v.closePolyline;
+        applyClosePolyline();
 
         config::base().setValue("polyline.close_mode",
-                                static_cast<int>(polylineCloseMode_));
+                                static_cast<int>(_polylineCloseMode));
         config::base().saveFile();
+
+
+        _lineFinishMode = v.finishLine;
+        applyFinishLine();
+
+        config::base().setValue("line.finish_mode",
+                                static_cast<int>(_lineFinishMode));
+        config::base().saveFile();
+
+
     });
 
     const int rc = dlg.exec();
@@ -4150,3 +4394,6 @@ void MainWindow::prevImage()
 
     list->setCurrentRow(newRow);
 }
+
+
+

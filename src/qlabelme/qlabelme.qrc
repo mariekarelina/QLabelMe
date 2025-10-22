@@ -23,5 +23,7 @@
         <file>resources/hexagon.svg</file>
         <file>resources/ok.svg</file>
         <file>resources/not_ok.svg</file>
+        <file>resources/line.svg</file>
+        <file>resources/point.svg</file>
     </qresource>
 </RCC>

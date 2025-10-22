@@ -176,6 +176,8 @@
     </property>
     <addaction name="actCreateRectangle"/>
     <addaction name="actCreateCircle"/>
+    <addaction name="actCreatePolyline"/>
+    <addaction name="actCreatePoint"/>
     <addaction name="actCreateLine"/>
     <addaction name="actDelete"/>
    </widget>
@@ -208,6 +210,8 @@
    </attribute>
    <addaction name="actCircle"/>
    <addaction name="actRect"/>
+   <addaction name="actPolyline"/>
+   <addaction name="actPoint"/>
    <addaction name="actLine"/>
   </widget>
   <action name="actOpen">
@@ -245,7 +249,7 @@
     <string>Ctrl+T</string>
    </property>
   </action>
-  <action name="actCreateLine">
+  <action name="actCreatePolyline">
    <property name="text">
     <string>Создать полилинию</string>
    </property>
@@ -316,7 +320,7 @@
     <string>Rect</string>
    </property>
   </action>
-  <action name="actLine">
+  <action name="actPolyline">
    <property name="icon">
     <iconset resource="../qlabelme.qrc">
      <normaloff>:/images/resources/hexagon.svg</normaloff>:/images/resources/hexagon.svg</iconset>
@@ -372,6 +376,34 @@
   <action name="actSetting">
    <property name="text">
     <string>Настройки</string>
+   </property>
+  </action>
+  <action name="actPoint">
+   <property name="icon">
+    <iconset resource="../qlabelme.qrc">
+     <normaloff>:/images/resources/point.svg</normaloff>:/images/resources/point.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Создать точку</string>
+   </property>
+  </action>
+  <action name="actLine">
+   <property name="icon">
+    <iconset resource="../qlabelme.qrc">
+     <normaloff>:/images/resources/line.svg</normaloff>:/images/resources/line.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Создать линию</string>
+   </property>
+  </action>
+  <action name="actCreatePoint">
+   <property name="text">
+    <string>Создать точку</string>
+   </property>
+  </action>
+  <action name="actCreateLine">
+   <property name="text">
+    <string>Создать линию</string>
    </property>
   </action>
  </widget>

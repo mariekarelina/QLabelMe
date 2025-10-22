@@ -15,6 +15,10 @@
 
 //#include "qutils/video_widget.h"
 
+#include "handle.h"
+#include "square.h"
+#include "line.h"
+
 #include <QMainWindow>
 #include <QFileDialog>
 #include <QCloseEvent>
@@ -38,15 +42,17 @@
 
 #include <QGraphicsView>
 #include <QGraphicsScene>
+#include <QGraphicsLineItem>
 //#include "graphicsscene.h"
 #include "graphics_view.h"
-#include "settingsdialog.h"
-#include "line.h"
+#include "settings.h"
 #include "square.h"
 
 #include "qgraphics2/circle.h"
 #include "qgraphics2/rectangle.h"
 #include "qgraphics2/polyline.h"
+#include "qgraphics2/point.h"
+#include "qgraphics2/line.h"
 
 // using namespace std;
 // using namespace pproto;
@@ -104,18 +110,10 @@ struct Document
     }
 };
 
-// struct ShapeSnapshot
-// {
-//     QString type;
-//     QVariant state;
-//     int zvalue = 0;
-//     bool visible = true;
-//     QPointF pos;
-// };
 struct ShapeSnapshot
 {
-    QString type;      // circle/rectangle/polyline/...
-    QVariant state;    // то, что вернул shape->saveState()
+    QString type;      // circle/rectangle/polyline/point/line
+    QVariant state;    // То, что вернул shape->saveState()
 };
 
 class MainWindow : public QMainWindow
@@ -150,12 +148,14 @@ private slots:
 
     void on_actCreateRectangle_triggered();
     void on_actCreateCircle_triggered();
-    void on_actCreateLine_triggered();
+    void on_actCreatePolyline_triggered();
+
 
     void on_btnRect_clicked(bool);
-    void on_btnLine_clicked(bool);
+    void on_btnPolyline_clicked(bool);
     void on_btnCircle_clicked(bool);
     void on_btnTest_clicked(bool);
+
 
     void fitImageToView();
     void fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem* previous);
@@ -165,7 +165,10 @@ private slots:
 
     void on_actRect_triggered();
     void on_actCircle_triggered();
+    void on_actPolyline_triggered();
+    void on_actPoint_triggered();
     void on_actLine_triggered();
+
 
     void wheelEvent(QWheelEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
@@ -248,8 +251,8 @@ private:
     void moveGhostTo(const QPointF& scenePos);
     void endGhost();
     // Cтили призрака
-    void setGhostStyleHover();  // жёлтый + увеличенный
-    void setGhostStyleIdle();   // исходный размер/цвет
+    void setGhostStyleHover();  // Желтый + увеличенный
+    void setGhostStyleIdle();   // Мсходный размер/цвет
     void showGhostPreview(qgraph::DragCircle* target, const QPointF& scenePos);
     void startGhostDrag(const QPointF& scenePos);
 
@@ -277,15 +280,20 @@ private:
     void apply_LineWidth_ToItem(QGraphicsItem* it);
     void apply_PointSize_ToItem(QGraphicsItem* it);
     void apply_NumberSize_ToItem(QGraphicsItem* it);
+    void apply_LineColor_ToScene(QGraphicsItem* it);
+    void apply_PointStyle_ToScene(QGraphicsItem* it);
 
     void updateLineColorsForScene(QGraphicsScene* scene);
 
     void applyZoom(qreal z);
 
-    SettingsDialog::PolylineCloseMode polylineCloseMode_ =
-            SettingsDialog::PolylineCloseMode::CtrlModifier;
+    Settings::PolylineCloseMode _polylineCloseMode =
+            Settings::PolylineCloseMode::DoubleClick;
+    Settings::LineFinishMode _lineFinishMode =
+            Settings::LineFinishMode::DoubleClick;
 
-    void applyPolylineCloseMode();
+    void applyClosePolyline();
+    void applyFinishLine();
 
 private:
     Ui::MainWindow* ui;
@@ -315,18 +323,22 @@ private:
 
     //QToolButton* _selectModeButton;
     bool _btnRectFlag = {false};
-    bool _btnLineFlag = {false};
+    bool _btnPolylineFlag = {false};
     bool _btnCircleFlag = {false};
+    bool _btnPointFlag = {false};
+    bool _btnLineFlag = {false};
+
 
     QGraphicsItem* _draggingItem = {nullptr}; // Указатель на перетаскиваемый объект
 
     bool _drawingCircle = {false};      // Флаг, рисуется ли круг
     bool _drawingLine = {false};      // Флаг, рисуется ли линия
-    bool _drawingPolyline = {false};      // Флаг, рисуется ли линия
+    bool _drawingPolyline = {false};      // Флаг, рисуется ли полилиния
     bool _drawingRectangle = {false};    // Флаг, рисуется ли прямоугольник
+    bool _drawingPoint = {false};
     bool _isInDrawingMode = false; // Флаг, указывающий что мы в режиме рисования новой фигуры
     bool _isDraggingImage = false; // Флаг для перетаскивания изображения
-    LineDrawingItem* _currentLine = {nullptr}; // Текущая линия
+    qgraph::Polyline* _currentLine = {nullptr}; // Текущая линия
     SquareDrawingItem* _currentSquare = {nullptr}; // Текущий квадрат
     QList<QPointF> _polylinePoints;            // Точки текущей полилинии
 
@@ -342,8 +354,16 @@ private:
     QGraphicsPathItem* _currPolyline = {nullptr}; // Временная визуализация полилинии
     bool _isDrawingPolyline = false;           // Флаг для состояния рисования
 
+    bool _isDrawingPoint = false;
+
+    qgraph::Line* _currLine = nullptr;
+    bool _isDrawingLine = false;
+    QPointF _lineFirstPoint;
+
 
     qgraph::Polyline* _polyline = {nullptr};
+    qgraph::Line* _line = {nullptr};
+    qgraph::Point* _currPoint = {nullptr};
 
     struct ImageData
     {
@@ -388,13 +408,13 @@ private:
     // Указатель на последний выбранный чекбокс в списке классов для полигонов
     QCheckBox* _lastCheckedPolygonLabel = nullptr;
 
-    // --- Механика "призрачной" ручки ---
-    QGraphicsRectItem* _ghostHandle = nullptr;         // рисуемая сверху копия
-    qgraph::DragCircle* _ghostTarget = nullptr;        // настоящая цель (реальная ручка)
+    // Механика призрачной ручки
+    QGraphicsRectItem* _ghostHandle = nullptr; // Рисуемая сверху копия
+    qgraph::DragCircle* _ghostTarget = nullptr; // Реальная ручка
     bool _ghostActive = false;
     bool _ghostHover  = false;
-    QPointF _ghostGrabOffset;                          // смещение точки хвата
-    qreal _ghostPickRadius = 6.0;                     // радиус поиска ручки под курсором
+    QPointF _ghostGrabOffset; // Смещение точки хвата
+    qreal _ghostPickRadius = 6.0; // Радиус поиска ручки под курсором
 
     QVector<qgraph::DragCircle*> m_circles;
     qgraph::DragCircle* m_selectedCircle = nullptr;
@@ -402,8 +422,8 @@ private:
 
     // Состояние перетаскивания
     bool m_isDraggingHandle = false;
-    QPointer<qgraph::DragCircle> m_dragHandle;   // какую ручку тащим
-    QPointF m_pressLocalOffset;                  // смещение от центра ручки при захвате
+    QPointer<qgraph::DragCircle> m_dragHandle;   // Какую ручку тащим
+    QPointF m_pressLocalOffset;                  // Смещение от центра ручки при захвате
 
 
     qgraph::DragCircle* _currentDraggedCircle = nullptr;
@@ -416,7 +436,7 @@ private:
 
     qgraph::DragCircle* _currentHoveredHandle = nullptr;
 
-    qgraph::DragCircle* _lastHoverHandle = nullptr; // кто сейчас в hover-стиле
+    qgraph::DragCircle* _lastHoverHandle = nullptr; // Кто сейчас в hover-стиле
 
     struct VisualStyle
     {
@@ -432,8 +452,13 @@ private:
         QColor rectangleLineColor = Qt::green;
         QColor circleLineColor = Qt::red;
         QColor polylineLineColor = Qt::blue;
+
+        QColor lineLineColor = Qt::red;
+        QColor pointColor = Qt::green;
+        int pointOutlineWidth = 1;
+
     };
-    VisualStyle _vis; // глобально для всех фигур
+    VisualStyle _vis; // Глобально для всех фигур
 
     // Позволяем стороннему классу видеть все
     //friend class GraphicsView;

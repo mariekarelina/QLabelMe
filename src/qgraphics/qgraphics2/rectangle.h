@@ -62,7 +62,6 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
     void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
 
-    // Это не актуально, если ручки всегда видны
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
     void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
     void updateHandleVisibility();

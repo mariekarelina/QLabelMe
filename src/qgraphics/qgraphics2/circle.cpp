@@ -281,7 +281,7 @@ void Circle::updateCrossLines()
                              this->flags() & QGraphicsItem::ItemIgnoresTransformations);
 
     // Длина линий крестика
-    qreal lineLength = _radius * 0.5; // 80% от радиуса
+    qreal lineLength = _radius * 0.5;
 
     // Вертикальная линия
     QLineF verticalLine(center.x(), center.y() - lineLength,
@@ -327,7 +327,7 @@ QPointF Circle::pointOnCircle(const QRectF& rect, const QPointF& pos)
     const QPointF c = rect.center();
     QPointF v = pos - c;
     const qreal len = std::hypot(v.x(), v.y());
-    if (len <= 1e-6) // курсор в центре — направим вправо
+    if (len <= 1e-6) // курсор в центре - направим вправо
         return c + QPointF(rect.width()*0.5, 0.0);
     const qreal r = rect.width()*0.5;
     v /= len;
@@ -562,11 +562,12 @@ struct Circle::SceneFilter : public QObject
     explicit SceneFilter(Circle* o) : owner(o) {}
     bool eventFilter(QObject* obj, QEvent* ev) override
     {
-        if (!owner) return false;
+        if (!owner)
+            return false;
         if (ev->type() == QEvent::GraphicsSceneMouseMove)
         {
             auto* me = static_cast<QGraphicsSceneMouseEvent*>(ev);
-            owner->updateHandlePosition(me->scenePos()); // уже есть у вас
+            owner->updateHandlePosition(me->scenePos());
         }
         return false;
     }

@@ -27,25 +27,21 @@ Rectangle::Rectangle(QGraphicsScene* scene)
     _circleTL->setParentItem(this);
     _circleTL->setVisible(true);
     _circleTL->setZValue(100000);
-    //_circleTL->raiseToTop();
 
     _circleTR = new DragCircle(scene);
     _circleTR->setParentItem(this);
     _circleTR->setVisible(true);
     _circleTR->setZValue(100000);
-    //_circleTR->raiseToTop();
 
     _circleBR = new DragCircle(scene);
     _circleBR->setParentItem(this);
     _circleBR->setVisible(true);
     _circleBR->setZValue(100000);
-    //_circleBR->raiseToTop();
 
     _circleBL = new DragCircle(scene);
     _circleBL->setParentItem(this);
     _circleBL->setVisible(true);
     _circleBL->setZValue(100000);
-    //_circleBL->raiseToTop();
 
     _circleTL->show();
     _circleTR->show();
@@ -123,7 +119,6 @@ void Rectangle::dragCircleMove(DragCircle* circle)
 
         // Устанавливаем новый верхний левый угол прямоугольника
         r.setTopLeft(QPointF(newX, newY));
-        //r.setTopLeft(QPoint(circle->x(), circle->y()));
 
         // Обновление позиций кругов, чтобы они были прикреплены к углам
         _circleTL->setPos(r.topLeft());
@@ -158,8 +153,6 @@ void Rectangle::dragCircleMove(DragCircle* circle)
     }
     else if (_circleBR == circle)
     {
-        //r.setWidth(circle->x());
-        //r.setHeight(circle->y());
         qreal newX = circle->x();
         qreal newY = circle->y();
 
@@ -186,8 +179,6 @@ void Rectangle::dragCircleMove(DragCircle* circle)
 
     else if (_circleBL == circle)
     {
-        //r.setWidth(circle->x());
-        //r.setHeight(circle->y());
         qreal newX = circle->x();
         qreal newY = circle->y();
 
@@ -224,7 +215,6 @@ void Rectangle::dragCircleRelease(DragCircle* circle)
 {
     if (circle->parentItem() == this)
     {
-        //circle->setPos(rect().width(), rect().height());
         circleReleaseSignal.emit_(this);
     }
 }
@@ -242,13 +232,6 @@ QRectF Rectangle::realSceneRect() const
 
 void Rectangle::setRealSceneRect(const QRectF& r)
 {
-    //float s = frameScale();
-    // Если масштаб равен нулю
-    // if (qFuzzyCompare(s, 0))
-    // {
-    //     s = 1.0f; // Устанавливаем значение по умолчанию
-    // }
-
     QPointF pos = r.topLeft(); // Верхний левый угол
     QRectF rect(0, 0, r.width(), r.height()); // Размеры прямоугольника без учета масштаба
 
@@ -265,8 +248,6 @@ void Rectangle::setRealSceneRect(const QRectF& r)
     updateHandlePosition(); // Обновляем позиции ручек
     updatePointNumbers();
     raiseHandlesToTop();
-
-    //_circle->setPos(rect.width(), rect.height());
 }
 
 void Rectangle::updateHandlePosition()
@@ -321,25 +302,6 @@ void Rectangle::keyPressEvent(QKeyEvent* event)
 
 void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
 {
-    // QMenu menu;
-
-    // // Добавляем меню для поворота точек
-    // QMenu* orderMenu = menu.addMenu("Порядок точек");
-    // QAction* cwAction = orderMenu->addAction("Сдвиг по часовой");
-    // QAction* ccwAction = orderMenu->addAction("Сдвиг против часовой");
-
-    // // connect(cwAction, &QAction::triggered, this, &Rectangle::rotatePointsClockwise);
-    // // connect(ccwAction, &QAction::triggered, this, &Rectangle::rotatePointsCounterClockwise);
-    // QObject::connect(cwAction, &QAction::triggered, [this]() {
-    //     this->rotatePointsClockwise();
-    // });
-
-    // QObject::connect(ccwAction, &QAction::triggered, [this]() {
-    //     this->rotatePointsCounterClockwise();
-    // });
-
-    // menu.exec(event->screenPos());
-    // event->accept();
     QMenu menu;
 
     QAction* cwAction = menu.addAction("Сдвиг по часовой (R)");
@@ -406,11 +368,6 @@ void Rectangle::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
 
 void Rectangle::updateHandleVisibility()
 {
-    // bool visible = isSelected(); // Или другая логика определения видимости
-    // _circleTL->setVisible(visible);
-    // _circleTR->setVisible(visible);
-    // _circleBL->setVisible(visible);
-    // _circleBR->setVisible(visible);
     _circleTL->setVisible(true);
     _circleTR->setVisible(true);
     _circleBL->setVisible(true);
@@ -428,7 +385,8 @@ void Rectangle::paint(QPainter* painter,
 
     const QRectF r = rect();
 
-    if (isSelected() || isUnderMouse()) {
+    if (isSelected() || isUnderMouse())
+    {
         QColor fill = pen().color();
         fill.setAlpha(80);
         painter->save();
@@ -485,7 +443,6 @@ void Rectangle::updatePointNumbers()
         QPointF(1, 1),
         QPointF(-1, 1)
     };
-    // const qreal offsetDistance = 10.0; // Расстояние от точки до номера
     const qreal handleRadius = _circleTL ? _circleTL->rect().width() / 2.0 : 5.0;
     const qreal fontHeight = _numberFontSize > 0 ? _numberFontSize : 10.0;
     const qreal offsetDistance = handleRadius + fontHeight * 0.8;
@@ -617,7 +574,6 @@ void Rectangle::deleteItem()
     }
 }
 
-// Новый метод для внешней обработки клавиш
 void Rectangle::handleKeyPressEvent(QKeyEvent* event)
 {
     keyPressEvent(event);
@@ -641,16 +597,6 @@ void Rectangle::updateHandlesZValue()
 
 void Rectangle::raiseHandlesToTop()
 {
-    // _circleTL->setZValue(100000);
-    // _circleTR->setZValue(100000);
-    // _circleBR->setZValue(100000);
-    // _circleBL->setZValue(100000);
-
-    // // _circleTL->raiseToTop();
-    // // _circleTR->raiseToTop();
-    // // _circleBR->raiseToTop();
-    // // _circleBL->raiseToTop();
-
     // Временное повышение z-value ручек
     _circleTL->setZValue(this->zValue() + 1000);
     _circleTR->setZValue(this->zValue() + 1000);

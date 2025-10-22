@@ -43,7 +43,7 @@ DragCircle::DragCircle(QGraphicsScene* scene)
     }
 
     // Устанавливаем высокий z-value, чтобы точки всегда были поверх других элементов
-    setZValue(10000); // Очень высокое значение
+    setZValue(10000);
 
     // Устанавливаем начальный маленький размер
     setSmallSize();
@@ -60,7 +60,7 @@ DragCircle::DragCircle(QGraphicsScene* scene)
     _baseBrush = brush();
 
     setFlag(QGraphicsItem::ItemIgnoresParentOpacity);
-    setFlag(QGraphicsItem::ItemIgnoresTransformations); // Игнорируем трансформации вида
+    setFlag(QGraphicsItem::ItemIgnoresTransformations);
     scene->addItem(this);
 
     _selectedHandleColor = Qt::yellow;
@@ -86,7 +86,7 @@ void DragCircle::setParent(QGraphicsItem* newParent)
 
 void DragCircle::raiseToTop()
 {
-    setZValue(100000); // Всегда на самом верху
+    setZValue(100000);
 }
 
 void DragCircle::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
@@ -104,7 +104,7 @@ void DragCircle::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
 void DragCircle::setBaseSize(qreal size)
 {
     _smallSize = size;
-    _largeSize = size * 1.5; // или другая логика, если нужно
+    _largeSize = size * 1.5;
     _currentSize = size;
     _baseRect = QRectF(-size/2, -size/2, size, size);
 }
@@ -160,7 +160,7 @@ void DragCircle::applyHoverStyle(QGraphicsRectItem* item, bool active)
 
     if (active)
     {
-        // Увеличиваем ИМЕННО относительно базового размера (без накопления)
+        // Увеличиваем относительно базового размера (без накопления)
         //const qreal side = std::max(baseRect.width(), baseRect.height()) + 2.0; // или *1.5
         const qreal side = baseRect.width() * 1.5;
         item->setRect(QRectF(-side/2.0, -side/2.0, side, side));
@@ -180,7 +180,7 @@ void DragCircle::applyHoverStyle(QGraphicsRectItem* item, bool active)
 void DragCircle::rememberCurrentAsBase(QGraphicsRectItem* item)
 {
     if (!item) return;
-    // Запоминаем «как есть» — размер/перо/кисть
+    // Запоминаем размер/перо/кисть
     item->setData(kRoleBaseRect,  item->rect());
     item->setData(kRoleBasePen,   QVariant::fromValue(item->pen()));
     item->setData(kRoleBaseBrush, QVariant::fromValue(item->brush()));
@@ -222,7 +222,7 @@ void DragCircle::restoreBaseStyle()
     }
     else
     {
-        // Для других фигур - обычный серый стиль
+        // Для других фигур - обычный стиль
         setRect(_baseRect);
         setPen(_basePen);
         setBrush(_baseBrush);
@@ -243,7 +243,6 @@ void DragCircle::setBaseStyle(const QColor& color, qreal size)
     _basePen = QPen(color.darker(150), 1);
     _baseBrush = QBrush(color);
 
-    // Немедленно применяем стиль
     restoreBaseStyle();
 }
 
@@ -267,14 +266,14 @@ void DragCircle::setSelectedHandleColor(const QColor& color)
 
 bool DragCircle::containsPoint(const QPointF &point) const
 {
-    qreal dx = point.x() - m_center.x();
-    qreal dy = point.y() - m_center.y();
-    return (dx*dx + dy*dy) <= (m_radius * m_radius);
+    qreal dx = point.x() - _center.x();
+    qreal dy = point.y() - _center.y();
+    return (dx*dx + dy*dy) <= (_radius * _radius);
 }
 
 void DragCircle::setCenter(const QPointF &center)
 {
-    m_center = center;
+    _center = center;
 }
 
 void DragCircle::setUserHidden(bool on)
@@ -283,7 +282,6 @@ void DragCircle::setUserHidden(bool on)
            return;
 
        _userHidden = on;
-       // Фактическая видимость = runtimeVisible И не скрыто пользователем
        QGraphicsItem::setVisible(!_userHidden && _runtimeVisible);
 }
 
@@ -306,18 +304,18 @@ QVariant DragCircle::itemChange(GraphicsItemChange change, const QVariant &value
         {
             return QGraphicsRectItem::itemChange(change, value);
         }
-        // если эту ручку прямо сейчас тянем мышью — не вмешиваемся
+        // Если эту ручку прямо сейчас тянем мышью - не вмешиваемся
         if (scene() && scene()->mouseGrabberItem() == this)
             return QGraphicsRectItem::itemChange(change, value);
 
-        // определяем родителя-фигуру
+        // Определяем родителя-фигуру
         if (auto* shape = dynamic_cast<Shape*>(parentItem()))
         {
-            // если фигура сейчас программно раскладывает ручки — не триггерим рекурсию
+            // Если фигура сейчас программно раскладывает ручки - не триггерим рекурсию
             if (shape->handlesUpdateBlocked())
                 return QGraphicsRectItem::itemChange(change, value);
 
-            // перетаскивание мышью ИЛИ «призрак» активен → это реальное редактирование
+            // Перетаскивание мышью или «призрак» активен - это реальное редактирование
             if (QApplication::mouseButtons() != Qt::NoButton || _ghostDriven)
             {
                 shape->dragCircleMove(this);
@@ -328,62 +326,15 @@ QVariant DragCircle::itemChange(GraphicsItemChange change, const QVariant &value
 
     if (change == QGraphicsItem::ItemVisibleChange)
     {
-        const bool requested = value.toBool(); // что пытаются установить извне
-        _runtimeVisible = requested;           // запоминаем «желание» логики
+        const bool requested = value.toBool();
+        _runtimeVisible = requested;
 
         // Если ручка скрыта пользователем, запрещаем включать видимость
         if (_userHidden && requested)
-            return false; // блокируем попытку сделать видимой
-        // Если requested == false — позволяем скрыть (это не конфликтует)
+            return false; // Блокируем попытку сделать видимой
     }
 
     return QGraphicsRectItem::itemChange(change, value);
 }
-
-
-/*void DragCircle::mousePressEvent(QGraphicsSceneMouseEvent* event)
-{
-    if (event->button() == Qt::RightButton)
-    {
-        emit deleteRequested(this);
-        event->accept();
-        return;
-    }
-    if (event->button() == Qt::LeftButton)
-        applyHoverStyle(this, true);
-
-    setZValue(100000);
-
-    // if (Shape* parentShape = dynamic_cast<Shape*>(parentItem()))
-    // {
-    //     parentShape->raiseHandlesToTop();
-    // }
-
-    event->accept(); // Перехватываем событие, чтобы оно не дошло до родителя
-    QGraphicsItem::mousePressEvent(event);
-}
-
-void DragCircle::mouseMoveEvent(QGraphicsSceneMouseEvent* event)
-{
-    QGraphicsItem::mouseMoveEvent(event);
-    if (Shape* item = dynamic_cast<Shape*>(parentItem()))
-    {
-        item->dragCircleMove(this);
-    }
-
-    emit moved(this); // Испускаем сигнал при перемещении круга
-}
-
-void DragCircle::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
-{
-    QGraphicsItem::mouseReleaseEvent(event);
-    if (Shape* item = dynamic_cast<Shape*>(parentItem()))
-    {
-        item->dragCircleRelease(this);
-    }
-    restoreBaseStyle();
-    applyHoverStyle(this, false);
-    emit released(this); // Испускаем сигнал при отпускании мыши
-}*/
 
 } // namespace qgraph

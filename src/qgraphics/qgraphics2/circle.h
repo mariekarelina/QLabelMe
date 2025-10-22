@@ -77,7 +77,6 @@ private:
 private:
     // Временная ручка при наведении
     QPointer<DragCircle> _hoverHandle = {nullptr};
-    //DragCircle* _circle;
     QPointer<DragCircle> _circle = {nullptr};
     QPointF _ghostLocalPos {0, 0};
     float _radius = {10};
@@ -85,7 +84,7 @@ private:
     QGraphicsLineItem* _verticalLine;
     QGraphicsLineItem* _horizontalLine;
 
-    QColor _highlightColor = Qt::transparent; // Цвет выделения
+    QColor _highlightColor = Qt::transparent;
 
     struct SceneFilter;
     SceneFilter* _sceneFilter = {nullptr};

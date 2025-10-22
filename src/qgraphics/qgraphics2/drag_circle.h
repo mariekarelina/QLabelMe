@@ -64,8 +64,8 @@ public:
     bool containsPoint(const QPointF &point) const;   // Проверка попадания в круг
     void setCenter(const QPointF &center);           // Перемещение центра
 
-    int index() const { return m_index; }
-    void setIndex(int idx) { m_index = idx; }
+    int index() const { return _index; }
+    void setIndex(int idx) { _index = idx; }
 
     // Пользовательское скрытие (переключатель)
     void setUserHidden(bool on);
@@ -79,11 +79,8 @@ signals:
     void hoverEntered();
     void hoverLeft();
 
-    // эти сигналы будут генерироваться из MainWindow (или из самой ручки,
-    // если вы захотите переместить emit внутрь DragCircle)
     void dragCircleMove(int index, const QPointF &scenePos);
     void dragCircleRelease(int index, const QPointF &scenePos);
-
 
 protected:
     void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
@@ -92,11 +89,6 @@ protected:
 
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
     void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
-
-    // void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
-    // void mouseMoveEvent(QGraphicsSceneMouseEvent*) override;
-    // void mouseReleaseEvent(QGraphicsSceneMouseEvent*) override;
-
 
 private:
     bool isGhost() const { return _isGhost; }
@@ -123,24 +115,19 @@ public:
 
     bool _hoverSizingEnabled = true;
 
-    bool _isBeingDragged = false; // Добавить этот флаг
-    int m_index = -1;
+    bool _isBeingDragged = false;
+    int _index = -1;
     QColor _baseColor = Qt::gray; // Цвет по умолчанию
     QColor _selectedHandleColor = Qt::yellow; // Цвет выделенной ручки
 
 
 public:
-    QPointF m_center;
-    float m_radius;
+    QPointF _center;
+    float _radius;
     bool _isValid = true;
 
-    bool _userHidden = false;     // скрыто пользователем
-    bool _runtimeVisible = true;  // «желание» фигуры показывать ручку (hover и пр.)
-
-    // int _radius = {8};
-    // int _smallSize = {6};  // Маленький размер (видимый)
-    // int _largeSize = {16}; // Большой размер (для захвата)
-    // int _currentSize = _smallSize;
+    bool _userHidden = false;     // Скрыто пользователем
+    bool _runtimeVisible = true;
 };
 
 } // namespace qgraph
