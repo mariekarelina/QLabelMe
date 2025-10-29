@@ -15,7 +15,7 @@ Rectangle::Rectangle(QGraphicsScene* scene)
     setRect({0, 0, 50, 100});
 
     QPen pen = this->pen();
-    pen.setColor(QColor(0, 255, 0));
+    pen.setColor(QColor(244, 164, 96));
     pen.setWidth(2);
     pen.setCosmetic(true);
     setPen(pen);

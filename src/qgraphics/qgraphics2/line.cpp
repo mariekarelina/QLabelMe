@@ -22,7 +22,7 @@ Line::Line(QGraphicsScene* scene, const QPointF& scenePos)
     setFlag(QGraphicsItem::ItemIsSelectable, true);
 
     QPen pen = this->pen();
-    pen.setColor(QColor(0, 0, 255));
+    pen.setColor(QColor(220, 221, 106));
     pen.setWidth(2);
     pen.setCosmetic(true);
     setPen(pen);

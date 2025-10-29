@@ -52,6 +52,8 @@ Product {
             "graphics_view.h",
             "handle.cpp",
             "handle.h",
+            "lambda_command.cpp",
+            "lambda_command.h",
             "line.cpp",
             "line.h",
             "main_window.cpp",

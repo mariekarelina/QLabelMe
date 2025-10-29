@@ -65,7 +65,7 @@
 #include <QGraphicsRectItem>
 #include <QAbstractItemView>
 #include <QMetaType>
-
+#include <QtGlobal>
 using namespace qgraph;
 //#include <view.h>
 
@@ -294,6 +294,39 @@ MainWindow::MainWindow(QWidget *parent) :
     applyFinishLine();
 
     ensureGhostAllocated();
+
+
+    // Стек и действия
+    _undoStack = std::make_unique<QUndoStack>(this);
+
+    _actUndo = _undoStack->createUndoAction(this, tr("Отменить"));
+    _actRedo = _undoStack->createRedoAction(this, tr("Повторить"));
+
+    _actUndo->setShortcut(QKeySequence::Undo);
+    _actRedo->setShortcuts({ QKeySequence::Redo, QKeySequence(Qt::CTRL | Qt::Key_Y)});
+
+    addAction(_actUndo);
+    addAction(_actRedo);
+
+    // Добавление в меню/тулбар
+    // ui->menuEdit->addAction(_actUndo);
+    // ui->menuEdit->addAction(_actRedo);
+    // if (ui->toolBar)
+    // {
+    //     ui->toolBar->addAction(_actUndo);
+    //     ui->toolBar->addAction(_actRedo);
+    // }
+
+    connect(_undoStack.get(), &QUndoStack::indexChanged, this, [this]() {
+        if (_loadingNow)
+            return;
+        auto doc = currentDocument();
+        if (!doc)
+            return;
+
+        doc->isModified = true;
+        updateFileListDisplay(doc->filePath);
+    });
 }
 
 MainWindow::~MainWindow()
@@ -523,6 +556,9 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                         {
                             _polyline->setData(0, selectedClass);
                             linkSceneItemToList(_polyline);
+
+                            ShapeBackup b = makeBackupFromItem(_polyline);
+                            pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
                         }
                     }
 
@@ -603,6 +639,11 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             {
                 _currPoint->setData(0, selectedClass);
                 linkSceneItemToList(_currPoint);
+
+                ShapeBackup b = makeBackupFromItem(_currPoint);
+                pushAdoptExistingShapeCommand(_currPoint, b, tr("Добавление точки"));
+
+
             }
         }
 
@@ -658,6 +699,9 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                         {
                             _line->setData(0, selectedClass);
                             linkSceneItemToList(_line);
+
+                            ShapeBackup b = makeBackupFromItem(_line);
+                            pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
                         }
                     }
 
@@ -809,6 +853,10 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             {
                 rectangle->setData(0, selectedClass);
                 linkSceneItemToList(rectangle); // Связываем новый элемент с списком
+
+                ShapeBackup b = makeBackupFromItem(rectangle);
+                pushAdoptExistingShapeCommand(rectangle, b, tr("Добавление прямоугольника"));
+
             }
         }
         if (auto doc = currentDocument())
@@ -856,6 +904,10 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             {
                 circle->setData(0, selectedClass);
                 linkSceneItemToList(circle); // Связываем новый элемент с списком
+
+                ShapeBackup b = makeBackupFromItem(circle);
+                pushAdoptExistingShapeCommand(circle, b, tr("Добавление круга"));
+
             }
         }
         if (auto doc = currentDocument())
@@ -888,6 +940,11 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             {
                 _polyline->setData(0, selectedClass);
                 linkSceneItemToList(_polyline);
+
+                ShapeBackup b = makeBackupFromItem(_polyline);
+                pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+
+
             }
         }
         _polyline = nullptr;
@@ -922,6 +979,11 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             {
                 _line->setData(0, selectedClass);
                 linkSceneItemToList(_line);
+
+                ShapeBackup b = makeBackupFromItem(_line);
+                pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+
+
             }
         }
         _line = nullptr;
@@ -1049,6 +1111,9 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             {
                                 _polyline->setData(0, selectedClass);
                                 linkSceneItemToList(_polyline);
+
+                                ShapeBackup b = makeBackupFromItem(_polyline);
+                                pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
                             }
                         }
 
@@ -1201,6 +1266,9 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     {
                         _polyline->setData(0, selectedClass);
                         linkSceneItemToList(_polyline);
+
+                        ShapeBackup b = makeBackupFromItem(_polyline);
+                        pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
                     }
                 }
 
@@ -1243,6 +1311,10 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     {
                         _line->setData(0, selectedClass);
                         linkSceneItemToList(_line);
+
+                        ShapeBackup b = makeBackupFromItem(_line);
+                        pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+
                     }
                 }
 
@@ -1912,6 +1984,8 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
     // После успешного сохранения
     doc->isModified = false;
     updateFileListDisplay(doc->filePath);
+    if (_undoStack)
+        _undoStack->setClean();
 }
 
 void MainWindow::updateFileListDisplay(const QString& filePath)
@@ -3788,11 +3862,359 @@ void MainWindow::applyFinishLine()
     qgraph::Line::CloseMode mode = PLM::CtrlModifier;
     switch (_lineFinishMode)
     {
-        case SDM::DoubleClick:             mode = PLM::DoubleClick;   break;
-        case SDM::CtrlModifier:            mode = PLM::CtrlModifier;            break;
-        case SDM::KeyCWithoutNewPoint:     mode = PLM::KeyC;                    break;
+        case SDM::DoubleClick: mode = PLM::DoubleClick;
+            break;
+        case SDM::CtrlModifier: mode = PLM::CtrlModifier;
+            break;
+        case SDM::KeyCWithoutNewPoint: mode = PLM::KeyC;
+            break;
     }
     qgraph::Line::setGlobalCloseMode(mode);
+}
+
+QVector<ShapeBackup> MainWindow::collectBackupsForListItems(const QList<QListWidgetItem*>& listItems) const
+{
+    QVector<ShapeBackup> out;
+    out.reserve(listItems.size());
+
+    for (QListWidgetItem* li : listItems)
+    {
+        if (!li)
+            continue;
+        QGraphicsItem* gi = sceneItemFromListItem(li);
+        if (!gi)
+            continue;
+
+        ShapeBackup b{};
+        b.className = gi->data(0).toString();
+        b.z = gi->zValue();
+        b.visible = gi->isVisible();
+
+        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(gi))
+        {
+            b.kind = ShapeKind::Rectangle;
+            b.rect = rect->sceneBoundingRect();
+        }
+        else if (auto* c = dynamic_cast<qgraph::Circle*>(gi))
+        {
+            b.kind = ShapeKind::Circle;
+            b.circleCenter = c->center();
+            b.circleRadius = c->realRadius();
+        }
+        else if (auto* pl = dynamic_cast<qgraph::Polyline*>(gi))
+        {
+            b.kind  = ShapeKind::Polyline;
+            b.points = pl->points();
+            b.closed = pl->isClosed();
+        }
+        else if (auto* ln = dynamic_cast<qgraph::Line*>(gi))
+        {
+            b.kind  = ShapeKind::Line;
+            b.points = ln->points();
+            b.closed = ln->isClosed();
+        }
+        else if (auto* p = dynamic_cast<qgraph::Point*>(gi))
+        {
+            b.kind = ShapeKind::Point;
+            b.pointCenter = p->center();
+        }
+        else
+        {
+            continue;
+        }
+
+        out.push_back(std::move(b));
+    }
+
+    return out;
+}
+
+void MainWindow::removeListEntryBySceneItem(QGraphicsItem* sceneItem)
+{
+    if (!sceneItem)
+        return;
+    for (int row = 0; row < ui->polygonList->count(); ++row)
+    {
+        QListWidgetItem* it = ui->polygonList->item(row);
+        if (!it)
+            continue;
+        QGraphicsItem* linked = sceneItemFromListItem(it);
+        if (linked == sceneItem)
+        {
+            delete ui->polygonList->takeItem(row);
+            return;
+        }
+    }
+}
+
+QGraphicsItem* MainWindow::sceneItemFromListItem(const QListWidgetItem* it)
+{
+    if (!it)
+        return nullptr;
+    return it->data(Qt::UserRole).value<QGraphicsItem*>();
+}
+
+// Создает и пушит в стек _undoStack новую LambdaCommand,
+void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString& description)
+{
+    struct Payload
+    {
+        ShapeBackup b;
+        QGraphicsItem* item = nullptr;
+    };
+    auto payload = std::make_shared<Payload>();
+    payload->b = backup;
+
+    auto redoFn = [this, payload]()
+    {
+        // Удалим во избежание дублей
+        if (payload->item)
+        {
+            _scene->removeItem(payload->item);
+            removeListEntryBySceneItem(payload->item);
+            delete payload->item;
+            payload->item = nullptr;
+        }
+        // Создаем заново из снимка и линкуем в список
+        payload->item = recreateFromBackup(payload->b);
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, payload]()
+    {
+        if (!payload->item)
+            return;
+        _scene->removeItem(payload->item);
+        removeListEntryBySceneItem(payload->item);
+        delete payload->item;
+        payload->item = nullptr;
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    _undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+}
+
+ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* gi) const
+{
+    ShapeBackup b{};
+    if (!gi)
+        return b;
+
+    b.className = gi->data(0).toString();
+    b.z = gi->zValue();
+    b.visible = gi->isVisible();
+
+    if (auto* rect = dynamic_cast<qgraph::Rectangle*>(gi))
+    {
+        b.kind = ShapeKind::Rectangle;
+        b.rect = rect->sceneBoundingRect();
+    }
+    else if (auto* c = dynamic_cast<qgraph::Circle*>(gi))
+    {
+        b.kind = ShapeKind::Circle;
+        b.circleCenter = c->center();
+        b.circleRadius = c->realRadius();
+    }
+    else if (auto* pl = dynamic_cast<qgraph::Polyline*>(gi))
+    {
+        b.kind  = ShapeKind::Polyline;
+        b.points = pl->points();
+        b.closed = pl->isClosed();
+    }
+    else if (auto* ln = dynamic_cast<qgraph::Line*>(gi))
+    {
+        b.kind  = ShapeKind::Line;
+        b.points = ln->points();
+        b.closed = ln->isClosed();
+    }
+    else if (auto* p = dynamic_cast<qgraph::Point*>(gi))
+    {
+        b.kind = ShapeKind::Point;
+        b.pointCenter = p->center();
+    }
+
+    return b;
+}
+
+void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
+                                               const ShapeBackup& backup,
+                                               const QString& description)
+{
+    struct Payload
+    {
+        ShapeBackup   b;
+        QGraphicsItem* item = nullptr;
+    };
+    auto payload = std::make_shared<Payload>();
+    payload->b  = backup;
+    payload->item = createdNow;      // На момент push объект уже создан и на сцене
+
+    auto redoFn = [this, payload]()
+    {
+        // Первый redo сразу после push: item уже есть и на сцене - ничего не делаем
+        if (payload->item && payload->item->scene())
+            return;
+
+        // Повторные redo после undo: создаем заново из backup
+        QGraphicsItem* newItem = recreateFromBackup(payload->b);
+        payload->item = newItem;
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, payload]()
+    {
+        QGraphicsItem* item = payload->item;
+         // Уже удален
+        if (!item)
+            return;
+
+        if (auto sc = item->scene())
+            sc->removeItem(item);
+        removeListEntryBySceneItem(item);
+        delete item;
+        payload->item = nullptr;
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    _undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+}
+
+void MainWindow::removeSceneAndListItems(const QList<QListWidgetItem*>& listItems)
+{
+    // Удаляем все выбранные по связке из списка - сцена
+    for (QListWidgetItem* li : listItems)
+    {
+        if (!li)
+            continue;
+        QGraphicsItem* gi = li->data(Qt::UserRole).value<QGraphicsItem*>();
+        if (gi)
+        {
+            _scene->removeItem(gi);
+            delete gi;
+        }
+        // Удаляем сам элемент списка
+        delete ui->polygonList->takeItem(ui->polygonList->row(li));
+    }
+}
+
+QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
+{
+    QGraphicsItem* created = nullptr;
+
+    switch (b.kind)
+    {
+    case ShapeKind::Rectangle:
+    {
+        auto* rect = new qgraph::Rectangle(_scene);
+        rect->setRealSceneRect(b.rect);
+        rect->updatePointNumbers();
+        apply_LineWidth_ToItem(rect);
+        apply_PointSize_ToItem(rect);
+        apply_NumberSize_ToItem(rect);
+        rect->setData(0, b.className);
+        rect->setZValue(b.z);
+        rect->setVisible(b.visible);
+        linkSceneItemToList(rect);
+        created = rect;
+        break;
+    }
+    case ShapeKind::Circle:
+    {
+        auto* c = new qgraph::Circle(_scene, b.circleCenter);
+        c->setRealRadius(b.circleRadius);
+        apply_LineWidth_ToItem(c);
+        apply_PointSize_ToItem(c);
+        c->setData(0, b.className);
+        c->setZValue(b.z);
+        c->setVisible(b.visible);
+        c->updateHandlePosition();
+        linkSceneItemToList(c);
+        created = c;
+        break;
+    }
+    case ShapeKind::Polyline:
+    {
+        if (b.points.isEmpty())
+            break;
+        auto* pl = new qgraph::Polyline(_scene, b.points.front());
+        for (int i = 1; i < b.points.size(); ++i)
+            pl->addPoint(b.points[i], _scene);
+        if (b.closed)
+            pl->closePolyline();
+
+        apply_LineWidth_ToItem(pl);
+        apply_PointSize_ToItem(pl);
+        apply_NumberSize_ToItem(pl);
+
+        pl->setData(0, b.className);
+        pl->setZValue(b.z);
+        pl->setVisible(b.visible);
+        pl->updateHandlePosition();
+        linkSceneItemToList(pl);
+        created = pl;
+        break;
+    }
+    case ShapeKind::Line:
+    {
+        if (b.points.isEmpty())
+            break;
+        auto* ln = new qgraph::Line(_scene, b.points.front());
+        for (int i = 1; i < b.points.size(); ++i)
+            ln->addPoint(b.points[i], _scene);
+        if (b.closed)
+            ln->closeLine();
+
+        apply_LineWidth_ToItem(ln);
+        apply_PointSize_ToItem(ln);
+        apply_NumberSize_ToItem(ln);
+
+        ln->setData(0, b.className);
+        ln->setZValue(b.z);
+        ln->setVisible(b.visible);
+        ln->updateHandlePosition();
+        linkSceneItemToList(ln);
+        created = ln;
+        break;
+    }
+    case ShapeKind::Point:
+    {
+        auto* pt = new qgraph::Point(_scene);
+        apply_PointSize_ToItem(pt);
+        apply_NumberSize_ToItem(pt);
+        pt->setCenter(b.pointCenter);
+        pt->setData(0, b.className);
+        pt->setZValue(b.z);
+        pt->setVisible(b.visible);
+        linkSceneItemToList(pt);
+        created = pt;
+        break;
+    }
+    }
+
+    if (created)
+        created->setFocus();
+
+    return created;
 }
 
 void MainWindow::removePolygonListItem(QListWidgetItem* item)
@@ -4141,26 +4563,79 @@ void MainWindow::onSceneItemRemoved(QGraphicsItem* item)
 
 void MainWindow::on_actDelete_triggered()
 {
-    // Удаляем выбранные элементы из списка
-    QList<QListWidgetItem*> selectedItems = ui->polygonList->selectedItems();
-    for (QListWidgetItem* listItem : selectedItems)
+    auto doc = currentDocument();
+    if (!doc)
+        return;
+
+    const QList<QListWidgetItem*> selectedItems = ui->polygonList->selectedItems();
+    if (selectedItems.isEmpty()) return;
+
+    // 1) Снимки для восстановления
+    const QVector<ShapeBackup> backups = collectBackupsForListItems(selectedItems);
+
+    // 2) Payload с живыми указателями текущего "набора"
+    struct Payload
     {
-        QGraphicsItem* graphicsItem = listItem->data(Qt::UserRole).value<QGraphicsItem*>();
-        if (graphicsItem)
-        {
-            _scene->removeItem(graphicsItem);
-            delete graphicsItem;
-        }
-        delete ui->polygonList->takeItem(ui->polygonList->row(listItem));
+        QVector<ShapeBackup> backups;
+        QVector<QGraphicsItem*> currentItems;
+    };
+    auto payload = std::make_shared<Payload>();
+    payload->backups = backups;
+
+    // Изначально "текущие" - это выделенные сейчас элементы из списка
+    payload->currentItems.reserve(selectedItems.size());
+    for (QListWidgetItem* li : selectedItems)
+    {
+        QGraphicsItem* gi = sceneItemFromListItem(li);
+        if (gi)
+            payload->currentItems.push_back(gi);
     }
 
-    // Помечаем документ как измененный
-    if (auto doc = currentDocument())
+    // 3) redo: удалить текущие элементы и записи списка
+    auto redoFn = [this, payload]()
     {
-        doc->isModified = true;
-        updateFileListDisplay(doc->filePath);
-    }
+        for (QGraphicsItem* gi : std::as_const(payload->currentItems))
+        {
+            if (!gi)
+                continue;
+
+            _scene->removeItem(gi);
+            removeListEntryBySceneItem(gi);
+            delete gi;
+        }
+        payload->currentItems.clear();
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    // 4) undo: восстановить по снимкам, сохранить новые указатели в currentItems
+    auto undoFn = [this, payload]()
+    {
+        payload->currentItems.clear();
+        payload->currentItems.reserve(payload->backups.size());
+
+        for (const ShapeBackup& b : payload->backups)
+        {
+            if (QGraphicsItem* created = recreateFromBackup(b))
+            {
+                payload->currentItems.push_back(created);
+            }
+        }
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    _undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Удаление фигур")));
 }
+
 
 void MainWindow::on_actAbout_triggered()
 {

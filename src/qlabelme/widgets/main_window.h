@@ -19,6 +19,8 @@
 #include "square.h"
 #include "line.h"
 
+#include "lambda_command.h"
+
 #include <QMainWindow>
 #include <QFileDialog>
 #include <QCloseEvent>
@@ -114,6 +116,26 @@ struct ShapeSnapshot
 {
     QString type;      // circle/rectangle/polyline/point/line
     QVariant state;    // То, что вернул shape->saveState()
+};
+
+// Тип фигур
+enum class ShapeKind { Rectangle, Circle, Polyline, Line, Point };
+
+struct ShapeBackup
+{
+    ShapeKind kind;
+    QString   className;
+    qreal     z = 0.0;
+    bool      visible = true;
+
+    // Геометрия по типам
+    QRectF rect;
+    QPoint circleCenter;
+    int circleRadius = 0;
+    QVector<QPointF> points;
+    QPoint pointCenter;
+
+    bool closed = false;
 };
 
 class MainWindow : public QMainWindow
@@ -252,7 +274,7 @@ private:
     void endGhost();
     // Cтили призрака
     void setGhostStyleHover();  // Желтый + увеличенный
-    void setGhostStyleIdle();   // Мсходный размер/цвет
+    void setGhostStyleIdle();   // Исходный размер/цвет
     void showGhostPreview(qgraph::DragCircle* target, const QPointF& scenePos);
     void startGhostDrag(const QPointF& scenePos);
 
@@ -294,6 +316,28 @@ private:
 
     void applyClosePolyline();
     void applyFinishLine();
+
+    // Стек действий
+
+    // Снять снимок с произвольного QGraphicsItem
+    ShapeBackup makeBackupFromItem(QGraphicsItem* gi) const;
+    // Создаем снимки, по которому потом будем восстанавливать фигуры
+    QVector<ShapeBackup> collectBackupsForListItems(const QList<QListWidgetItem*>& listItems) const;
+    // Создаем фигуру из снимка
+    QGraphicsItem* recreateFromBackup(const ShapeBackup& bkp);
+    // Привязать уже созданную фигуру к Undo/Redo
+    void pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
+                                       const ShapeBackup& backup,
+                                       const QString& description);
+
+    // Создание фигуры через undo/redo по заранее собранному ShapeBackup
+    void pushCreateShapeCommand(const ShapeBackup& backup, const QString& description);
+
+    // Удаляет несколько фигур сразу
+    void removeSceneAndListItems(const QList<QListWidgetItem*>& listItems);
+    // Удаляет одну запись из списка по заданному QGraphicsItem
+    void removeListEntryBySceneItem(QGraphicsItem* sceneItem);
+    static QGraphicsItem* sceneItemFromListItem(const QListWidgetItem* it);
 
 private:
     Ui::MainWindow* ui;
@@ -459,6 +503,10 @@ private:
 
     };
     VisualStyle _vis; // Глобально для всех фигур
+
+    std::unique_ptr<QUndoStack> _undoStack;
+    QAction* _actUndo = {nullptr};
+    QAction* _actRedo = {nullptr};
 
     // Позволяем стороннему классу видеть все
     //friend class GraphicsView;

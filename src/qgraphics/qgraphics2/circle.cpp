@@ -24,7 +24,7 @@ Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
     setPos(scenePos.x(), scenePos.y());
 
     QPen pen = this->pen();
-    pen.setColor(QColor(255, 0, 0));
+    pen.setColor(QColor(144, 238, 144));
     pen.setWidth(2);
     pen.setCosmetic(true);
     setPen(pen);

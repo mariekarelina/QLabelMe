@@ -50,7 +50,7 @@ DragCircle::DragCircle(QGraphicsScene* scene)
 
     //setRect(-_radius, -_radius, _radius * 2, _radius * 2);
 
-    QColor color(255, 255, 255, 200);
+    QColor color(123, 104, 238);
     setBrush(QBrush(color));
     setPen(QPen(Qt::black, 1));
     setPen(QPen(color.darker(200)));
