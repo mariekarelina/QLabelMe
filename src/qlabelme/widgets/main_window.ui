@@ -79,7 +79,7 @@
          <item row="0" column="1">
           <widget class="QLabel" name="label_4">
            <property name="text">
-            <string>Классы</string>
+            <string>Стек действий</string>
            </property>
           </widget>
          </item>
@@ -107,14 +107,7 @@
           </widget>
          </item>
          <item row="1" column="1">
-          <widget class="QListWidget" name="polygonLabel">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-          </widget>
+          <widget class="QUndoView" name="undoView"/>
          </item>
         </layout>
        </widget>
@@ -183,9 +176,10 @@
    </widget>
    <widget class="QMenu" name="menuSettings">
     <property name="title">
-     <string>Настройки</string>
+     <string>Настройка</string>
     </property>
-    <addaction name="actSetting"/>
+    <addaction name="actSettingsProj"/>
+    <addaction name="actSettingsApp"/>
    </widget>
    <widget class="QMenu" name="menuAbout">
     <property name="title">
@@ -373,9 +367,9 @@
     <string>Внешний вид</string>
    </property>
   </action>
-  <action name="actSetting">
+  <action name="actSettingsApp">
    <property name="text">
-    <string>Настройки</string>
+    <string>Настроить QLabelMe</string>
    </property>
   </action>
   <action name="actPoint">
@@ -404,6 +398,11 @@
   <action name="actCreateLine">
    <property name="text">
     <string>Создать линию</string>
+   </property>
+  </action>
+  <action name="actSettingsProj">
+   <property name="text">
+    <string>Свойства проекта</string>
    </property>
   </action>
  </widget>

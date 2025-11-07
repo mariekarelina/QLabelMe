@@ -1,20 +1,21 @@
 #include "lambda_command.h"
 
-bool LambdaCommand::mergeWith(const QUndoCommand* other)
-{
-    if (!_merge)
-        return false;
-    return _merge(other);
-}
-
 void LambdaCommand::redo()
 {
+    //qDebug() << "[CMD] redo:" << text();
+
     if (_redoFn)
         _redoFn();
+
+    _applied = true;
 }
 
 void LambdaCommand::undo()
 {
+    //qDebug() << "[CMD] undo:" << text();
+
     if (_undoFn)
         _undoFn();
+
+   _applied = false;
 }

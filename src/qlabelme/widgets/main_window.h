@@ -37,10 +37,15 @@
 #include <QPushButton>
 #include <QTableWidgetItem>
 #include <QColorDialog>
-#include <QUndoStack>
 #include <QUndoCommand>
 #include <QShortcut>
+#include <optional>
 #include <QPointer>
+
+#include <QUndoStack>
+#include <QUndoGroup>
+#include <QUndoView>
+#include <QDockWidget>
 
 #include <QGraphicsView>
 #include <QGraphicsScene>
@@ -48,6 +53,7 @@
 //#include "graphicsscene.h"
 #include "graphics_view.h"
 #include "settings.h"
+#include "project_settings.h"
 #include "square.h"
 
 #include "qgraphics2/circle.h"
@@ -75,6 +81,7 @@ struct Document
     qgraph::VideoRect* videoRect = nullptr;
     QPixmap pixmap;  // Само изображение
     bool isModified = false; // Флаг, указывающий на наличие несохраненных изменений
+    std::unique_ptr<QUndoStack> _undoStack;
 
     // Состояние просмотра
     struct
@@ -119,7 +126,7 @@ struct ShapeSnapshot
 };
 
 // Тип фигур
-enum class ShapeKind { Rectangle, Circle, Polyline, Line, Point };
+enum class ShapeKind {Rectangle, Circle, Polyline, Line, Point};
 
 struct ShapeBackup
 {
@@ -141,7 +148,7 @@ struct ShapeBackup
 class MainWindow : public QMainWindow
 {
 public:
-    explicit MainWindow(QWidget *parent = nullptr);
+    explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
 
     bool init();
@@ -152,7 +159,7 @@ public:
     void graphicsView_mouseReleaseEvent(QMouseEvent*, GraphicsView*);
 
     void setSceneItemsMovable(bool movable);
-    QColor selectedHandleColor() const { return _vis.selectedHandleColor; }
+    QColor selectedHandleColor() const {return _vis.selectedHandleColor;}
     Document::Ptr currentDocument() const;
 
 protected:
@@ -201,7 +208,7 @@ private slots:
     void onSceneItemRemoved(QGraphicsItem* item);
     void on_actDelete_triggered();
     void on_actAbout_triggered();
-    void on_actSetting_triggered();
+    void on_actSettingsApp_triggered();
 
     void nextImage();
     void prevImage();
@@ -218,7 +225,6 @@ private:
     QJsonObject serializeSceneToJson(QGraphicsScene* scene);
     void deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json);
     qgraph::VideoRect* findVideoRect(QGraphicsScene* scene);
-    //void resetViewToDefault();
 
     void toggleRightSplitter();
     void updateWindowTitle();
@@ -239,6 +245,7 @@ private:
     bool hasAnnotationFile(const QString& imagePath) const;
 
     bool loadClassesFromFile(const QString& filePath);
+    const QStringList& projectClasses() const { return _projectClasses; }
 
     void onPolygonListItemClicked(QListWidgetItem* item);
     void onPolygonListItemDoubleClicked(QListWidgetItem* item);
@@ -318,13 +325,17 @@ private:
     void applyFinishLine();
 
     // Стек действий
+    QUndoStack* activeUndoStack() const;
 
     // Снять снимок с произвольного QGraphicsItem
     ShapeBackup makeBackupFromItem(QGraphicsItem* gi) const;
+
     // Создаем снимки, по которому потом будем восстанавливать фигуры
-    QVector<ShapeBackup> collectBackupsForListItems(const QList<QListWidgetItem*>& listItems) const;
+    QVector<ShapeBackup> collectBackupsForItems(const QList<QListWidgetItem*>& listItems) const;
+
     // Создаем фигуру из снимка
-    QGraphicsItem* recreateFromBackup(const ShapeBackup& bkp);
+    QGraphicsItem* recreateFromBackup(const ShapeBackup&);
+
     // Привязать уже созданную фигуру к Undo/Redo
     void pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
                                        const ShapeBackup& backup,
@@ -333,8 +344,21 @@ private:
     // Создание фигуры через undo/redo по заранее собранному ShapeBackup
     void pushCreateShapeCommand(const ShapeBackup& backup, const QString& description);
 
+    // Перемещение фигур
+    void pushMoveShapeCommand(QGraphicsItem* item,
+                              const ShapeBackup& before,
+                              const ShapeBackup& after,
+                              const QString& description);
+
+    // Для узлов
+    void pushHandleEditCommand(QGraphicsItem* item,
+                               const ShapeBackup& before,
+                               const ShapeBackup& after,
+                               const QString& description);
+
     // Удаляет несколько фигур сразу
     void removeSceneAndListItems(const QList<QListWidgetItem*>& listItems);
+
     // Удаляет одну запись из списка по заданному QGraphicsItem
     void removeListEntryBySceneItem(QGraphicsItem* sceneItem);
     static QGraphicsItem* sceneItemFromListItem(const QListWidgetItem* it);
@@ -362,7 +386,7 @@ private:
     QList <QPointF> _points;
 
     bool _dragging = false; // Флаг для отслеживания состояния перетаскивания
-    QPoint _lastMousePos;   // Последняя позиция мыши
+    QPoint _lastMousePos; // Последняя позиция мыши
 
 
     //QToolButton* _selectModeButton;
@@ -504,9 +528,28 @@ private:
     };
     VisualStyle _vis; // Глобально для всех фигур
 
-    std::unique_ptr<QUndoStack> _undoStack;
+    //std::unique_ptr<QUndoStack> _undoStack;
+    QUndoGroup* _undoGroup = nullptr;
+    QUndoView* _undoView = nullptr;         // Ссылка на вид из .ui
+    QStringList _projectClasses;            // Единый список классов проекта
+    ProjectSettings* _projPropsDialog = nullptr;
+
     QAction* _actUndo = {nullptr};
     QAction* _actRedo = {nullptr};
+
+    // Перемещение фигур
+    QGraphicsItem* _movingItem = nullptr;
+    ShapeBackup    _moveBeforeSnap;
+    bool           _moveHadChanges = false;
+
+    QPointF        _moveGrabOffsetScene; // Смещение узла относительно item->scenePos()
+    QGraphicsItem::GraphicsItemFlags  _moveSavedFlags{}; // Чтобы вернуть флаги
+
+    // Для узлов
+    QGraphicsItem* _handleEditedItem = nullptr; // Владелец перетаскиваемой ручки
+    ShapeBackup    _handleBeforeSnap;           // снимок "до"
+    bool           _handleDragHadChanges = false;
+
 
     // Позволяем стороннему классу видеть все
     //friend class GraphicsView;

@@ -20,7 +20,7 @@
    <string>Настройки</string>
   </property>
   <property name="windowFilePath">
-   <string>Настройки</string>
+   <string>Настройка</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_6">
    <item>

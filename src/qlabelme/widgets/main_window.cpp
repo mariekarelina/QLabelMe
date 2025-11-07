@@ -66,6 +66,10 @@
 #include <QAbstractItemView>
 #include <QMetaType>
 #include <QtGlobal>
+#include <QShortcut>
+#include <QKeySequence>
+
+
 using namespace qgraph;
 //#include <view.h>
 
@@ -100,6 +104,50 @@ public:
 private:
     QDoubleSpinBox* _spin = nullptr;
 };
+
+// Идем вверх по родителям, ищем перемещаемого владельца
+static QGraphicsItem* findMovableAncestor(QGraphicsItem* it)
+{
+    for (QGraphicsItem* p = it; p; p = p->parentItem())
+    {
+        if (p->flags().testFlag(QGraphicsItem::ItemIsMovable))
+            return p;
+    }
+    return it;
+}
+
+// Простое сравнение геометрии снапшотов, чтобы не совершать no-op команды
+static bool sameGeometry(const ShapeBackup& a, const ShapeBackup& b)
+{
+    if (a.kind != b.kind)
+        return false;
+
+    switch (a.kind)
+    {
+    case ShapeKind::Rectangle:
+        return a.rect == b.rect && a.z == b.z && a.visible == b.visible && a.className == b.className;
+
+    case ShapeKind::Circle:
+        return a.circleCenter == b.circleCenter
+            && a.circleRadius == b.circleRadius
+            && a.z == b.z && a.visible == b.visible && a.className == b.className;
+
+    case ShapeKind::Polyline:
+        return a.points == b.points
+            && a.closed == b.closed
+            && a.z == b.z && a.visible == b.visible && a.className == b.className;
+
+    case ShapeKind::Line:
+        return a.points == b.points
+            && a.z == b.z && a.visible == b.visible && a.className == b.className;
+
+    case ShapeKind::Point:
+        return a.pointCenter == b.pointCenter
+            && a.z == b.z && a.visible == b.visible && a.className == b.className;
+    }
+    return false;
+}
+
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -226,6 +274,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->polygonList, &QListWidget::itemSelectionChanged,
             this, &MainWindow::onPolygonListSelectionChanged);
 
+
     auto shNext = new QShortcut(QKeySequence(Qt::Key_D), this);
     shNext->setContext(Qt::ApplicationShortcut);
     connect(shNext, &QShortcut::activated, this, &MainWindow::nextImage);
@@ -297,35 +346,97 @@ MainWindow::MainWindow(QWidget *parent) :
 
 
     // Стек и действия
-    _undoStack = std::make_unique<QUndoStack>(this);
+    // _undoStack = std::make_unique<QUndoStack>(this);
 
-    _actUndo = _undoStack->createUndoAction(this, tr("Отменить"));
-    _actRedo = _undoStack->createRedoAction(this, tr("Повторить"));
+    // _actUndo = _undoStack->createUndoAction(this, tr("Отменить"));
+    // _actRedo = _undoStack->createRedoAction(this, tr("Повторить"));
 
-    _actUndo->setShortcut(QKeySequence::Undo);
-    _actRedo->setShortcuts({ QKeySequence::Redo, QKeySequence(Qt::CTRL | Qt::Key_Y)});
+    // Группа стеков действий для разных документов
+    _undoGroup = new QUndoGroup(this);
+
+    // _actUndo = _undoGroup->createUndoAction(this, tr("Отменить"));
+    // _actRedo = _undoGroup->createRedoAction(this, tr("Повторить"));
+
+    // _actUndo->setShortcut(QKeySequence::Undo);
+    // _actRedo->setShortcuts({QKeySequence::Redo, QKeySequence(Qt::CTRL | Qt::Key_Y)});
+
+    // _actUndo->setShortcutContext(Qt::ApplicationShortcut);
+    // _actRedo->setShortcutContext(Qt::ApplicationShortcut);
+
+    // Фиксированные подписи без динамического хвоста
+    _actUndo = new QAction(tr("Отменить"), this);
+    _actRedo = new QAction(tr("Повторить"), this);
+
+    // Триггеры - методы группы
+    connect(_actUndo, &QAction::triggered, _undoGroup, &QUndoGroup::undo);
+    connect(_actRedo, &QAction::triggered, _undoGroup, &QUndoGroup::redo);
+
+    // Включаемость по состоянию группы
+    connect(_undoGroup, &QUndoGroup::canUndoChanged, _actUndo, &QAction::setEnabled);
+    connect(_undoGroup, &QUndoGroup::canRedoChanged, _actRedo, &QAction::setEnabled);
+
+    // Начальное состояние
+    _actUndo->setEnabled(_undoGroup->canUndo());
+    _actRedo->setEnabled(_undoGroup->canRedo());
+
+    // _actUndo->setShortcut(QKeySequence::Undo);
+    // _actRedo->setShortcuts({QKeySequence::Redo, QKeySequence(Qt::CTRL | Qt::Key_Y)});
+
+    _actUndo->setShortcuts(QKeySequence::keyBindings(QKeySequence::Undo));
+    _actRedo->setShortcuts(QKeySequence::keyBindings(QKeySequence::Redo));
+
+    _actUndo->setShortcutContext(Qt::ApplicationShortcut);
+    _actRedo->setShortcutContext(Qt::ApplicationShortcut);
+
+    _actUndo->setToolTip(tr("Отменить"));
+    _actRedo->setToolTip(tr("Повторить"));
+
 
     addAction(_actUndo);
     addAction(_actRedo);
 
     // Добавление в меню/тулбар
-    // ui->menuEdit->addAction(_actUndo);
-    // ui->menuEdit->addAction(_actRedo);
-    // if (ui->toolBar)
-    // {
-    //     ui->toolBar->addAction(_actUndo);
-    //     ui->toolBar->addAction(_actRedo);
-    // }
+    ui->menuEdit->addAction(_actUndo);
+    ui->menuEdit->addAction(_actRedo);
+    if (ui->toolBar)
+    {
+        ui->toolBar->addAction(_actUndo);
+        ui->toolBar->addAction(_actRedo);
+    }
 
-    connect(_undoStack.get(), &QUndoStack::indexChanged, this, [this]() {
-        if (_loadingNow)
-            return;
-        auto doc = currentDocument();
-        if (!doc)
-            return;
+    // connect(_undoStack.get(), &QUndoStack::indexChanged, this, [this]() {
+    //     if (_loadingNow)
+    //         return;
+    //     auto doc = currentDocument();
+    //     if (!doc)
+    //         return;
 
-        doc->isModified = true;
-        updateFileListDisplay(doc->filePath);
+    //     doc->isModified = true;
+    //     updateFileListDisplay(doc->filePath);
+    // });
+
+    // Панель с QUndoView для визуального контроля
+    // _undoView = new QUndoView(_undoStack.get(), this);
+    // _undoView->setEmptyLabel(tr("<пусто>"));
+    // _undoDock = new QDockWidget(tr("Стек действий (временный)"), this);
+    // _undoDock->setObjectName("UndoDockDebug");
+    // _undoDock->setWidget(_undoView);
+    // addDockWidget(Qt::RightDockWidgetArea, _undoDock);
+
+    _undoView = ui->undoView;
+    //_undoView->setStack(_undoStack.get());
+    _undoView->setEmptyLabel(tr("<пусто>"));
+
+
+
+    // Классы в настройках
+    _projPropsDialog = new ProjectSettings(this);
+
+    // Открыть «Свойства проекта»
+    connect(ui->actSettingsProj, &QAction::triggered, this, [this]{
+        // Перед показом синхронизируем актуальный список классов
+        _projPropsDialog->setProjectClasses(_projectClasses);
+        _projPropsDialog->exec();
     });
 }
 
@@ -478,6 +589,10 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         {
             // При зажатом Shift - выбираем отдельный элемент для перемещения
             _draggingItem = clickedItem;
+
+            _lastMousePos = mouseEvent->pos();
+           mouseEvent->accept();
+           return;
         }
         else
         {
@@ -485,8 +600,27 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             _isDraggingImage = (clickedItem == _videoRect);
             _draggingItem = nullptr;
         }
-
         _lastMousePos = mouseEvent->pos();
+    }
+
+    if (mouseEvent->button() == Qt::LeftButton)
+    {
+        QGraphicsItem* clickedItem = graphView->itemAt(mouseEvent->pos());
+
+        if (clickedItem && !qgraphicsitem_cast<qgraph::DragCircle*>(clickedItem))
+        {
+            QGraphicsItem* mov = findMovableAncestor(clickedItem);
+            if (mov && mov->flags().testFlag(QGraphicsItem::ItemIsMovable))
+            {
+                _movingItem = mov;
+                _moveBeforeSnap = makeBackupFromItem(_movingItem);
+                _moveHadChanges = false;
+                const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
+                _moveGrabOffsetScene = scenePos - _movingItem->scenePos();
+                _moveSavedFlags = _movingItem->flags();
+                _movingItem->setFlag(QGraphicsItem::ItemIsMovable, false);
+            }
+        }
     }
 
     if (_drawingCircle)
@@ -544,11 +678,13 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                     apply_NumberSize_ToItem(_polyline);
 
                     // Выбор класса — как в Ctrl-ветке
-                    QStringList classes;
-                    for (int i = 0; i < ui->polygonLabel->count(); ++i)
-                        classes << ui->polygonLabel->item(i)->text();
+                    // QStringList classes;
+                    // for (int i = 0; i < ui->polygonLabel->count(); ++i)
+                    //     classes << ui->polygonLabel->item(i)->text();
 
-                    Select_class dialog(classes, this);
+                    // Select_class dialog(classes, this);
+                    Select_class dialog(_projectClasses, this);
+
                     if (dialog.exec() == QDialog::Accepted)
                     {
                         const QString selectedClass = dialog.selectedClass();
@@ -619,8 +755,6 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
         _currPoint = new qgraph::Point(_scene);
 
-        QStringList classes;
-
         // Применяем стили из настроек
         apply_PointSize_ToItem(_currPoint);
         apply_NumberSize_ToItem(_currPoint);
@@ -628,10 +762,13 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         _currPoint->setCenter(sceneP);
         _currPoint->setFocus();
 
-        for (int i = 0; i < ui->polygonLabel->count(); ++i)
-            classes << ui->polygonLabel->item(i)->text();
+        // QStringList classes;
+        // for (int i = 0; i < ui->polygonLabel->count(); ++i)
+        //     classes << ui->polygonLabel->item(i)->text();
 
-        Select_class dialog(classes, this);
+        // Select_class dialog(classes, this);
+        Select_class dialog(_projectClasses, this);
+
         if (dialog.exec() == QDialog::Accepted)
         {
             const QString selectedClass = dialog.selectedClass();
@@ -687,11 +824,14 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                     apply_PointSize_ToItem(_line);
                     apply_NumberSize_ToItem(_line);
 
-                    QStringList classes;
-                    for (int i = 0; i < ui->polygonLabel->count(); ++i)
-                        classes << ui->polygonLabel->item(i)->text();
+                    // QStringList classes;
+                    // for (int i = 0; i < ui->polygonLabel->count(); ++i)
+                    //     classes << ui->polygonLabel->item(i)->text();
 
-                    Select_class dialog(classes, this);
+                    // Select_class dialog(classes, this);
+
+                    Select_class dialog(_projectClasses, this);
+
                     if (dialog.exec() == QDialog::Accepted)
                     {
                         const QString selectedClass = dialog.selectedClass();
@@ -748,6 +888,15 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
         }
         return;
     }
+    if (_movingItem)
+    {
+        const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
+        // Новая позиция = курсор минус захваченный офсет - смещение
+        _movingItem->setPos(scenePos - _moveGrabOffsetScene);
+        _moveHadChanges = true;
+        mouseEvent->accept();
+        return; // чтобы встроенная логика Qt не добавляла свое смещение
+    }
     if (mouseEvent->buttons() & Qt::LeftButton)
     {
         QPointF delta = graphView->mapToScene(mouseEvent->pos()) -
@@ -783,7 +932,11 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
         }
         else if (_draggingItem && (mouseEvent->modifiers() & Qt::ShiftModifier))
         {
-            // Перемещаем только выбранную фигуру
+            // Смещение в системе координат сцены
+            const QPointF curScene = graphView->mapToScene(mouseEvent->pos());
+            const QPointF prevScene = graphView->mapToScene(_lastMousePos);
+            const QPointF delta = curScene - prevScene;
+
             _draggingItem->moveBy(delta.x(), delta.y());
 
             // Обновляем ручки для перемещаемой фигуры
@@ -807,7 +960,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     if (mouseEvent->button() == Qt::LeftButton)
     {
         _isDraggingImage = false;
-        _draggingItem = nullptr;
+        _draggingItem    = nullptr;
 
         if (_isInDrawingMode)
         {
@@ -815,6 +968,28 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             setSceneItemsMovable(true);
         }
     }
+
+    if (mouseEvent->button() == Qt::LeftButton)
+    {
+        if (_movingItem)
+        {
+            // Вернуть исходные флаги — снова позволим обычное поведение Qt
+            _movingItem->setFlags(_moveSavedFlags);
+
+            ShapeBackup after = makeBackupFromItem(_movingItem);
+
+            // Если реально сдвинули — пишем в стек
+            if (_moveHadChanges && !sameGeometry(_moveBeforeSnap, after))
+            {
+                pushMoveShapeCommand(_movingItem, _moveBeforeSnap, after, tr("Перемещение фигуры"));
+            }
+
+            _movingItem = nullptr;
+            _moveHadChanges = false;
+        }
+    }
+
+
     if (mouseEvent->button() == Qt::LeftButton && _isDrawingRectangle)
     {
         _isDrawingRectangle = false;
@@ -838,14 +1013,17 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         apply_NumberSize_ToItem(rectangle);
 
         // Получаем список классов из listWidget_PolygonLabel
-        QStringList classes;
-        for (int i = 0; i < ui->polygonLabel->count(); ++i)
-        {
-            classes << ui->polygonLabel->item(i)->text();
-        }
+        // QStringList classes;
+        // for (int i = 0; i < ui->polygonLabel->count(); ++i)
+        // {
+        //     classes << ui->polygonLabel->item(i)->text();
+        // }
 
-        // Показываем диалог выбора класса
-        Select_class dialog(classes, this);
+        // // Показываем диалог выбора класса
+        // Select_class dialog(classes, this);
+
+        Select_class dialog(_projectClasses, this);
+
         if (dialog.exec() == QDialog::Accepted)
         {
             QString selectedClass = dialog.selectedClass();
@@ -890,13 +1068,16 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         apply_LineWidth_ToItem(circle);
         apply_PointSize_ToItem(circle);
 
-        QStringList classes;
-        for (int i = 0; i < ui->polygonLabel->count(); ++i)
-        {
-            classes << ui->polygonLabel->item(i)->text();
-        }
+        // QStringList classes;
+        // for (int i = 0; i < ui->polygonLabel->count(); ++i)
+        // {
+        //     classes << ui->polygonLabel->item(i)->text();
+        // }
 
-        Select_class dialog(classes, this);
+        // Select_class dialog(classes, this);
+
+        Select_class dialog(_projectClasses, this);
+
         if (dialog.exec() == QDialog::Accepted)
         {
             QString selectedClass = dialog.selectedClass();
@@ -927,12 +1108,13 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         apply_NumberSize_ToItem(_polyline);
 
         // Получаем список классов из listWidget_PolygonLabel
-        QStringList classes;
-        for (int i = 0; i < ui->polygonLabel->count(); ++i)
-            classes << ui->polygonLabel->item(i)->text();
+        // QStringList classes;
+        // for (int i = 0; i < ui->polygonLabel->count(); ++i)
+        //     classes << ui->polygonLabel->item(i)->text();
+        // // Показываем диалог выбора класса
+        // Select_class dialog(classes, this);
 
-        // Показываем диалог выбора класса
-        Select_class dialog(classes, this);
+        Select_class dialog(_projectClasses, this);
         if (dialog.exec() == QDialog::Accepted)
         {
             const QString selectedClass = dialog.selectedClass();
@@ -966,12 +1148,14 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         apply_NumberSize_ToItem(_line);
 
         // Получаем список классов из listWidget_PolygonLabel
-        QStringList classes;
-        for (int i = 0; i < ui->polygonLabel->count(); ++i)
-            classes << ui->polygonLabel->item(i)->text();
+        // QStringList classes;
+        // for (int i = 0; i < ui->polygonLabel->count(); ++i)
+        //     classes << ui->polygonLabel->item(i)->text();
 
-        // Показываем диалог выбора класса
-        Select_class dialog(classes, this);
+        // // Показываем диалог выбора класса
+        // Select_class dialog(classes, this);
+
+        Select_class dialog(_projectClasses, this);
         if (dialog.exec() == QDialog::Accepted)
         {
             const QString selectedClass = dialog.selectedClass();
@@ -1099,11 +1283,13 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         apply_NumberSize_ToItem(_polyline);
 
                         // Выбор класса
-                        QStringList classes;
-                        for (int i = 0; i < ui->polygonLabel->count(); ++i)
-                            classes << ui->polygonLabel->item(i)->text();
+                        // QStringList classes;
+                        // for (int i = 0; i < ui->polygonLabel->count(); ++i)
+                        //     classes << ui->polygonLabel->item(i)->text();
 
-                        Select_class dialog(classes, this);
+                        // Select_class dialog(classes, this);
+
+                        Select_class dialog(_projectClasses, this);
                         if (dialog.exec() == QDialog::Accepted)
                         {
                             const QString selectedClass = dialog.selectedClass();
@@ -1254,11 +1440,13 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 apply_NumberSize_ToItem(_polyline);
 
                 // Выбор класса
-                QStringList classes;
-                for (int i = 0; i < ui->polygonLabel->count(); ++i)
-                    classes << ui->polygonLabel->item(i)->text();
+                // QStringList classes;
+                // for (int i = 0; i < ui->polygonLabel->count(); ++i)
+                //     classes << ui->polygonLabel->item(i)->text();
 
-                Select_class dialog(classes, this);
+                // Select_class dialog(classes, this);
+
+                Select_class dialog(_projectClasses, this);
                 if (dialog.exec() == QDialog::Accepted)
                 {
                     const QString selectedClass = dialog.selectedClass();
@@ -1299,11 +1487,13 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 apply_NumberSize_ToItem(_line);
 
                 // Выбор класса
-                QStringList classes;
-                for (int i = 0; i < ui->polygonLabel->count(); ++i)
-                    classes << ui->polygonLabel->item(i)->text();
+                // QStringList classes;
+                // for (int i = 0; i < ui->polygonLabel->count(); ++i)
+                //     classes << ui->polygonLabel->item(i)->text();
 
-                Select_class dialog(classes, this);
+                // Select_class dialog(classes, this);
+
+                Select_class dialog(_projectClasses, this);
                 if (dialog.exec() == QDialog::Accepted)
                 {
                     const QString selectedClass = dialog.selectedClass();
@@ -1332,9 +1522,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             }
             break;
         }
-
         default:
-            break;
+            break; // Другие события сцены не интересуют
     }
     return QMainWindow::eventFilter(obj, event);
 }
@@ -1693,6 +1882,23 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
         item->setData(Qt::UserRole, QVariant::fromValue(doc));
         _documentsMap.insert(doc->filePath, doc);
 
+        // Инициализируем индивидуальный стек для документа и регистрируем его в группе
+        doc->_undoStack = std::make_unique<QUndoStack>();      // без родителя, владеем unique_ptr
+        _undoGroup->addStack(doc->_undoStack.get());           // группа будет переключать активный
+
+        QUndoStack* st = doc->_undoStack.get();
+        QObject::connect(st, &QUndoStack::indexChanged, this, [this, st](int){
+            if (_loadingNow) return;
+
+            // реагируем только если этот стек активен у группы
+            if (_undoGroup && _undoGroup->activeStack() != st) return;
+
+            if (auto d = currentDocument()) {
+                d->isModified = true;
+                updateFileListDisplay(d->filePath);
+            }
+        });
+
         // Убираем чекбоксы
         //item->setFlags(item->flags() & ~Qt::ItemIsUserCheckable);
 
@@ -1984,8 +2190,6 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
     // После успешного сохранения
     doc->isModified = false;
     updateFileListDisplay(doc->filePath);
-    if (_undoStack)
-        _undoStack->setClean();
 }
 
 void MainWindow::updateFileListDisplay(const QString& filePath)
@@ -2607,11 +2811,18 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
         return false;
     }
 
-    ui->polygonLabel->clear();
-    for (const QString& className : classes)
-    {
-        ui->polygonLabel->addItem(className);
-    }
+    // ui->polygonLabel->clear();
+    // for (const QString& className : classes)
+    // {
+    //     ui->polygonLabel->addItem(className);
+    // }
+
+    _projectClasses = classes; // Сохраняем единый список в MainWindow
+
+    // Синхронизируем открытый диалог, если есть
+    if (_projPropsDialog)
+        _projPropsDialog->setProjectClasses(_projectClasses);
+
 
     return true;
 }
@@ -3260,10 +3471,18 @@ qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
 }
 
 void MainWindow::startHandleDrag(qgraph::DragCircle* h, const QPointF& scenePos)
-{
+{    
     m_isDraggingHandle = true;
     m_dragHandle = h;
     _handleDragging = true; // Начало перетаскивания ручки
+
+    // UNDO: запомним владельца и снимок "до"
+    _handleEditedItem = h ? h->parentItem() : nullptr;
+    _handleDragHadChanges = false;
+    if (_handleEditedItem)
+    {
+        _handleBeforeSnap = makeBackupFromItem(_handleEditedItem);
+    }
 
     const QPointF handleCenter = h->sceneBoundingRect().center();
     m_pressLocalOffset = scenePos - handleCenter;
@@ -3284,6 +3503,7 @@ void MainWindow::updateHandleDrag(const QPointF& scenePos)
     emit m_dragHandle->dragCircleMove(m_dragHandle->index(),
                                       m_dragHandle->scenePos());
     updateAllPointNumbers();
+    _handleDragHadChanges = true;
 }
 
 void MainWindow::finishHandleDrag()
@@ -3302,6 +3522,23 @@ void MainWindow::finishHandleDrag()
         }
         m_dragHandle->restoreBaseStyle();
     }
+    // UNDO: если что-то реально поменяли — пушим команду
+    if (_handleEditedItem && _handleDragHadChanges)
+    {
+        ShapeBackup after = makeBackupFromItem(_handleEditedItem);
+        if (!sameGeometry(_handleBeforeSnap, after))
+        {
+            // красивое имя действия
+            QString what = tr("Перемещение узла");
+            if (m_dragHandle) {
+                what += tr(" #1").arg(m_dragHandle->index());
+            }
+            pushHandleEditCommand(_handleEditedItem, _handleBeforeSnap, after, what);
+        }
+    }
+    _handleEditedItem = nullptr;
+    _handleDragHadChanges = false;
+
     m_isDraggingHandle = false;
     m_dragHandle = nullptr;
     _handleDragging = false; // Завершение перетаскивания ручки
@@ -3872,7 +4109,7 @@ void MainWindow::applyFinishLine()
     qgraph::Line::setGlobalCloseMode(mode);
 }
 
-QVector<ShapeBackup> MainWindow::collectBackupsForListItems(const QList<QListWidgetItem*>& listItems) const
+QVector<ShapeBackup> MainWindow::collectBackupsForItems(const QList<QListWidgetItem*>& listItems) const
 {
     QVector<ShapeBackup> out;
     out.reserve(listItems.size());
@@ -4001,7 +4238,22 @@ void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString
         }
     };
 
-    _undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+    //_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+    if (auto* st = activeUndoStack())
+        st->push(new LambdaCommand(redoFn, undoFn, description));
+
+}
+
+QUndoStack* MainWindow::activeUndoStack() const
+{
+    if (!_undoGroup) return nullptr;
+    if (QUndoStack* st = _undoGroup->activeStack()) return st;
+
+    // Запасной вариант — стек текущего документа
+    if (auto d = currentDocument())
+        return d->_undoStack ? d->_undoStack.get() : nullptr;
+
+    return nullptr;
 }
 
 ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* gi) const
@@ -4096,7 +4348,136 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
         }
     };
 
-    _undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+    //_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+    if (auto* st = activeUndoStack())
+        st->push(new LambdaCommand(redoFn, undoFn, description));
+
+}
+
+void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
+                                      const ShapeBackup& before,
+                                      const ShapeBackup& after,
+                                      const QString& description)
+{
+    struct Payload
+    {
+        ShapeBackup before;
+        ShapeBackup after;
+        QGraphicsItem* item = nullptr; // Текущий экземпляр на сцене
+    };
+
+    auto payload = std::make_shared<Payload>();
+    payload->before = before;
+    payload->after  = after;
+    payload->item   = item;
+
+    auto recreate = [this](QGraphicsItem*& slot, const ShapeBackup& snap)
+    {
+        if (slot)
+        {
+            _scene->removeItem(slot);
+            removeListEntryBySceneItem(slot);
+            delete slot;
+            slot = nullptr;
+        }
+        slot = recreateFromBackup(snap);
+        return slot != nullptr;
+    };
+
+    auto redoFn = [this, payload, recreate]()
+    {
+        recreate(payload->item, payload->after);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, payload, recreate]()
+    {
+        recreate(payload->item, payload->before);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    //_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+    if (auto* st = activeUndoStack())
+        st->push(new LambdaCommand(redoFn, undoFn, description));
+
+}
+
+void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
+                                       const ShapeBackup& before,
+                                       const ShapeBackup& after,
+                                       const QString& description)
+{
+    struct Payload
+    {
+        ShapeBackup before;
+        ShapeBackup after;
+        QGraphicsItem* item = nullptr; // Текущий экземпляр на сцене
+    };
+
+    auto payload = std::make_shared<Payload>();
+    payload->before = before;
+    payload->after  = after;
+    payload->item   = item;
+
+    // Вспомогательная лямбда – пересоздать фигуру по снапшоту и обновить ссылки
+    auto recreate = [this](QGraphicsItem*& slot, const ShapeBackup& snap)
+    {
+        if (slot)
+        {
+            _scene->removeItem(slot);
+            removeListEntryBySceneItem(slot);
+            delete slot;
+            slot = nullptr;
+        }
+        slot = recreateFromBackup(snap);
+        return slot != nullptr;
+    };
+
+    auto redoFn = [this, payload, recreate]()
+    {
+        if (!payload->item)
+        {
+            recreate(payload->item, payload->after);
+        }
+        else
+        {
+            recreate(payload->item, payload->after);
+        }
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+    auto undoFn = [this, payload, recreate]()
+    {
+        if (payload->item)
+        {
+            recreate(payload->item, payload->before);
+        }
+        else
+        {
+            recreate(payload->item, payload->before);
+        }
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    //_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+    if (auto* st = activeUndoStack())
+        st->push(new LambdaCommand(redoFn, undoFn, description));
+
 }
 
 void MainWindow::removeSceneAndListItems(const QList<QListWidgetItem*>& listItems)
@@ -4330,6 +4711,22 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
 
     Document::Ptr currentDoc = currentData.value<Document::Ptr>();
     _currentImagePath = currentDoc->filePath;
+
+    if (currentDoc && currentDoc->_undoStack)
+    {
+        // Переключаем активный стек группы
+        _undoGroup->setActiveStack(currentDoc->_undoStack.get());
+
+        // И показываем его в QUndoView
+        if (_undoView) _undoView->setStack(currentDoc->_undoStack.get());
+    }
+    else
+    {
+        // Нет документа - отключаемся от группы и очищаем представление
+        _undoGroup->setActiveStack(nullptr);
+        if (_undoView) _undoView->setStack(nullptr);
+    }
+
 
     // Временно блокируем обработку изменений сцены
     _loadingNow = true;
@@ -4571,7 +4968,7 @@ void MainWindow::on_actDelete_triggered()
     if (selectedItems.isEmpty()) return;
 
     // 1) Снимки для восстановления
-    const QVector<ShapeBackup> backups = collectBackupsForListItems(selectedItems);
+    const QVector<ShapeBackup> backups = collectBackupsForItems(selectedItems);
 
     // 2) Payload с живыми указателями текущего "набора"
     struct Payload
@@ -4633,7 +5030,7 @@ void MainWindow::on_actDelete_triggered()
         }
     };
 
-    _undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Удаление фигур")));
+    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Удаление фигур")));
 }
 
 
@@ -4723,7 +5120,7 @@ void MainWindow::on_actAbout_triggered()
     aboutDialog.exec();
 }
 
-void MainWindow::on_actSetting_triggered()
+void MainWindow::on_actSettingsApp_triggered()
 {
     const auto visBackup = _vis;
 
@@ -4870,6 +5267,3 @@ void MainWindow::prevImage()
 
     list->setCurrentRow(newRow);
 }
-
-
-
