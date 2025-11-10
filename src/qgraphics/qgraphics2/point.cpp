@@ -174,8 +174,11 @@ QGraphicsEllipseItem* Point::ensureDotVis()
     _dotVis->setFlag(QGraphicsItem::ItemStacksBehindParent, false);
     _dotVis->setZValue(100000);
     _dotVis->setOpacity(1.0);
+
+    const bool ignores = _handle ? (_handle->flags() & QGraphicsItem::ItemIgnoresTransformations) : true;
+    _dotVis->setFlag(QGraphicsItem::ItemIgnoresTransformations, ignores);
     _dotVis->setPen(Qt::NoPen);
-    return _dotVis;
+    return _dotVis;    
 }
 
 
@@ -253,32 +256,41 @@ void Point::hideDot()
         _dotVis->setVisible(false);
 }
 
-// void Point::syncDotGeometry()
-// {
-//     QGraphicsEllipseItem* dv = ensureDotVis();
-//     const qreal r = std::max<qreal>(_dotRadiusPx, 0.5);
-//     dv->setRect(QRectF(-r, -r, 2*r, 2*r));
-// }
+
+static constexpr qreal kCoverPaddingPx = 1.0; // запас на неточности между пикселями
 
 void Point::syncDotGeometry()
 {
     QGraphicsEllipseItem* dv = ensureDotVis();
     if (!dv) return;
 
-    // Если ручка существует - берем ее текущий размер
     if (_handle)
     {
         const QRectF hr = _handle->rect();
-        const qreal d  = std::max(hr.width(), hr.height());
-        const qreal R  = 0.5 * d * _coverScale;
+        const qreal w   = std::abs(hr.width());
+        const qreal h   = std::abs(hr.height());
+
+        // Радиус должен быть >= половины диагонали квадрата
+        const qreal halfDiag = 0.5 * std::hypot(w, h);
+
+        // Толщина пера квадрата может быть видна по краю - добавим ее половину
+        qreal penHalf = 0.0;
+        const QPen pen = _handle->pen();
+        penHalf = 0.5 * pen.widthF();
+
+        // Если ручка игнорирует трансформации, добавим небольшой пиксельный запас
+        const bool ignores = _handle->flags() & QGraphicsItem::ItemIgnoresTransformations;
+        const qreal pad = ignores ? kCoverPaddingPx : 0.0;
+
+        const qreal R = halfDiag + penHalf + pad;
+
         dv->setRect(QRectF(-R, -R, 2*R, 2*R));
         return;
     }
-    // Если узла нет
-    const qreal R = 4.0; // Минимальный радиус
+
+    const qreal R = 4.0;
     dv->setRect(QRectF(-R, -R, 2*R, 2*R));
 }
-
 
 void Point::syncDotColors()
 {

@@ -79,7 +79,7 @@ private:
 
     bool _interacting = false; // true только во время активного взаимодействия
 
-    qreal _coverScale = 1.15; // 15% больше квадрата-узла
+    qreal _coverScale = 1.15;
 
 };
 
