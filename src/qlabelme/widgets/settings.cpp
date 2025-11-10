@@ -46,7 +46,7 @@ void Settings::wireUi()
     std::sort(byName.begin(), byName.end(),
               [](QPushButton* a, QPushButton* b){ return a->objectName() < b->objectName(); });
 
-    if (byName.size() >= 8)
+    if (byName.size() >= 9)
     {
         _btnNode = byName.at(0);
         _btnNodeSel = byName.at(1);
@@ -56,6 +56,7 @@ void Settings::wireUi()
         _btnCircle = byName.at(5);
         _btnPolyline = byName.at(6);
         _btnLine = byName.at(7);
+        _btnPoint = byName.at(8);
     }
 
     // Привязываем диалог выбора цвета
@@ -126,6 +127,7 @@ void Settings::applyModelToUi()
     ui->spinLineWidth->setValue(_values.lineWidth);
     ui->spinHandleSize->setValue(_values.handleSize);
     ui->spinNumberSize->setValue(_values.numberFontPt);
+    ui->spinPointSize->setValue(_values.pointSize);
 
     if (_btnNode)
         updateColorPreview(_btnNode, _values.nodeColor);
@@ -143,6 +145,8 @@ void Settings::applyModelToUi()
         updateColorPreview(_btnPolyline, _values.polylineLineColor);
     if (_btnLine)
         updateColorPreview(_btnLine, _values.lineLineColor);
+    if (_btnPoint)
+        updateColorPreview(_btnPoint, _values.pointColor);
 
     switch (_values.closePolyline)
     {
@@ -178,6 +182,7 @@ void Settings::applyUiToModel()
     _values.lineWidth = ui->spinLineWidth->value();
     _values.handleSize = ui->spinHandleSize->value();
     _values.numberFontPt = ui->spinNumberSize->value();
+    _values.pointSize = ui->spinPointSize->value();
 
     if (ui->doubleClickLMB->isChecked())
         _values.closePolyline = PolylineCloseMode::DoubleClick;

@@ -50,6 +50,7 @@ public:
         QColor lineLineColor = QColor("#40ff40");
         QColor pointColor = QColor("#00ff00");
         int pointOutlineWidth = 1;
+        int pointSize = 6;
 
         PolylineCloseMode closePolyline = PolylineCloseMode::DoubleClick;
         LineFinishMode finishLine = LineFinishMode::DoubleClick;

@@ -296,7 +296,6 @@ private:
 
     void updateAllPointNumbers();
 
-
     void loadVisualStyle();
     void saveVisualStyle() const;
 
@@ -310,7 +309,7 @@ private:
     void apply_PointSize_ToItem(QGraphicsItem* it);
     void apply_NumberSize_ToItem(QGraphicsItem* it);
     void apply_LineColor_ToScene(QGraphicsItem* it);
-    void apply_PointStyle_ToScene(QGraphicsItem* it);
+    void apply_PointStyle_ToItem(QGraphicsItem* it);
 
     void updateLineColorsForScene(QGraphicsScene* scene);
 
@@ -335,6 +334,7 @@ private:
 
     // Создаем фигуру из снимка
     QGraphicsItem* recreateFromBackup(const ShapeBackup&);
+    void applyBackupToExisting(QGraphicsItem*, const ShapeBackup&);
 
     // Привязать уже созданную фигуру к Undo/Redo
     void pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
@@ -524,6 +524,7 @@ private:
         QColor lineLineColor = Qt::red;
         QColor pointColor = Qt::green;
         int pointOutlineWidth = 1;
+        int pointSize = 6;
 
     };
     VisualStyle _vis; // Глобально для всех фигур

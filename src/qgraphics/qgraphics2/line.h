@@ -72,6 +72,8 @@ public:
 
    const QVector<DragCircle*>& circles() const { return _circles; }
 
+   void replaceScenePoints(const QVector<QPointF>& scenePts, bool closed);
+
 protected:
    // Переопределяем обработчик событий клавиатуры
    void keyPressEvent(QKeyEvent* event) override;

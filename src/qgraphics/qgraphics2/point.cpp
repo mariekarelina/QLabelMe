@@ -2,6 +2,12 @@
 #include "drag_circle.h"
 #include <QtGui>
 #include <QMenu>
+#include <QGraphicsSceneHoverEvent>
+#include <QGraphicsSceneMouseEvent>
+#include <QGraphicsScene>
+#include <QPen>
+#include <QBrush>
+#include <QObject>
 
 namespace qgraph {
 
@@ -37,6 +43,18 @@ Point::Point(QGraphicsScene* scene)
 
     updateHandlePosition();
     raiseHandlesToTop();
+
+    // _dotVis = new QGraphicsEllipseItem(this);
+    // _dotVis->setZValue(1e5);
+    // _dotVis->setAcceptedMouseButtons(Qt::NoButton);
+    // _dotVis->setFlag(QGraphicsItem::ItemIsSelectable, false);
+    // _dotVis->setFlag(QGraphicsItem::ItemIsMovable, false);
+    // _dotVis->setPen(Qt::NoPen);
+
+    ensureDotVis();
+    syncDotGeometry();
+    syncDotColors();
+    showDotIfIdle();
 }
 
 Point::~Point()
@@ -62,9 +80,17 @@ void Point::setFrameScale(float newScale)
     prepareGeometryChange();
     setRect(QRectF(-r, -r, _baseDiameter, _baseDiameter));
 
+    // if (_dotVis)
+    //     _dotVis->setRect(-_dotRadiusPx, -_dotRadiusPx, 2*_dotRadiusPx, 2*_dotRadiusPx);
+    QGraphicsEllipseItem* dv = ensureDotVis();
+    dv->setRect(-_dotRadiusPx, -_dotRadiusPx, 2*_dotRadiusPx, 2*_dotRadiusPx);
+
     updateHandlePosition();
     _frameScale = newScale;
     raiseHandlesToTop();
+    showDotIfIdle();
+    syncDotGeometry();
+    syncDotColors();
 }
 
 void Point::dragCircleMove(DragCircle* circle)
@@ -72,6 +98,7 @@ void Point::dragCircleMove(DragCircle* circle)
     qgraph::Shape::HandleBlocker guard(this);
 
     if (circle != _handle) return;
+    hideDot();
 
     // Для точки центр = позиция ручки в сцене
     const QPointF newScenePos = _handle->mapToScene(QPointF(0,0));
@@ -81,7 +108,7 @@ void Point::dragCircleMove(DragCircle* circle)
 
 void Point::dragCircleRelease(DragCircle*)
 {
-
+    showDotIfIdle();
 }
 
 void Point::raiseHandlesToTop()
@@ -105,7 +132,7 @@ void Point::updateHandlesZValue()
 
 QPainterPath Point::shape() const
 {
-    // Радиус «попадания» — чтобы по точке было легко кликнуть.
+    // Радиус «попадания» — чтобы по точке было легко кликнуть
     const qreal r = 8.0;
     QPainterPath p;
     p.addEllipse(QPointF(0,0), r, r);
@@ -114,11 +141,39 @@ QPainterPath Point::shape() const
 
 QRectF Point::boundingRect() const
 {
-    // Должен покрывать shape() + небольшой запас под перо, если рисуете контур
     const qreal r = 8.0;
     const qreal pad = 1.5;
     return QRectF(-r - pad, -r - pad, 2*(r + pad), 2*(r + pad));
 }
+
+void Point::setDotStyle(const QColor& color, qreal diameterPx)
+{
+    _dotColor = color;
+    //_dotRadiusPx = diameterPx * 0.5;
+    _dotRadiusPx  = std::max<qreal>(diameterPx * 0.5, 0.5);
+
+    ensureDotVis();
+    syncDotColors();
+    syncDotGeometry();
+    showDotIfIdle();
+}
+
+QGraphicsEllipseItem* Point::ensureDotVis()
+{
+    if (_dotVis)
+        return _dotVis;
+
+    _dotVis = new QGraphicsEllipseItem(this);
+    _dotVis->setAcceptedMouseButtons(Qt::NoButton);
+    _dotVis->setFlag(QGraphicsItem::ItemIsSelectable, false);
+    _dotVis->setFlag(QGraphicsItem::ItemIsMovable, false);
+    _dotVis->setFlag(QGraphicsItem::ItemStacksBehindParent, false);
+    _dotVis->setZValue(100000);
+    _dotVis->setOpacity(1.0);
+    _dotVis->setPen(Qt::NoPen);
+    return _dotVis;
+}
+
 
 void Point::deleteItem()
 {
@@ -129,16 +184,13 @@ void Point::deleteItem()
 
 QVariant Point::itemChange(GraphicsItemChange change, const QVariant& value)
 {
-    if (change == QGraphicsItem::ItemSelectedHasChanged)
+    if (change == QGraphicsItem::ItemSelectedChange)
     {
-        const bool sel = value.toBool();
-        if (sel) {
-            _highlightColor = QColor(255, 255, 0, 100);
-        } else {
-            _highlightColor = Qt::transparent;
-        }
-        setBrush(_highlightColor);
-        raiseHandlesToTop();
+        bool willBeSelected = value.toBool();
+        if (willBeSelected)
+            hideDot();
+        else
+            showDotIfIdle();
     }
     else if (change == QGraphicsItem::ItemPositionHasChanged)
     {
@@ -147,10 +199,56 @@ QVariant Point::itemChange(GraphicsItemChange change, const QVariant& value)
     return QGraphicsEllipseItem::itemChange(change, value);
 }
 
+void Point::hoverEnterEvent(QGraphicsSceneHoverEvent* ev)
+{
+    hideDot();
+    QGraphicsItem::hoverEnterEvent(ev);
+}
+
+void Point::hoverLeaveEvent(QGraphicsSceneHoverEvent* ev)
+{
+    showDotIfIdle();
+    QGraphicsItem::hoverLeaveEvent(ev);
+}
+
 void Point::mousePressEvent(QGraphicsSceneMouseEvent* ev)
 {
+    hideDot();
     setSelected(true); // Гарантируем, что точка стала выбранной
     QGraphicsEllipseItem::mousePressEvent(ev);
+}
+
+void Point::mouseReleaseEvent(QGraphicsSceneMouseEvent* ev)
+{
+    QGraphicsItem::mouseReleaseEvent(ev);
+    showDotIfIdle();
+}
+
+void Point::showDotIfIdle()
+{
+    const bool idle = !isSelected();
+    if (auto* dv = ensureDotVis())
+        dv->setVisible(idle);
+}
+
+void Point::hideDot()
+{
+    if (_dotVis)
+        _dotVis->setVisible(false);
+}
+
+void Point::syncDotGeometry()
+{
+    QGraphicsEllipseItem* dv = ensureDotVis();
+    const qreal r = std::max<qreal>(_dotRadiusPx, 0.5);
+    dv->setRect(QRectF(-r, -r, 2*r, 2*r));
+}
+
+void Point::syncDotColors()
+{
+    QGraphicsEllipseItem* dv = ensureDotVis();
+    dv->setBrush(QBrush(_dotColor));
+    dv->setPen(Qt::NoPen);
 }
 
 }

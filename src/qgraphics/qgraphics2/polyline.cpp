@@ -726,54 +726,44 @@ void Polyline::setModificationCallback(std::function<void()> callback)
     _modificationCallback = callback;
 }
 
+void Polyline::replaceScenePoints(const QVector<QPointF>& scenePts, bool closed)
+{
+    for (DragCircle* c : _circles)
+    {
+        if (!c) continue;
+        c->setParentItem(nullptr);
+        delete c;
+    }
+    _circles.clear();
+
+    qDeleteAll(pointNumbers);
+    qDeleteAll(numberBackgrounds);
+    pointNumbers.clear();
+    numberBackgrounds.clear();
+
+    if (QGraphicsScene* sc = scene())
+    {
+        for (const QPointF& p : scenePts)
+            addPoint(p, sc);
+    }
+
+    _isClosed = closed;
+
+    updatePath();
+    updatePointNumbers();
+    if (_modificationCallback)
+        _modificationCallback();
+}
+
+
 void Polyline::updateConnections()
 {
-    // // Отключаем все старые соединения
-    // for (DragCircle* circle : _circles)
-    // {
-    //     QObject::disconnect(circle, nullptr, nullptr, nullptr);
-    // }
-    // // Устанавливаем новые соединения для всех точек
-    // for (DragCircle* circle : _circles)
-    // {
-    //     QObject::connect(circle, &DragCircle::moved, [this, circle]() {
-    //         this->dragCircleMove(circle);
-    //     });
 
-    //     QObject::connect(circle, &DragCircle::released, [this, circle]() {
-    //         this->dragCircleRelease(circle);
-    //     });
-
-    //     QObject::connect(circle, &DragCircle::deleteRequested, [this, circle]() {
-    //         this->handlePointDeletion(circle);
-    //     });
-    // }
 }
 
 void Polyline::updateClosedState()
 {
-    // if (_isClosed && _circles.size() > 2)
-    // {
-    //     // Удаляем все предыдущие соединения
-    //     for (DragCircle* circle : _circles)
-    //     {
-    //         QObject::disconnect(circle, nullptr, nullptr, nullptr);
-    //     }
 
-    //     // Устанавливаем новые соединения с помощью лямбда-функций
-    //     QObject::connect(_circles.first(), &DragCircle::moved, [this]() {
-    //         if (_isClosed && !_circles.isEmpty())
-    //             _circles.last()->setPos(_circles.first()->pos());
-    //     });
-
-    //     QObject::connect(_circles.last(), &DragCircle::moved, [this]() {
-    //         if (_isClosed && !_circles.isEmpty())
-    //             _circles.first()->setPos(_circles.last()->pos());
-    //     });
-
-    //     // Восстанавливаем остальные соединения
-    //     updateConnections();
-    // }
 }
 
 void Polyline::updatePointNumbersAfterReorder()

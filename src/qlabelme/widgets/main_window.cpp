@@ -758,6 +758,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         // Применяем стили из настроек
         apply_PointSize_ToItem(_currPoint);
         apply_NumberSize_ToItem(_currPoint);
+        apply_PointStyle_ToItem(_currPoint);
 
         _currPoint->setCenter(sceneP);
         _currPoint->setFocus();
@@ -1594,8 +1595,15 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             onSceneItemRemoved(item);
 
             // Затем удалим со сцены и из памяти
-            _scene->removeItem(item);
-            delete item;
+
+            // _scene->removeItem(item);
+            // delete item;
+            if (item)
+            {
+                if (auto sc = item->scene())
+                    sc->removeItem(item);
+                delete item;
+            }
         }
         event->accept();
         return;
@@ -2393,6 +2401,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
 
             apply_PointSize_ToItem(p);
             apply_NumberSize_ToItem(p);
+            apply_PointStyle_ToItem(p);
         }
         return true;
     };
@@ -3654,6 +3663,9 @@ void MainWindow::loadVisualStyle()
     if (!config::base().getValue("vis.all.number_font_pt", _vis.numberFontPt))
         _vis.numberFontPt = 10.0;
 
+    if (!config::base().getValue("vis.all.point_size", _vis.pointSize))
+        _vis.pointSize = 6;
+
     // Загружаем цвета
     QString colorStr;
     if (config::base().getValue("vis.all.handle_color", colorStr))
@@ -3713,6 +3725,7 @@ void MainWindow::saveVisualStyle() const
     config::base().setValue("vis.all.line_width", _vis.lineWidth);
     config::base().setValue("vis.all.handle_size", _vis.handleSize);
     config::base().setValue("vis.all.number_font_pt", _vis.numberFontPt);
+    config::base().setValue("vis.all.point_size", _vis.pointSize);
     config::base().setValue("vis.all.handle_color", _vis.handleColor.name(QColor::HexArgb));
     config::base().setValue("vis.all.selected_handle_color", _vis.selectedHandleColor.name(QColor::HexArgb));
     config::base().setValue("vis.all.number_color", _vis.numberColor.name(QColor::HexArgb));
@@ -3737,6 +3750,9 @@ void MainWindow::applyStyle_AllDocuments()
         apply_PointSize_ToScene(doc->scene);
         apply_NumberSize_ToScene(doc->scene);
         updateLineColorsForScene(doc->scene);
+
+        for (QGraphicsItem* item : doc->scene->items())
+            apply_PointStyle_ToItem(item);
     }
 
     if (_scene)
@@ -3745,6 +3761,9 @@ void MainWindow::applyStyle_AllDocuments()
         apply_PointSize_ToScene(_scene);
         apply_NumberSize_ToScene(_scene);
         updateLineColorsForScene(_scene);
+
+        for (QGraphicsItem* item : _scene->items())
+            apply_PointStyle_ToItem(item);
     }
 }
 
@@ -3996,6 +4015,19 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* it)
             bg->setZValue(1000);
             bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
         }
+    }
+}
+
+void MainWindow::apply_PointStyle_ToItem(QGraphicsItem* it)
+{
+    if (!it)
+        return;
+
+    if (auto* p = dynamic_cast<qgraph::Point*>(it))
+    {
+        const QColor color = _vis.pointColor;
+        const qreal diam = std::max(2, _vis.pointSize);
+        p->setDotStyle(color, diam);
     }
 }
 
@@ -4363,30 +4395,30 @@ void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
     {
         ShapeBackup before;
         ShapeBackup after;
-        QGraphicsItem* item = nullptr; // Текущий экземпляр на сцене
+        QGraphicsItem* item = nullptr;
     };
 
-    auto payload = std::make_shared<Payload>();
-    payload->before = before;
-    payload->after  = after;
-    payload->item   = item;
+    auto p = std::make_shared<Payload>();
+    p->before = before;
+    p->after  = after;
+    p->item   = item;
 
-    auto recreate = [this](QGraphicsItem*& slot, const ShapeBackup& snap)
+    auto apply = [this](QGraphicsItem*& slot, const ShapeBackup& snap)
     {
+        // Нормальный путь — правим существующий объект
         if (slot)
         {
-            _scene->removeItem(slot);
-            removeListEntryBySceneItem(slot);
-            delete slot;
-            slot = nullptr;
+            applyBackupToExisting(slot, snap);
+            return true;
         }
+        // Пробуем воссоздать
         slot = recreateFromBackup(snap);
         return slot != nullptr;
     };
 
-    auto redoFn = [this, payload, recreate]()
+    auto redoFn = [this, p, apply]()
     {
-        recreate(payload->item, payload->after);
+        apply(p->item, p->after);
         if (auto d = currentDocument())
         {
             d->isModified = true;
@@ -4394,9 +4426,9 @@ void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
         }
     };
 
-    auto undoFn = [this, payload, recreate]()
+    auto undoFn = [this, p, apply]()
     {
-        recreate(payload->item, payload->before);
+        apply(p->item, p->before);
         if (auto d = currentDocument())
         {
             d->isModified = true;
@@ -4404,10 +4436,8 @@ void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
         }
     };
 
-    //_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
     if (auto* st = activeUndoStack())
         st->push(new LambdaCommand(redoFn, undoFn, description));
-
 }
 
 void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
@@ -4419,7 +4449,7 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
     {
         ShapeBackup before;
         ShapeBackup after;
-        QGraphicsItem* item = nullptr; // Текущий экземпляр на сцене
+        QGraphicsItem* item = nullptr;
     };
 
     auto payload = std::make_shared<Payload>();
@@ -4427,46 +4457,23 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
     payload->after  = after;
     payload->item   = item;
 
-    // Вспомогательная лямбда – пересоздать фигуру по снапшоту и обновить ссылки
-    auto recreate = [this](QGraphicsItem*& slot, const ShapeBackup& snap)
+    auto apply = [this](QGraphicsItem*& slot, const ShapeBackup& snap)
     {
-        if (slot)
+        // Если указатель потеряли, попробуем создать заново
+        if (!slot)
         {
-            _scene->removeItem(slot);
-            removeListEntryBySceneItem(slot);
-            delete slot;
-            slot = nullptr;
+            slot = recreateFromBackup(snap);
+            return slot != nullptr;
         }
-        slot = recreateFromBackup(snap);
-        return slot != nullptr;
+
+        // Обычный путь: правим существующий объект in-place
+        applyBackupToExisting(slot, snap);
+        return true;
     };
 
-    auto redoFn = [this, payload, recreate]()
+    auto redoFn = [this, payload, apply]()
     {
-        if (!payload->item)
-        {
-            recreate(payload->item, payload->after);
-        }
-        else
-        {
-            recreate(payload->item, payload->after);
-        }
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-    auto undoFn = [this, payload, recreate]()
-    {
-        if (payload->item)
-        {
-            recreate(payload->item, payload->before);
-        }
-        else
-        {
-            recreate(payload->item, payload->before);
-        }
+        apply(payload->item, payload->after);
         if (auto d = currentDocument())
         {
             d->isModified = true;
@@ -4474,11 +4481,20 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
         }
     };
 
-    //_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+    auto undoFn = [this, payload, apply]()
+    {
+        apply(payload->item, payload->before);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
     if (auto* st = activeUndoStack())
         st->push(new LambdaCommand(redoFn, undoFn, description));
-
 }
+
 
 void MainWindow::removeSceneAndListItems(const QList<QListWidgetItem*>& listItems)
 {
@@ -4582,6 +4598,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
         auto* pt = new qgraph::Point(_scene);
         apply_PointSize_ToItem(pt);
         apply_NumberSize_ToItem(pt);
+        apply_PointStyle_ToItem(pt);
         pt->setCenter(b.pointCenter);
         pt->setData(0, b.className);
         pt->setZValue(b.z);
@@ -4596,6 +4613,91 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
         created->setFocus();
 
     return created;
+}
+
+void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
+{
+    if (!it) return;
+
+    switch (b.kind)
+    {
+    case ShapeKind::Rectangle:
+        if (auto* r = qgraphicsitem_cast<qgraph::Rectangle*>(it))
+        {
+            r->setRealSceneRect(b.rect);
+            r->updatePointNumbers();
+            apply_LineWidth_ToItem(r);
+            apply_PointSize_ToItem(r);
+            apply_NumberSize_ToItem(r);
+            r->setData(0, b.className);
+            r->setZValue(b.z);
+            r->setVisible(b.visible);
+            r->updateHandlePosition();
+        }
+        break;
+
+    case ShapeKind::Circle:
+        if (auto* c = qgraphicsitem_cast<qgraph::Circle*>(it))
+        {
+            c->setRealRadius(b.circleRadius);
+            apply_LineWidth_ToItem(c);
+            apply_PointSize_ToItem(c);
+            c->setData(0, b.className);
+            c->setZValue(b.z);
+            c->setVisible(b.visible);
+            c->updateHandlePosition();
+        }
+        break;
+
+    case ShapeKind::Polyline:
+    {
+        if (auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(it))
+        {
+            // Полная замена узлов из снапшота
+            pl->replaceScenePoints(b.points, b.closed);
+
+            apply_LineWidth_ToItem(pl);
+            apply_PointSize_ToItem(pl);
+            apply_NumberSize_ToItem(pl);
+            pl->setData(0, b.className);
+            pl->setZValue(b.z);
+            pl->setVisible(b.visible);
+            pl->updateHandlePosition();
+        }
+        break;
+    }
+
+    case ShapeKind::Line:
+    {
+        if (auto* ln = qgraphicsitem_cast<qgraph::Line*>(it))
+        {
+
+            ln->replaceScenePoints(b.points, b.closed);
+
+            apply_LineWidth_ToItem(ln);
+            apply_PointSize_ToItem(ln);
+            apply_NumberSize_ToItem(ln);
+            ln->setData(0, b.className);
+            ln->setZValue(b.z);
+            ln->setVisible(b.visible);
+            ln->updateHandlePosition();
+        }
+        break;
+    }
+    case ShapeKind::Point:
+        if (auto* pt = qgraphicsitem_cast<qgraph::Point*>(it))
+        {
+            apply_PointStyle_ToItem(pt);
+            apply_PointSize_ToItem(pt);
+            apply_NumberSize_ToItem(pt);
+            pt->setCenter(b.pointCenter);
+            pt->setData(0, b.className);
+            pt->setZValue(b.z);
+            pt->setVisible(b.visible);
+            pt->updateHandlePosition();
+        }
+        break;
+    }
 }
 
 void MainWindow::removePolygonListItem(QListWidgetItem* item)
@@ -4689,7 +4791,12 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
                 {
                     if (item != _videoRect)
                     {
-                        _scene->removeItem(item);
+                        //_scene->removeItem(item);
+                        if (item)
+                        {
+                            if (auto sc = item->scene())
+                                sc->removeItem(item);
+                        }
                         prevDoc->scene->addItem(item);
                     }
                 }
@@ -5149,6 +5256,7 @@ void MainWindow::on_actSettingsApp_triggered()
     init.lineWidth         = _vis.lineWidth;
     init.handleSize        = _vis.handleSize;
     init.numberFontPt      = _vis.numberFontPt;
+    init.pointSize         = _vis.pointSize;
 
     init.nodeColor         = _vis.handleColor;           // «Цвет узла»
     init.nodeSelectedColor = _vis.selectedHandleColor;   // «Цвет выбранного узла»
@@ -5173,6 +5281,7 @@ void MainWindow::on_actSettingsApp_triggered()
         _vis.lineWidth = v.lineWidth;
         _vis.handleSize = v.handleSize;
         _vis.numberFontPt = v.numberFontPt;
+        _vis.pointSize = v.pointSize;
 
         _vis.handleColor = v.nodeColor;
         _vis.selectedHandleColor = v.nodeSelectedColor;
@@ -5187,9 +5296,11 @@ void MainWindow::on_actSettingsApp_triggered()
 
         // 2) Сохраняем и применяем
         saveVisualStyle();
-        apply_LineWidth_ToScene(nullptr);
+        applyStyle_AllDocuments();
+
+        /*apply_LineWidth_ToScene(nullptr);
         apply_PointSize_ToScene(nullptr);
-        apply_NumberSize_ToScene(nullptr);
+        apply_NumberSize_ToScene(nullptr)*/;
 
         // 3) Режим замыкания полилинии
         _polylineCloseMode = v.closePolyline;
