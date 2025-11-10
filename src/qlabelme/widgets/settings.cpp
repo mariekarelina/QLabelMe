@@ -127,7 +127,7 @@ void Settings::applyModelToUi()
     ui->spinLineWidth->setValue(_values.lineWidth);
     ui->spinHandleSize->setValue(_values.handleSize);
     ui->spinNumberSize->setValue(_values.numberFontPt);
-    ui->spinPointSize->setValue(_values.pointSize);
+    //ui->spinPointSize->setValue(_values.pointSize);
 
     if (_btnNode)
         updateColorPreview(_btnNode, _values.nodeColor);
@@ -182,7 +182,7 @@ void Settings::applyUiToModel()
     _values.lineWidth = ui->spinLineWidth->value();
     _values.handleSize = ui->spinHandleSize->value();
     _values.numberFontPt = ui->spinNumberSize->value();
-    _values.pointSize = ui->spinPointSize->value();
+    //_values.pointSize = ui->spinPointSize->value();
 
     if (ui->doubleClickLMB->isChecked())
         _values.closePolyline = PolylineCloseMode::DoubleClick;

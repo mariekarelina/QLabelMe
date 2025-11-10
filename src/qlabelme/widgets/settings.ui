@@ -78,13 +78,6 @@
            </property>
           </widget>
          </item>
-         <item>
-          <widget class="QLabel" name="poinrSize">
-           <property name="text">
-            <string>Размер точки</string>
-           </property>
-          </widget>
-         </item>
         </layout>
        </widget>
        <widget class="QWidget" name="layoutWidget2">
@@ -111,16 +104,6 @@
          </item>
          <item>
           <widget class="QSpinBox" name="spinNumberSize">
-           <property name="minimum">
-            <number>1</number>
-           </property>
-           <property name="maximum">
-            <number>50</number>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QSpinBox" name="spinPointSize">
            <property name="minimum">
             <number>1</number>
            </property>

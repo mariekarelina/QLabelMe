@@ -67,6 +67,9 @@ void Point::setCenter(const QPointF& p)
     if (pos() == p) return;
     setPos(p);
     updateHandlePosition();
+
+    syncDotGeometry();
+    showDotIfIdle();
 }
 
 void Point::setFrameScale(float newScale)
@@ -123,6 +126,7 @@ void Point::updateHandlePosition()
 
     qgraph::Shape::HandleBlocker guard(this);
     _handle->setPos(0, 0);
+    syncDotGeometry();
 }
 
 void Point::updateHandlesZValue()
@@ -184,6 +188,14 @@ void Point::deleteItem()
 
 QVariant Point::itemChange(GraphicsItemChange change, const QVariant& value)
 {
+    if (change == QGraphicsItem::ItemSceneHasChanged)
+    {
+        // Когда элемент окончательно попал в сцену – гарантируем корректное состояние круга
+        ensureDotVis();
+        syncDotGeometry();
+        syncDotColors();
+        showDotIfIdle();
+    }
     if (change == QGraphicsItem::ItemSelectedChange)
     {
         bool willBeSelected = value.toBool();
@@ -201,18 +213,21 @@ QVariant Point::itemChange(GraphicsItemChange change, const QVariant& value)
 
 void Point::hoverEnterEvent(QGraphicsSceneHoverEvent* ev)
 {
+    _interacting = true;
     hideDot();
     QGraphicsItem::hoverEnterEvent(ev);
 }
 
 void Point::hoverLeaveEvent(QGraphicsSceneHoverEvent* ev)
 {
+    _interacting = false;
     showDotIfIdle();
     QGraphicsItem::hoverLeaveEvent(ev);
 }
 
 void Point::mousePressEvent(QGraphicsSceneMouseEvent* ev)
 {
+    _interacting = true;
     hideDot();
     setSelected(true); // Гарантируем, что точка стала выбранной
     QGraphicsEllipseItem::mousePressEvent(ev);
@@ -221,12 +236,13 @@ void Point::mousePressEvent(QGraphicsSceneMouseEvent* ev)
 void Point::mouseReleaseEvent(QGraphicsSceneMouseEvent* ev)
 {
     QGraphicsItem::mouseReleaseEvent(ev);
+    _interacting = false;
     showDotIfIdle();
 }
 
 void Point::showDotIfIdle()
 {
-    const bool idle = !isSelected();
+    const bool idle = !_interacting;
     if (auto* dv = ensureDotVis())
         dv->setVisible(idle);
 }
@@ -237,12 +253,32 @@ void Point::hideDot()
         _dotVis->setVisible(false);
 }
 
+// void Point::syncDotGeometry()
+// {
+//     QGraphicsEllipseItem* dv = ensureDotVis();
+//     const qreal r = std::max<qreal>(_dotRadiusPx, 0.5);
+//     dv->setRect(QRectF(-r, -r, 2*r, 2*r));
+// }
+
 void Point::syncDotGeometry()
 {
     QGraphicsEllipseItem* dv = ensureDotVis();
-    const qreal r = std::max<qreal>(_dotRadiusPx, 0.5);
-    dv->setRect(QRectF(-r, -r, 2*r, 2*r));
+    if (!dv) return;
+
+    // Если ручка существует - берем ее текущий размер
+    if (_handle)
+    {
+        const QRectF hr = _handle->rect();
+        const qreal d  = std::max(hr.width(), hr.height());
+        const qreal R  = 0.5 * d * _coverScale;
+        dv->setRect(QRectF(-R, -R, 2*R, 2*R));
+        return;
+    }
+    // Если узла нет
+    const qreal R = 4.0; // Минимальный радиус
+    dv->setRect(QRectF(-R, -R, 2*R, 2*R));
 }
+
 
 void Point::syncDotColors()
 {

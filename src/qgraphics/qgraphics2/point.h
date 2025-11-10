@@ -76,6 +76,11 @@ private:
     //QPointer<QGraphicsEllipseItem> _dotVis;
     qreal  _dotRadiusPx = 3.0;
     QColor _dotColor = Qt::white;
+
+    bool _interacting = false; // true только во время активного взаимодействия
+
+    qreal _coverScale = 1.15; // 15% больше квадрата-узла
+
 };
 
 }

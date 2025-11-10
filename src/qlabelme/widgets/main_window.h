@@ -143,6 +143,7 @@ struct ShapeBackup
     QPoint pointCenter;
 
     bool closed = false;
+    qulonglong uid = 0;
 };
 
 class MainWindow : public QMainWindow
@@ -362,6 +363,10 @@ private:
     // Удаляет одну запись из списка по заданному QGraphicsItem
     void removeListEntryBySceneItem(QGraphicsItem* sceneItem);
     static QGraphicsItem* sceneItemFromListItem(const QListWidgetItem* it);
+    // Поиск фигуры по uid на текущей сцене
+    QGraphicsItem* findItemByUid(qulonglong uid) const;
+    // Выдать/присвоить uid предмету
+    qulonglong ensureUid(QGraphicsItem* it) const;
 
 private:
     Ui::MainWindow* ui;
@@ -550,6 +555,15 @@ private:
     QGraphicsItem* _handleEditedItem = nullptr; // Владелец перетаскиваемой ручки
     ShapeBackup    _handleBeforeSnap;           // снимок "до"
     bool           _handleDragHadChanges = false;
+
+
+
+
+    // Стабильный ключ в QGraphicsItem::data(...)
+    static constexpr int RoleUid = 0x1337ABCD;
+
+    // Счетчик уникальных id на время жизни документа
+    mutable qulonglong _uidCounter = 1;
 
 
     // Позволяем стороннему классу видеть все

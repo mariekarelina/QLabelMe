@@ -4155,6 +4155,11 @@ QVector<ShapeBackup> MainWindow::collectBackupsForItems(const QList<QListWidgetI
             continue;
 
         ShapeBackup b{};
+
+        b.uid = gi->data(RoleUid).toULongLong();
+        if (b.uid == 0)
+            b.uid = ensureUid(gi);
+
         b.className = gi->data(0).toString();
         b.z = gi->zValue();
         b.visible = gi->isVisible();
@@ -4221,6 +4226,30 @@ QGraphicsItem* MainWindow::sceneItemFromListItem(const QListWidgetItem* it)
     if (!it)
         return nullptr;
     return it->data(Qt::UserRole).value<QGraphicsItem*>();
+}
+
+QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
+{
+    if (!ui->graphView || !ui->graphView->scene())
+        return nullptr;
+    for (QGraphicsItem* it : ui->graphView->scene()->items())
+    {
+        if (it->data(RoleUid).toULongLong() == uid)
+            return it;
+    }
+    return nullptr;
+}
+
+qulonglong MainWindow::ensureUid(QGraphicsItem* it) const
+{
+    if (!it)
+        return 0;
+    QVariant v = it->data(RoleUid);
+    if (!v.isNull())
+        return v.toULongLong();
+    qulonglong uid = _uidCounter++;
+    it->setData(RoleUid, QVariant::fromValue<qulonglong>(uid));
+    return uid;
 }
 
 // Создает и пушит в стек _undoStack новую LambdaCommand,
@@ -4293,6 +4322,10 @@ ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* gi) const
     ShapeBackup b{};
     if (!gi)
         return b;
+
+    b.uid = gi->data(RoleUid).toULongLong();
+    if (b.uid == 0)
+        b.uid = ensureUid(gi);
 
     b.className = gi->data(0).toString();
     b.z = gi->zValue();
@@ -4611,6 +4644,9 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
 
     if (created)
         created->setFocus();
+
+    if (created)
+        created->setData(RoleUid, QVariant::fromValue<qulonglong>(b.uid));
 
     return created;
 }
