@@ -210,6 +210,7 @@ private slots:
     void on_actDelete_triggered();
     void on_actAbout_triggered();
     void on_actSettingsApp_triggered();
+    void on_actSettingsProj_triggered();
 
     void nextImage();
     void prevImage();
@@ -247,6 +248,9 @@ private:
 
     bool loadClassesFromFile(const QString& filePath);
     const QStringList& projectClasses() const { return _projectClasses; }
+
+    QString classesYamlPath() const;
+    bool saveProjectClasses(const QStringList& classes);
 
     void onPolygonListItemClicked(QListWidgetItem* item);
     void onPolygonListItemDoubleClicked(QListWidgetItem* item);

@@ -50,15 +50,12 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
-#include <QScreen>
 #include <QGuiApplication>
-#include <QEvent>
 #include <cmath>
 #include <limits>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QDialogButtonBox>
-#include <QVBoxLayout>
 #include <QAbstractButton>
 #include <QAction>
 #include <QGraphicsSimpleTextItem>
@@ -156,7 +153,6 @@ MainWindow::MainWindow(QWidget *parent) :
     //_socket(new tcp::Socket)
 {
     ui->setupUi(this);
-
 
     //ui->menuBar->setAttribute(Qt::WA_TransparentForMouseEvents, false);
 
@@ -427,17 +423,14 @@ MainWindow::MainWindow(QWidget *parent) :
     //_undoView->setStack(_undoStack.get());
     _undoView->setEmptyLabel(tr("<пусто>"));
 
-
-
     // Классы в настройках
     _projPropsDialog = new ProjectSettings(this);
 
-    // Открыть «Свойства проекта»
-    connect(ui->actSettingsProj, &QAction::triggered, this, [this]{
-        // Перед показом синхронизируем актуальный список классов
-        _projPropsDialog->setProjectClasses(_projectClasses);
-        _projPropsDialog->exec();
-    });
+    connect(_projPropsDialog, &ProjectSettings::classesApplied, this,
+        [this](const QStringList& classes){
+            _projectClasses = classes;
+            saveProjectClasses(_projectClasses);
+        });
 }
 
 MainWindow::~MainWindow()
@@ -2717,13 +2710,11 @@ void MainWindow::handleCheckBoxClick(QCheckBox* clickedCheckBox)
 {
     if (_lastCheckedPolygonLabel == clickedCheckBox)
     {
-        // Клик на уже выбранный чекбокс — снимаем галочку
         clickedCheckBox->setChecked(false);
         _lastCheckedPolygonLabel = nullptr;
     }
     else
     {
-        // Клик на новый чекбокс — снимаем предыдущий и выбираем текущий
         if (_lastCheckedPolygonLabel)
         {
             _lastCheckedPolygonLabel->setChecked(false);
@@ -2835,6 +2826,44 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
 
     return true;
 }
+
+QString MainWindow::classesYamlPath() const
+{
+    QDir dir(_currentFolderPath);
+    return dir.filePath("classes.yaml");
+}
+
+bool MainWindow::saveProjectClasses(const QStringList& classes)
+{
+    const QString path = classesYamlPath();
+    if (path.isEmpty())
+        return false;
+
+    YAML::Emitter seq;
+    seq.SetIndent(2);
+    seq << YAML::Flow << YAML::BeginSeq;
+    for (const QString& s : classes)
+        seq << s.toUtf8().constData();
+    seq << YAML::EndSeq;
+    if (!seq.good())
+        return false;
+
+    QByteArray body;
+    body += "---\n";
+    body += "### YAML syntax ###\n\n";
+    body += "classes: ";
+    body += seq.c_str();
+    body += "\n\n...\n";
+
+    QSaveFile sf(path);
+    if (!sf.open(QIODevice::WriteOnly))
+        return false;
+    if (sf.write(body) != body.size())
+        return false;
+
+    return sf.commit();
+}
+
 
 void MainWindow::onPolygonListItemClicked(QListWidgetItem* item)
 {
@@ -4228,17 +4257,35 @@ QGraphicsItem* MainWindow::sceneItemFromListItem(const QListWidgetItem* it)
     return it->data(Qt::UserRole).value<QGraphicsItem*>();
 }
 
+// QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
+// {
+//     if (!ui->graphView || !ui->graphView->scene())
+//         return nullptr;
+//     for (QGraphicsItem* it : ui->graphView->scene()->items())
+//     {
+//         if (it->data(RoleUid).toULongLong() == uid)
+//             return it;
+//     }
+//     return nullptr;
+// }
+
 QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
 {
-    if (!ui->graphView || !ui->graphView->scene())
+    if (!_scene || uid == 0)
         return nullptr;
-    for (QGraphicsItem* it : ui->graphView->scene()->items())
+
+    const auto itemsList = _scene->items();
+    for (QGraphicsItem* it : itemsList)
     {
+        if (!it)
+            continue;
+
         if (it->data(RoleUid).toULongLong() == uid)
             return it;
     }
     return nullptr;
 }
+
 
 qulonglong MainWindow::ensureUid(QGraphicsItem* it) const
 {
@@ -4428,30 +4475,40 @@ void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
     {
         ShapeBackup before;
         ShapeBackup after;
-        QGraphicsItem* item = nullptr;
+        qulonglong uid = 0;
     };
 
     auto p = std::make_shared<Payload>();
     p->before = before;
     p->after  = after;
-    p->item   = item;
 
-    auto apply = [this](QGraphicsItem*& slot, const ShapeBackup& snap)
+    qulonglong uid = 0;
+    if (item)
+        uid = item->data(RoleUid).toULongLong();
+    if (uid == 0 && item)
+        uid = ensureUid(item);
+    p->uid = uid;
+
+    auto apply = [this](qulonglong uid, const ShapeBackup& snap)
     {
-        // Нормальный путь — правим существующий объект
-        if (slot)
+        QGraphicsItem* it = findItemByUid(uid);
+        if (it)
         {
-            applyBackupToExisting(slot, snap);
+            applyBackupToExisting(it, snap);
             return true;
         }
-        // Пробуем воссоздать
-        slot = recreateFromBackup(snap);
-        return slot != nullptr;
+        QGraphicsItem* created = recreateFromBackup(snap);
+        if (created)
+        {
+            created->setData(RoleUid, QVariant::fromValue<qulonglong>(snap.uid ? snap.uid : uid));
+            return true;
+        }
+        return false;
     };
 
     auto redoFn = [this, p, apply]()
     {
-        apply(p->item, p->after);
+        apply(p->uid, p->after);
         if (auto d = currentDocument())
         {
             d->isModified = true;
@@ -4461,7 +4518,7 @@ void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
 
     auto undoFn = [this, p, apply]()
     {
-        apply(p->item, p->before);
+        apply(p->uid, p->before);
         if (auto d = currentDocument())
         {
             d->isModified = true;
@@ -4482,31 +4539,43 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
     {
         ShapeBackup before;
         ShapeBackup after;
-        QGraphicsItem* item = nullptr;
+        qulonglong uid = 0;
     };
 
-    auto payload = std::make_shared<Payload>();
-    payload->before = before;
-    payload->after  = after;
-    payload->item   = item;
+    auto p = std::make_shared<Payload>();
+    p->before = before;
+    p->after  = after;
 
-    auto apply = [this](QGraphicsItem*& slot, const ShapeBackup& snap)
+    // Сохраняем uid
+    qulonglong uid = 0;
+    if (item)
+        uid = item->data(RoleUid).toULongLong();
+    if (uid == 0 && item)
+        uid = ensureUid(item);
+    p->uid = uid;
+
+    // Найти актуальный item по uid; если нет - пересоздать из снапшота
+    auto apply = [this](qulonglong uid, const ShapeBackup& snap)
     {
-        // Если указатель потеряли, попробуем создать заново
-        if (!slot)
+        QGraphicsItem* it = findItemByUid(uid);
+        if (it)
         {
-            slot = recreateFromBackup(snap);
-            return slot != nullptr;
+            applyBackupToExisting(it, snap);
+            return true;
         }
-
-        // Обычный путь: правим существующий объект in-place
-        applyBackupToExisting(slot, snap);
-        return true;
+        // Не нашли - пересоздаем (и привязываем тот же uid)
+        QGraphicsItem* created = recreateFromBackup(snap);
+        if (created)
+        {
+            created->setData(RoleUid, QVariant::fromValue<qulonglong>(snap.uid ? snap.uid : uid));
+            return true;
+        }
+        return false;
     };
 
-    auto redoFn = [this, payload, apply]()
+    auto redoFn = [this, p, apply]()
     {
-        apply(payload->item, payload->after);
+        apply(p->uid, p->after);
         if (auto d = currentDocument())
         {
             d->isModified = true;
@@ -4514,9 +4583,9 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
         }
     };
 
-    auto undoFn = [this, payload, apply]()
+    auto undoFn = [this, p, apply]()
     {
-        apply(payload->item, payload->before);
+        apply(p->uid, p->before);
         if (auto d = currentDocument())
         {
             d->isModified = true;
@@ -4527,6 +4596,7 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
     if (auto* st = activeUndoStack())
         st->push(new LambdaCommand(redoFn, undoFn, description));
 }
+
 
 
 void MainWindow::removeSceneAndListItems(const QList<QListWidgetItem*>& listItems)
@@ -5374,6 +5444,36 @@ void MainWindow::on_actSettingsApp_triggered()
         apply_LineWidth_ToScene(nullptr);
         apply_PointSize_ToScene(nullptr);
         apply_NumberSize_ToScene(nullptr);
+    }
+}
+
+void MainWindow::on_actSettingsProj_triggered()
+{
+    _projPropsDialog->setProjectClasses(_projectClasses);
+
+    QVector<int> geom{ -1, -1, 520, 360 };
+    config::base().getValue("windows.project_settings_dialog.geometry", geom);
+    if (geom.size() == 4) {
+        if (geom[2] < 320) geom[2] = 320;
+        if (geom[3] < 200) geom[3] = 200;
+        if (geom[0] >= 0 && geom[1] >= 0)
+            _projPropsDialog->move(geom[0], geom[1]);
+        _projPropsDialog->resize(geom[2], geom[3]);
+    }
+
+    const int rc = _projPropsDialog->exec();
+
+    const QRect r = (_projPropsDialog->isMaximized() || _projPropsDialog->isFullScreen())
+                    ? _projPropsDialog->normalGeometry()
+                    : _projPropsDialog->geometry();
+    QVector<int> out { r.x(), r.y(), r.width(), r.height() };
+    config::base().setValue("windows.project_settings_dialog.geometry", out);
+    config::base().saveFile();
+
+    if (rc == QDialog::Accepted)
+    {
+        _projectClasses = _projPropsDialog->projectClasses();
+        saveProjectClasses(_projectClasses);
     }
 }
 

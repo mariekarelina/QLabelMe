@@ -17,26 +17,84 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="general">
       <attribute name="title">
-       <string>Tab 1</string>
+       <string>Общее</string>
       </attribute>
      </widget>
      <widget class="QWidget" name="classes">
       <attribute name="title">
-       <string>Tab 2</string>
+       <string>Классы</string>
       </attribute>
       <widget class="QListWidget" name="listClasses">
        <property name="geometry">
         <rect>
          <x>30</x>
          <y>30</y>
-         <width>511</width>
+         <width>401</width>
          <height>261</height>
         </rect>
        </property>
+      </widget>
+      <widget class="QWidget" name="layoutWidget">
+       <property name="geometry">
+        <rect>
+         <x>470</x>
+         <y>40</y>
+         <width>207</width>
+         <height>196</height>
+        </rect>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_2">
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout">
+          <item>
+           <widget class="QPushButton" name="btnAdd">
+            <property name="text">
+             <string>+</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnRemove">
+            <property name="text">
+             <string>-</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnEdit">
+          <property name="text">
+           <string>Редактировать</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnSortAZ">
+          <property name="text">
+           <string>Сортировать А-Я</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnUp">
+          <property name="text">
+           <string>Вверх</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnDown">
+          <property name="text">
+           <string>Вниз</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </widget>
      </widget>
     </widget>
@@ -47,7 +105,7 @@
       <enum>Qt::Horizontal</enum>
      </property>
      <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+      <set>QDialogButtonBox::Apply|QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
      </property>
     </widget>
    </item>
