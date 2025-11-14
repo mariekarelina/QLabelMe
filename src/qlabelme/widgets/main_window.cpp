@@ -4304,24 +4304,36 @@ void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString
 {
     struct Payload
     {
-        ShapeBackup b;
-        QGraphicsItem* item = nullptr;
+        ShapeBackup  b;
+        qulonglong   uid = 0;
     };
+
     auto payload = std::make_shared<Payload>();
-    payload->b = backup;
+    payload->b   = backup;
+    payload->uid = backup.uid;
 
     auto redoFn = [this, payload]()
     {
-        // Удалим во избежание дублей
-        if (payload->item)
+        // Пытаемся найти существующий объект по uid
+        QGraphicsItem* it = nullptr;
+        if (payload->uid != 0)
+            it = findItemByUid(payload->uid);
+
+        if (it)
         {
-            _scene->removeItem(payload->item);
-            removeListEntryBySceneItem(payload->item);
-            delete payload->item;
-            payload->item = nullptr;
+            // Фигура уже есть (первый redo после push) -
+            // просто приводим ее к нужному состоянию из снапшота
+            applyBackupToExisting(it, payload->b);
         }
-        // Создаем заново из снимка и линкуем в список
-        payload->item = recreateFromBackup(payload->b);
+        else
+        {
+            // Фигуры нет - создаем по снапшоту
+            it = recreateFromBackup(payload->b);
+            if (it && payload->uid != 0)
+            {
+                it->setData(RoleUid, QVariant::fromValue<qulonglong>(payload->uid));
+            }
+        }
 
         if (auto d = currentDocument())
         {
@@ -4332,12 +4344,15 @@ void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString
 
     auto undoFn = [this, payload]()
     {
-        if (!payload->item)
+        if (payload->uid == 0)
             return;
-        _scene->removeItem(payload->item);
-        removeListEntryBySceneItem(payload->item);
-        delete payload->item;
-        payload->item = nullptr;
+
+        if (QGraphicsItem* it = findItemByUid(payload->uid))
+        {
+            _scene->removeItem(it);
+            removeListEntryBySceneItem(it);
+            delete it;
+        }
 
         if (auto d = currentDocument())
         {
@@ -4346,10 +4361,8 @@ void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString
         }
     };
 
-    //_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
     if (auto* st = activeUndoStack())
         st->push(new LambdaCommand(redoFn, undoFn, description));
-
 }
 
 QUndoStack* MainWindow::activeUndoStack() const
@@ -4416,22 +4429,43 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
 {
     struct Payload
     {
-        ShapeBackup   b;
-        QGraphicsItem* item = nullptr;
+        ShapeBackup  b;
+        qulonglong   uid = 0;
     };
+
     auto payload = std::make_shared<Payload>();
-    payload->b  = backup;
-    payload->item = createdNow;      // На момент push объект уже создан и на сцене
+    payload->b = backup;
+
+    // Берем uid из снапшота или с самого объекта
+    qulonglong uid = backup.uid;
+    if (uid == 0 && createdNow)
+        uid = createdNow->data(RoleUid).toULongLong();
+    if (uid == 0 && createdNow)
+        uid = ensureUid(createdNow);
+    payload->uid = uid;
 
     auto redoFn = [this, payload]()
     {
-        // Первый redo сразу после push: item уже есть и на сцене - ничего не делаем
-        if (payload->item && payload->item->scene())
+        if (payload->uid == 0)
             return;
 
-        // Повторные redo после undo: создаем заново из backup
-        QGraphicsItem* newItem = recreateFromBackup(payload->b);
-        payload->item = newItem;
+        // Пытаемся найти уже существующий объект по uid
+        QGraphicsItem* item = findItemByUid(payload->uid);
+        if (item)
+        {
+            // Фигура есть - просто приводим ее к состоянию из снапшота
+            applyBackupToExisting(item, payload->b);
+        }
+        else
+        {
+            // Фигуры нет - создаем по снапшоту
+            QGraphicsItem* created = recreateFromBackup(payload->b);
+            if (created && payload->uid != 0)
+            {
+                created->setData(RoleUid,
+                                 QVariant::fromValue<qulonglong>(payload->uid));
+            }
+        }
 
         if (auto d = currentDocument())
         {
@@ -4442,16 +4476,16 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
 
     auto undoFn = [this, payload]()
     {
-        QGraphicsItem* item = payload->item;
-         // Уже удален
-        if (!item)
+        if (payload->uid == 0)
             return;
 
-        if (auto sc = item->scene())
-            sc->removeItem(item);
-        removeListEntryBySceneItem(item);
-        delete item;
-        payload->item = nullptr;
+        if (QGraphicsItem* item = findItemByUid(payload->uid))
+        {
+            if (auto sc = item->scene())
+                sc->removeItem(item);
+            removeListEntryBySceneItem(item);
+            delete item;
+        }
 
         if (auto d = currentDocument())
         {
@@ -4460,11 +4494,10 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
         }
     };
 
-    //_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
     if (auto* st = activeUndoStack())
         st->push(new LambdaCommand(redoFn, undoFn, description));
-
 }
+
 
 void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
                                       const ShapeBackup& before,
@@ -5178,61 +5211,41 @@ void MainWindow::on_actDelete_triggered()
         return;
 
     const QList<QListWidgetItem*> selectedItems = ui->polygonList->selectedItems();
-    if (selectedItems.isEmpty()) return;
+    if (selectedItems.isEmpty())
+        return;
 
-    // 1) Снимки для восстановления
+    // Снимки для восстановления
     const QVector<ShapeBackup> backups = collectBackupsForItems(selectedItems);
 
-    // 2) Payload с живыми указателями текущего "набора"
     struct Payload
     {
-        QVector<ShapeBackup> backups;
-        QVector<QGraphicsItem*> currentItems;
+        QVector<ShapeBackup>  backups;
+        QVector<qulonglong>   uids;
     };
+
     auto payload = std::make_shared<Payload>();
     payload->backups = backups;
+    payload->uids.reserve(backups.size());
 
-    // Изначально "текущие" - это выделенные сейчас элементы из списка
-    payload->currentItems.reserve(selectedItems.size());
-    for (QListWidgetItem* li : selectedItems)
+    for (const ShapeBackup& b : backups)
     {
-        QGraphicsItem* gi = sceneItemFromListItem(li);
-        if (gi)
-            payload->currentItems.push_back(gi);
+        if (b.uid != 0)
+            payload->uids.push_back(b.uid);
     }
 
-    // 3) redo: удалить текущие элементы и записи списка
+    // redo: удалить текущие элементы по uid
     auto redoFn = [this, payload]()
     {
-        for (QGraphicsItem* gi : std::as_const(payload->currentItems))
+        for (qulonglong uid : std::as_const(payload->uids))
         {
-            if (!gi)
+            if (!uid)
                 continue;
 
-            _scene->removeItem(gi);
-            removeListEntryBySceneItem(gi);
-            delete gi;
-        }
-        payload->currentItems.clear();
-
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    // 4) undo: восстановить по снимкам, сохранить новые указатели в currentItems
-    auto undoFn = [this, payload]()
-    {
-        payload->currentItems.clear();
-        payload->currentItems.reserve(payload->backups.size());
-
-        for (const ShapeBackup& b : payload->backups)
-        {
-            if (QGraphicsItem* created = recreateFromBackup(b))
+            if (QGraphicsItem* gi = findItemByUid(uid))
             {
-                payload->currentItems.push_back(created);
+                _scene->removeItem(gi);
+                removeListEntryBySceneItem(gi);
+                delete gi;
             }
         }
 
@@ -5243,9 +5256,25 @@ void MainWindow::on_actDelete_triggered()
         }
     };
 
-    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Удаление фигур")));
-}
+    // undo: восстановить по снапшотам
+    auto undoFn = [this, payload]()
+    {
+        for (const ShapeBackup& b : std::as_const(payload->backups))
+        {
+            QGraphicsItem* created = recreateFromBackup(b);
+            Q_UNUSED(created);
+        }
 
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    if (doc->_undoStack)
+        doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Удаление фигур")));
+}
 
 void MainWindow::on_actAbout_triggered()
 {
