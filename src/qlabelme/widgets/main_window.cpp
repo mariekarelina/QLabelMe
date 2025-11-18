@@ -515,14 +515,11 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         if (auto* circle = dynamic_cast<DragCircle*>(item))
         {
             QGraphicsItem* parent = circle->parentItem();
-            auto* polyline = dynamic_cast<qgraph::Polyline*>(parent);
-            if (!polyline)
-                return;
-            qulonglong uid = polyline->data(RoleUid).toULongLong();
-            ShapeBackup before = makeBackupFromItem(polyline);
-
             if (auto* polyline = dynamic_cast<qgraph::Polyline*>(parent))
             {
+                ShapeBackup before = makeBackupFromItem(polyline);
+                qulonglong uid = before.uid;
+
                 polyline->handlePointDeletion(circle);
 
                 ShapeBackup after = makeBackupFromItem(polyline);
@@ -542,11 +539,12 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 return;
             }
         }
+
         // Проверяем, кликнули ли на саму полилинию (для добавления точки)
         if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
-            qulonglong uid = polyline->data(RoleUid).toULongLong();
             ShapeBackup before = makeBackupFromItem(polyline);
+            qulonglong uid = before.uid;
 
             polyline->insertPoint(scenePos);
 
@@ -556,7 +554,6 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 pushModifyShapeCommand(uid, before, after, tr("Добавление узла"));
             }
 
-            // Помечаем документ как измененный
             Document::Ptr doc = currentDocument();
             if (doc && !doc->isModified)
             {
@@ -570,14 +567,11 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         if (auto* circle = dynamic_cast<DragCircle*>(item))
         {
             QGraphicsItem* parent = circle->parentItem();
-            auto* line = dynamic_cast<qgraph::Line*>(parent);
-            if (!line)
-                return;
-            qulonglong uid = line->data(RoleUid).toULongLong();
-            ShapeBackup before = makeBackupFromItem(line);
-
             if (auto* line = dynamic_cast<qgraph::Line*>(parent))
             {
+                ShapeBackup before = makeBackupFromItem(line);
+                qulonglong uid = before.uid;
+
                 line->handlePointDeletion(circle);
 
                 ShapeBackup after = makeBackupFromItem(line);
@@ -597,11 +591,12 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 return;
             }
         }
+
         // Проверяем, кликнули ли на саму линию (для добавления точки)
         if (auto* line = dynamic_cast<qgraph::Line*>(item))
         {
-            qulonglong uid = line->data(RoleUid).toULongLong();
             ShapeBackup before = makeBackupFromItem(line);
+            qulonglong uid = before.uid;
 
             line->insertPoint(scenePos);
 
@@ -611,7 +606,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             {
                 pushModifyShapeCommand(uid, before, after, tr("Добавление узла"));
             }
-            // Помечаем документ как измененный
+
             Document::Ptr doc = currentDocument();
             if (doc && !doc->isModified)
             {
@@ -621,6 +616,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             mouseEvent->accept();
             return;
         }
+
     }
     if (mouseEvent->button() == Qt::LeftButton)
     {
@@ -4563,6 +4559,10 @@ void MainWindow::pushModifyShapeCommand(qulonglong uid,
                                         const ShapeBackup& after,
                                         const QString& description)
 {
+    auto doc = currentDocument();
+    if (!doc || !doc->_undoStack)
+        return;
+
     struct Payload
     {
         qulonglong uid;
@@ -4575,16 +4575,19 @@ void MainWindow::pushModifyShapeCommand(qulonglong uid,
     payload->before = before;
     payload->after  = after;
 
-    auto redoFn = [this, payload]()
+    // Применяем снапшот к существующей фигуре по uid.
+    // Если фигуру не нашли — просто no-op, без пересоздания.
+    auto applySnap = [this](qulonglong uid, const ShapeBackup& snap)
     {
-        if (QGraphicsItem* it = findItemByUid(payload->uid))
+        if (QGraphicsItem* it = findItemByUid(uid))
         {
-            applyBackupToExisting(it, payload->after);
+            applyBackupToExisting(it, snap);
         }
-        else
-        {
-            recreateFromBackup(payload->after);
-        }
+    };
+
+    auto redoFn = [this, payload, applySnap]()
+    {
+        applySnap(payload->uid, payload->after);
         if (auto d = currentDocument())
         {
             d->isModified = true;
@@ -4592,17 +4595,9 @@ void MainWindow::pushModifyShapeCommand(qulonglong uid,
         }
     };
 
-    auto undoFn = [this, payload]()
+    auto undoFn = [this, payload, applySnap]()
     {
-        if (QGraphicsItem* it = findItemByUid(payload->uid))
-        {
-            applyBackupToExisting(it, payload->before);
-        }
-        else
-        {
-            recreateFromBackup(payload->before);
-        }
-
+        applySnap(payload->uid, payload->before);
         if (auto d = currentDocument())
         {
             d->isModified = true;
@@ -4610,8 +4605,7 @@ void MainWindow::pushModifyShapeCommand(qulonglong uid,
         }
     };
 
-    if (auto* st = activeUndoStack())
-        st->push(new LambdaCommand(redoFn, undoFn, description));
+    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
 void MainWindow::removeSceneAndListItems(const QList<QListWidgetItem*>& listItems)
