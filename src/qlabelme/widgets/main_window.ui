@@ -173,6 +173,12 @@
     <addaction name="actCreatePoint"/>
     <addaction name="actCreateLine"/>
     <addaction name="actDelete"/>
+    <addaction name="separator"/>
+    <addaction name="actClosePolyline"/>
+    <addaction name="actBack"/>
+    <addaction name="actViewNum"/>
+    <addaction name="actRotatePointsClockwise"/>
+    <addaction name="actRotatePointsCounterClockwise"/>
    </widget>
    <widget class="QMenu" name="menuSettings">
     <property name="title">
@@ -403,6 +409,46 @@
   <action name="actSettingsProj">
    <property name="text">
     <string>Свойства проекта</string>
+   </property>
+  </action>
+  <action name="actClosePolyline">
+   <property name="text">
+    <string>Завершить полилинию</string>
+   </property>
+   <property name="shortcut">
+    <string>C</string>
+   </property>
+  </action>
+  <action name="actBack">
+   <property name="text">
+    <string>Переместить на задний план</string>
+   </property>
+   <property name="shortcut">
+    <string>B</string>
+   </property>
+  </action>
+  <action name="actViewNum">
+   <property name="text">
+    <string>Скрыть/показать нумерацию</string>
+   </property>
+   <property name="shortcut">
+    <string>N</string>
+   </property>
+  </action>
+  <action name="actRotatePointsClockwise">
+   <property name="text">
+    <string>Сдвиг нумерации по часовой</string>
+   </property>
+   <property name="shortcut">
+    <string>R</string>
+   </property>
+  </action>
+  <action name="actRotatePointsCounterClockwise">
+   <property name="text">
+    <string>Сдвиг нумерации против часовой</string>
+   </property>
+   <property name="shortcut">
+    <string>E</string>
    </property>
   </action>
  </widget>

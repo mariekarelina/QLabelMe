@@ -515,9 +515,23 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         if (auto* circle = dynamic_cast<DragCircle*>(item))
         {
             QGraphicsItem* parent = circle->parentItem();
+            auto* polyline = dynamic_cast<qgraph::Polyline*>(parent);
+            if (!polyline)
+                return;
+            qulonglong uid = polyline->data(RoleUid).toULongLong();
+            ShapeBackup before = makeBackupFromItem(polyline);
+
             if (auto* polyline = dynamic_cast<qgraph::Polyline*>(parent))
             {
                 polyline->handlePointDeletion(circle);
+
+                ShapeBackup after = makeBackupFromItem(polyline);
+
+                if (!sameGeometry(before, after))
+                {
+                    pushModifyShapeCommand(uid, before, after, tr("Удаление узла"));
+                }
+
                 Document::Ptr doc = currentDocument();
                 if (doc && !doc->isModified)
                 {
@@ -531,7 +545,17 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         // Проверяем, кликнули ли на саму полилинию (для добавления точки)
         if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
+            qulonglong uid = polyline->data(RoleUid).toULongLong();
+            ShapeBackup before = makeBackupFromItem(polyline);
+
             polyline->insertPoint(scenePos);
+
+            ShapeBackup after = makeBackupFromItem(polyline);
+            if (!sameGeometry(before, after))
+            {
+                pushModifyShapeCommand(uid, before, after, tr("Добавление узла"));
+            }
+
             // Помечаем документ как измененный
             Document::Ptr doc = currentDocument();
             if (doc && !doc->isModified)
@@ -546,9 +570,23 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         if (auto* circle = dynamic_cast<DragCircle*>(item))
         {
             QGraphicsItem* parent = circle->parentItem();
+            auto* line = dynamic_cast<qgraph::Line*>(parent);
+            if (!line)
+                return;
+            qulonglong uid = line->data(RoleUid).toULongLong();
+            ShapeBackup before = makeBackupFromItem(line);
+
             if (auto* line = dynamic_cast<qgraph::Line*>(parent))
             {
                 line->handlePointDeletion(circle);
+
+                ShapeBackup after = makeBackupFromItem(line);
+
+                if (!sameGeometry(before, after))
+                {
+                    pushModifyShapeCommand(uid, before, after, tr("Удаление узла"));
+                }
+
                 Document::Ptr doc = currentDocument();
                 if (doc && !doc->isModified)
                 {
@@ -562,7 +600,17 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         // Проверяем, кликнули ли на саму линию (для добавления точки)
         if (auto* line = dynamic_cast<qgraph::Line*>(item))
         {
+            qulonglong uid = line->data(RoleUid).toULongLong();
+            ShapeBackup before = makeBackupFromItem(line);
+
             line->insertPoint(scenePos);
+
+            ShapeBackup after = makeBackupFromItem(line);
+
+            if (!sameGeometry(before, after))
+            {
+                pushModifyShapeCommand(uid, before, after, tr("Добавление узла"));
+            }
             // Помечаем документ как измененный
             Document::Ptr doc = currentDocument();
             if (doc && !doc->isModified)
@@ -1418,99 +1466,20 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         case QEvent::ShortcutOverride:
         case QEvent::KeyPress:
         {
-            auto* ke = static_cast<QKeyEvent*>(event);
+            //auto* ke = static_cast<QKeyEvent*>(event);
 
             // Завершение рисования по 'C' при выбранном режиме KeyC
             if (_drawingPolyline && _polyline &&
-                qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::KeyC &&
-                ke->key() == Qt::Key_C)
+                qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::KeyC)
             {
-                _drawingPolyline = false;
-                _polyline->closePolyline();
-
-                _polyline->updatePointNumbers();
-                apply_LineWidth_ToItem(_polyline);
-                apply_PointSize_ToItem(_polyline);
-                apply_NumberSize_ToItem(_polyline);
-
-                // Выбор класса
-                // QStringList classes;
-                // for (int i = 0; i < ui->polygonLabel->count(); ++i)
-                //     classes << ui->polygonLabel->item(i)->text();
-
-                // Select_class dialog(classes, this);
-
-                Select_class dialog(_projectClasses, this);
-                if (dialog.exec() == QDialog::Accepted)
-                {
-                    const QString selectedClass = dialog.selectedClass();
-                    if (!selectedClass.isEmpty())
-                    {
-                        _polyline->setData(0, selectedClass);
-                        linkSceneItemToList(_polyline);
-
-                        ShapeBackup b = makeBackupFromItem(_polyline);
-                        pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
-                    }
-                }
-
-                _polyline = nullptr;
-
-                if (auto doc = currentDocument())
-                {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
-                raiseAllHandlesToTop();
-
                 event->accept();
                 return true;
             }
 
             // Завершение рисования по 'C' при выбранном режиме KeyC для линии
             if (_drawingLine && _line &&
-                qgraph::Line::globalCloseMode() == qgraph::Line::CloseMode::KeyC &&
-                ke->key() == Qt::Key_C)
+                qgraph::Line::globalCloseMode() == qgraph::Line::CloseMode::KeyC)
             {
-                _drawingLine = false;
-                _line->closeLine();
-
-                _line->updatePointNumbers();
-                apply_LineWidth_ToItem(_line);
-                apply_PointSize_ToItem(_line);
-                apply_NumberSize_ToItem(_line);
-
-                // Выбор класса
-                // QStringList classes;
-                // for (int i = 0; i < ui->polygonLabel->count(); ++i)
-                //     classes << ui->polygonLabel->item(i)->text();
-
-                // Select_class dialog(classes, this);
-
-                Select_class dialog(_projectClasses, this);
-                if (dialog.exec() == QDialog::Accepted)
-                {
-                    const QString selectedClass = dialog.selectedClass();
-                    if (!selectedClass.isEmpty())
-                    {
-                        _line->setData(0, selectedClass);
-                        linkSceneItemToList(_line);
-
-                        ShapeBackup b = makeBackupFromItem(_line);
-                        pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
-
-                    }
-                }
-
-                _line = nullptr;
-
-                if (auto doc = currentDocument())
-                {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
-                raiseAllHandlesToTop();
-
                 event->accept();
                 return true;
             }
@@ -1603,57 +1572,16 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     }
     else if (event->key() == Qt::Key_E || event->key() == Qt::Key_R)
     {
-        QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
-        for (QGraphicsItem* item : selectedItems)
-        {
-            if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
-            {
-                if (event->key() == Qt::Key_E)
-                {
-                    rectangle->rotatePointsCounterClockwise();
-                }
-                else if (event->key() == Qt::Key_R)
-                {
-                    rectangle->rotatePointsClockwise();
-                }
-                updateAllPointNumbers();
-            }
-            else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-            {
-                if (event->key() == Qt::Key_E)
-                {
-                    polyline->rotatePointsCounterClockwise();
-                }
-                else if (event->key() == Qt::Key_R)
-                {
-                    polyline->rotatePointsClockwise();
-                }
-                updateAllPointNumbers();
-            }
-        }
         event->accept();
         return;
     }
     else if (event->key() == Qt::Key_N)
     {
-        QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
-        for (QGraphicsItem* item : selectedItems)
-        {
-            if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
-            {
-                rectangle->togglePointNumbers();
-            }
-            else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-            {
-                polyline->togglePointNumbers();
-            }
-        }
         event->accept();
         return;
     }
     else if (event->key() == Qt::Key_B)
     {
-        moveSelectedItemsToBack();
         event->accept();
         return;
     }
@@ -4630,7 +4558,61 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
         st->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
+void MainWindow::pushModifyShapeCommand(qulonglong uid,
+                                        const ShapeBackup& before,
+                                        const ShapeBackup& after,
+                                        const QString& description)
+{
+    struct Payload
+    {
+        qulonglong uid;
+        ShapeBackup before;
+        ShapeBackup after;
+    };
 
+    auto payload = std::make_shared<Payload>();
+    payload->uid    = uid;
+    payload->before = before;
+    payload->after  = after;
+
+    auto redoFn = [this, payload]()
+    {
+        if (QGraphicsItem* it = findItemByUid(payload->uid))
+        {
+            applyBackupToExisting(it, payload->after);
+        }
+        else
+        {
+            recreateFromBackup(payload->after);
+        }
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, payload]()
+    {
+        if (QGraphicsItem* it = findItemByUid(payload->uid))
+        {
+            applyBackupToExisting(it, payload->before);
+        }
+        else
+        {
+            recreateFromBackup(payload->before);
+        }
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    if (auto* st = activeUndoStack())
+        st->push(new LambdaCommand(redoFn, undoFn, description));
+}
 
 void MainWindow::removeSceneAndListItems(const QList<QListWidgetItem*>& listItems)
 {
@@ -5129,6 +5111,80 @@ void MainWindow::on_actLine_triggered()
     _drawingPolyline      = false;
 }
 
+void MainWindow::on_actClosePolyline_triggered()
+{
+    // Завершение рисования полилинии, если мы ее сейчас рисуем
+    if (_drawingPolyline && _polyline)
+    {
+        _drawingPolyline = false;
+        _polyline->closePolyline();
+
+        _polyline->updatePointNumbers();
+        apply_LineWidth_ToItem(_polyline);
+        apply_PointSize_ToItem(_polyline);
+        apply_NumberSize_ToItem(_polyline);
+
+        // Выбор класса
+        Select_class dialog(_projectClasses, this);
+        if (dialog.exec() == QDialog::Accepted)
+        {
+            const QString selectedClass = dialog.selectedClass();
+            if (!selectedClass.isEmpty())
+            {
+                _polyline->setData(0, selectedClass);
+                linkSceneItemToList(_polyline);
+
+                ShapeBackup b = makeBackupFromItem(_polyline);
+                pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+            }
+        }
+
+        _polyline = nullptr;
+
+        if (auto doc = currentDocument())
+        {
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
+        }
+        raiseAllHandlesToTop();
+    }
+
+    // Завершение рисования линии, если мы ее сейчас рисуем
+    if (_drawingLine && _line)
+    {
+        _drawingLine = false;
+        _line->closeLine();
+
+        _line->updatePointNumbers();
+        apply_LineWidth_ToItem(_line);
+        apply_PointSize_ToItem(_line);
+        apply_NumberSize_ToItem(_line);
+
+        Select_class dialog(_projectClasses, this);
+        if (dialog.exec() == QDialog::Accepted)
+        {
+            const QString selectedClass = dialog.selectedClass();
+            if (!selectedClass.isEmpty())
+            {
+                _line->setData(0, selectedClass);
+                linkSceneItemToList(_line);
+
+                ShapeBackup b = makeBackupFromItem(_line);
+                pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+            }
+        }
+
+        _line = nullptr;
+
+        if (auto doc = currentDocument())
+        {
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
+        }
+        raiseAllHandlesToTop();
+    }
+}
+
 void MainWindow::wheelEvent(QWheelEvent* event)
 {
     // Сохраняем состояние при изменении масштаба
@@ -5543,3 +5599,75 @@ void MainWindow::prevImage()
 
     list->setCurrentRow(newRow);
 }
+
+void MainWindow::on_actBack_triggered()
+{
+    moveSelectedItemsToBack();
+}
+
+void MainWindow::on_actViewNum_triggered()
+{
+    QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+    for (QGraphicsItem* item : selectedItems)
+    {
+        if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            rectangle->togglePointNumbers();
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            polyline->togglePointNumbers();
+        }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            line->togglePointNumbers();
+        }
+    }
+}
+
+void MainWindow::on_actRotatePointsClockwise_triggered()
+{
+    QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+    for (QGraphicsItem* item : selectedItems)
+    {
+        if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            rectangle->rotatePointsClockwise();
+            updateAllPointNumbers();
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            polyline->rotatePointsClockwise();
+            updateAllPointNumbers();
+        }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            line->rotatePointsClockwise();
+            updateAllPointNumbers();
+        }
+    }
+}
+
+void MainWindow::on_actRotatePointsCounterClockwise_triggered()
+{
+    QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+    for (QGraphicsItem* item : selectedItems)
+    {
+        if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            rectangle->rotatePointsCounterClockwise();
+            updateAllPointNumbers();
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            polyline->rotatePointsCounterClockwise();
+            updateAllPointNumbers();
+        }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            line->rotatePointsCounterClockwise();
+            updateAllPointNumbers();
+        }
+    }
+}
+

@@ -199,6 +199,7 @@ private slots:
     void on_actPoint_triggered();
     void on_actLine_triggered();
 
+    void on_actClosePolyline_triggered();
 
     void wheelEvent(QWheelEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
@@ -214,6 +215,12 @@ private slots:
 
     void nextImage();
     void prevImage();
+
+    void on_actBack_triggered();
+    void on_actViewNum_triggered();
+
+    void on_actRotatePointsClockwise_triggered();
+    void on_actRotatePointsCounterClockwise_triggered();
 
 private:
     Q_OBJECT
@@ -360,6 +367,11 @@ private:
                                const ShapeBackup& before,
                                const ShapeBackup& after,
                                const QString& description);
+    // Добавление/удаление узлов у линий
+    void pushModifyShapeCommand(qulonglong uid,
+                                const ShapeBackup& before,
+                                const ShapeBackup& after,
+                                const QString& description);
 
     // Удаляет несколько фигур сразу
     void removeSceneAndListItems(const QList<QListWidgetItem*>& listItems);
