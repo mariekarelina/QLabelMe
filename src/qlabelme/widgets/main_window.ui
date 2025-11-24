@@ -179,6 +179,9 @@
     <addaction name="actViewNum"/>
     <addaction name="actRotatePointsClockwise"/>
     <addaction name="actRotatePointsCounterClockwise"/>
+    <addaction name="separator"/>
+    <addaction name="Copy"/>
+    <addaction name="Paste"/>
    </widget>
    <widget class="QMenu" name="menuSettings">
     <property name="title">
@@ -449,6 +452,22 @@
    </property>
    <property name="shortcut">
     <string>E</string>
+   </property>
+  </action>
+  <action name="Copy">
+   <property name="text">
+    <string>Копировать </string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+C</string>
+   </property>
+  </action>
+  <action name="Paste">
+   <property name="text">
+    <string>Вставить</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+V</string>
    </property>
   </action>
  </widget>

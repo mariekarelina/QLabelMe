@@ -47,6 +47,9 @@
 #include <QUndoView>
 #include <QDockWidget>
 
+#include <QJsonObject>
+#include <QJsonArray>
+
 #include <QGraphicsView>
 #include <QGraphicsScene>
 #include <QGraphicsLineItem>
@@ -222,6 +225,9 @@ private slots:
     void on_actRotatePointsClockwise_triggered();
     void on_actRotatePointsCounterClockwise_triggered();
 
+    void on_Copy_triggered();
+    void on_Paste_triggered();
+
 private:
     Q_OBJECT
     void loadFilesFromFolder(const QString& folderPath);
@@ -233,6 +239,13 @@ private:
 
     QJsonObject serializeSceneToJson(QGraphicsScene* scene);
     void deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json);
+
+    // Только выделенных элементов
+    QJsonObject serializeSelectedItemsToJson(QGraphicsScene* scene);
+    // Логика копирования/вставки между сценами
+    void copySelectedShapes();
+    void pasteCopiedShapesToCurrentScene();
+
     qgraph::VideoRect* findVideoRect(QGraphicsScene* scene);
 
     void toggleRightSplitter();
@@ -467,6 +480,8 @@ private:
 
     // Текущее изображение
     QString _currentImagePath;
+    // Буфер для копирования фигур между сценами
+    QJsonObject _shapesClipboard;
 
     // Временные данные для рисования
     QGraphicsRectItem* _tempRectItem = nullptr;

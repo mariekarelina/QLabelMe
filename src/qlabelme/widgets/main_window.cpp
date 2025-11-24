@@ -623,13 +623,20 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         QGraphicsItem* clickedItem = graphView->itemAt(mouseEvent->pos());
 
         if (mouseEvent->modifiers() & Qt::ShiftModifier)
-        {
-            // При зажатом Shift - выбираем отдельный элемент для перемещения
-            _draggingItem = clickedItem;
+            {
+            // При зажатом Shift двигаем именно фигуру, а не ее дочерние элементы
+            if (clickedItem && !qgraphicsitem_cast<qgraph::DragCircle*>(clickedItem))
+            {
+                _draggingItem = findMovableAncestor(clickedItem);
+            }
+            else
+            {
+                _draggingItem = nullptr;
+            }
 
             _lastMousePos = mouseEvent->pos();
-           mouseEvent->accept();
-           return;
+            mouseEvent->accept();
+            return;
         }
         else
         {
@@ -2408,7 +2415,8 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
             qreal height = shapeObj["height"].toDouble();
 
             qgraph::Rectangle* rect = new qgraph::Rectangle(scene);
-            rect->setRect(QRectF(x, y, width, height));
+            //rect->setRect(QRectF(x, y, width, height));
+            rect->setRealSceneRect(QRectF(QPointF(x, y), QSizeF(width, height)));
             rect->setData(0, className);
             apply_LineWidth_ToItem(rect);
             apply_PointSize_ToItem(rect);
@@ -2447,6 +2455,46 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
             apply_LineWidth_ToItem(polyline);
             apply_PointSize_ToItem(polyline);
             apply_NumberSize_ToItem(polyline);
+        }
+        else if (type == "line")
+        {
+            QJsonArray pointsArray = shapeObj["points"].toArray();
+            if (pointsArray.size() < 2)
+                continue;
+
+            QPointF firstPoint(pointsArray[0].toObject()["x"].toDouble(),
+                               pointsArray[0].toObject()["y"].toDouble());
+
+            qgraph::Line* line = new qgraph::Line(scene, firstPoint);
+
+            for (int i = 1; i < pointsArray.size(); ++i)
+            {
+                QJsonObject ptObj = pointsArray[i].toObject();
+                QPointF p(ptObj["x"].toDouble(), ptObj["y"].toDouble());
+                line->addPoint(p, scene);
+            }
+            line->setData(0, className);
+
+            apply_LineWidth_ToItem(line);
+            apply_PointSize_ToItem(line);
+            apply_NumberSize_ToItem(line);
+        }
+        else if (type == "point")
+        {
+            qreal x = shapeObj["x"].toDouble();
+            qreal y = shapeObj["y"].toDouble();
+
+            qgraph::Point* p = new qgraph::Point(scene);
+            p->setCenter(QPointF(x, y));
+            p->setData(0, className);
+
+            apply_PointSize_ToItem(p);
+            apply_NumberSize_ToItem(p);
+            apply_PointStyle_ToItem(p);
+        }
+        else
+        {
+            continue;
         }
     }
 }
@@ -2542,6 +2590,13 @@ QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
     QJsonObject root;
     QJsonArray shapesArray;
 
+
+    if (!scene)
+    {
+        root["shapes"] = shapesArray;
+        return root;
+    }
+
     for (QGraphicsItem* item : scene->items())
     {
         // Пропускаем само изображение и временные элементы
@@ -2563,7 +2618,8 @@ QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
         if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
         {
             shapeObj["type"] = "rectangle";
-            QRectF r = rect->rect();
+            // QRectF r = rect->rect();
+            QRectF r = rect->sceneBoundingRect();
             shapeObj["x"] = r.x();
             shapeObj["y"] = r.y();
             shapeObj["width"] = r.width();
@@ -2572,7 +2628,8 @@ QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
         else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
         {
             shapeObj["type"] = "circle";
-            QPointF center = circle->realCenter();
+            //QPointF center = circle->realCenter();
+            QPointF center = circle->center();
             shapeObj["x"] = center.x();
             shapeObj["y"] = center.y();
             shapeObj["radius"] = circle->realRadius();
@@ -2592,12 +2649,223 @@ QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
             }
             shapeObj["points"] = pointsArray;
         }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            shapeObj["type"] = "line";
+            QJsonArray pointsArray;
+
+            for (const QPointF& point : line->points())
+            {
+                QJsonObject pointObj;
+                pointObj["x"] = point.x();
+                pointObj["y"] = point.y();
+                pointsArray.append(pointObj);
+            }
+
+            shapeObj["points"] = pointsArray;
+        }
+        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
+        {
+            shapeObj["type"] = "point";
+            QPointF center = point->center();
+            shapeObj["x"] = center.x();
+            shapeObj["y"] = center.y();
+        }
+        else
+        {
+            continue;
+        }
 
         shapesArray.append(shapeObj);
     }
 
     root["shapes"] = shapesArray;
     return root;
+}
+
+QJsonObject MainWindow::serializeSelectedItemsToJson(QGraphicsScene* scene)
+{
+    QJsonObject root;
+    QJsonArray shapesArray;
+
+    if (!scene)
+    {
+        root["shapes"] = shapesArray;
+        return root;
+    }
+
+    // Берем именно выделенные элементы
+    const QList<QGraphicsItem*> items = scene->selectedItems();
+
+    for (QGraphicsItem* item : items)
+    {
+        // Пропускаем само изображение и временные элементы
+        if (item == _videoRect || item == _tempRectItem ||
+            item == _tempCircleItem || item == _tempPolyline)
+        {
+            continue;
+        }
+
+        QJsonObject shapeObj;
+        QString className = item->data(0).toString();
+
+        // Пропускаем элементы без класса
+        if (className.isEmpty() || className == "--")
+        {
+            continue;
+        }
+
+        shapeObj["class"] = className;
+
+        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            shapeObj["type"] = "rectangle";
+            //QRectF r = rect->rect();
+            QRectF r = rect->sceneBoundingRect();
+            shapeObj["x"] = r.x();
+            shapeObj["y"] = r.y();
+            shapeObj["width"] = r.width();
+            shapeObj["height"] = r.height();
+        }
+        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        {
+            shapeObj["type"] = "circle";
+            //QPointF center = circle->realCenter();
+            QPointF center = circle->center();
+            shapeObj["x"] = center.x();
+            shapeObj["y"] = center.y();
+            shapeObj["radius"] = circle->realRadius();
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            shapeObj["type"] = "polyline";
+            QJsonArray pointsArray;
+
+            for (const QPointF& point : polyline->points())
+            {
+                QJsonObject pt;
+                pt["x"] = point.x();
+                pt["y"] = point.y();
+                pointsArray.append(pt);
+            }
+
+            shapeObj["points"] = pointsArray;
+        }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            shapeObj["type"] = "line";
+            QJsonArray pointsArray;
+
+            for (const QPointF& point : line->points())
+            {
+                QJsonObject pt;
+                pt["x"] = point.x();
+                pt["y"] = point.y();
+                pointsArray.append(pt);
+            }
+
+            shapeObj["points"] = pointsArray;
+        }
+        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
+        {
+            shapeObj["type"] = "point";
+            QPointF center = point->center();
+            shapeObj["x"] = center.x();
+            shapeObj["y"] = center.y();
+        }
+        else
+        {
+            continue;
+        }
+
+        shapesArray.append(shapeObj);
+    }
+
+    root["shapes"] = shapesArray;
+    return root;
+}
+
+void MainWindow::copySelectedShapes()
+{
+    auto doc = currentDocument();
+    if (!doc || !doc->scene)
+        return;
+
+    // Собираем JSON только по выделенным фигурам на текущей сцене
+    _shapesClipboard = serializeSelectedItemsToJson(doc->scene);
+}
+
+void MainWindow::pasteCopiedShapesToCurrentScene()
+{
+    Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene)
+        return;
+
+    // В буфере ничего нет - нечего вставлять
+    if (_shapesClipboard.isEmpty())
+        return;
+
+    QGraphicsScene* scene = doc->scene;
+
+    // Запоминаем, что было на сцене ДО вставки
+    QList<QGraphicsItem*> beforeItems = scene->items();
+
+    deserializeJsonToScene(scene, _shapesClipboard);
+    updatePolygonListForCurrentScene();
+
+    // Собираем список новых фигур (тех, которых не было в beforeItems)
+    QList<QGraphicsItem*> afterItems = scene->items();
+    QList<QGraphicsItem*> newItems;
+
+    for (QGraphicsItem* item : afterItems)
+    {
+        // Пропускаем служебные элементы
+        if (item == _videoRect ||
+            item == _tempRectItem ||
+            item == _tempCircleItem ||
+            item == _tempPolyline)
+        {
+            continue;
+        }
+
+        // Нас интересуют только элементы, которых не было "до"
+        if (beforeItems.contains(item))
+            continue;
+
+        // И только наши примитивы
+        if (dynamic_cast<qgraph::Rectangle*>(item) ||
+            dynamic_cast<qgraph::Circle*>(item)    ||
+            dynamic_cast<qgraph::Polyline*>(item)  ||
+            dynamic_cast<qgraph::Line*>(item)      ||
+            dynamic_cast<qgraph::Point*>(item))
+        {
+            newItems.append(item);
+        }
+    }
+
+    if (newItems.isEmpty())
+        return;
+
+    QString descr;
+    if (newItems.size() == 1)
+        descr = tr("Вставка примитива");
+    else
+        descr = tr("Вставка примитивов");
+
+    if (QUndoStack* st = activeUndoStack())
+        st->beginMacro(descr);
+
+    for (QGraphicsItem* item : newItems)
+    {
+        ShapeBackup backup = makeBackupFromItem(item);
+        pushAdoptExistingShapeCommand(item, backup, descr);
+    }
+
+    if (QUndoStack* st = activeUndoStack())
+        st->endMacro();
+
+    doc->isModified = true;
+    updateFileListDisplay(doc->filePath);
 }
 
 void MainWindow::saveCurrentViewState(Document::Ptr doc)
@@ -4318,7 +4586,8 @@ ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* gi) const
     if (auto* rect = dynamic_cast<qgraph::Rectangle*>(gi))
     {
         b.kind = ShapeKind::Rectangle;
-        b.rect = rect->sceneBoundingRect();
+        //b.rect = rect->sceneBoundingRect();
+        b.rect = rect->mapRectToScene(rect->rect());
     }
     else if (auto* c = dynamic_cast<qgraph::Circle*>(gi))
     {
@@ -4576,7 +4845,7 @@ void MainWindow::pushModifyShapeCommand(qulonglong uid,
     payload->after  = after;
 
     // Применяем снапшот к существующей фигуре по uid.
-    // Если фигуру не нашли — просто no-op, без пересоздания.
+    // Если фигуру не нашли - просто no-op, без пересоздания.
     auto applySnap = [this](qulonglong uid, const ShapeBackup& snap)
     {
         if (QGraphicsItem* it = findItemByUid(uid))
@@ -5663,5 +5932,15 @@ void MainWindow::on_actRotatePointsCounterClockwise_triggered()
             updateAllPointNumbers();
         }
     }
+}
+
+void MainWindow::on_Copy_triggered()
+{
+    copySelectedShapes();
+}
+
+void MainWindow::on_Paste_triggered()
+{
+    pasteCopiedShapesToCurrentScene();
 }
 
