@@ -25,5 +25,11 @@
         <file>resources/not_ok.svg</file>
         <file>resources/line.svg</file>
         <file>resources/point.svg</file>
+        <file>resources/up_arrow.svg</file>
+        <file>resources/sort.svg</file>
+        <file>resources/down_arrow.svg</file>
+        <file>resources/delete.svg</file>
+        <file>resources/add.svg</file>
+        <file>resources/edit.svg</file>
     </qresource>
 </RCC>

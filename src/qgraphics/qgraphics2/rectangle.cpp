@@ -418,7 +418,8 @@ void Rectangle::handleHandleHoverLeave()
 
 void Rectangle::updatePointNumbers()
 {
-    if (!scene()) return;
+    if (!scene())
+        return;
 
     // Удаляем старые номера и фоны
     qDeleteAll(pointNumbers);
@@ -426,7 +427,8 @@ void Rectangle::updatePointNumbers()
     pointNumbers.clear();
     numberBackgrounds.clear();
 
-    if (!_pointNumbersVisible) return; // Не показываем номера, если выключено
+    if (!_pointNumbersVisible)
+        return; // Не показываем номера, если выключено
 
     QRectF rect = this->rect();
     QPointF points[4] = {
@@ -445,7 +447,7 @@ void Rectangle::updatePointNumbers()
     };
     const qreal handleRadius = _circleTL ? _circleTL->rect().width() / 2.0 : 5.0;
     const qreal fontHeight = _numberFontSize > 0 ? _numberFontSize : 10.0;
-    const qreal offsetDistance = handleRadius + fontHeight * 0.8;
+    const qreal offsetDistance = handleRadius + fontHeight * 0.3;
 
     for (int i = 0; i < 4; ++i)
     {
@@ -546,7 +548,8 @@ void Rectangle::applyNumberStyle(qreal fontSize, const QColor& textColor, const 
 
 QVariant Rectangle::itemChange(GraphicsItemChange change, const QVariant& value)
 {
-    if (change == QGraphicsItem::ItemSelectedHasChanged) {
+    if (change == QGraphicsItem::ItemSelectedHasChanged)
+    {
         update();
     }
     return QGraphicsRectItem::itemChange(change, value);

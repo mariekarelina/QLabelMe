@@ -623,7 +623,10 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         QGraphicsItem* clickedItem = graphView->itemAt(mouseEvent->pos());
 
         if (mouseEvent->modifiers() & Qt::ShiftModifier)
-            {
+        {
+            _imageTransformBeforeShiftDrag = graphView->transform();
+            _imageShiftDragActive          = true;
+
             // При зажатом Shift двигаем именно фигуру, а не ее дочерние элементы
             if (clickedItem && !qgraphicsitem_cast<qgraph::DragCircle*>(clickedItem))
             {
@@ -1002,6 +1005,22 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
 
 void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
 {
+    if (_imageShiftDragActive && mouseEvent->button() == Qt::LeftButton)
+    {
+        _imageShiftDragActive = false;
+
+        QTransform after = graphView->transform();
+
+        pushMoveImageCommand(_imageTransformBeforeShiftDrag,
+                             after,
+                             graphView,
+                             tr("Перемещение изображения"));
+
+        // мышь мы обработали
+        mouseEvent->accept();
+        // можно return; если дальше по коду ничего делать не надо
+    }
+
     if (mouseEvent->button() == Qt::LeftButton)
     {
         _isDraggingImage = false;
@@ -4877,6 +4896,46 @@ void MainWindow::pushModifyShapeCommand(qulonglong uid,
     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
+void MainWindow::pushMoveImageCommand(const QTransform& before,
+                                      const QTransform& after,
+                                      GraphicsView* view,
+                                      const QString& description)
+{
+    auto doc = currentDocument();
+    if (!doc || !doc->_undoStack || !view)
+        return;
+
+    // Если transform не изменился — ничего не добавляем
+    if (before == after)
+        return;
+
+    struct Payload
+    {
+        QTransform  before;
+        QTransform  after;
+        GraphicsView* view;
+    };
+
+    auto payload  = std::make_shared<Payload>();
+    payload->before = before;
+    payload->after  = after;
+    payload->view   = view;
+
+    auto redoFn = [payload]()
+    {
+        if (payload->view)
+            payload->view->setTransform(payload->after);
+    };
+
+    auto undoFn = [payload]()
+    {
+        if (payload->view)
+            payload->view->setTransform(payload->before);
+    };
+
+    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+}
+
 void MainWindow::removeSceneAndListItems(const QList<QListWidgetItem*>& listItems)
 {
     // Удаляем все выбранные по связке из списка - сцена
@@ -5334,7 +5393,7 @@ void MainWindow::on_actCircle_triggered()
 
     _drawingCircle = true;
     _drawingPolyline = false;
-    _drawingRectangle= false;
+    _drawingRectangle = false;
     _drawingLine = false;
     _drawingPoint = false;
 
@@ -5345,7 +5404,7 @@ void MainWindow::on_actPolyline_triggered()
     _btnPolylineFlag = true;
 
     _drawingPolyline = true;
-    _drawingRectangle= false;
+    _drawingRectangle = false;
     _drawingCircle = false;
     _drawingLine = false;
     _drawingPoint = false;
@@ -5357,8 +5416,8 @@ void MainWindow::on_actPoint_triggered()
 
     _drawingPoint = true;
     _drawingRectangle = false;
-    _drawingCircle    = false;
-    _drawingPolyline      = false;
+    _drawingCircle = false;
+    _drawingPolyline = false;
     _drawingLine = false;
 }
 
@@ -5370,8 +5429,8 @@ void MainWindow::on_actLine_triggered()
     _drawingLine = true;
     _drawingPoint = false;
     _drawingRectangle = false;
-    _drawingCircle    = false;
-    _drawingPolyline      = false;
+    _drawingCircle = false;
+    _drawingPolyline = false;
 }
 
 void MainWindow::on_actClosePolyline_triggered()

@@ -83,6 +83,7 @@ struct Document
     QGraphicsScene* scene = nullptr;  // Сцена с изображением и разметкой
     qgraph::VideoRect* videoRect = nullptr;
     QPixmap pixmap;  // Само изображение
+    QGraphicsPixmapItem* pixmapItem{}; // Элемент на сцене
     bool isModified = false; // Флаг, указывающий на наличие несохраненных изменений
     std::unique_ptr<QUndoStack> _undoStack;
 
@@ -385,6 +386,12 @@ private:
                                 const ShapeBackup& before,
                                 const ShapeBackup& after,
                                 const QString& description);
+    // Изменение положения снимка
+    void pushMoveImageCommand(const QTransform& before,
+                              const QTransform& after,
+                              GraphicsView* view,
+                              const QString& description);
+
 
     // Удаляет несколько фигур сразу
     void removeSceneAndListItems(const QList<QListWidgetItem*>& listItems);
@@ -587,7 +594,11 @@ private:
     ShapeBackup    _handleBeforeSnap;           // снимок "до"
     bool           _handleDragHadChanges = false;
 
+    // QPointF _imagePosBeforeShiftDrag;
+    // bool _imageShiftDragActive = false;
 
+    QTransform _imageTransformBeforeShiftDrag;
+    bool       _imageShiftDragActive = false;
 
 
     // Стабильный ключ в QGraphicsItem::data(...)
