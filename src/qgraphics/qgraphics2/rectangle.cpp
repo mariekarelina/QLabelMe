@@ -421,85 +421,78 @@ void Rectangle::updatePointNumbers()
     if (!scene())
         return;
 
-    // Удаляем старые номера и фоны
     qDeleteAll(pointNumbers);
     qDeleteAll(numberBackgrounds);
     pointNumbers.clear();
     numberBackgrounds.clear();
 
     if (!_pointNumbersVisible)
-        return; // Не показываем номера, если выключено
+        return;
 
-    QRectF rect = this->rect();
-    QPointF points[4] = {
-        rect.topLeft(),
-        rect.topRight(),
-        rect.bottomRight(),
-        rect.bottomLeft()
+    auto centerOf = [](DragCircle* c) {
+        return c ? c->mapToParent(c->boundingRect().center())
+                 : QPointF(0, 0);
     };
 
-    // Определяем внешние направления для каждой точки
-    QPointF directions[4] ={
-        QPointF(-1, -1),
-        QPointF(1, -1),
-        QPointF(1, 1),
-        QPointF(-1, 1)
+    QPointF pts[4] =
+    {
+        centerOf(_circleTL),
+        centerOf(_circleTR),
+        centerOf(_circleBR),
+        centerOf(_circleBL)
     };
-    const qreal handleRadius = _circleTL ? _circleTL->rect().width() / 2.0 : 5.0;
-    const qreal fontHeight = _numberFontSize > 0 ? _numberFontSize : 10.0;
-    const qreal offsetDistance = handleRadius + fontHeight * 0.3;
+
+    // Радиус ручки
+    const qreal handleR =
+        _circleTL ? _circleTL->boundingRect().width() / 2.0 : 5.0;
+
+    const qreal margin = (_numberFontSize > 0 ? _numberFontSize : 10.0) * 0.25;
 
     for (int i = 0; i < 4; ++i)
     {
-        // Вычисляем номер точки с учетом смещения
-        int numberedIndex = (i + _numberingOffset) % 4;
+        int idx = (i + _numberingOffset) % 4;
 
-        // Вычисляем позицию номера вне фигуры
-        QPointF direction = directions[i];
-        QPointF numberPos = points[i] + direction * offsetDistance;
+        auto* num = new QGraphicsSimpleTextItem(QString::number(idx), this);
+        num->setBrush(_numberColor);
+        num->setPen(Qt::NoPen);
+        num->setZValue(1001);
+        num->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
 
-        QGraphicsSimpleTextItem* number = new QGraphicsSimpleTextItem(QString::number(numberedIndex), this);
-        number->setPos(points[i]);
-        number->setBrush(_numberColor);
-        number->setZValue(1001);
-        number->setPen(Qt::NoPen);
-        number->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
-        number->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
-        number->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
-
-        // Применяем сохраненный стиль шрифта
-        if (_numberFontSize > 0)
-        {
-            QFont font = number->font();
-            font.setPointSizeF(_numberFontSize);
-            number->setFont(font);
+        if (_numberFontSize > 0) {
+            QFont f = num->font();
+            f.setPointSizeF(_numberFontSize);
+            num->setFont(f);
         }
 
-        // Центрируем номер относительно позиции
-        QRectF textRect = number->boundingRect();
-        QPointF finalNumberPos(numberPos.x() - textRect.width()/2,
-                               numberPos.y() - textRect.height()/2);
-        number->setPos(finalNumberPos);
+        QRectF r = num->boundingRect();
+        qreal halfW = r.width() / 2.0;
+        qreal halfH = r.height() / 2.0;
 
-        // Добавляем прямоугольник фона
-        QGraphicsRectItem* bg = new QGraphicsRectItem(number->boundingRect(), this);
-        bg->setPos(finalNumberPos);
+        QPointF center = pts[i];
+
+        if (i == 0 || i == 3)
+        {
+            center.setX(center.x() - (handleR + halfW + margin));
+        }
+        else
+        {
+            center.setX(center.x() + (handleR + halfW + margin));
+        }
+
+        // Центрируем по вертикали точно рядом с узлом
+        center.setY(center.y());
+
+        num->setPos(center.x() - halfW,
+                    center.y() - halfH);
+
+        auto* bg = new QGraphicsRectItem(num->boundingRect(), this);
+        bg->setPos(num->pos());
         bg->setBrush(_numberBgColor);
         bg->setPen(Qt::NoPen);
         bg->setZValue(1000);
-        bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
         bg->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
-        bg->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
 
-        // Запрещаем взаимодействие с номером
-        number->setFlag(QGraphicsItem::ItemIsSelectable, false);
-        number->setFlag(QGraphicsItem::ItemIsMovable, false);
-        number->setFlag(QGraphicsItem::ItemIsFocusable, false);
-        bg->setFlag(QGraphicsItem::ItemIsSelectable, false);
-        bg->setFlag(QGraphicsItem::ItemIsMovable, false);
-        bg->setFlag(QGraphicsItem::ItemIsFocusable, false);
-
-        pointNumbers.append(number);
+        pointNumbers.append(num);
         numberBackgrounds.append(bg);
     }
 }

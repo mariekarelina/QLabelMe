@@ -386,10 +386,9 @@ private:
                                 const ShapeBackup& before,
                                 const ShapeBackup& after,
                                 const QString& description);
-    // Изменение положения снимка
-    void pushMoveImageCommand(const QTransform& before,
-                              const QTransform& after,
-                              GraphicsView* view,
+    // Изменение положения изображения
+    void pushMoveImageCommand(const QPointF& before,
+                              const QPointF& after,
                               const QString& description);
 
 
@@ -594,11 +593,8 @@ private:
     ShapeBackup    _handleBeforeSnap;           // снимок "до"
     bool           _handleDragHadChanges = false;
 
-    // QPointF _imagePosBeforeShiftDrag;
-    // bool _imageShiftDragActive = false;
-
-    QTransform _imageTransformBeforeShiftDrag;
-    bool       _imageShiftDragActive = false;
+    QPointF _shiftImageBeforePos;
+    bool _shiftImageDragging = false;
 
 
     // Стабильный ключ в QGraphicsItem::data(...)

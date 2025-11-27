@@ -624,8 +624,20 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
         if (mouseEvent->modifiers() & Qt::ShiftModifier)
         {
-            _imageTransformBeforeShiftDrag = graphView->transform();
-            _imageShiftDragActive          = true;
+            // Shift - двигаем только фото и пишем это в стек
+            if (clickedItem == _videoRect && _videoRect)
+            {
+                _shiftImageBeforePos  = _videoRect->pos();
+                _shiftImageDragging   = true;
+
+                // В этом режиме мы не двигаем фигуры
+                _isDraggingImage = false;
+                _draggingItem    = nullptr;
+
+                _lastMousePos = mouseEvent->pos();
+                mouseEvent->accept();
+                return;
+            }
 
             // При зажатом Shift двигаем именно фигуру, а не ее дочерние элементы
             if (clickedItem && !qgraphicsitem_cast<qgraph::DragCircle*>(clickedItem))
@@ -637,6 +649,9 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 _draggingItem = nullptr;
             }
 
+            _isDraggingImage = false;
+            _shiftImageDragging = false;
+
             _lastMousePos = mouseEvent->pos();
             mouseEvent->accept();
             return;
@@ -646,8 +661,11 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             // Без Shift - проверяем, кликнули ли на изображение
             _isDraggingImage = (clickedItem == _videoRect);
             _draggingItem = nullptr;
+            _shiftImageDragging = false;
         }
+
         _lastMousePos = mouseEvent->pos();
+
     }
 
     if (mouseEvent->button() == Qt::LeftButton)
@@ -950,31 +968,45 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
         QPointF delta = graphView->mapToScene(mouseEvent->pos()) -
                         graphView->mapToScene(_lastMousePos);
 
+        // Shift-перетаскивание только фото
+        if (_shiftImageDragging)
+        {
+            if (_videoRect)
+                _videoRect->moveBy(delta.x(), delta.y());
+
+            _lastMousePos = mouseEvent->pos();
+            mouseEvent->accept();
+            return; // чтобы не сработал _isDraggingImage ниже
+        }
+
         if (_isDraggingImage)
         {
-            // Перемещаем только изображение
-            _videoRect->moveBy(delta.x(), delta.y());
+            if (_videoRect)
+                _videoRect->moveBy(delta.x(), delta.y());
 
-            // Обновляем положение всех фигур относительно изображения
+            // Перемещаем все фигуры вместе с фото
             for (QGraphicsItem* item : _scene->items())
             {
                 if (!item)
                     continue;
 
-                if (item != _videoRect &&
-                    !dynamic_cast<DragCircle*>(item) &&
-                    item->parentItem() == nullptr)
-                {
-                    item->moveBy(delta.x(), delta.y());
+                if (item == _videoRect)
+                    continue;
 
-                    // Обновляем ручки для фигур
-                    if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
-                        circle->updateHandlePosition();
-                    else if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
-                        rect->updateHandlePosition();
-                    else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-                        polyline->updateHandlePosition();
-                }
+                if (dynamic_cast<qgraph::DragCircle*>(item))
+                    continue;
+
+                if (item->parentItem() != nullptr)
+                    continue;
+
+                item->moveBy(delta.x(), delta.y());
+
+                if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+                    circle->updateHandlePosition();
+                else if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+                    rect->updateHandlePosition();
+                else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+                    polyline->updateHandlePosition();
             }
             updateAllPointNumbers();
         }
@@ -1005,20 +1037,19 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
 
 void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
 {
-    if (_imageShiftDragActive && mouseEvent->button() == Qt::LeftButton)
+    if (_shiftImageDragging && mouseEvent->button() == Qt::LeftButton)
     {
-        _imageShiftDragActive = false;
+        _shiftImageDragging = false;
 
-        QTransform after = graphView->transform();
+        if (_videoRect)
+        {
+            QPointF after = _videoRect->pos();
+            pushMoveImageCommand(_shiftImageBeforePos,
+                                 after,
+                                 tr("Перемещение изображения"));
+        }
 
-        pushMoveImageCommand(_imageTransformBeforeShiftDrag,
-                             after,
-                             graphView,
-                             tr("Перемещение изображения"));
-
-        // мышь мы обработали
         mouseEvent->accept();
-        // можно return; если дальше по коду ничего делать не надо
     }
 
     if (mouseEvent->button() == Qt::LeftButton)
@@ -4896,41 +4927,51 @@ void MainWindow::pushModifyShapeCommand(qulonglong uid,
     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
-void MainWindow::pushMoveImageCommand(const QTransform& before,
-                                      const QTransform& after,
-                                      GraphicsView* view,
+void MainWindow::pushMoveImageCommand(const QPointF& before,
+                                      const QPointF& after,
                                       const QString& description)
 {
     auto doc = currentDocument();
-    if (!doc || !doc->_undoStack || !view)
+    if (!doc || !doc->_undoStack || !_videoRect)
         return;
 
-    // Если transform не изменился — ничего не добавляем
     if (before == after)
         return;
 
     struct Payload
     {
-        QTransform  before;
-        QTransform  after;
-        GraphicsView* view;
+        QPointF before;
+        QPointF after;
     };
 
-    auto payload  = std::make_shared<Payload>();
+    auto payload   = std::make_shared<Payload>();
     payload->before = before;
     payload->after  = after;
-    payload->view   = view;
 
-    auto redoFn = [payload]()
+    auto applyPos = [this](const QPointF& pos)
     {
-        if (payload->view)
-            payload->view->setTransform(payload->after);
+        if (_videoRect)
+            _videoRect->setPos(pos);
     };
 
-    auto undoFn = [payload]()
+    auto redoFn = [this, payload, applyPos]()
     {
-        if (payload->view)
-            payload->view->setTransform(payload->before);
+        applyPos(payload->after);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, payload, applyPos]()
+    {
+        applyPos(payload->before);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
     };
 
     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
