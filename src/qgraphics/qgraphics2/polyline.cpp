@@ -589,7 +589,7 @@ void Polyline::paint(QPainter* painter,
                      QWidget* widget)
 {
     Q_UNUSED(option);
-    Q_UNUSED(option);
+    Q_UNUSED(widget);
 
     const QPainterPath path = this->path();
 
@@ -856,10 +856,15 @@ void Polyline::updatePointNumbers()
             }
         }
 
-        const qreal handleRadius = _circles.isEmpty() ? 5.0 : _circles[0]->rect().width() / 2.0;
-        const qreal fontHeight = _numberFontSize > 0 ? _numberFontSize : 10.0;
-        const qreal offsetDistance = handleRadius + fontHeight * 0.8;
-        QPointF numberPos = circlePos + direction * offsetDistance;
+       qreal handleRadius = 5.0;
+       if (!_circles.isEmpty() && _circles[i])
+       {
+           handleRadius = _circles[i]->rect().width() / 2.0;
+       }
+
+       const qreal fontHeight = (_numberFontSize > 0 ? _numberFontSize : 10.0);
+       const qreal offsetDistance = handleRadius + fontHeight * 0.8;
+       QPointF numberPos = circlePos + direction * offsetDistance;
 
         // Создаем номер
         QGraphicsSimpleTextItem* number = new QGraphicsSimpleTextItem(QString::number(i), this);

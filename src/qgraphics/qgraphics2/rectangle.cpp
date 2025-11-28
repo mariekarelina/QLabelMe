@@ -92,6 +92,7 @@ void Rectangle::setFrameScale(float newScale)
 
     _frameScale = newScale;
     //changeSignal.emit_(this);
+    updatePointNumbers();
     raiseHandlesToTop();
 }
 
@@ -429,27 +430,29 @@ void Rectangle::updatePointNumbers()
     if (!_pointNumbersVisible)
         return;
 
-    auto centerOf = [](DragCircle* c) {
-        return c ? c->mapToParent(c->boundingRect().center())
-                 : QPointF(0, 0);
+    // Массив узлов
+    DragCircle* circles[4] = { _circleTL, _circleTR, _circleBR, _circleBL };
+
+    auto centerOf = [](DragCircle* c) -> QPointF {
+        return c ? c->pos() : QPointF(0, 0);
     };
 
     QPointF pts[4] =
     {
-        centerOf(_circleTL),
-        centerOf(_circleTR),
-        centerOf(_circleBR),
-        centerOf(_circleBL)
+        centerOf(circles[0]),
+        centerOf(circles[1]),
+        centerOf(circles[2]),
+        centerOf(circles[3])
     };
 
-    // Радиус ручки
-    const qreal handleR =
-        _circleTL ? _circleTL->boundingRect().width() / 2.0 : 5.0;
-
-    const qreal margin = (_numberFontSize > 0 ? _numberFontSize : 10.0) * 0.25;
+    const qreal baseFontSize = (_numberFontSize > 0 ? _numberFontSize : 10.0);
+    const qreal margin       = baseFontSize * 0.25;
 
     for (int i = 0; i < 4; ++i)
     {
+        if (!circles[i])
+            continue;
+
         int idx = (i + _numberingOffset) % 4;
 
         auto* num = new QGraphicsSimpleTextItem(QString::number(idx), this);
@@ -465,22 +468,29 @@ void Rectangle::updatePointNumbers()
         }
 
         QRectF r = num->boundingRect();
-        qreal halfW = r.width() / 2.0;
+        qreal halfW = r.width()  / 2.0;
         qreal halfH = r.height() / 2.0;
 
         QPointF center = pts[i];
 
-        if (i == 0 || i == 3)
-        {
-            center.setX(center.x() - (handleR + halfW + margin));
-        }
-        else
-        {
-            center.setX(center.x() + (handleR + halfW + margin));
-        }
+        // Радиус свой для каждого узла
+        qreal handleR = circles[i]->boundingRect().width() / 2.0;
 
-        // Центрируем по вертикали точно рядом с узлом
-        center.setY(center.y());
+        switch (i)
+        {
+        case 0:
+            center.setX(center.x() - (handleR + halfW + margin));
+            break;
+        case 1:
+            center.setX(center.x() + (handleR + halfW + margin));
+            break;
+        case 2:
+            center.setX(center.x() + (handleR + halfW + margin));
+            break;
+        case 3:
+            center.setX(center.x() - (handleR + halfW + margin));
+            break;
+        }
 
         num->setPos(center.x() - halfW,
                     center.y() - halfH);
@@ -503,45 +513,17 @@ void Rectangle::applyNumberStyle(qreal fontSize, const QColor& textColor, const 
     _numberColor = textColor;   // Сохраняем цвет текста
     _numberBgColor = bgColor;   // Сохраняем цвет фона
 
-    // Обновляем существующие номера
-    for (QGraphicsSimpleTextItem* number : pointNumbers)
-    {
-        if (number)
-        {
-            QFont font = number->font();
-            font.setPointSizeF(fontSize);
-            number->setFont(font);
-            number->setBrush(textColor);
-        }
-    }
-
-    // Обновляем фоны
-    for (QGraphicsRectItem* bg : numberBackgrounds)
-    {
-        if (bg)
-        {
-            bg->setBrush(bgColor);
-        }
-    }
-
-    // Обновляем размеры фонов
-    for (int i = 0; i < pointNumbers.size() && i < numberBackgrounds.size(); ++i)
-    {
-        QGraphicsSimpleTextItem* number = pointNumbers[i];
-        QGraphicsRectItem* bg = numberBackgrounds[i];
-
-        if (number && bg)
-        {
-            QRectF textRect = number->boundingRect();
-            bg->setRect(textRect);
-            bg->setPos(number->pos());
-        }
-    }
+    updatePointNumbers();
 }
 
 QVariant Rectangle::itemChange(GraphicsItemChange change, const QVariant& value)
 {
-    if (change == QGraphicsItem::ItemSelectedHasChanged)
+    if (change == QGraphicsItem::ItemPositionHasChanged)
+    {
+        // При любом перемещении прямоугольника подтягиваем номера
+        updatePointNumbers();
+    }
+    else if (change == QGraphicsItem::ItemSelectedHasChanged)
     {
         update();
     }

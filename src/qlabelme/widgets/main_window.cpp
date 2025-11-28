@@ -3919,6 +3919,10 @@ void MainWindow::updateAllPointNumbers()
         {
             polyline->updatePointNumbers();
         }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            line->updatePointNumbers();
+        }
     }
 }
 

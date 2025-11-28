@@ -292,6 +292,20 @@ void Line::updatePath()
     updatePointNumbers();
 }
 
+// QVariant Line::itemChange(GraphicsItemChange change, const QVariant& value)
+// {
+//     if (change == QGraphicsItem::ItemPositionHasChanged)
+//     {
+//         updatePointNumbers();
+//     }
+//     else if (change == QGraphicsItem::ItemSelectedHasChanged)
+//     {
+//         update();              // Перерисовать заливку/контур
+//         updatePointNumbers();  // Чтобы номера/фон у номеров тоже реагировали
+//     }
+//     return QGraphicsPathItem::itemChange(change, value);
+// }
+
 QVariant Line::itemChange(GraphicsItemChange change, const QVariant& value)
 {
     if (change == QGraphicsItem::ItemPositionHasChanged)
@@ -305,6 +319,7 @@ QVariant Line::itemChange(GraphicsItemChange change, const QVariant& value)
     }
     return QGraphicsPathItem::itemChange(change, value);
 }
+
 
 
 void Line::handlePointDeletion(DragCircle* circle)
@@ -551,7 +566,7 @@ void Line::paint(QPainter* painter,
                      QWidget* widget)
 {
     Q_UNUSED(option);
-    Q_UNUSED(option);
+    Q_UNUSED(widget);
 
     const QPainterPath path = this->path();
 
@@ -816,8 +831,13 @@ void Line::updatePointNumbers()
             }
         }
 
-        const qreal handleRadius = _circles.isEmpty() ? 5.0 : _circles[0]->rect().width() / 2.0;
-        const qreal fontHeight = _numberFontSize > 0 ? _numberFontSize : 10.0;
+        qreal handleRadius = 5.0;
+        if (!_circles.isEmpty() && _circles[i])
+        {
+            handleRadius = _circles[i]->rect().width() / 2.0;
+        }
+
+        const qreal fontHeight = (_numberFontSize > 0 ? _numberFontSize : 10.0);
         const qreal offsetDistance = handleRadius + fontHeight * 0.8;
         QPointF numberPos = circlePos + direction * offsetDistance;
 
