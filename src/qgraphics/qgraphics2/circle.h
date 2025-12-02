@@ -53,6 +53,9 @@ public:
 
     bool isCursorNearCircle(const QPointF& cursorPos) const;
 
+    void toggleSelectionRect();
+    bool isSelectionRectVisible() const { return _selectionRectVisible; }
+
     DragCircle* getDragCircle() const { return _circle; }
 
     QVariant saveState() const;
@@ -73,6 +76,7 @@ protected:
 private:
     void attachSceneFilter(QGraphicsScene* s);
     void detachSceneFilter();
+    void updateSelectionRect();
 
 private:
     // Временная ручка при наведении
@@ -88,6 +92,9 @@ private:
 
     struct SceneFilter;
     SceneFilter* _sceneFilter = {nullptr};
+
+    QGraphicsRectItem* _selectionRect = nullptr;
+    bool _selectionRectVisible = true;
 };
 
 } // namespace qgraph

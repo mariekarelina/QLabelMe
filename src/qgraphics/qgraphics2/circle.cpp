@@ -2,6 +2,7 @@
 #include "drag_circle.h"
 
 #include <QtGui>
+#include <QGraphicsRectItem>
 #include <cmath>
 #include <QApplication>
 #include <QCursor>
@@ -116,6 +117,8 @@ void Circle::setFrameScale(float newScale)
 
     _circle->setPos(w / 2, 0);
     _frameScale = newScale;
+
+    updateSelectionRect();
     //changeSignal.emit_(this);
 }
 
@@ -254,6 +257,7 @@ QVariant Circle::itemChange(GraphicsItemChange change, const QVariant& value)
     if (change == QGraphicsItem::ItemSelectedHasChanged)
     {
         update();
+        updateSelectionRect();
     }
     return QGraphicsItem::itemChange(change, value);
 }
@@ -366,11 +370,18 @@ void Circle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     // Добавляем разделитель
     menu.addSeparator();
 
+    QString frameText = _selectionRectVisible ? "Скрыть рамку (W)" : "Показать рамку (W)";
+
     // Добавляем действие удаления
     QAction* deleteAction = menu.addAction("Удалить (Del)");
+    QAction* toggleFrameAction = menu.addAction(frameText);
 
     QObject::connect(moveToBackAction, &QAction::triggered, [this]() {
         this->moveToBack();
+    });
+
+    QObject::connect(toggleFrameAction, &QAction::triggered, [this]() {
+        this->toggleSelectionRect();
     });
 
     QObject::connect(deleteAction, &QAction::triggered, [this]() {
@@ -589,6 +600,35 @@ void Circle::detachSceneFilter()
         scene()->removeEventFilter(_sceneFilter);
     delete _sceneFilter;
     _sceneFilter = nullptr;
+}
+
+void Circle::updateSelectionRect()
+{
+    if (!_selectionRect)
+    {
+        _selectionRect = new QGraphicsRectItem(this);
+        _selectionRect->setBrush(Qt::NoBrush);
+
+        QPen pen(Qt::DashLine);
+        pen.setWidthF(0.0);
+        pen.setColor(QColor(220, 220, 220));
+        _selectionRect->setPen(pen);
+
+        _selectionRect->setVisible(false);
+    }
+
+    _selectionRect->setRect(boundingRect());
+
+    const bool visible = isSelected() && _selectionRectVisible;
+    _selectionRect->setVisible(visible);
+    if (visible)
+        _selectionRect->setZValue(zValue() + 0.5);
+}
+
+void Circle::toggleSelectionRect()
+{
+    _selectionRectVisible = !_selectionRectVisible;
+    updateSelectionRect();
 }
 
 bool Circle::isCursorNearCircle(const QPointF& cursorPos) const

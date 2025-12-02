@@ -229,6 +229,8 @@ private slots:
     void on_Copy_triggered();
     void on_Paste_triggered();
 
+    void on_toggleSelectionFrame_triggered();
+
 private:
     Q_OBJECT
     void loadFilesFromFolder(const QString& folderPath);
@@ -277,6 +279,7 @@ private:
     void onPolygonListItemDoubleClicked(QListWidgetItem* item);
     void onSceneSelectionChanged();
 
+    void updateCoordinateList();
     void updateFileListItemIcon(QListWidgetItem* item, bool hasAnnotations);
     QListWidgetItem* findFileListItem(const QString& filePath);
 

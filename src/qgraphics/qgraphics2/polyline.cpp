@@ -306,6 +306,7 @@ void Polyline::updatePath()
 
     setPath(path);
     updatePointNumbers();
+    updateSelectionRect();
 }
 
 QVariant Polyline::itemChange(GraphicsItemChange change, const QVariant& value)
@@ -318,6 +319,7 @@ QVariant Polyline::itemChange(GraphicsItemChange change, const QVariant& value)
     {
         update();              // Перерисовать заливку/контур
         updatePointNumbers();  // Чтобы номера/фон у номеров тоже реагировали
+        updateSelectionRect();
     }
     return QGraphicsPathItem::itemChange(change, value);
 }
@@ -489,8 +491,11 @@ void Polyline::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     QAction* cwAction = menu.addAction("Сдвиг по часовой (R)");
     QAction* ccwAction = menu.addAction("Сдвиг против часовой (E)");
     QString numbersText = _pointNumbersVisible ? "Скрыть нумерацию (N)" : "Показать нумерацию (N)";
+    QString frameText = _selectionRectVisible ? "Скрыть рамку (W)" : "Показать рамку (W)";
+
     QAction* moveToBackAction = menu.addAction("Переместить на задний план (B)");
     QAction* toggleNumbersAction = menu.addAction(numbersText);
+    QAction* toggleFrameAction = menu.addAction(frameText);
 
     // Добавляем разделитель
     menu.addSeparator();
@@ -513,6 +518,10 @@ void Polyline::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
 
     QObject::connect(moveToBackAction, &QAction::triggered, [this]() {
         this->moveToBack();
+    });
+
+    QObject::connect(toggleFrameAction, &QAction::triggered, [this]() {
+        this->toggleSelectionRect();
     });
 
     QObject::connect(deleteAction, &QAction::triggered, [this]() {
@@ -627,6 +636,36 @@ void Polyline::dragCircleRelease(DragCircle* circle)
     {
         _modificationCallback();
     }
+}
+
+void Polyline::updateSelectionRect()
+{
+    if (!_selectionRect)
+    {
+        _selectionRect = new QGraphicsRectItem(this);
+        _selectionRect->setBrush(Qt::NoBrush);
+
+        QPen pen(Qt::DashLine);
+        pen.setWidthF(0.0);
+        pen.setColor(QColor(220, 220, 220));
+        _selectionRect->setPen(pen);
+
+        _selectionRect->setVisible(false);
+    }
+
+    // Обновляем геометрию
+    _selectionRect->setRect(boundingRect());
+
+    const bool visible = isSelected() && _selectionRectVisible;
+    _selectionRect->setVisible(visible);
+    if (visible)
+        _selectionRect->setZValue(zValue() + 0.5);
+}
+
+void Polyline::toggleSelectionRect()
+{
+    _selectionRectVisible = !_selectionRectVisible;
+    updateSelectionRect();
 }
 
 void Polyline::updateHandlesZValue()

@@ -1891,7 +1891,12 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
 void MainWindow::updatePolygonListForCurrentScene()
 {
     ui->polygonList->clear();
-    if (!_scene) return;
+
+    if (ui->coordinateList)
+            ui->coordinateList->clear();
+
+    if (!_scene)
+        return;
 
     for (QGraphicsItem* item : _scene->items())
     {
@@ -1901,7 +1906,8 @@ void MainWindow::updatePolygonListForCurrentScene()
             item != _tempPolyline)
         {
             QString className = item->data(0).toString();
-            if (!className.isEmpty()) {
+            if (!className.isEmpty())
+            {
                 linkSceneItemToList(item);
             }
         }
@@ -3165,7 +3171,197 @@ void MainWindow::onSceneSelectionChanged()
     }
     // Разблокируем сигналы списка
     ui->polygonList->blockSignals(false);
+    updateCoordinateList();
     raiseAllHandlesToTop();
+}
+
+void MainWindow::updateCoordinateList()
+{
+    if (!ui || !ui->coordinateList)
+        return;
+
+    ui->coordinateList->clear();
+
+    if (!_scene)
+        return;
+
+    QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+    if (selectedItems.isEmpty())
+        return;
+
+    auto addLine = [this](const QString& text)
+    {
+        ui->coordinateList->addItem(text);
+    };
+
+    auto calcBounds = [](const QVector<QPointF>& pts,
+                         QPoint& topLeft,
+                         QPoint& bottomRight,
+                         QPoint& center) -> bool
+    {
+        if (pts.isEmpty())
+            return false;
+
+        qreal minX = pts[0].x();
+        qreal maxX = pts[0].x();
+        qreal minY = pts[0].y();
+        qreal maxY = pts[0].y();
+
+        for (const QPointF& p : pts)
+        {
+            if (p.x() < minX) minX = p.x();
+            if (p.x() > maxX) maxX = p.x();
+            if (p.y() < minY) minY = p.y();
+            if (p.y() > maxY) maxY = p.y();
+        }
+
+        topLeft = QPoint(static_cast<int>(std::round(minX)),
+                         static_cast<int>(std::round(minY)));
+        bottomRight = QPoint(static_cast<int>(std::round(maxX)),
+                             static_cast<int>(std::round(maxY)));
+        center = QPoint((topLeft.x() + bottomRight.x()) / 2,
+                        (topLeft.y() + bottomRight.y()) / 2);
+        return true;
+    };
+
+    bool firstShape = true;
+
+    for (QGraphicsItem* item : selectedItems)
+    {
+        if (!item)
+            continue;
+
+        if (auto* point = dynamic_cast<qgraph::Point*>(item))
+        {
+            if (!firstShape)
+                addLine(QString());
+            firstShape = false;
+
+            QPoint center = point->center();
+
+            addLine(tr("Точка"));
+            addLine(tr("Центр: (%1; %2)")
+                        .arg(center.x())
+                        .arg(center.y()));
+        }
+        else if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            if (!firstShape)
+                addLine(QString());
+            firstShape = false;
+
+            QRectF r = rect->sceneBoundingRect();
+
+            QPoint topLeft(std::round(r.topLeft().x()),
+                           std::round(r.topLeft().y()));
+            QPoint bottomRight(std::round(r.bottomRight().x()),
+                               std::round(r.bottomRight().y()));
+            QPoint center((topLeft.x() + bottomRight.x()) / 2,
+                          (topLeft.y() + bottomRight.y()) / 2);
+
+            int width  = bottomRight.x() - topLeft.x();
+            int height = bottomRight.y() - topLeft.y();
+
+            addLine(tr("Прямоугольник"));
+            addLine(tr("TL точка: (%1; %2)")
+                        .arg(topLeft.x())
+                        .arg(topLeft.y()));
+            addLine(tr("BR точка: (%1; %2)")
+                        .arg(bottomRight.x())
+                        .arg(bottomRight.y()));
+            addLine(tr("Центр: (%1; %2)")
+                        .arg(center.x())
+                        .arg(center.y()));
+            addLine(tr("Ширина: %1").arg(width));
+            addLine(tr("Высота: %1").arg(height));
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            QPoint topLeft;
+            QPoint bottomRight;
+            QPoint center;
+            if (!calcBounds(polyline->points(), topLeft, bottomRight, center))
+                continue;
+
+            if (!firstShape)
+                addLine(QString());
+            firstShape = false;
+
+            int width  = bottomRight.x() - topLeft.x();
+            int height = bottomRight.y() - topLeft.y();
+
+            addLine(tr("Полилиния"));
+            addLine(tr("TL точка: (%1; %2)")
+                        .arg(topLeft.x())
+                        .arg(topLeft.y()));
+            addLine(tr("BR точка: (%1; %2)")
+                        .arg(bottomRight.x())
+                        .arg(bottomRight.y()));
+            addLine(tr("Центр: (%1; %2)")
+                        .arg(center.x())
+                        .arg(center.y()));
+            addLine(tr("Ширина: %1").arg(width));
+            addLine(tr("Высота: %1").arg(height));
+        }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            QPoint topLeft;
+            QPoint bottomRight;
+            QPoint center;
+            if (!calcBounds(line->points(), topLeft, bottomRight, center))
+                continue;
+
+            if (!firstShape)
+                addLine(QString());
+            firstShape = false;
+
+            int width  = bottomRight.x() - topLeft.x();
+            int height = bottomRight.y() - topLeft.y();
+
+            addLine(tr("Линия"));
+            addLine(tr("TL точка: (%1; %2)")
+                        .arg(topLeft.x())
+                        .arg(topLeft.y()));
+            addLine(tr("BR точка: (%1; %2)")
+                        .arg(bottomRight.x())
+                        .arg(bottomRight.y()));
+            addLine(tr("Центр: (%1; %2)")
+                        .arg(center.x())
+                        .arg(center.y()));
+            addLine(tr("Ширина: %1").arg(width));
+            addLine(tr("Высота: %1").arg(height));
+        }
+        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        {
+            if (!firstShape)
+                addLine(QString());
+            firstShape = false;
+
+            QPoint center = circle->center();
+            int radius = circle->realRadius();
+
+            QPoint topLeft(center.x() - radius,
+                           center.y() - radius);
+            QPoint bottomRight(center.x() + radius,
+                               center.y() + radius);
+
+            int width  = bottomRight.x() - topLeft.x();
+            int height = bottomRight.y() - topLeft.y();
+
+            addLine(tr("Круг"));
+            addLine(tr("TL точка: (%1; %2)")
+                        .arg(topLeft.x())
+                        .arg(topLeft.y()));
+            addLine(tr("BR точка: (%1; %2)")
+                        .arg(bottomRight.x())
+                        .arg(bottomRight.y()));
+            addLine(tr("Центр: (%1; %2)")
+                        .arg(center.x())
+                        .arg(center.y()));
+            addLine(tr("Ширина: %1").arg(width));
+            addLine(tr("Высота: %1").arg(height));
+        }
+    }
 }
 
 void MainWindow::updateFileListItemIcon(QListWidgetItem* item, bool hasAnnotations)
@@ -5382,6 +5578,9 @@ void MainWindow::onSceneChanged()
     if (_loadingNow)
         return;
 
+    // Обновляем координаты для выделенных фигур
+        updateCoordinateList();
+
     // Document::Ptr doc = currentDocument();
     // if (!doc || doc->isModified) return;
 
@@ -5412,6 +5611,8 @@ void MainWindow::onPolygonListSelectionChanged()
             scItem->setSelected(true);
     }
     _scene->blockSignals(false);
+
+    updateCoordinateList();
 
     if (!selected.isEmpty())
     {
@@ -6046,5 +6247,29 @@ void MainWindow::on_Copy_triggered()
 void MainWindow::on_Paste_triggered()
 {
     pasteCopiedShapesToCurrentScene();
+}
+
+
+void MainWindow::on_toggleSelectionFrame_triggered()
+{
+    if (!_scene)
+        return;
+
+    QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+    for (QGraphicsItem* item : selectedItems)
+    {
+        if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            polyline->toggleSelectionRect();
+        }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            line->toggleSelectionRect();
+        }
+        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        {
+            circle->toggleSelectionRect();
+        }
+    }
 }
 

@@ -64,6 +64,8 @@ public:
 
     void togglePointNumbers();
     bool isPointNumbersVisible() const { return _pointNumbersVisible; }
+    void toggleSelectionRect();
+    bool isSelectionRectVisible() const { return _selectionRectVisible; }
 
     void updateHandlesZValue();
     void raiseHandlesToTop() override;
@@ -105,6 +107,7 @@ private:
     void dragCircleMove(DragCircle* circle) override;
     void dragCircleRelease(DragCircle* circle) override;
     QColor selectionFillColor() const;
+    void updateSelectionRect();
 
 public:
     QVector<DragCircle*> _circles;
@@ -123,6 +126,9 @@ public:
     QColor _numberBgColor = QColor(0, 0, 0, 180);
 
     bool _pointNumbersVisible = true; // Видимости нумерации
+    QGraphicsRectItem* _selectionRect = nullptr;
+    bool _selectionRectVisible = true;
+
     std::function<void()> _modificationCallback; // Сallback для уведомлений
 };
 
