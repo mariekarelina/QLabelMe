@@ -193,6 +193,8 @@
     <addaction name="separator"/>
     <addaction name="Copy"/>
     <addaction name="Paste"/>
+    <addaction name="separator"/>
+    <addaction name="actRuler"/>
    </widget>
    <widget class="QMenu" name="menuSettings">
     <property name="title">
@@ -487,6 +489,14 @@
    </property>
    <property name="shortcut">
     <string>W</string>
+   </property>
+  </action>
+  <action name="actRuler">
+   <property name="text">
+    <string>Линейка</string>
+   </property>
+   <property name="shortcut">
+    <string>L</string>
    </property>
   </action>
  </widget>

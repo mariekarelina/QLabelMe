@@ -136,6 +136,7 @@ void Circle::dragCircleMove(DragCircle* circle)
     r.setWidth (_radius * 2);
     r.setHeight(_radius * 2);
 
+    updateSelectionRect();
     prepareGeometryChange();
     setRect(r);
 
@@ -174,6 +175,7 @@ void Circle::setRealCenter(const QPointF& val)
 
     _circle->setPos(rect().width() / 2, 0);
     updateCrossLines();
+    updateSelectionRect();
 }
 
 QPoint Circle::center() const
@@ -204,6 +206,7 @@ void Circle::setRealRadius(int val)
     setRect(r);
 
     _circle->setPos(rect().width() / 2, 0);
+    updateSelectionRect();
 }
 
 void Circle::updateHandlePosition()

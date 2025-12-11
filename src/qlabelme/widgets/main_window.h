@@ -53,6 +53,7 @@
 #include <QGraphicsView>
 #include <QGraphicsScene>
 #include <QGraphicsLineItem>
+#include <QGraphicsTextItem>
 //#include "graphicsscene.h"
 #include "graphics_view.h"
 #include "settings.h"
@@ -202,6 +203,7 @@ private slots:
     void on_actPolyline_triggered();
     void on_actPoint_triggered();
     void on_actLine_triggered();
+    void on_actRuler_triggered();
 
     void on_actClosePolyline_triggered();
 
@@ -239,6 +241,10 @@ private:
 
     void loadGeometry();
     void saveGeometry();
+
+    // Системный буфер обмена
+    void writeShapesJsonToClipboard(const QJsonObject& json) const;
+    QJsonObject readShapesJsonFromClipboard() const;
 
     QJsonObject serializeSceneToJson(QGraphicsScene* scene);
     void deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json);
@@ -461,6 +467,9 @@ private:
 
     QGraphicsEllipseItem* _currCircle = {nullptr};
     bool _isDrawingCircle = false;
+    // Временный крестик центра при рисовании круга
+    QGraphicsLineItem* _currCircleCrossV = {nullptr};
+    QGraphicsLineItem* _currCircleCrossH = {nullptr};
 
     QGraphicsPathItem* _currPolyline = {nullptr}; // Временная визуализация полилинии
     bool _isDrawingPolyline = false;           // Флаг для состояния рисования
@@ -470,6 +479,13 @@ private:
     qgraph::Line* _currLine = nullptr;
     bool _isDrawingLine = false;
     QPointF _lineFirstPoint;
+
+    // Линейка
+    QGraphicsLineItem* _rulerLine = nullptr; // Временная линия измерения
+    QGraphicsTextItem* _rulerText = nullptr; // Подпись с расстоянием
+    bool _drawingRuler = false; // Выбран ли инструмент "Линейка"
+    bool _isDrawingRuler = false; // Тянем вторую точку
+    QPointF _rulerStartPoint; // Первая точка измерения
 
 
     qgraph::Polyline* _polyline = {nullptr};
@@ -538,6 +554,8 @@ private:
     QPointer<qgraph::DragCircle> m_dragHandle;   // Какую ручку тащим
     QPointF m_pressLocalOffset;                  // Смещение от центра ручки при захвате
 
+    // Состояние левой кнопки мыши над графическим видом
+    bool _leftMouseButtonDown = false;
 
     qgraph::DragCircle* _currentDraggedCircle = nullptr;
     QPointF _dragCircleStartPosition;
@@ -598,7 +616,6 @@ private:
 
     QPointF _shiftImageBeforePos;
     bool _shiftImageDragging = false;
-
 
     // Стабильный ключ в QGraphicsItem::data(...)
     static constexpr int RoleUid = 0x1337ABCD;

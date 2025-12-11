@@ -31,89 +31,65 @@
       <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
-         <x>20</x>
-         <y>10</y>
-         <width>681</width>
-         <height>291</height>
+         <x>30</x>
+         <y>20</y>
+         <width>521</width>
+         <height>211</height>
         </rect>
        </property>
-       <layout class="QVBoxLayout" name="verticalLayout_2">
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_2">
-          <item>
-           <widget class="QPushButton" name="btnSortAZ">
-            <property name="text">
-             <string/>
-            </property>
-            <property name="icon">
-             <iconset resource="../qlabelme.qrc">
-              <normaloff>:/images/resources/sort.svg</normaloff>:/images/resources/sort.svg</iconset>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnDown">
-            <property name="text">
-             <string/>
-            </property>
-            <property name="icon">
-             <iconset resource="../qlabelme.qrc">
-              <normaloff>:/images/resources/down_arrow.svg</normaloff>:/images/resources/down_arrow.svg</iconset>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnUp">
-            <property name="text">
-             <string/>
-            </property>
-            <property name="icon">
-             <iconset resource="../qlabelme.qrc">
-              <normaloff>:/images/resources/up_arrow.svg</normaloff>:/images/resources/up_arrow.svg</iconset>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnEdit">
-            <property name="text">
-             <string/>
-            </property>
-            <property name="icon">
-             <iconset resource="../qlabelme.qrc">
-              <normaloff>:/images/resources/edit.svg</normaloff>:/images/resources/edit.svg</iconset>
-            </property>
-           </widget>
-          </item>
+         <widget class="QListWidget" name="listClasses"/>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_2">
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout">
             <item>
              <widget class="QPushButton" name="btnAdd">
               <property name="text">
-               <string/>
-              </property>
-              <property name="icon">
-               <iconset resource="../qlabelme.qrc">
-                <normaloff>:/images/resources/add.svg</normaloff>:/images/resources/add.svg</iconset>
+               <string>+</string>
               </property>
              </widget>
             </item>
             <item>
              <widget class="QPushButton" name="btnRemove">
               <property name="text">
-               <string/>
-              </property>
-              <property name="icon">
-               <iconset resource="../qlabelme.qrc">
-                <normaloff>:/images/resources/delete.svg</normaloff>:/images/resources/delete.svg</iconset>
+               <string>-</string>
               </property>
              </widget>
             </item>
            </layout>
           </item>
+          <item>
+           <widget class="QPushButton" name="btnEdit">
+            <property name="text">
+             <string>Редактировать</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnUp">
+            <property name="text">
+             <string>Вверх</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnDown">
+            <property name="text">
+             <string>Вниз</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnSortAZ">
+            <property name="text">
+             <string>Сортировать А-Я</string>
+            </property>
+           </widget>
+          </item>
          </layout>
-        </item>
-        <item>
-         <widget class="QListWidget" name="listClasses"/>
         </item>
        </layout>
       </widget>
@@ -132,9 +108,7 @@
    </item>
   </layout>
  </widget>
- <resources>
-  <include location="../qlabelme.qrc"/>
- </resources>
+ <resources/>
  <connections>
   <connection>
    <sender>buttonBox</sender>

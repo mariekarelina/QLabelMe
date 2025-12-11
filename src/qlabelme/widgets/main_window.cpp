@@ -50,6 +50,8 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QClipboard>
+#include <QMimeData>
 #include <QGuiApplication>
 #include <cmath>
 #include <limits>
@@ -78,6 +80,12 @@ using namespace qgraph;
 #define log_debug2_m  alog::logger().debug2  (alog_line_location, "MainWin")
 
 QUuidEx MainWindow::_applId;
+
+namespace
+{
+    // Строковый идентификатор формата данных
+    const char* kShapesMimeType = "application/x-qlabelme-shapes";
+}
 
 class OneSpinDialog : public QDialog {
 public:
@@ -467,6 +475,9 @@ void MainWindow::deinit()
 
 void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
 {
+    if (mouseEvent->button() == Qt::LeftButton)
+        _leftMouseButtonDown = true;
+
     if (_isInDrawingMode)
     {
         return;
@@ -710,6 +721,37 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             // Задаем позицию и начальный размер
             _currCircle->setRect(QRectF(_startPoint, QSizeF(1, 1)));
             _isDrawingCircle = true;
+
+            const qreal crossSize = 10.0;
+            if (!_currCircleCrossV)
+            {
+                _currCircleCrossV = _scene->addLine(0, 0, 0, 0);
+                _currCircleCrossV->setFlag(QGraphicsItem::ItemIsMovable, false);
+                _currCircleCrossV->setFlag(QGraphicsItem::ItemIsSelectable, false);
+                _currCircleCrossV->setFlag(QGraphicsItem::ItemIsFocusable, false);
+                _currCircleCrossV->setAcceptedMouseButtons(Qt::NoButton);
+            }
+            if (!_currCircleCrossH)
+            {
+                _currCircleCrossH = _scene->addLine(0, 0, 0, 0);
+                _currCircleCrossH->setFlag(QGraphicsItem::ItemIsMovable, false);
+                _currCircleCrossH->setFlag(QGraphicsItem::ItemIsSelectable, false);
+                _currCircleCrossH->setFlag(QGraphicsItem::ItemIsFocusable, false);
+                _currCircleCrossH->setAcceptedMouseButtons(Qt::NoButton);
+            }
+
+            QPen pen;
+            pen.setWidthF(_vis.lineWidth);
+            pen.setColor(_vis.circleLineColor);
+            pen.setCosmetic(true);
+            _currCircleCrossV->setPen(pen);
+            _currCircleCrossH->setPen(pen);
+
+            const qreal cx = _startPoint.x();
+            const qreal cy = _startPoint.y();
+
+            _currCircleCrossV->setLine(cx, cy - crossSize, cx, cy + crossSize);
+            _currCircleCrossH->setLine(cx - crossSize, cy, cx + crossSize, cy);
         }
         else if (_currCircle)
         {
@@ -924,12 +966,77 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         }
         _line->addPoint(_startPoint, _scene);
     }
+    else if (_drawingRuler)
+    {
+        //_isInDrawingMode = true;
+        //setSceneItemsMovable(false);
 
+        if (!_isDrawingRuler)
+        {
+            // Первая точка линейки
+            _rulerStartPoint = graphView->mapToScene(mouseEvent->pos());
+            _isDrawingRuler  = true;
+
+            // Удаляем старую линейку (если осталась от прошлого измерения)
+            if (_rulerLine)
+            {
+                _scene->removeItem(_rulerLine);
+                delete _rulerLine;
+                _rulerLine = nullptr;
+            }
+            if (_rulerText)
+            {
+                _scene->removeItem(_rulerText);
+                delete _rulerText;
+                _rulerText = nullptr;
+            }
+
+            // Создаем временную линию
+            _rulerLine = _scene->addLine(
+                QLineF(_rulerStartPoint, _rulerStartPoint),
+                QPen(Qt::yellow, 1, Qt::DashLine)
+            );
+            _rulerLine->setZValue(1000);
+
+            // Текст с расстоянием
+            _rulerText = _scene->addText(QStringLiteral("0 px"));
+            _rulerText->setDefaultTextColor(Qt::yellow);
+            _rulerText->setZValue(1001);
+            _rulerText->setPos(_rulerStartPoint);
+        }
+        _drawingRuler = false;
+
+        mouseEvent->accept();
+        return;
+    }
     //graphView->mousePressEvent(mouseEvent);
 }
 
 void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
 {
+
+    if (_isDrawingRuler && _rulerLine)
+       {
+           QPointF currentPoint = graphView->mapToScene(mouseEvent->pos());
+
+           QLineF line(_rulerStartPoint, currentPoint);
+           _rulerLine->setLine(line);
+
+           const double dist = line.length();
+
+           if (_rulerText)
+           {
+               QString text = QString::number(dist, 'f', 1) + QStringLiteral(" px");
+               _rulerText->setPlainText(text);
+
+               QPointF middle = (line.p1() + line.p2()) / 2.0;
+               _rulerText->setPos(middle);
+           }
+
+           mouseEvent->accept();
+           return;
+       }
+
     if (_isInDrawingMode)
     {
         if (_isDrawingRectangle && _currRectangle)
@@ -1037,6 +1144,9 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
 
 void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
 {
+    if (mouseEvent->button() == Qt::LeftButton)
+        _leftMouseButtonDown = false;
+
     if (_shiftImageDragging && mouseEvent->button() == Qt::LeftButton)
     {
         _shiftImageDragging = false;
@@ -1149,6 +1259,20 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         _scene->removeItem(_currCircle);
         delete _currCircle;
         _currCircle = nullptr;
+
+        // Удаляем временный крестик центра
+        if (_currCircleCrossV)
+        {
+            _scene->removeItem(_currCircleCrossV);
+            delete _currCircleCrossV;
+            _currCircleCrossV = nullptr;
+        }
+        if (_currCircleCrossH)
+        {
+            _scene->removeItem(_currCircleCrossH);
+            delete _currCircleCrossH;
+            _currCircleCrossH = nullptr;
+                }
 
         // Проверяем минимальный радиус
         if (circleRect.width() < 10 || circleRect.height() < 10)
@@ -1274,6 +1398,32 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         }
         raiseAllHandlesToTop();
     }
+    else if (mouseEvent->button() == Qt::LeftButton && _isDrawingRuler)
+    {
+        // Фиксируем конечную точку и окончательно считаем расстояние
+        _isDrawingRuler = false;
+        //_isInDrawingMode = false;
+        //setSceneItemsMovable(true);
+
+        if (_rulerLine)
+        {
+            QLineF line = _rulerLine->line();
+            const double dist = line.length();
+
+            if (_rulerText)
+            {
+                QString text = QString::number(dist, 'f', 1) + QStringLiteral(" px");
+                _rulerText->setPlainText(text);
+
+                QPointF middle = (line.p1() + line.p2()) / 2.0;
+                _rulerText->setPos(middle);
+            }
+        }
+
+        mouseEvent->accept();
+        return;
+    }
+
 
     Document::Ptr doc = currentDocument();
     if (doc && mouseEvent->button() == Qt::LeftButton)
@@ -2641,6 +2791,227 @@ void MainWindow::updateFolderPathDisplay()
     }
 }
 
+void MainWindow::writeShapesJsonToClipboard(const QJsonObject& json) const
+{
+    if (json.isEmpty())
+        return;
+
+    // JSON-данные - для внутренней вставки
+    QJsonDocument doc(json);
+    QByteArray raw = doc.toJson(QJsonDocument::Compact);
+
+    QJsonArray shapesArray = json["shapes"].toArray();
+
+    struct Circle { QString label; double x, y, radius; };
+    struct Polyline { QString label; QVector<QPointF> points; };
+    struct Rectangle{ QString label; double x1, y1, x2, y2; };
+    struct Point { QString label; double x, y; };
+    struct Line { QString label; QVector<QPointF> points; };
+
+    QVector<Circle> circles;
+    QVector<Polyline> polylines;
+    QVector<Rectangle> rectangles;
+    QVector<Point> points;
+    QVector<Line> lines;
+
+    for (const QJsonValue& v : shapesArray)
+    {
+        QJsonObject o = v.toObject();
+        QString type  = o["type"].toString();
+        QString label = o["class"].toString();
+        if (label.isEmpty())
+            label = "none";
+
+        if (type == "circle")
+        {
+            Circle c;
+            c.label  = label;
+            c.x  = o["x"].toDouble();
+            c.y = o["y"].toDouble();
+            c.radius = o["radius"].toDouble();
+            circles.append(c);
+        }
+        else if (type == "rectangle")
+        {
+            Rectangle r;
+            r.label = label;
+            double x = o["x"].toDouble();
+            double y = o["y"].toDouble();
+            double w = o["width"].toDouble();
+            double h = o["height"].toDouble();
+            r.x1 = x;
+            r.y1 = y;
+            r.x2 = x + w;
+            r.y2 = y + h;
+            rectangles.append(r);
+        }
+        else if (type == "polyline")
+        {
+            Polyline pl;
+            pl.label = label;
+            QJsonArray pts = o["points"].toArray();
+            for (const QJsonValue& pv : pts)
+            {
+                QJsonObject po = pv.toObject();
+                pl.points.append(QPointF(po["x"].toDouble(),
+                                         po["y"].toDouble()));
+            }
+            polylines.append(pl);
+        }
+        else if (type == "line")
+        {
+            Line ln;
+            ln.label = label;
+            QJsonArray pts = o["points"].toArray();
+            for (const QJsonValue& pv : pts)
+            {
+                QJsonObject po = pv.toObject();
+                ln.points.append(QPointF(po["x"].toDouble(),
+                                         po["y"].toDouble()));
+            }
+            lines.append(ln);
+        }
+        else if (type == "point")
+        {
+            Point p;
+            p.label = label;
+            p.x     = o["x"].toDouble();
+            p.y     = o["y"].toDouble();
+            points.append(p);
+        }
+    }
+
+    QString yaml;
+    {
+        QTextStream out(&yaml);
+        out << "shapes:\n";
+
+        if (!circles.isEmpty())
+        {
+            out << "  circles:\n";
+            for (const Circle& c : circles)
+            {
+                int cx = static_cast<int>(std::round(c.x));
+                int cy = static_cast<int>(std::round(c.y));
+                int r  = static_cast<int>(std::round(c.radius));
+
+                out << "    - label: " << c.label << "\n";
+                out << "      center: {x: " << cx << ", y: " << cy << "}\n";
+                out << "      radius: " << r << "\n";
+            }
+        }
+
+        if (!polylines.isEmpty())
+        {
+            out << "  polylines:\n";
+            for (const Polyline& pl : polylines)
+            {
+                out << "    - label: " << pl.label << "\n";
+                out << "      points: [";
+                for (int i = 0; i < pl.points.size(); ++i)
+                {
+                    const QPointF& p = pl.points[i];
+                    int px = static_cast<int>(std::round(p.x()));
+                    int py = static_cast<int>(std::round(p.y()));
+                    if (i > 0)
+                        out << ", ";
+                    out << "{x: " << px << ", y: " << py << "}";
+                }
+                out << "]\n";
+            }
+        }
+
+        if (!rectangles.isEmpty())
+        {
+            out << "  rectangles:\n";
+            for (const Rectangle& r : rectangles)
+            {
+                int x1 = static_cast<int>(std::round(r.x1));
+                int y1 = static_cast<int>(std::round(r.y1));
+                int x2 = static_cast<int>(std::round(r.x2));
+                int y2 = static_cast<int>(std::round(r.y2));
+
+                out << "    - label: " << r.label << "\n";
+                out << "      point1: {x: " << x1 << ", y: " << y1 << "}\n";
+                out << "      point2: {x: " << x2 << ", y: " << y2 << "}\n";
+            }
+        }
+
+        if (!points.isEmpty())
+        {
+            out << "  points:\n";
+            for (const Point& p : points)
+            {
+                int px = static_cast<int>(std::round(p.x));
+                int py = static_cast<int>(std::round(p.y));
+
+                out << "    - label: " << p.label << "\n";
+                out << "      point: {x: " << px << ", y: " << py << "}\n";
+            }
+        }
+
+        if (!lines.isEmpty())
+        {
+            out << "  lines:\n";
+            for (const Line& ln : lines)
+            {
+                out << "    - label: " << ln.label << "\n";
+                out << "      points: [";
+                for (int i = 0; i < ln.points.size(); ++i)
+                {
+                    const QPointF& p = ln.points[i];
+                    int px = static_cast<int>(std::round(p.x()));
+                    int py = static_cast<int>(std::round(p.y()));
+                    if (i > 0)
+                        out << ", ";
+                    out << "{x: " << px << ", y: " << py << "}";
+                }
+                out << "]\n";
+            }
+        }
+    }
+
+    // Пишем и JSON, и YAML в буфер обмена
+    auto* mime = new QMimeData;
+    mime->setData(kShapesMimeType, raw);
+    mime->setText(yaml);
+
+    QClipboard* cb = QGuiApplication::clipboard();
+    cb->setMimeData(mime);
+}
+
+QJsonObject MainWindow::readShapesJsonFromClipboard() const
+{
+    QClipboard* cb = QGuiApplication::clipboard();
+    const QMimeData* mime = cb->mimeData();
+    if (!mime)
+        return {};
+
+    QByteArray raw;
+
+    // Сначала пробуем наш MIME-тип
+    if (mime->hasFormat(kShapesMimeType))
+    {
+        raw = mime->data(kShapesMimeType);
+    }
+    else if (mime->hasText())
+    {
+        // fallback: вдруг пользователь сам сохранил JSON в виде текста
+        raw = mime->text().toUtf8();
+    }
+    else
+    {
+        return {};
+    }
+
+    QJsonParseError err{};
+    QJsonDocument doc = QJsonDocument::fromJson(raw, &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject())
+        return {};
+
+    return doc.object();
+}
+
 QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
 {
     QJsonObject root;
@@ -2848,7 +3219,13 @@ void MainWindow::copySelectedShapes()
         return;
 
     // Собираем JSON только по выделенным фигурам на текущей сцене
-    _shapesClipboard = serializeSelectedItemsToJson(doc->scene);
+    QJsonObject json = serializeSelectedItemsToJson(doc->scene);
+
+    // Локальный буфер
+    _shapesClipboard = json;
+
+    // Отправляем JSON в системный буфер обмена
+    writeShapesJsonToClipboard(json);
 }
 
 void MainWindow::pasteCopiedShapesToCurrentScene()
@@ -2857,8 +3234,14 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     if (!doc || !doc->scene)
         return;
 
-    // В буфере ничего нет - нечего вставлять
-    if (_shapesClipboard.isEmpty())
+    // Пытаемся прочитать JSON из системного буфера обмена
+    QJsonObject json = readShapesJsonFromClipboard();
+
+    // Если в системном буфере нет наших данных - используем старый локальный буфер
+    if (json.isEmpty())
+        json = _shapesClipboard;
+
+    if (json.isEmpty())
         return;
 
     QGraphicsScene* scene = doc->scene;
@@ -3980,6 +4363,7 @@ void MainWindow::updateHandleDrag(const QPointF& scenePos)
                                       m_dragHandle->scenePos());
     updateAllPointNumbers();
     _handleDragHadChanges = true;
+    updateCoordinateList();
 }
 
 void MainWindow::finishHandleDrag()
@@ -5578,8 +5962,11 @@ void MainWindow::onSceneChanged()
     if (_loadingNow)
         return;
 
-    // Обновляем координаты для выделенных фигур
+    // Обновляем координаты для выделенной фигуры
+    if (_leftMouseButtonDown)
+    {
         updateCoordinateList();
+    }
 
     // Document::Ptr doc = currentDocument();
     // if (!doc || doc->isModified) return;
@@ -5677,6 +6064,36 @@ void MainWindow::on_actLine_triggered()
     _drawingRectangle = false;
     _drawingCircle = false;
     _drawingPolyline = false;
+}
+
+void MainWindow::on_actRuler_triggered()
+{
+    // // Отключаем другие режимы рисования
+    // _drawingLine      = false;
+    // _drawingPoint     = false;
+    // _drawingRectangle = false;
+    // _drawingCircle    = false;
+    // _drawingPolyline  = false;
+
+    // // Включаем режим линейки
+    // _drawingRuler     = true;
+    // _isDrawingRuler   = false;
+    // //_isInDrawingMode  = true;
+    // //setSceneItemsMovable(false);
+
+    // // При включении инструмента очищаем старую линейку
+    // if (_rulerLine)
+    // {
+    //     _scene->removeItem(_rulerLine);
+    //     delete _rulerLine;
+    //     _rulerLine = nullptr;
+    // }
+    // if (_rulerText)
+    // {
+    //     _scene->removeItem(_rulerText);
+    //     delete _rulerText;
+    //     _rulerText = nullptr;
+    // }
 }
 
 void MainWindow::on_actClosePolyline_triggered()
@@ -6272,4 +6689,3 @@ void MainWindow::on_toggleSelectionFrame_triggered()
         }
     }
 }
-
