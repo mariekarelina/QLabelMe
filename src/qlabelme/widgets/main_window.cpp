@@ -399,8 +399,13 @@ MainWindow::MainWindow(QWidget *parent) :
     _actUndo->setShortcutContext(Qt::ApplicationShortcut);
     _actRedo->setShortcutContext(Qt::ApplicationShortcut);
 
-    _actUndo->setToolTip(tr("Отменить"));
-    _actRedo->setToolTip(tr("Повторить"));
+    // _actUndo->setToolTip(tr("Отменить"));
+    // _actRedo->setToolTip(tr("Повторить"));
+
+    _actUndo->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
+    _actRedo->setIcon(style()->standardIcon(QStyle::SP_ArrowForward));
+
+    //ui->toolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 
 
     addAction(_actUndo);
@@ -413,6 +418,22 @@ MainWindow::MainWindow(QWidget *parent) :
     {
         ui->toolBar->addAction(_actUndo);
         ui->toolBar->addAction(_actRedo);
+    }
+
+    auto undoBtn = qobject_cast<QToolButton*>(
+        ui->toolBar->widgetForAction(_actUndo)
+    );
+    if (undoBtn)
+    {
+        undoBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    }
+
+    auto redoBtn = qobject_cast<QToolButton*>(
+        ui->toolBar->widgetForAction(_actRedo)
+    );
+    if (redoBtn)
+    {
+        redoBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     }
 
     ui->toolBar->setIconSize(QSize(32, 32));
