@@ -206,10 +206,18 @@ MainWindow::MainWindow(QWidget *parent) :
     if (!screens.isEmpty())
         ultraHD = (screens[0]->geometry().width() >= 2560);
 
+    // if (ultraHD)
+    //     ui->toolBar->setIconSize({48, 48});
+    // else
+    //     ui->toolBar->setIconSize({32, 32});
+#ifdef Q_OS_WINDOWS
+    ui->toolBar->setIconSize({32, 32});
+#else
     if (ultraHD)
-        ui->toolBar->setIconSize({48, 48});
-    else
         ui->toolBar->setIconSize({32, 32});
+    else
+        ui->toolBar->setIconSize({24, 24});
+#endif
 
     _windowTitle = windowTitle();
 
@@ -351,7 +359,6 @@ MainWindow::MainWindow(QWidget *parent) :
 
     // Стек и действия
     // _undoStack = std::make_unique<QUndoStack>(this);
-
     // _actUndo = _undoStack->createUndoAction(this, tr("Отменить"));
     // _actRedo = _undoStack->createRedoAction(this, tr("Повторить"));
 
@@ -407,6 +414,8 @@ MainWindow::MainWindow(QWidget *parent) :
         ui->toolBar->addAction(_actUndo);
         ui->toolBar->addAction(_actRedo);
     }
+
+    ui->toolBar->setIconSize(QSize(32, 32));
 
     // connect(_undoStack.get(), &QUndoStack::indexChanged, this, [this]() {
     //     if (_loadingNow)
@@ -691,10 +700,50 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 _movingItem = mov;
                 _moveBeforeSnap = makeBackupFromItem(_movingItem);
                 _moveHadChanges = false;
+
                 const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
                 _moveGrabOffsetScene = scenePos - _movingItem->scenePos();
                 _moveSavedFlags = _movingItem->flags();
                 _movingItem->setFlag(QGraphicsItem::ItemIsMovable, false);
+
+                _movingItems.clear();
+                _moveGroupBefore.clear();
+                _moveGroupInitialPos.clear();
+                _moveIsGroup        = false;
+                _movePressScenePos  = scenePos;
+
+                // Если выделено несколько фигур
+                const QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+                if (selectedItems.size() > 1 && mov->isSelected())
+                {
+                    _moveIsGroup = true;
+
+                    for (QGraphicsItem* sel : selectedItems)
+                    {
+                        if (!sel)
+                            continue;
+
+                        QGraphicsItem* root = findMovableAncestor(sel);
+                        if (!root)
+                            continue;
+
+                        // Избегаем дублей, если у нескольких выделенных общий ancestor
+                        if (_movingItems.contains(root))
+                            continue;
+
+                        _movingItems.append(root);
+                        _moveGroupBefore.append(makeBackupFromItem(root));
+                        _moveGroupInitialPos.append(root->scenePos());
+                    }
+
+                    // На всякий случай гарантируем, что "ведущий" item есть в списке
+                    if (!_movingItems.contains(_movingItem))
+                    {
+                        _movingItems.append(_movingItem);
+                        _moveGroupBefore.append(makeBackupFromItem(_movingItem));
+                        _moveGroupInitialPos.append(_movingItem->scenePos());
+                    }
+                }
             }
         }
     }
@@ -991,16 +1040,24 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 _rulerText = nullptr;
             }
 
+            QPen pen(QColor(200, 200, 200));
+            pen.setWidthF(2.0);
+            pen.setStyle(Qt::DotLine);
+            pen.setCapStyle(Qt::RoundCap);
+            pen.setJoinStyle(Qt::RoundJoin);
+            pen.setCosmetic(true);
+
+            _rulerLine = _scene->addLine(QLineF(_rulerStartPoint, _rulerStartPoint), pen);
             // Создаем временную линию
-            _rulerLine = _scene->addLine(
-                QLineF(_rulerStartPoint, _rulerStartPoint),
-                QPen(Qt::yellow, 1, Qt::DashLine)
-            );
+            // _rulerLine = _scene->addLine(
+            //     QLineF(_rulerStartPoint, _rulerStartPoint),
+            //     QPen(Qt::yellow, 1, Qt::DashLine)
+            // );
             _rulerLine->setZValue(1000);
 
             // Текст с расстоянием
-            _rulerText = _scene->addText(QStringLiteral("0 px"));
-            _rulerText->setDefaultTextColor(Qt::yellow);
+            _rulerText = _scene->addText(QStringLiteral("0"));
+            _rulerText->setDefaultTextColor(QColor(200, 200, 200));
             _rulerText->setZValue(1001);
             _rulerText->setPos(_rulerStartPoint);
         }
@@ -1026,7 +1083,7 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
 
            if (_rulerText)
            {
-               QString text = QString::number(dist, 'f', 1) + QStringLiteral(" px");
+               QString text = QString::number(dist, 'f', 1);
                _rulerText->setPlainText(text);
 
                QPointF middle = (line.p1() + line.p2()) / 2.0;
@@ -1064,12 +1121,31 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
     if (_movingItem)
     {
         const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
-        // Новая позиция = курсор минус захваченный офсет - смещение
-        _movingItem->setPos(scenePos - _moveGrabOffsetScene);
+
+        if (_moveIsGroup && !_movingItems.isEmpty())
+        {
+            // Сдвиг относительно положения курсора при захвате
+            const QPointF shift = scenePos - _movePressScenePos;
+
+            const int count = qMin(_movingItems.size(), _moveGroupInitialPos.size());
+            for (int i = 0; i < count; ++i)
+            {
+                QGraphicsItem* item = _movingItems[i];
+                if (!item)
+                    continue;
+
+                const QPointF& startPos = _moveGroupInitialPos[i];
+                item->setPos(startPos + shift);
+            }
+        }
+        else
+        {
+            _movingItem->setPos(scenePos - _moveGrabOffsetScene);
+        }
+
         _moveHadChanges = true;
-        mouseEvent->accept();
-        return; // чтобы встроенная логика Qt не добавляла свое смещение
     }
+
     if (mouseEvent->buttons() & Qt::LeftButton)
     {
         QPointF delta = graphView->mapToScene(mouseEvent->pos()) -
@@ -1173,26 +1249,67 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             setSceneItemsMovable(true);
         }
     }
-
     if (mouseEvent->button() == Qt::LeftButton)
     {
         if (_movingItem)
         {
-            // Вернуть исходные флаги — снова позволим обычное поведение Qt
             _movingItem->setFlags(_moveSavedFlags);
 
-            ShapeBackup after = makeBackupFromItem(_movingItem);
-
-            // Если реально сдвинули — пишем в стек
-            if (_moveHadChanges && !sameGeometry(_moveBeforeSnap, after))
+            if (_moveHadChanges)
             {
-                pushMoveShapeCommand(_movingItem, _moveBeforeSnap, after, tr("Перемещение фигуры"));
+                if (_moveIsGroup && !_movingItems.isEmpty())
+                {
+                    // Групповое перемещение
+                    QString descr = (_movingItems.size() == 1)
+                                      ? tr("Перемещение фигуры")
+                                      : tr("Перемещение фигур");
+
+                    if (QUndoStack* st = activeUndoStack())
+                        st->beginMacro(descr);
+
+                    const int count = qMin(_movingItems.size(), _moveGroupBefore.size());
+                    for (int i = 0; i < count; ++i)
+                    {
+                        QGraphicsItem* item = _movingItems[i];
+                        if (!item)
+                            continue;
+
+                        const ShapeBackup& before = _moveGroupBefore[i];
+                        ShapeBackup after = makeBackupFromItem(item);
+
+                        if (!sameGeometry(before, after))
+                        {
+                            pushMoveShapeCommand(item, before, after, descr);
+                        }
+                    }
+
+                    if (QUndoStack* st = activeUndoStack())
+                        st->endMacro();
+                }
+                else
+                {
+                    // Перемещение одной фигуры
+                    ShapeBackup after = makeBackupFromItem(_movingItem);
+
+                    if (!sameGeometry(_moveBeforeSnap, after))
+                    {
+                        pushMoveShapeCommand(_movingItem,
+                                             _moveBeforeSnap,
+                                             after,
+                                             tr("Перемещение фигуры"));
+                    }
+                }
             }
 
             _movingItem = nullptr;
+            _movingItems.clear();
+            _moveGroupBefore.clear();
+            _moveGroupInitialPos.clear();
+            _moveIsGroup = false;
             _moveHadChanges = false;
         }
     }
+
 
 
     if (mouseEvent->button() == Qt::LeftButton && _isDrawingRectangle)
@@ -1272,7 +1389,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             _scene->removeItem(_currCircleCrossH);
             delete _currCircleCrossH;
             _currCircleCrossH = nullptr;
-                }
+        }
 
         // Проверяем минимальный радиус
         if (circleRect.width() < 10 || circleRect.height() < 10)
@@ -1412,7 +1529,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
             if (_rulerText)
             {
-                QString text = QString::number(dist, 'f', 1) + QStringLiteral(" px");
+                QString text = QString::number(dist, 'f', 1);
                 _rulerText->setPlainText(text);
 
                 QPointF middle = (line.p1() + line.p2()) / 2.0;
@@ -1455,10 +1572,20 @@ void MainWindow::setSceneItemsMovable(bool movable)
 {
     for (QGraphicsItem* item : _scene->items())
     {
+        if (!item)
+            continue;
+
+        // Не трогаем дочерние элементы (ручки, контуры)
+        if (item->parentItem() != nullptr)
+            continue;
+
         if (item != _videoRect &&
             item != _tempRectItem &&
             item != _tempCircleItem &&
-            item != _tempPolyline)
+            item != _tempPolyline &&
+            item != _currCircle &&
+            item != _currCircleCrossV &&
+            item != _currCircleCrossH)
         {
             item->setFlag(QGraphicsItem::ItemIsMovable, movable);
         }
@@ -2025,8 +2152,11 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
             // реагируем только если этот стек активен у группы
             if (_undoGroup && _undoGroup->activeStack() != st) return;
 
-            if (auto d = currentDocument()) {
-                d->isModified = true;
+            if (auto d = currentDocument())
+            {
+                // Если стек в состоянии <пусто>, считаем файл неизмененным
+                const bool clean = st->isClean();
+                d->isModified = !clean;
                 updateFileListDisplay(d->filePath);
             }
         });
@@ -2325,6 +2455,9 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
             updateFileListItemIcon(item, true);
         }
     }
+    if (doc->_undoStack)
+        doc->_undoStack->setClean();
+
     // После успешного сохранения
     doc->isModified = false;
     updateFileListDisplay(doc->filePath);
@@ -3500,18 +3633,10 @@ void MainWindow::onPolygonListItemClicked(QListWidgetItem* item)
 {
     if (!item) return;
 
-    // Снимаем выделение со всех элементов сцены
-    for (QGraphicsItem* sceneItem : _scene->items())
-    {
-        sceneItem->setSelected(false);
-    }
-
-    // Выделяем соответствующий элемент на сцене
     QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
     if (sceneItem)
     {
-        sceneItem->setSelected(true);
-        ui->graphView->centerOn(sceneItem);
+       ui->graphView->centerOn(sceneItem);
     }
 }
 
@@ -6068,32 +6193,32 @@ void MainWindow::on_actLine_triggered()
 
 void MainWindow::on_actRuler_triggered()
 {
-    // // Отключаем другие режимы рисования
-    // _drawingLine      = false;
-    // _drawingPoint     = false;
-    // _drawingRectangle = false;
-    // _drawingCircle    = false;
-    // _drawingPolyline  = false;
+    // Отключаем другие режимы рисования
+    _drawingLine      = false;
+    _drawingPoint     = false;
+    _drawingRectangle = false;
+    _drawingCircle    = false;
+    _drawingPolyline  = false;
 
-    // // Включаем режим линейки
-    // _drawingRuler     = true;
-    // _isDrawingRuler   = false;
-    // //_isInDrawingMode  = true;
-    // //setSceneItemsMovable(false);
+    // Включаем режим линейки
+    _drawingRuler     = true;
+    _isDrawingRuler   = false;
+    //_isInDrawingMode  = true;
+    //setSceneItemsMovable(false);
 
-    // // При включении инструмента очищаем старую линейку
-    // if (_rulerLine)
-    // {
-    //     _scene->removeItem(_rulerLine);
-    //     delete _rulerLine;
-    //     _rulerLine = nullptr;
-    // }
-    // if (_rulerText)
-    // {
-    //     _scene->removeItem(_rulerText);
-    //     delete _rulerText;
-    //     _rulerText = nullptr;
-    // }
+    // При включении инструмента очищаем старую линейку
+    if (_rulerLine)
+    {
+        _scene->removeItem(_rulerLine);
+        delete _rulerLine;
+        _rulerLine = nullptr;
+    }
+    if (_rulerText)
+    {
+        _scene->removeItem(_rulerText);
+        delete _rulerText;
+        _rulerText = nullptr;
+    }
 }
 
 void MainWindow::on_actClosePolyline_triggered()

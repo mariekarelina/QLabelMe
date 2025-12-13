@@ -617,6 +617,11 @@ void Circle::updateSelectionRect()
         pen.setColor(QColor(220, 220, 220));
         _selectionRect->setPen(pen);
 
+        _selectionRect->setFlag(QGraphicsItem::ItemIsMovable, false);
+        _selectionRect->setFlag(QGraphicsItem::ItemIsSelectable, false);
+        _selectionRect->setAcceptedMouseButtons(Qt::NoButton);
+        _selectionRect->setAcceptHoverEvents(false);
+
         _selectionRect->setVisible(false);
     }
 

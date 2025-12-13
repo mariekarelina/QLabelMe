@@ -609,6 +609,13 @@ private:
     QPointF        _moveGrabOffsetScene; // Смещение узла относительно item->scenePos()
     QGraphicsItem::GraphicsItemFlags  _moveSavedFlags{}; // Чтобы вернуть флаги
 
+    // Групповое перемещение фигур
+    QVector<QGraphicsItem*> _movingItems; // Все фигуры, которые двигаем вместе
+    QVector<ShapeBackup> _moveGroupBefore; // Снимки фигур до перемещения
+    QVector<QPointF> _moveGroupInitialPos; // Начальные позиции при захвате
+    bool _moveIsGroup = false; // true, если тянем сразу несколько фигур
+    QPointF _movePressScenePos; // Позиция курсора в сцене в момент захвата
+
     // Для узлов
     QGraphicsItem* _handleEditedItem = nullptr; // Владелец перетаскиваемой ручки
     ShapeBackup    _handleBeforeSnap;           // снимок "до"
