@@ -120,6 +120,9 @@ struct Document
             videoRect = new qgraph::VideoRect(scene);
         }
         videoRect->setPixmap(pixmap);
+
+        videoRect->setPos(0, 0);
+        scene->setSceneRect(QRectF(QPointF(0, 0), QSizeF(pixmap.size())));
         return true;
     }
 };
@@ -232,6 +235,9 @@ private slots:
     void on_Paste_triggered();
 
     void on_toggleSelectionFrame_triggered();
+
+    void on_actUndo_triggered();
+    void on_actRedo_triggered();
 
 private:
     Q_OBJECT
@@ -346,6 +352,7 @@ private:
     void apply_LineColor_ToScene(QGraphicsItem* it);
     void apply_PointStyle_ToItem(QGraphicsItem* it);
 
+    void applyLabelFontToUi();
     void updateLineColorsForScene(QGraphicsScene* scene);
 
     void applyZoom(qreal z);
@@ -574,6 +581,8 @@ private:
         qreal lineWidth = 2.0;
         qreal handleSize = 10.0;
         qreal numberFontPt = 10.0;
+        int labelFontPt = 12;
+        QString labelFont;
         QColor handleColor = Qt::red;
         QColor selectedHandleColor = Qt::yellow;
         QColor numberColor = Qt::white;

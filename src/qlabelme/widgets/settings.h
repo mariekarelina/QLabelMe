@@ -39,6 +39,8 @@ public:
         int lineWidth = 2;
         int handleSize = 10;
         int numberFontPt = 12;
+        int labelFontPt = 12;
+        QString labelFont;
 
         QColor nodeColor = QColor("#3b6cff");
         QColor nodeSelectedColor = QColor("#ffe100");

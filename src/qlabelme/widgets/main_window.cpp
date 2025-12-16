@@ -164,6 +164,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
     //ui->menuBar->setAttribute(Qt::WA_TransparentForMouseEvents, false);
 
+    ui->graphView->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+    ui->graphView->setCacheMode(QGraphicsView::CacheNone);
+
     ui->toolBar->setAllowedAreas(Qt::TopToolBarArea);
     ui->toolBar->setMovable(false);
     ui->toolBar->setFloatable(false);
@@ -173,6 +176,14 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->graphView->setMouseTracking(true);
     ui->graphView->viewport()->setMouseTracking(true);
+
+    ui->graphView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    ui->graphView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+    ui->graphView->setResizeAnchor(QGraphicsView::AnchorViewCenter);
+    ui->graphView->setTransformationAnchor(QGraphicsView::AnchorViewCenter);
+    ui->graphView->setAlignment(Qt::AlignCenter);
+
 
     // Сделать подсветку одинаковой яркой, даже когда список без фокуса
     auto fixSelectionPalette = [](QListWidget* w){
@@ -200,6 +211,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->graphView->viewport()->installEventFilter(this);
 
     loadVisualStyle();
+    applyLabelFontToUi();
 
     bool ultraHD = false;
     QList<QScreen*> screens = QGuiApplication::screens();
@@ -375,66 +387,66 @@ MainWindow::MainWindow(QWidget *parent) :
     // _actRedo->setShortcutContext(Qt::ApplicationShortcut);
 
     // Фиксированные подписи без динамического хвоста
-    _actUndo = new QAction(tr("Отменить"), this);
-    _actRedo = new QAction(tr("Повторить"), this);
+    // _actUndo = new QAction(tr("Отменить"), this);
+    // _actRedo = new QAction(tr("Повторить"), this);
 
     // Триггеры - методы группы
-    connect(_actUndo, &QAction::triggered, _undoGroup, &QUndoGroup::undo);
-    connect(_actRedo, &QAction::triggered, _undoGroup, &QUndoGroup::redo);
+    // connect(_actUndo, &QAction::triggered, _undoGroup, &QUndoGroup::undo);
+    // connect(_actRedo, &QAction::triggered, _undoGroup, &QUndoGroup::redo);
 
     // Включаемость по состоянию группы
-    connect(_undoGroup, &QUndoGroup::canUndoChanged, _actUndo, &QAction::setEnabled);
-    connect(_undoGroup, &QUndoGroup::canRedoChanged, _actRedo, &QAction::setEnabled);
+    connect(_undoGroup, &QUndoGroup::canUndoChanged, ui->actUndo, &QAction::setEnabled);
+    connect(_undoGroup, &QUndoGroup::canRedoChanged, ui->actRedo, &QAction::setEnabled);
 
     // Начальное состояние
-    _actUndo->setEnabled(_undoGroup->canUndo());
-    _actRedo->setEnabled(_undoGroup->canRedo());
+    ui->actUndo->setEnabled(_undoGroup->canUndo());
+    ui->actRedo->setEnabled(_undoGroup->canRedo());
 
     // _actUndo->setShortcut(QKeySequence::Undo);
     // _actRedo->setShortcuts({QKeySequence::Redo, QKeySequence(Qt::CTRL | Qt::Key_Y)});
 
-    _actUndo->setShortcuts(QKeySequence::keyBindings(QKeySequence::Undo));
-    _actRedo->setShortcuts(QKeySequence::keyBindings(QKeySequence::Redo));
+    ui->actUndo->setShortcuts(QKeySequence::keyBindings(QKeySequence::Undo));
+    ui->actRedo->setShortcuts(QKeySequence::keyBindings(QKeySequence::Redo));
 
-    _actUndo->setShortcutContext(Qt::ApplicationShortcut);
-    _actRedo->setShortcutContext(Qt::ApplicationShortcut);
+    ui->actUndo->setShortcutContext(Qt::ApplicationShortcut);
+    ui->actRedo->setShortcutContext(Qt::ApplicationShortcut);
 
     // _actUndo->setToolTip(tr("Отменить"));
     // _actRedo->setToolTip(tr("Повторить"));
 
-    _actUndo->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
-    _actRedo->setIcon(style()->standardIcon(QStyle::SP_ArrowForward));
+    // actUndo->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
+    // actRedo->setIcon(style()->standardIcon(QStyle::SP_ArrowForward));
 
     //ui->toolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 
 
-    addAction(_actUndo);
-    addAction(_actRedo);
+    // addAction(actUndo);
+    // addAction(actRedo);
 
     // Добавление в меню/тулбар
-    ui->menuEdit->addAction(_actUndo);
-    ui->menuEdit->addAction(_actRedo);
-    if (ui->toolBar)
-    {
-        ui->toolBar->addAction(_actUndo);
-        ui->toolBar->addAction(_actRedo);
-    }
+    // ui->menuEdit->addAction(_actUndo);
+    // ui->menuEdit->addAction(_actRedo);
+    // if (ui->toolBar)
+    // {
+    //     ui->toolBar->addAction(_actUndo);
+    //     ui->toolBar->addAction(_actRedo);
+    // }
 
-    auto undoBtn = qobject_cast<QToolButton*>(
-        ui->toolBar->widgetForAction(_actUndo)
-    );
-    if (undoBtn)
-    {
-        undoBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    }
+    // auto undoBtn = qobject_cast<QToolButton*>(
+    //     ui->toolBar->widgetForAction(_actUndo)
+    // );
+    // if (undoBtn)
+    // {
+    //     undoBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    // }
 
-    auto redoBtn = qobject_cast<QToolButton*>(
-        ui->toolBar->widgetForAction(_actRedo)
-    );
-    if (redoBtn)
-    {
-        redoBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    }
+    // auto redoBtn = qobject_cast<QToolButton*>(
+    //     ui->toolBar->widgetForAction(_actRedo)
+    // );
+    // if (redoBtn)
+    // {
+    //     redoBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    // }
 
     ui->toolBar->setIconSize(QSize(32, 32));
 
@@ -1069,11 +1081,6 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             pen.setCosmetic(true);
 
             _rulerLine = _scene->addLine(QLineF(_rulerStartPoint, _rulerStartPoint), pen);
-            // Создаем временную линию
-            // _rulerLine = _scene->addLine(
-            //     QLineF(_rulerStartPoint, _rulerStartPoint),
-            //     QPen(Qt::yellow, 1, Qt::DashLine)
-            // );
             _rulerLine->setZValue(1000);
 
             // Текст с расстоянием
@@ -1178,6 +1185,10 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
             if (_videoRect)
                 _videoRect->moveBy(delta.x(), delta.y());
 
+            updateAllPointNumbers();
+            _scene->update();
+            ui->graphView->viewport()->update();
+
             _lastMousePos = mouseEvent->pos();
             mouseEvent->accept();
             return; // чтобы не сработал _isDraggingImage ниже
@@ -1213,6 +1224,8 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
                     polyline->updateHandlePosition();
             }
             updateAllPointNumbers();
+            _scene->update();
+            ui->graphView->viewport()->update();
         }
         else if (_draggingItem && (mouseEvent->modifiers() & Qt::ShiftModifier))
         {
@@ -1886,9 +1899,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         else if (key == Qt::Key_0)
         {
             // Сброс к базе
-            m_zoom = 1.0;
-            ui->graphView->setTransform(base);
-            event->accept();
+            fitImageToView();
             return;
         }
     }
@@ -4717,6 +4728,15 @@ void MainWindow::loadVisualStyle()
     else
         _vis.pointOutlineWidth = 1;
 
+    config::base().getValue("vis.all.label_font_pt", _vis.labelFontPt);
+
+    QString font;
+    if (config::base().getValue("vis.all.label_font_family", font))
+        _vis.labelFont = font;
+    else
+        _vis.labelFont.clear();
+
+
     applyStyle_AllDocuments();
 }
 
@@ -4737,6 +4757,8 @@ void MainWindow::saveVisualStyle() const
     config::base().setValue("vis.colors.line",  _vis.lineLineColor.name(QColor::HexArgb));
     config::base().setValue("vis.colors.point", _vis.pointColor.name(QColor::HexArgb));
     config::base().setValue("vis.point.outline_width", _vis.pointOutlineWidth);
+    config::base().setValue("vis.all.label_font_pt", _vis.labelFontPt);
+    config::base().setValue("vis.all.label_font_family", _vis.labelFont);
 }
 
 void MainWindow::applyStyle_AllDocuments()
@@ -5030,6 +5052,29 @@ void MainWindow::apply_PointStyle_ToItem(QGraphicsItem* it)
         const qreal diam = std::max(2, _vis.pointSize);
         p->setDotStyle(color, diam);
     }
+}
+
+void MainWindow::applyLabelFontToUi()
+{
+    QFont f = qApp->font();
+    if (!_vis.labelFont.isEmpty())
+        f.setFamily(_vis.labelFont);
+    f.setPointSize(_vis.labelFontPt);
+
+    qApp->setFont(f);
+
+    const auto widgets = qApp->allWidgets();
+    for (QWidget* w : widgets)
+    {
+        if (!w) continue;
+        w->setFont(f);
+        w->updateGeometry();
+        w->update();
+    }
+
+    if (this->centralWidget())
+        this->centralWidget()->updateGeometry();
+    this->adjustSize();
 }
 
 void MainWindow::updateLineColorsForScene(QGraphicsScene* scene)
@@ -5938,34 +5983,28 @@ void MainWindow::removePolygonListItem(QListWidgetItem* item)
 void MainWindow::fitImageToView()
 {
     if (!_scene || !_videoRect || !ui->graphView)
-    {
         return;
-    }
 
-    QRectF viewRect = ui->graphView->viewport()->rect();
-    QRectF sceneRect = _videoRect->sceneBoundingRect();
-
-    qreal xScale = viewRect.width() / sceneRect.width();
-    qreal yScale = viewRect.height() / sceneRect.height();
-    qreal scale = qMin(xScale, yScale);
+    _scene->setSceneRect(_videoRect->boundingRect().translated(_videoRect->pos()));
 
     ui->graphView->resetTransform();
-    ui->graphView->scale(scale, scale);
-    ui->graphView->centerOn(sceneRect.center());
+
+    ui->graphView->fitInView(_scene->sceneRect(), Qt::KeepAspectRatio);
+    ui->graphView->centerOn(_scene->sceneRect().center());
+
     ui->graphView->horizontalScrollBar()->setValue(0);
     ui->graphView->verticalScrollBar()->setValue(0);
 
     if (auto doc = currentDocument())
     {
+        const qreal zoom = ui->graphView->transform().m11();
         doc->viewState = {
-            ui->graphView->horizontalScrollBar()->value(),
-            ui->graphView->verticalScrollBar()->value(),
-            scale,
-            _videoRect->sceneBoundingRect().center() // Центр изображения, а не viewport
+            0,
+            0,
+            zoom,
+            _scene->sceneRect().center()
         };
-
-        // Принудительно помечаем как инициализированное
-        doc->viewState.zoom = scale; // Гарантируем, что zoom > 0
+        doc->viewState.zoom = zoom;
     }
 }
 
@@ -6592,6 +6631,9 @@ void MainWindow::on_actSettingsApp_triggered()
 
     init.closePolyline       = _polylineCloseMode;         // Текущий режим замыкания
     init.finishLine       = _lineFinishMode;               // Текущий режим завершения рисования линии
+    init.labelFontPt = _vis.labelFontPt;                   // Размер и шрифт
+    init.labelFont = _vis.labelFont;
+
 
     dlg.setValues(init);
 
@@ -6615,6 +6657,9 @@ void MainWindow::on_actSettingsApp_triggered()
         _vis.lineLineColor = v.lineLineColor;
         _vis.pointColor = v.pointColor;
         _vis.pointOutlineWidth = v.pointOutlineWidth;
+        _vis.labelFontPt = v.labelFontPt;
+        _vis.labelFont = v.labelFont;
+        applyLabelFontToUi();
 
         // 2) Сохраняем и применяем
         saveVisualStyle();
@@ -6652,7 +6697,6 @@ void MainWindow::on_actSettingsApp_triggered()
     config::base().setValue("windows.settings_dialog.geometry", out);
     config::base().saveFile();
 
-    // Если нажали "Отмена" — откатываем визуальный стиль
     if (rc == QDialog::Rejected)
     {
         _vis = visBackup;
@@ -6660,6 +6704,19 @@ void MainWindow::on_actSettingsApp_triggered()
         apply_LineWidth_ToScene(nullptr);
         apply_PointSize_ToScene(nullptr);
         apply_NumberSize_ToScene(nullptr);
+
+       applyLabelFontToUi();
+
+       applyClosePolyline();
+       applyFinishLine();
+
+       // Откат конфига
+       saveVisualStyle();
+       config::base().setValue("polyline.close_mode", static_cast<int>(_polylineCloseMode));
+       config::base().setValue("line.finish_mode", static_cast<int>(_lineFinishMode));
+       config::base().saveFile();
+
+       applyStyle_AllDocuments();
     }
 }
 
@@ -6835,3 +6892,22 @@ void MainWindow::on_toggleSelectionFrame_triggered()
         }
     }
 }
+
+void MainWindow::on_actUndo_triggered()
+{
+    if (!_undoGroup)
+        return;
+
+    if (_undoGroup->canUndo())
+        _undoGroup->undo();
+}
+
+void MainWindow::on_actRedo_triggered()
+{
+    if (!_undoGroup)
+        return;
+
+    if (_undoGroup->canRedo())
+        _undoGroup->redo();
+}
+

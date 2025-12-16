@@ -32,12 +32,30 @@
       </sizepolicy>
      </property>
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="tabGeneral">
       <attribute name="title">
        <string>Общее</string>
       </attribute>
+      <widget class="QWidget" name="layoutWidget">
+       <property name="geometry">
+        <rect>
+         <x>30</x>
+         <y>30</y>
+         <width>591</width>
+         <height>51</height>
+        </rect>
+       </property>
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QFontComboBox" name="fontComboLabels"/>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="spinLabelFontSize"/>
+        </item>
+       </layout>
+      </widget>
      </widget>
      <widget class="QWidget" name="tabView">
       <attribute name="title">

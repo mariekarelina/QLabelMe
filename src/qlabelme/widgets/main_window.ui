@@ -195,6 +195,7 @@
     <addaction name="Paste"/>
     <addaction name="separator"/>
     <addaction name="actRuler"/>
+    <addaction name="separator"/>
    </widget>
    <widget class="QMenu" name="menuSettings">
     <property name="title">
@@ -235,6 +236,8 @@
    <addaction name="actPolyline"/>
    <addaction name="actPoint"/>
    <addaction name="actLine"/>
+   <addaction name="actUndo"/>
+   <addaction name="actRedo"/>
   </widget>
   <action name="actOpen">
    <property name="text">
@@ -503,6 +506,22 @@
    </property>
    <property name="shortcut">
     <string>L</string>
+   </property>
+  </action>
+  <action name="actUndo">
+   <property name="text">
+    <string>Отменить</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Z</string>
+   </property>
+  </action>
+  <action name="actRedo">
+   <property name="text">
+    <string>Повторить</string>
+   </property>
+   <property name="shortcut">
+    <string>, Ctrl+Shift+Z</string>
    </property>
   </action>
  </widget>

@@ -128,6 +128,12 @@ void Settings::applyModelToUi()
     ui->spinHandleSize->setValue(_values.handleSize);
     ui->spinNumberSize->setValue(_values.numberFontPt);
     //ui->spinPointSize->setValue(_values.pointSize);
+    ui->spinLabelFontSize->setValue(_values.labelFontPt);
+
+    if (!_values.labelFont.isEmpty())
+        ui->fontComboLabels->setCurrentFont(QFont(_values.labelFont));
+    else
+        ui->fontComboLabels->setCurrentFont(QApplication::font());
 
     if (_btnNode)
         updateColorPreview(_btnNode, _values.nodeColor);
@@ -183,6 +189,8 @@ void Settings::applyUiToModel()
     _values.handleSize = ui->spinHandleSize->value();
     _values.numberFontPt = ui->spinNumberSize->value();
     //_values.pointSize = ui->spinPointSize->value();
+    _values.labelFontPt = ui->spinLabelFontSize->value();
+    _values.labelFont = ui->fontComboLabels->currentFont().family();
 
     if (ui->doubleClickLMB->isChecked())
         _values.closePolyline = PolylineCloseMode::DoubleClick;
