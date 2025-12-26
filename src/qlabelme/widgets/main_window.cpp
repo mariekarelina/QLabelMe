@@ -1980,6 +1980,12 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             return;
         }
     }
+    if (event->key() == Qt::Key_Escape)
+    {
+        cancelRulerMode();
+        event->accept();
+        return;
+    }
     QMainWindow::keyPressEvent(event);
 }
 
@@ -5316,6 +5322,26 @@ qulonglong MainWindow::ensureUid(QGraphicsItem* it) const
     return uid;
 }
 
+void MainWindow::cancelRulerMode()
+{
+    _isDrawingRuler = false;
+    _drawingRuler = false;
+
+    if (_rulerLine)
+    {
+        _scene->removeItem(_rulerLine);
+        delete _rulerLine;
+        _rulerLine = nullptr;
+    }
+
+    if (_rulerText)
+    {
+        _scene->removeItem(_rulerText);
+        delete _rulerText;
+        _rulerText = nullptr;
+    }
+}
+
 // Создает и пушит в стек _undoStack новую LambdaCommand,
 void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString& description)
 {
@@ -6562,7 +6588,8 @@ void MainWindow::on_actAbout_triggered()
     authorsText->setHtml(
         tr("<ul>"
            "<li>Карелина Мария - разработчик</li>"
-           "<li>Карелин Павел - разработчик</li>"
+           "<li>Карелин Павел - консультант по коду программы</li>"
+           "<li>Назаровский Александр - консультант по функциональной части программы</li>"
            "</ul>")
         );
     authorsLayout->addWidget(authorsText);

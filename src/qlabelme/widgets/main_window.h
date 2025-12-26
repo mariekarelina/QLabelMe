@@ -418,6 +418,8 @@ private:
     QGraphicsItem* findItemByUid(qulonglong uid) const;
     // Выдать/присвоить uid предмету
     qulonglong ensureUid(QGraphicsItem* it) const;
+    // "Отмена" линейки
+    void cancelRulerMode();
 
 private:
     Ui::MainWindow* ui;
