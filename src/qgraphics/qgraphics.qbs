@@ -1,6 +1,5 @@
 import qbs
-import QbsUtl
-import ProbExt
+import qbs.FileInfo
 
 Product {
     name: "QGraphics"
@@ -16,15 +15,7 @@ Product {
     cpp.cxxFlags: project.cxxFlags
     cpp.cxxLanguageVersion: project.cxxLanguageVersion
 
-    property var includePaths: [
-        "./",
-        "./qgraphics2",
-    ]
-    cpp.includePaths: includePaths
-
-    cpp.systemIncludePaths: QbsUtl.concatPaths(
-        Qt.core.cpp.includePaths // Декларация для подавления Qt warning-ов
-    )
+    cpp.includePaths: [".", "qgraphics2"]
 
     files: [
         "qgraphics2/circle.cpp",
@@ -49,6 +40,9 @@ Product {
 
     Export {
         Depends { name: "cpp" }
-        cpp.includePaths: exportingProduct.includePaths
+        cpp.includePaths: [
+            FileInfo.joinPaths(exportingProduct.sourceDirectory, "."),
+            FileInfo.joinPaths(exportingProduct.sourceDirectory, "qgraphics2")
+        ]
     }
 }

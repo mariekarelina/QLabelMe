@@ -32,10 +32,6 @@ Product {
         "./widgets",
     ]
 
-    cpp.systemIncludePaths: QbsUtl.concatPaths(
-        Qt.core.cpp.includePaths // Декларация для подавления Qt warning-ов
-    )
-
     Group {
         name: "resources"
         files: [
@@ -80,9 +76,4 @@ Product {
     files: [
         "qlabelme.cpp",
     ]
-
-//    property var test: {
-//        console.info("=== Video.decklinkIncludePath ===");
-//    }
-
 }

@@ -1,5 +1,5 @@
 import qbs
-import QbsUtl
+import qbs.FileInfo
 
 Product {
     name: "PProto"
@@ -8,28 +8,15 @@ Product {
     type: "staticlibrary"
 
     Depends { name: "cpp" }
-    Depends { name: "lib.sodium" }
     Depends { name: "RapidJson" }
     Depends { name: "SharedLib" }
     Depends { name: "Qt"; submodules: ["core", "network"] }
-
-    lib.sodium.enabled: project.useSodium
-    lib.sodium.version: project.sodiumVersion
 
     cpp.defines: project.cppDefines
     cpp.cxxFlags: project.cxxFlags
     cpp.cxxLanguageVersion: project.cxxLanguageVersion
 
-    property var includePaths: [
-        "./",
-        "./pproto",
-    ]
-    cpp.includePaths: includePaths;
-
-    cpp.systemIncludePaths: QbsUtl.concatPaths(
-        Qt.core.cpp.includePaths // Декларация для подавления Qt warning-ов
-       ,lib.sodium.includePath
-    )
+    cpp.includePaths: [".", "pproto"]
 
     files: [
         "pproto/commands/base.cpp",
@@ -40,23 +27,25 @@ Product {
         "pproto/commands/pool.h",
         "pproto/commands/time_range.cpp",
         "pproto/commands/time_range.h",
+        "pproto/commands/time_spec.cpp",
+        "pproto/commands/time_spec.h",
         "pproto/serialize/byte_array.cpp",
         "pproto/serialize/byte_array.h",
         "pproto/serialize/functions.cpp",
         "pproto/serialize/functions.h",
         "pproto/serialize/json.cpp",
         "pproto/serialize/json.h",
-//      "pproto/serialize/qbinary.h",
+      //"pproto/serialize/qbinary.h",
         "pproto/serialize/result.cpp",
         "pproto/serialize/result.h",
         "pproto/transport/base.cpp",
         "pproto/transport/base.h",
-//      "pproto/transport/local.cpp",
-//      "pproto/transport/local.h",
+      //"pproto/transport/local.cpp",
+      //"pproto/transport/local.h",
         "pproto/transport/tcp.cpp",
         "pproto/transport/tcp.h",
-//      "pproto/transport/udp.cpp",
-//      "pproto/transport/udp.h",
+      //"pproto/transport/udp.cpp",
+      //"pproto/transport/udp.h",
         "pproto/bserialize_space.h",
         "pproto/error_sender.h",
         "pproto/func_invoker.h",
@@ -72,6 +61,9 @@ Product {
 
     Export {
         Depends { name: "cpp" }
-        cpp.includePaths: exportingProduct.includePaths
+        cpp.includePaths: [
+            FileInfo.joinPaths(exportingProduct.sourceDirectory, "."),
+            FileInfo.joinPaths(exportingProduct.sourceDirectory, "pproto"),
+        ]
     }
 }
