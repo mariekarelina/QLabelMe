@@ -2,9 +2,9 @@
 #include "ui_select_class.h"
 
 
-Select_class::Select_class(const QStringList &classes, QWidget *parent)
+SelectClass::SelectClass(const QStringList &classes, QWidget *parent)
     : QDialog(parent),
-      ui(new Ui::Select_class)
+      ui(new Ui::SelectClass)
 {
     ui->setupUi(this);
 
@@ -36,7 +36,7 @@ Select_class::Select_class(const QStringList &classes, QWidget *parent)
             });
 }
 
-QString Select_class::selectedClass() const
+QString SelectClass::selectedClass() const
 {
     return _selectedClass;
 }

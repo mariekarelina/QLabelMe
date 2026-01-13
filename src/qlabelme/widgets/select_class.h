@@ -2,16 +2,16 @@
 
 #include <QDialog>
 
-namespace Ui { class Select_class; }
+namespace Ui { class SelectClass; }
 
-class Select_class : public QDialog
+class SelectClass : public QDialog
 {
     Q_OBJECT
 public:
-    explicit Select_class(const QStringList &classes, QWidget *parent = nullptr);
+    explicit SelectClass(const QStringList &classes, QWidget *parent = nullptr);
     QString selectedClass() const;
 
 private:
-    Ui::Select_class* ui = nullptr;
+    Ui::SelectClass* ui = nullptr;
     QString _selectedClass;
 };

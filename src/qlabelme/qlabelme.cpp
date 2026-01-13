@@ -11,10 +11,10 @@
 #include "shared/qt/logger_operators.h"
 #include "shared/qt/version_number.h"
 
-#include "pproto/commands/base.h"
-#include "pproto/commands/pool.h"
-#include "pproto/transport/tcp.h"
-#include "pproto/transport/udp.h"
+// #include "pproto/commands/base.h"
+// #include "pproto/commands/pool.h"
+// #include "pproto/transport/tcp.h"
+// #include "pproto/transport/udp.h"
 
 #include <QApplication>
 #include <QNetworkProxy>
@@ -136,17 +136,17 @@ int main(int argc, char *argv[])
         // alog::configExtensionSavers();
         // alog::printSaversInfo();
 
-        if (!pproto::command::checkUnique())
-        {
-            stopProgram();
-            return 1;
-        }
+        // if (!pproto::command::checkUnique())
+        // {
+        //     stopProgram();
+        //     return 1;
+        // }
 
-        if (!pproto::error::checkUnique())
-        {
-            stopProgram();
-            return 1;
-        }
+        // if (!pproto::error::checkUnique())
+        // {
+        //     stopProgram();
+        //     return 1;
+        // }
 
         QApplication appl {argc, argv};
 

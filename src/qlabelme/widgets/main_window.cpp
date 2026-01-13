@@ -2,11 +2,12 @@
 #include "ui_main_window.h"
 //#include "event_window.h"
 
-//#include "shared/defmac.h"
+#include "shared/defmac.h"
+#include "shared/break_point.h"
 #include "shared/logger/logger.h"
-//#include "shared/logger/format.h"
+#include "shared/logger/format.h"
 #include "shared/config/appl_conf.h"
-//#include "shared/qt/logger_operators.h"
+#include "shared/qt/logger_operators.h"
 
 // #include "pproto/commands/base.h"
 // #include "pproto/commands/pool.h"
@@ -192,9 +193,9 @@ MainWindow::MainWindow(QWidget *parent) :
         const QColor txtA = pal.color(QPalette::Active,   QPalette::HighlightedText);
 
         pal.setColor(QPalette::Inactive, QPalette::Highlight,       hiA);
-        pal.setColor(QPalette::Inactive, QPalette::HighlightedText,  txtA);
+        pal.setColor(QPalette::Inactive, QPalette::HighlightedText, txtA);
         pal.setColor(QPalette::Disabled, QPalette::Highlight,       hiA);
-        pal.setColor(QPalette::Disabled, QPalette::HighlightedText,  txtA);
+        pal.setColor(QPalette::Disabled, QPalette::HighlightedText, txtA);
 
         w->setPalette(pal);
         if (w->viewport()) w->viewport()->setPalette(pal);
@@ -283,9 +284,9 @@ MainWindow::MainWindow(QWidget *parent) :
     _currentFolderPath = "";
 
 
-    connect(ui->fileList, &QListWidget::currentItemChanged,
-            this, &MainWindow::fileList_ItemChanged);
-
+    // TODO все коннекты исправить на chk_connect_a
+    chk_connect_a(ui->fileList, &QListWidget::currentItemChanged,
+                  this, &MainWindow::fileList_ItemChanged);
 
     connect(ui->polygonList, &QListWidget::itemClicked,
             this, &MainWindow::onPolygonListItemClicked);
@@ -871,8 +872,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                     // for (int i = 0; i < ui->polygonLabel->count(); ++i)
                     //     classes << ui->polygonLabel->item(i)->text();
 
-                    // Select_class dialog(classes, this);
-                    Select_class dialog(_projectClasses, this);
+                    // SelectClass dialog(classes, this);
+                    SelectClass dialog(_projectClasses, this);
 
                     if (dialog.exec() == QDialog::Accepted)
                     {
@@ -956,8 +957,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         // for (int i = 0; i < ui->polygonLabel->count(); ++i)
         //     classes << ui->polygonLabel->item(i)->text();
 
-        // Select_class dialog(classes, this);
-        Select_class dialog(_projectClasses, this);
+        // SelectClass dialog(classes, this);
+        SelectClass dialog(_projectClasses, this);
 
         if (dialog.exec() == QDialog::Accepted)
         {
@@ -1018,9 +1019,9 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                     // for (int i = 0; i < ui->polygonLabel->count(); ++i)
                     //     classes << ui->polygonLabel->item(i)->text();
 
-                    // Select_class dialog(classes, this);
+                    // SelectClass dialog(classes, this);
 
-                    Select_class dialog(_projectClasses, this);
+                    SelectClass dialog(_projectClasses, this);
 
                     if (dialog.exec() == QDialog::Accepted)
                     {
@@ -1376,9 +1377,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         // }
 
         // // Показываем диалог выбора класса
-        // Select_class dialog(classes, this);
+        // SelectClass dialog(classes, this);
 
-        Select_class dialog(_projectClasses, this);
+        SelectClass dialog(_projectClasses, this);
 
         if (dialog.exec() == QDialog::Accepted)
         {
@@ -1444,9 +1445,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         //     classes << ui->polygonLabel->item(i)->text();
         // }
 
-        // Select_class dialog(classes, this);
+        // SelectClass dialog(classes, this);
 
-        Select_class dialog(_projectClasses, this);
+        SelectClass dialog(_projectClasses, this);
 
         if (dialog.exec() == QDialog::Accepted)
         {
@@ -1482,9 +1483,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         // for (int i = 0; i < ui->polygonLabel->count(); ++i)
         //     classes << ui->polygonLabel->item(i)->text();
         // // Показываем диалог выбора класса
-        // Select_class dialog(classes, this);
+        // SelectClass dialog(classes, this);
 
-        Select_class dialog(_projectClasses, this);
+        SelectClass dialog(_projectClasses, this);
         if (dialog.exec() == QDialog::Accepted)
         {
             const QString selectedClass = dialog.selectedClass();
@@ -1523,9 +1524,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         //     classes << ui->polygonLabel->item(i)->text();
 
         // // Показываем диалог выбора класса
-        // Select_class dialog(classes, this);
+        // SelectClass dialog(classes, this);
 
-        Select_class dialog(_projectClasses, this);
+        SelectClass dialog(_projectClasses, this);
         if (dialog.exec() == QDialog::Accepted)
         {
             const QString selectedClass = dialog.selectedClass();
@@ -1693,9 +1694,9 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         // for (int i = 0; i < ui->polygonLabel->count(); ++i)
                         //     classes << ui->polygonLabel->item(i)->text();
 
-                        // Select_class dialog(classes, this);
+                        // SelectClass dialog(classes, this);
 
-                        Select_class dialog(_projectClasses, this);
+                        SelectClass dialog(_projectClasses, this);
                         if (dialog.exec() == QDialog::Accepted)
                         {
                             const QString selectedClass = dialog.selectedClass();
@@ -2234,17 +2235,45 @@ void MainWindow::updatePolygonListForCurrentScene()
 
 void MainWindow::loadGeometry()
 {
-    QVector<int> v {100, 100, 800, 600};
-    config::base().getValue("windows.main_window.geometry", v);
-    setGeometry(v[0], v[1], v[2], v[3]);
+    // QVector<int> v {100, 100, 800, 600};
+    // config::base().getValue("windows.main_window.geometry", v);
+    // setGeometry(v[0], v[1], v[2], v[3]);
+
+    QVector<int> wg;
+    config::base().getValue("windows.main_window.geometry", wg);
+    if (wg.count() != 4)
+    {
+        //wg.resize(4);
+        wg = {10, 10, 1400, 800};
+        //setGeometry(wg[0], wg[1], wg[2], wg[3]);
+
+        QList<QScreen*> screens = QGuiApplication::screens();
+        if (!screens.isEmpty())
+        {
+            QRect screenGeometry = screens[0]->geometry();
+            //QRect windowGeometry = this->geometry();
+            QRect windowGeometry {0, 0, int(screenGeometry.width()  * (2./3)),
+                                        int(screenGeometry.height() * (2./3))};
+            wg[0] = screenGeometry.width()  / 2 - windowGeometry.width()  / 2;
+            wg[1] = screenGeometry.height() / 2 - windowGeometry.height() / 2;
+            wg[2] = windowGeometry.width();
+            wg[3] = windowGeometry.height();
+        }
+    }
+    setGeometry(wg[0], wg[1], wg[2], wg[3]);
 
     QList<int> splitterSizes;
     if (config::base().getValue("windows.main_window.splitter_sizes", splitterSizes))
         ui->splitter->setSizes(splitterSizes);
 
     splitterSizes.clear();
-    if (config::base().getValue("windows.main_window.splitter2_sizes", splitterSizes))
-        ui->splitter2->setSizes(splitterSizes);
+    if (!config::base().getValue("windows.main_window.splitter2_sizes", splitterSizes))
+    {
+        splitterSizes = {100, 100};
+        QRect windowGeometry = this->geometry();
+        splitterSizes[0] = windowGeometry.width() * (2./3);
+    }
+    ui->splitter2->setSizes(splitterSizes);
 
 //    int tabIndex = 0;
 //    config::base().getValue("windows.main_window.tab_index", tabIndex);
@@ -3563,6 +3592,12 @@ bool MainWindow::hasAnnotationFile(const QString& imagePath) const
     return false;
 }
 
+QString MainWindow::classesYamlPath() const
+{
+    QDir dir(_currentFolderPath);
+    return dir.filePath("classes.yaml");
+}
+
 bool MainWindow::loadClassesFromFile(const QString& filePath)
 {
     YamlConfig yconfig;
@@ -3629,43 +3664,42 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
     return true;
 }
 
-QString MainWindow::classesYamlPath() const
-{
-    QDir dir(_currentFolderPath);
-    return dir.filePath("classes.yaml");
-}
-
 bool MainWindow::saveProjectClasses(const QStringList& classes)
 {
     const QString path = classesYamlPath();
     if (path.isEmpty())
         return false;
 
-    YAML::Emitter seq;
-    seq.SetIndent(2);
-    seq << YAML::Flow << YAML::BeginSeq;
-    for (const QString& s : classes)
-        seq << s.toUtf8().constData();
-    seq << YAML::EndSeq;
-    if (!seq.good())
-        return false;
+    YamlConfig yconfig;
+    yconfig.setValue("classes", classes);
+
+    std::string str;
+    yconfig.saveString(str);
+
+    // YAML::Emitter seq;
+    // seq.SetIndent(2);
+    // seq << YAML::Flow << YAML::BeginSeq;
+    // for (const QString& s : classes)
+    //     seq << s.toUtf8().constData();
+    // seq << YAML::EndSeq;
+    // if (!seq.good())
+    //     return false;
 
     QByteArray body;
     body += "---\n";
-    body += "### YAML syntax ###\n\n";
-    body += "classes: ";
-    body += seq.c_str();
+    body += "### QLabelMe YAML syntax ###\n\n";
+    body += str.c_str();
     body += "\n\n...\n";
 
-    QSaveFile sf(path);
+    QSaveFile sf {path};
     if (!sf.open(QIODevice::WriteOnly))
         return false;
+
     if (sf.write(body) != body.size())
         return false;
 
     return sf.commit();
 }
-
 
 void MainWindow::onPolygonListItemClicked(QListWidgetItem* item)
 {
@@ -6321,7 +6355,7 @@ void MainWindow::on_actClosePolyline_triggered()
         apply_NumberSize_ToItem(_polyline);
 
         // Выбор класса
-        Select_class dialog(_projectClasses, this);
+        SelectClass dialog(_projectClasses, this);
         if (dialog.exec() == QDialog::Accepted)
         {
             const QString selectedClass = dialog.selectedClass();
@@ -6356,7 +6390,7 @@ void MainWindow::on_actClosePolyline_triggered()
         apply_PointSize_ToItem(_line);
         apply_NumberSize_ToItem(_line);
 
-        Select_class dialog(_projectClasses, this);
+        SelectClass dialog(_projectClasses, this);
         if (dialog.exec() == QDialog::Accepted)
         {
             const QString selectedClass = dialog.selectedClass();

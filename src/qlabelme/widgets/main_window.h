@@ -1,10 +1,10 @@
 #pragma once
 
 #include "shared/container_ptr.h"
-//#include "shared/simple_ptr.h"
+#include "shared/qt/quuidex.h"
 
 //#include "pproto/func_invoker.h"
-#include "pproto/transport/tcp.h"
+//#include "pproto/transport/tcp.h"
 
 //#include "commands/commands.h"
 //#include "commands/error.h"
@@ -281,10 +281,10 @@ private:
 
     bool hasAnnotationFile(const QString& imagePath) const;
 
-    bool loadClassesFromFile(const QString& filePath);
-    const QStringList& projectClasses() const { return _projectClasses; }
-
     QString classesYamlPath() const;
+    const QStringList& projectClasses() const {return _projectClasses;}
+
+    bool loadClassesFromFile(const QString& filePath);
     bool saveProjectClasses(const QStringList& classes);
 
     void onPolygonListItemClicked(QListWidgetItem* item);

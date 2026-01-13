@@ -217,7 +217,7 @@
          </item>
         </layout>
        </widget>
-       <widget class="QWidget" name="layoutWidget">
+       <widget class="QWidget" name="layoutWidget4">
         <layout class="QVBoxLayout" name="verticalLayout_5">
          <item>
           <widget class="QPushButton" name="pushButton">
