@@ -420,6 +420,8 @@ private:
     qulonglong ensureUid(QGraphicsItem* it) const;
     // "Отмена" линейки
     void cancelRulerMode();
+    // Скрывать menuBar
+    void toggleMenuBarVisible();
 
 private:
     Ui::MainWindow* ui;
@@ -634,6 +636,8 @@ private:
 
     QPointF _shiftImageBeforePos;
     bool _shiftImageDragging = false;
+
+    bool keepImageScale = false;
 
     // Стабильный ключ в QGraphicsItem::data(...)
     static constexpr int RoleUid = 0x1337ABCD;

@@ -53,6 +53,7 @@ public:
         QColor pointColor = QColor("#00ff00");
         int pointOutlineWidth = 1;
         int pointSize = 6;
+        bool keepImageScale = false;
 
         PolylineCloseMode closePolyline = PolylineCloseMode::DoubleClick;
         LineFinishMode finishLine = LineFinishMode::DoubleClick;

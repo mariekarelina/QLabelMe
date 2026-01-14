@@ -168,12 +168,46 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->graphView->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
     ui->graphView->setCacheMode(QGraphicsView::CacheNone);
 
-    ui->toolBar->setAllowedAreas(Qt::TopToolBarArea);
-    ui->toolBar->setMovable(false);
-    ui->toolBar->setFloatable(false);
-    addToolBarBreak(Qt::TopToolBarArea);
+    // ui->toolBar->setAllowedAreas(Qt::TopToolBarArea);
+    // ui->toolBar->setMovable(false);
+    // ui->toolBar->setFloatable(false);
+    // addToolBarBreak(Qt::TopToolBarArea);
 
-    ui->menuBar->raise();
+    //ui->menuBar->raise();
+
+    // toolbar в правую панель над "Фигуры/Координаты/Стек действий"
+    ui->toolBar->setParent(ui->layoutWidget1);
+    ui->toolBar->setAllowedAreas(Qt::NoToolBarArea);
+    ui->toolBar->setFloatable(false);
+    ui->toolBar->setMovable(false);
+
+    // 1) Убираем виджеты из их старых позиций (чтобы не было конфликта в сетке)
+    ui->gridLayout->removeWidget(ui->label_5);
+    ui->gridLayout->removeWidget(ui->label);
+    ui->gridLayout->removeWidget(ui->label_4);
+    ui->gridLayout->removeWidget(ui->polygonList);
+    ui->gridLayout->removeWidget(ui->coordinateList);
+    ui->gridLayout->removeWidget(ui->undoView);
+
+    // 2) Ставим toolbar в верхнюю строку (row 0)
+    ui->gridLayout->addWidget(ui->toolBar, 0, 0, 1, 3);
+
+    // 3) Возвращаем заголовки в row 1
+    ui->gridLayout->addWidget(ui->label_5, 1, 0);
+    ui->gridLayout->addWidget(ui->label, 1, 1);
+    ui->gridLayout->addWidget(ui->label_4, 1, 2);
+
+    // 4) Возвращаем списки/undoView в row 2
+    ui->gridLayout->addWidget(ui->polygonList, 2, 0);
+    ui->gridLayout->addWidget(ui->coordinateList, 2, 1);
+    ui->gridLayout->addWidget(ui->undoView, 2, 2);
+
+    // 5) Чтобы нижняя строка растягивалась, а верхние нет
+    ui->gridLayout->setRowStretch(0, 0);
+    ui->gridLayout->setRowStretch(1, 0);
+    ui->gridLayout->setRowStretch(2, 1);
+
+
 
     ui->graphView->setMouseTracking(true);
     ui->graphView->viewport()->setMouseTracking(true);
@@ -369,6 +403,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ensureGhostAllocated();
 
+    //config::base().getValue("view.keep_image_scale", init.keepImageScale);
+
+
 
     // Стек и действия
     // _undoStack = std::make_unique<QUndoStack>(this);
@@ -482,6 +519,31 @@ MainWindow::MainWindow(QWidget *parent) :
             _projectClasses = classes;
             saveProjectClasses(_projectClasses);
         });
+
+    // Чтобы Alt работал независимо от фокуса
+    qApp->installEventFilter(this);
+
+    // Восстановить видимость меню
+    bool mbVisible = false;
+    ui->menuBar->setVisible(mbVisible);
+
+    // Чтобы шорткаты работали даже при скрытом menuBar
+    const auto acts = findChildren<QAction*>();
+    for (QAction* a : acts)
+    {
+        if (!a)
+            continue;
+
+        if (a->menu() != nullptr)
+            continue;
+
+        if (a->shortcut().isEmpty())
+            continue;
+
+        a->setShortcutContext(Qt::WindowShortcut);
+        this->addAction(a);
+    }
+
 }
 
 MainWindow::~MainWindow()
@@ -1651,6 +1713,20 @@ Document::Ptr MainWindow::currentDocument() const
 
 bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 {
+    // Скрыть/показать верхнее меню
+    if (event->type() == QEvent::KeyPress)
+    {
+        auto* ke = static_cast<QKeyEvent*>(event);
+        if (ke->key() == Qt::Key_Alt &&
+            !ke->isAutoRepeat() &&
+            ke->modifiers() == Qt::AltModifier)
+        {
+            toggleMenuBarVisible();
+            ke->accept();
+            return true;
+        }
+    }
+
     if (obj != ui->graphView->viewport())
         return QMainWindow::eventFilter(obj, event);
 
@@ -5376,6 +5452,15 @@ void MainWindow::cancelRulerMode()
     }
 }
 
+void MainWindow::toggleMenuBarVisible()
+{
+    if (!ui || !ui->menuBar)
+        return;
+
+    const bool newVisible = !ui->menuBar->isVisible();
+    ui->menuBar->setVisible(newVisible);
+}
+
 // Создает и пушит в стек _undoStack новую LambdaCommand,
 void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString& description)
 {
@@ -6169,6 +6254,7 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     _videoRect = currentDoc->videoRect;
 
     ensureGhostAllocated();
+    bool sceneWasJustCreated = false;
     // Подключаем сигнал changed для новой сцены
     if (currentDoc->scene)
     {
@@ -6181,9 +6267,31 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
                 Qt::UniqueConnection);
     }
 
+    // _loadingNow = false;
+    // fitImageToView();
+    // updatePolygonListForCurrentScene();
+
     _loadingNow = false;
-    fitImageToView();
+
+    bool keepPerImageZoom = false;
+    config::base().getValue("view.keep_image_scale_per_image", keepPerImageZoom);
+
+    if (sceneWasJustCreated)
+    {
+        // первый показ снимка — стартуем с fit и сразу запомним viewState (у тебя fitImageToView это уже делает)
+        fitImageToView();
+    }
+    else
+    {
+        if (keepPerImageZoom)
+            restoreViewState(currentDoc);  // <-- ВОССТАНАВЛИВАЕМ ПЕР-СНИМОК
+        else
+            fitImageToView();              // <-- СБРОС
+    }
+
     updatePolygonListForCurrentScene();
+
+
     clearAllHandleHoverEffects();
     // Обновляем отображение звездочки (файл изменен)
     updateFileListDisplay(currentDoc->filePath);
@@ -6745,6 +6853,10 @@ void MainWindow::on_actSettingsApp_triggered()
         config::base().setValue("line.finish_mode",
                                 static_cast<int>(_lineFinishMode));
         config::base().saveFile();
+
+        // Масштаб при смене снимков
+        config::base().setValue("view.keep_image_scale", v.keepImageScale);
+
 
 
     });
