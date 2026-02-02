@@ -31,5 +31,7 @@
         <file>resources/delete.svg</file>
         <file>resources/add.svg</file>
         <file>resources/edit.svg</file>
+        <file>resources/undo.svg</file>
+        <file>resources/redo.svg</file>
     </qresource>
 </RCC>

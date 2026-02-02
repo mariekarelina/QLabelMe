@@ -20,6 +20,8 @@ Settings::Settings(QWidget *parent)
     ui->buttonBox->button(QDialogButtonBox::Apply)->setText(tr("Применить"));
     ui->buttonBox->button(QDialogButtonBox::Cancel)->setText(tr("Отмена"));
 
+    ui->labelFontValue->setStyleSheet("font-weight: bold;");
+
     wireUi();
     applyModelToUi();
 }
@@ -83,6 +85,21 @@ void Settings::wireUi()
     setupCloseMethodGroup();
     // Радиокнопки "Завршение линии"
     setupFinishMethodGroup();
+
+    // Выбор шрифта
+    if (ui->toolButtonPickFont)
+    {
+        const QIcon ico = QIcon::fromTheme(QStringLiteral("preferences-desktop-font"));
+        if (!ico.isNull())
+        {
+            ui->toolButtonPickFont->setIcon(ico);
+            ui->toolButtonPickFont->setText(QString());
+            ui->toolButtonPickFont->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        }
+
+        connect(ui->toolButtonPickFont, &QToolButton::clicked,
+                this, &Settings::onPickLabelFont);
+    }
 }
 
 void Settings::setupCloseMethodGroup()
@@ -128,12 +145,34 @@ void Settings::applyModelToUi()
     ui->spinHandleSize->setValue(_values.handleSize);
     ui->spinNumberSize->setValue(_values.numberFontPt);
     //ui->spinPointSize->setValue(_values.pointSize);
-    ui->spinLabelFontSize->setValue(_values.labelFontPt);
+    //ui->spinLabelFontSize->setValue(_values.labelFontPt);
+    ui->keepImageScale->setChecked(_values.keepImageScale);
+    ui->keepMenuBarVisibility->setChecked(_values.keepMenuBarVisibility);
 
+    // if (!_values.labelFont.isEmpty())
+    //     ui->fontComboLabels->setCurrentFont(QFont(_values.labelFont));
+    // else
+    //     ui->fontComboLabels->setCurrentFont(QApplication::font());
+    // Шрифт меток
+    _labelFont = QApplication::font();
     if (!_values.labelFont.isEmpty())
-        ui->fontComboLabels->setCurrentFont(QFont(_values.labelFont));
-    else
-        ui->fontComboLabels->setCurrentFont(QApplication::font());
+        _labelFont.setFamily(_values.labelFont);
+    if (_values.labelFontPt > 0)
+        _labelFont.setPointSize(_values.labelFontPt);
+
+    updateLabelFontPreview();
+
+    if (ui->labelFontValue)
+    {
+        const int pt = (_labelFont.pointSize() > 0) ? _labelFont.pointSize()
+                                                    : QApplication::font().pointSize();
+        ui->labelFontValue->setText(QStringLiteral("%1, %2")
+                                        .arg(_labelFont.family())
+                                        .arg(pt));
+        ui->labelFontValue->setToolTip(tr("%1\nРазмер: %2")
+                                           .arg(_labelFont.family())
+                                           .arg(pt));
+    }
 
     if (_btnNode)
         updateColorPreview(_btnNode, _values.nodeColor);
@@ -189,8 +228,15 @@ void Settings::applyUiToModel()
     _values.handleSize = ui->spinHandleSize->value();
     _values.numberFontPt = ui->spinNumberSize->value();
     //_values.pointSize = ui->spinPointSize->value();
-    _values.labelFontPt = ui->spinLabelFontSize->value();
-    _values.labelFont = ui->fontComboLabels->currentFont().family();
+    // _values.labelFontPt = ui->spinLabelFontSize->value();
+    // _values.labelFont = ui->fontComboLabels->currentFont().family();
+    _values.labelFontPt = (_labelFont.pointSize() > 0) ? _labelFont.pointSize() : _values.labelFontPt;
+    _values.labelFont   = _labelFont.family();
+
+    _values.keepImageScale = ui->keepImageScale->isChecked();
+    _values.keepMenuBarVisibility = ui->keepMenuBarVisibility->isChecked();
+
+
 
     if (ui->doubleClickLMB->isChecked())
         _values.closePolyline = PolylineCloseMode::DoubleClick;
@@ -231,6 +277,43 @@ void Settings::on_buttonBox_clicked(QAbstractButton *btn)
     }
 }
 
+void Settings::onPickLabelFont()
+{
+    bool ok = false;
+    QFont initial = _labelFont;
+    if (initial.family().isEmpty())
+        initial = QApplication::font();
+
+    const QFont chosen = QFontDialog::getFont(
+        &ok,
+        initial,
+        this,
+        tr("Выбор шрифта"),
+        QFontDialog::DontUseNativeDialog
+    );
+
+    if (!ok)
+        return;
+
+    _labelFont = chosen;
+    updateLabelFontPreview();
+
+    if (ui->labelFontValue)
+    {
+        const int pt = (_labelFont.pointSize() > 0) ? _labelFont.pointSize()
+                                                    : QApplication::font().pointSize();
+        ui->labelFontValue->setText(QStringLiteral("%1, %2")
+                                        .arg(_labelFont.family())
+                                        .arg(pt));
+        ui->labelFontValue->setToolTip(tr("%1\nРазмер: %2")
+                                        .arg(_labelFont.family())
+                                        .arg(pt));
+        QFont f = ui->labelFontValue->font();
+        f.setBold(true);
+        ui->labelFontValue->setFont(f);
+    }
+}
+
 void Settings::updateColorPreview(QPushButton *btn, const QColor &c)
 {
     if (!btn) return;
@@ -263,3 +346,21 @@ void Settings::attachColorPicker(QPushButton *btn, QColor *target)
         pickColor(this, tr("Выбор цвета"), *target, btn);
     });
 }
+
+void Settings::updateLabelFontPreview()
+{
+    if (!ui->labelFontValue)
+        return;
+
+    const int pt = (_labelFont.pointSize() > 0) ? _labelFont.pointSize()
+                                                : QApplication::font().pointSize();
+    ui->labelFontValue->setText(QStringLiteral("%1, %2").arg(_labelFont.family()).arg(pt));
+    ui->labelFontValue->setToolTip(tr("%1\nРазмер: %2").arg(_labelFont.family()).arg(pt));
+
+    QFont f = ui->labelFontValue->font();
+    f.setFamily(_labelFont.family());
+    f.setPointSize(pt);
+    f.setBold(true);
+    ui->labelFontValue->setFont(f);
+}
+

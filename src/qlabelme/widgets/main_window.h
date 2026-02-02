@@ -93,7 +93,8 @@ struct Document
     {
         int hScroll = 0;
         int vScroll = 0;
-        qreal zoom = 1.0;
+        // qreal zoom = 1.0;
+        qreal zoom = 0.0;
         QPointF center;
     } viewState;
 
@@ -420,7 +421,7 @@ private:
     qulonglong ensureUid(QGraphicsItem* it) const;
     // "Отмена" линейки
     void cancelRulerMode();
-    // Скрывать menuBar
+    // Видимость menuBar
     void toggleMenuBarVisible();
 
 private:
@@ -543,10 +544,10 @@ private:
     QList<int> _savedSplitterSizes; // Хранит нормальные размеры сплиттера
     bool _isRightSplitterCollapsed = false;
     bool _isRightPanelVisible = true;
-    QWidget* _rightPanel; // Указатель на правую панель
+    QWidget* _rightPanel = {nullptr}; // Указатель на правую панель
 
     // Указатель на последний выбранный чекбокс в списке классов для полигонов
-    QCheckBox* _lastCheckedPolygonLabel = nullptr;
+    QCheckBox* _lastCheckedPolygonLabel = {nullptr};
 
     // Механика призрачной ручки
     QGraphicsRectItem* _ghostHandle = nullptr; // Рисуемая сверху копия

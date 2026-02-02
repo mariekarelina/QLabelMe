@@ -176,12 +176,37 @@ MainWindow::MainWindow(QWidget *parent) :
     //ui->menuBar->raise();
 
     // toolbar в правую панель над "Фигуры/Координаты/Стек действий"
+
+    // Оба тулбара в layoutWidget1
     ui->toolBar->setParent(ui->layoutWidget1);
     ui->toolBar->setAllowedAreas(Qt::NoToolBarArea);
     ui->toolBar->setFloatable(false);
     ui->toolBar->setMovable(false);
 
-    // 1) Убираем виджеты из их старых позиций (чтобы не было конфликта в сетке)
+    ui->toolBar_2->setParent(ui->layoutWidget1);
+    ui->toolBar_2->setAllowedAreas(Qt::NoToolBarArea);
+    ui->toolBar_2->setFloatable(false);
+    ui->toolBar_2->setMovable(false);
+
+    // Создаем контейнер для тулбаров и кладём их рядом
+    QWidget* toolBarsBlock = new QWidget(ui->layoutWidget1);
+    auto* htb = new QHBoxLayout(toolBarsBlock);
+    htb->setContentsMargins(0, 0, 0, 0);
+    htb->setSpacing(6); // Расстояние между тулбарами
+
+    // Чтобы первый тулбар не растягивался, а второй занимал остаток
+    ui->toolBar->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+    ui->toolBar_2->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    // Выравниваем по центру по вертикали
+    htb->addWidget(ui->toolBar, 0, Qt::AlignVCenter);
+    htb->addWidget(ui->toolBar_2,   1, Qt::AlignVCenter);
+
+    htb->setStretch(0, 0); // toolBar_2 не растягиваем
+    htb->setStretch(1, 1); // toolBar растягиваем
+    ui->toolBar->setMinimumWidth(ui->toolBar->sizeHint().width());
+
+    // Убираем старые виджеты из сетки и вставляем блок тулбаров в row 0
     ui->gridLayout->removeWidget(ui->label_5);
     ui->gridLayout->removeWidget(ui->label);
     ui->gridLayout->removeWidget(ui->label_4);
@@ -189,24 +214,22 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->gridLayout->removeWidget(ui->coordinateList);
     ui->gridLayout->removeWidget(ui->undoView);
 
-    // 2) Ставим toolbar в верхнюю строку (row 0)
-    ui->gridLayout->addWidget(ui->toolBar, 0, 0, 1, 3);
+    // Добавляем контейнер toolBarsBlock
+    ui->gridLayout->addWidget(toolBarsBlock, 0, 0, 1, 3);
 
-    // 3) Возвращаем заголовки в row 1
+    // Возвращаем заголовки и списки ниже
     ui->gridLayout->addWidget(ui->label_5, 1, 0);
-    ui->gridLayout->addWidget(ui->label, 1, 1);
+    ui->gridLayout->addWidget(ui->label,   1, 1);
     ui->gridLayout->addWidget(ui->label_4, 1, 2);
 
-    // 4) Возвращаем списки/undoView в row 2
-    ui->gridLayout->addWidget(ui->polygonList, 2, 0);
+    ui->gridLayout->addWidget(ui->polygonList,    2, 0);
     ui->gridLayout->addWidget(ui->coordinateList, 2, 1);
-    ui->gridLayout->addWidget(ui->undoView, 2, 2);
+    ui->gridLayout->addWidget(ui->undoView,       2, 2);
 
-    // 5) Чтобы нижняя строка растягивалась, а верхние нет
+    // Растяжение: тулбары/заголовки не растягиваются, низ растягивается
     ui->gridLayout->setRowStretch(0, 0);
     ui->gridLayout->setRowStretch(1, 0);
     ui->gridLayout->setRowStretch(2, 1);
-
 
 
     ui->graphView->setMouseTracking(true);
@@ -246,7 +269,6 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->graphView->viewport()->installEventFilter(this);
 
     loadVisualStyle();
-    applyLabelFontToUi();
 
     bool ultraHD = false;
     QList<QScreen*> screens = QGuiApplication::screens();
@@ -382,6 +404,7 @@ MainWindow::MainWindow(QWidget *parent) :
     _rightPanel = ui->splitter->widget(1); // Или другой индекс, в зависимости от структуры
     // Сохраняем начальные размеры сплиттера
     _savedSplitterSizes = ui->splitter->sizes();
+    applyLabelFontToUi();
 
     // сцена должна отдавать нам события
     _scene->installEventFilter(this);
@@ -524,7 +547,15 @@ MainWindow::MainWindow(QWidget *parent) :
     qApp->installEventFilter(this);
 
     // Восстановить видимость меню
-    bool mbVisible = false;
+    // bool mbVisible = true;
+    // ui->menuBar->setVisible(mbVisible);
+    bool keepMenuVis = false;
+    config::base().getValue("ui.keep_menu_visibility", keepMenuVis);
+
+    bool mbVisible = true; // по умолчанию при запуске меню видно
+    if (keepMenuVis)
+        config::base().getValue("ui.menu_visible", mbVisible);
+
     ui->menuBar->setVisible(mbVisible);
 
     // Чтобы шорткаты работали даже при скрытом menuBar
@@ -3600,7 +3631,16 @@ void MainWindow::saveCurrentViewState(Document::Ptr doc)
 
 void MainWindow::restoreViewState(Document::Ptr doc)
 {
-    if (!doc || !ui->graphView)
+    if (!doc || !ui->graphView || !_scene || !_videoRect)
+    {
+        fitImageToView();
+        return;
+    }
+
+    _scene->setSceneRect(_videoRect->boundingRect().translated(_videoRect->pos()));
+
+    // Если viewState еще не был сохранен
+    if (doc->viewState.zoom <= 0.000001)
     {
         fitImageToView();
         return;
@@ -5172,25 +5212,48 @@ void MainWindow::apply_PointStyle_ToItem(QGraphicsItem* it)
 
 void MainWindow::applyLabelFontToUi()
 {
-    QFont f = qApp->font();
+    // QFont f = qApp->font();
+    // if (!_vis.labelFont.isEmpty())
+    //     f.setFamily(_vis.labelFont);
+    // f.setPointSize(_vis.labelFontPt);
+
+    // qApp->setFont(f);
+
+    // const auto widgets = qApp->allWidgets();
+    // for (QWidget* w : widgets)
+    // {
+    //     if (!w) continue;
+    //     w->setFont(f);
+    //     w->updateGeometry();
+    //     w->update();
+    // }
+
+    // if (this->centralWidget())
+    //     this->centralWidget()->updateGeometry();
+    // this->adjustSize();
+
+    if (!ui || !ui->splitter)
+        return;
+
+    // Берем текущий шрифт правой зоны как базовый
+    QFont f = ui->splitter->font();
+
     if (!_vis.labelFont.isEmpty())
         f.setFamily(_vis.labelFont);
-    f.setPointSize(_vis.labelFontPt);
 
-    qApp->setFont(f);
+    if (_vis.labelFontPt > 0)
+        f.setPointSize(_vis.labelFontPt);
 
-    const auto widgets = qApp->allWidgets();
-    for (QWidget* w : widgets)
-    {
-        if (!w) continue;
-        w->setFont(f);
-        w->updateGeometry();
-        w->update();
-    }
+    // Применяем ко всей правой панели
+    ui->splitter->setFont(f);
 
-    if (this->centralWidget())
-        this->centralWidget()->updateGeometry();
-    this->adjustSize();
+    if (ui->toolBar)
+        ui->toolBar->setFont(f);
+    if (ui->toolBar_2)
+        ui->toolBar_2->setFont(f);
+
+    ui->splitter->updateGeometry();
+    ui->splitter->update();
 }
 
 void MainWindow::updateLineColorsForScene(QGraphicsScene* scene)
@@ -5390,18 +5453,6 @@ QGraphicsItem* MainWindow::sceneItemFromListItem(const QListWidgetItem* it)
     return it->data(Qt::UserRole).value<QGraphicsItem*>();
 }
 
-// QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
-// {
-//     if (!ui->graphView || !ui->graphView->scene())
-//         return nullptr;
-//     for (QGraphicsItem* it : ui->graphView->scene()->items())
-//     {
-//         if (it->data(RoleUid).toULongLong() == uid)
-//             return it;
-//     }
-//     return nullptr;
-// }
-
 QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
 {
     if (!_scene || uid == 0)
@@ -5418,7 +5469,6 @@ QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
     }
     return nullptr;
 }
-
 
 qulonglong MainWindow::ensureUid(QGraphicsItem* it) const
 {
@@ -5459,6 +5509,13 @@ void MainWindow::toggleMenuBarVisible()
 
     const bool newVisible = !ui->menuBar->isVisible();
     ui->menuBar->setVisible(newVisible);
+    bool keepMenuVis = false;
+    config::base().getValue("ui.keep_menu_visibility", keepMenuVis);
+    if (keepMenuVis)
+    {
+        config::base().setValue("ui.menu_visible", newVisible);
+        config::base().saveFile();
+    }
 }
 
 // Создает и пушит в стек _undoStack новую LambdaCommand,
@@ -6235,15 +6292,14 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
 
     // Временно блокируем обработку изменений сцены
     _loadingNow = true;
-
+    bool sceneWasJustCreated = false;
     // Если сцена еще не создана, загружаем изображение
     if (!currentDoc->scene)
     {
-        if (!currentDoc->loadImage())
-        {
-            return;
-        }
+        sceneWasJustCreated = true;
 
+        if (!currentDoc->loadImage())
+            return;
         // Загружаем аннотации, если они есть
         loadAnnotationFromFile(currentDoc);
     }
@@ -6254,7 +6310,7 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     _videoRect = currentDoc->videoRect;
 
     ensureGhostAllocated();
-    bool sceneWasJustCreated = false;
+
     // Подключаем сигнал changed для новой сцены
     if (currentDoc->scene)
     {
@@ -6278,15 +6334,14 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
 
     if (sceneWasJustCreated)
     {
-        // первый показ снимка — стартуем с fit и сразу запомним viewState (у тебя fitImageToView это уже делает)
         fitImageToView();
     }
     else
     {
         if (keepPerImageZoom)
-            restoreViewState(currentDoc);  // <-- ВОССТАНАВЛИВАЕМ ПЕР-СНИМОК
+            restoreViewState(currentDoc);
         else
-            fitImageToView();              // <-- СБРОС
+            fitImageToView();
     }
 
     updatePolygonListForCurrentScene();
@@ -6766,7 +6821,7 @@ void MainWindow::on_actSettingsApp_triggered()
     QVector<int> geom{ -1, -1, 520, 360 };
     config::base().getValue("windows.settings_dialog.geometry", geom);
     if (geom.size() == 4) {
-        // защита от слишком маленького размера
+        // Защита от слишком маленького размера
         if (geom[2] < 320)
             geom[2] = 320;
         if (geom[3] < 220)
@@ -6795,14 +6850,16 @@ void MainWindow::on_actSettingsApp_triggered()
     init.rectLineColor     = _vis.rectangleLineColor;    // «Линии прямоугольника»
     init.circleLineColor   = _vis.circleLineColor;       // «Линии окружности»
     init.polylineLineColor = _vis.polylineLineColor;     // «Линии полилинии»
-    init.lineLineColor = _vis.lineLineColor;
-    init.pointColor = _vis.pointColor;
+    init.lineLineColor     = _vis.lineLineColor;
+    init.pointColor        = _vis.pointColor;
 
-    init.closePolyline       = _polylineCloseMode;         // Текущий режим замыкания
-    init.finishLine       = _lineFinishMode;               // Текущий режим завершения рисования линии
-    init.labelFontPt = _vis.labelFontPt;                   // Размер и шрифт
-    init.labelFont = _vis.labelFont;
+    init.closePolyline = _polylineCloseMode;    // Текущий режим замыкания
+    init.finishLine    = _lineFinishMode;       // Текущий режим завершения рисования линии
+    init.labelFontPt   = _vis.labelFontPt;      // Размер и шрифт
+    init.labelFont     = _vis.labelFont;
 
+    config::base().getValue("view.keep_image_scale_per_image", init.keepImageScale);
+    config::base().getValue("ui.keep_menu_visibility", init.keepMenuBarVisibility);
 
     dlg.setValues(init);
 
@@ -6844,20 +6901,17 @@ void MainWindow::on_actSettingsApp_triggered()
 
         config::base().setValue("polyline.close_mode",
                                 static_cast<int>(_polylineCloseMode));
-        config::base().saveFile();
-
 
         _lineFinishMode = v.finishLine;
         applyFinishLine();
 
         config::base().setValue("line.finish_mode",
                                 static_cast<int>(_lineFinishMode));
-        config::base().saveFile();
 
         // Масштаб при смене снимков
-        config::base().setValue("view.keep_image_scale", v.keepImageScale);
-
-
+        config::base().setValue("view.keep_image_scale_per_image", v.keepImageScale);
+        config::base().setValue("ui.keep_menu_visibility", v.keepMenuBarVisibility);
+        config::base().saveFile();
 
     });
 
@@ -6878,18 +6932,18 @@ void MainWindow::on_actSettingsApp_triggered()
         apply_PointSize_ToScene(nullptr);
         apply_NumberSize_ToScene(nullptr);
 
-       applyLabelFontToUi();
+        applyLabelFontToUi();
 
-       applyClosePolyline();
-       applyFinishLine();
+        applyClosePolyline();
+        applyFinishLine();
 
-       // Откат конфига
-       saveVisualStyle();
-       config::base().setValue("polyline.close_mode", static_cast<int>(_polylineCloseMode));
-       config::base().setValue("line.finish_mode", static_cast<int>(_lineFinishMode));
-       config::base().saveFile();
+        // Откат конфига
+        saveVisualStyle();
+        config::base().setValue("polyline.close_mode", static_cast<int>(_polylineCloseMode));
+        config::base().setValue("line.finish_mode", static_cast<int>(_lineFinishMode));
+        config::base().saveFile();
 
-       applyStyle_AllDocuments();
+        applyStyle_AllDocuments();
     }
 }
 

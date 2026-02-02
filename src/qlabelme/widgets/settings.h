@@ -8,6 +8,7 @@
 #include <QDoubleSpinBox>
 #include <QColor>
 #include <QRadioButton>
+#include <QFont>
 
 namespace Ui {
 class Settings;
@@ -54,6 +55,7 @@ public:
         int pointOutlineWidth = 1;
         int pointSize = 6;
         bool keepImageScale = false;
+        bool keepMenuBarVisibility = false;
 
         PolylineCloseMode closePolyline = PolylineCloseMode::DoubleClick;
         LineFinishMode finishLine = LineFinishMode::DoubleClick;
@@ -75,6 +77,7 @@ private slots:
     void on_buttonBox_accepted();
     void on_buttonBox_rejected();
     void on_buttonBox_clicked(QAbstractButton* btn);
+    void onPickLabelFont();
 
 private:
     void wireUi();
@@ -87,6 +90,7 @@ private:
     static bool pickColor(QWidget *parent, const QString &title,
                           QColor &ioColor, QPushButton *previewBtn);
     void attachColorPicker(QPushButton *btn, QColor *target);
+    void updateLabelFontPreview();
 
 private:
     Ui::Settings* ui = {nullptr};
@@ -101,4 +105,6 @@ private:
     QPushButton* _btnPolyline = {nullptr};
     QPushButton* _btnLine = {nullptr};
     QPushButton* _btnPoint = {nullptr};
+
+    QFont _labelFont; // Выбранный шрифт
 };
