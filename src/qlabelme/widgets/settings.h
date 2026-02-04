@@ -93,7 +93,7 @@ private:
     void updateLabelFontPreview();
 
 private:
-    Ui::Settings* ui = {nullptr};
+    Ui::Settings* ui = {nullptr};   
     Values _values;
 
     QPushButton* _btnNode = {nullptr};

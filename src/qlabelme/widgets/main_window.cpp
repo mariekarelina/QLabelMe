@@ -6971,7 +6971,8 @@ void MainWindow::on_actAbout_triggered()
 
 void MainWindow::on_actSettingsApp_triggered()
 {
-    const auto visBackup = _vis;
+    auto visBackup = _vis;
+    bool wasApplied = false;
 
     Settings dlg(this);
 
@@ -7021,9 +7022,13 @@ void MainWindow::on_actSettingsApp_triggered()
     dlg.setValues(init);
 
 
+    // connect(&dlg, &Settings::settingsApplied, this,
+    //             [this](const Settings::Values& v)
+    // {
     connect(&dlg, &Settings::settingsApplied, this,
-                [this](const Settings::Values& v)
+            [this, &visBackup, &wasApplied](const Settings::Values& v)
     {
+        wasApplied = true;
         // 1) Обновляем визуальные настройки из v
         _vis.lineWidth = v.lineWidth;
         _vis.handleSize = v.handleSize;
@@ -7069,7 +7074,7 @@ void MainWindow::on_actSettingsApp_triggered()
         config::base().setValue("view.keep_image_scale_per_image", v.keepImageScale);
         config::base().setValue("ui.keep_menu_visibility", v.keepMenuBarVisibility);
         config::base().saveFile();
-
+        visBackup = _vis;
     });
 
     const int rc = dlg.exec();

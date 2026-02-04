@@ -37,6 +37,8 @@ void Settings::showEvent(QShowEvent* e)
     // Всегда открываемся на первой вкладке
     if (ui && ui->tabWidget)
         ui->tabWidget->setCurrentIndex(0);   // 0 — «Общее»
+    //_draft = _values;
+    applyModelToUi();
 }
 
 void Settings::wireUi()
