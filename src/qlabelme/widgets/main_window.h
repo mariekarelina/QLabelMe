@@ -29,6 +29,7 @@
 #include <QToolButton>
 #include <QListWidget>
 #include <QMap>
+#include <QColor>
 #include <QList>
 #include <QCheckBox>
 #include <QButtonGroup>
@@ -185,11 +186,6 @@ private slots:
 
     void on_actExit_triggered(bool);
 
-    void on_actCreateRectangle_triggered();
-    void on_actCreateCircle_triggered();
-    void on_actCreatePolyline_triggered();
-
-
     void on_btnRect_clicked(bool);
     void on_btnPolyline_clicked(bool);
     void on_btnCircle_clicked(bool);
@@ -286,7 +282,7 @@ private:
     const QStringList& projectClasses() const {return _projectClasses;}
 
     bool loadClassesFromFile(const QString& filePath);
-    bool saveProjectClasses(const QStringList& classes);
+    bool saveProjectClasses(const QStringList& classes, const QMap<QString, QColor>& colors);
 
     void onPolygonListItemClicked(QListWidgetItem* item);
     void onPolygonListItemDoubleClicked(QListWidgetItem* item);
@@ -424,6 +420,9 @@ private:
     // Видимость menuBar
     void toggleMenuBarVisible();
 
+    QColor classColorFor(const QString& className) const;
+    void applyClassColorToItem(QGraphicsItem* item, const QString& className);
+
 private:
     Ui::MainWindow* ui;
     static QUuidEx _applId;
@@ -460,16 +459,16 @@ private:
 
     QGraphicsItem* _draggingItem = {nullptr}; // Указатель на перетаскиваемый объект
 
-    bool _drawingCircle = {false};      // Флаг, рисуется ли круг
+    bool _drawingCircle = {false};    // Флаг, рисуется ли круг
     bool _drawingLine = {false};      // Флаг, рисуется ли линия
-    bool _drawingPolyline = {false};      // Флаг, рисуется ли полилиния
-    bool _drawingRectangle = {false};    // Флаг, рисуется ли прямоугольник
+    bool _drawingPolyline = {false};  // Флаг, рисуется ли полилиния
+    bool _drawingRectangle = {false}; // Флаг, рисуется ли прямоугольник
     bool _drawingPoint = {false};
     bool _isInDrawingMode = false; // Флаг, указывающий что мы в режиме рисования новой фигуры
     bool _isDraggingImage = false; // Флаг для перетаскивания изображения
     qgraph::Polyline* _currentLine = {nullptr}; // Текущая линия
     SquareDrawingItem* _currentSquare = {nullptr}; // Текущий квадрат
-    QList<QPointF> _polylinePoints;            // Точки текущей полилинии
+    QList<QPointF> _polylinePoints; // Точки текущей полилинии
 
 
     QPointF _startPoint;
@@ -484,7 +483,7 @@ private:
     QGraphicsLineItem* _currCircleCrossH = {nullptr};
 
     QGraphicsPathItem* _currPolyline = {nullptr}; // Временная визуализация полилинии
-    bool _isDrawingPolyline = false;           // Флаг для состояния рисования
+    bool _isDrawingPolyline = false; // Флаг для состояния рисования
 
     bool _isDrawingPoint = false;
 
@@ -520,6 +519,8 @@ private:
     // Буфер для копирования фигур между сценами
     QJsonObject _shapesClipboard;
 
+    QMap<QString, QColor> _projectClassColors;
+
     // Временные данные для рисования
     QGraphicsRectItem* _tempRectItem = nullptr;
     QGraphicsEllipseItem* _tempCircleItem = nullptr;
@@ -531,9 +532,9 @@ private:
        int hScroll = 0;
        int vScroll = 0;
        qreal zoom = 1.0;
-       QPointF center; // Центр viewport'а (дополнительно для точного восстановления)
+       QPointF center;
     };
-    QMap<QString, ScrollState> _scrollStates; // Ключ — путь к файлу
+    QMap<QString, ScrollState> _scrollStates; // Ключ - путь к файлу
     // double currentScale = 1.0;
     // const double scaleStep = 1.1;
     qreal m_zoom = 1.0;
@@ -563,8 +564,8 @@ private:
 
     // Состояние перетаскивания
     bool m_isDraggingHandle = false;
-    QPointer<qgraph::DragCircle> m_dragHandle;   // Какую ручку тащим
-    QPointF m_pressLocalOffset;                  // Смещение от центра ручки при захвате
+    QPointer<qgraph::DragCircle> m_dragHandle; // Какую ручку тащим
+    QPointF m_pressLocalOffset;                // Смещение от центра ручки при захвате
 
     // Состояние левой кнопки мыши над графическим видом
     bool _leftMouseButtonDown = false;
@@ -608,8 +609,8 @@ private:
 
     //std::unique_ptr<QUndoStack> _undoStack;
     QUndoGroup* _undoGroup = nullptr;
-    QUndoView* _undoView = nullptr;         // Ссылка на вид из .ui
-    QStringList _projectClasses;            // Единый список классов проекта
+    QUndoView* _undoView = nullptr; // Ссылка на вид из .ui
+    QStringList _projectClasses;    // Единый список классов проекта
     ProjectSettings* _projPropsDialog = nullptr;
 
     QAction* _actUndo = {nullptr};
@@ -632,7 +633,7 @@ private:
 
     // Для узлов
     QGraphicsItem* _handleEditedItem = nullptr; // Владелец перетаскиваемой ручки
-    ShapeBackup    _handleBeforeSnap;           // снимок "до"
+    ShapeBackup    _handleBeforeSnap;           // Снимок "до"
     bool           _handleDragHadChanges = false;
 
     QPointF _shiftImageBeforePos;

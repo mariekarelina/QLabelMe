@@ -177,11 +177,11 @@
     <property name="title">
      <string>Правка</string>
     </property>
-    <addaction name="actCreateRectangle"/>
-    <addaction name="actCreateCircle"/>
-    <addaction name="actCreatePolyline"/>
-    <addaction name="actCreatePoint"/>
-    <addaction name="actCreateLine"/>
+    <addaction name="actRect"/>
+    <addaction name="actCircle"/>
+    <addaction name="actPolyline"/>
+    <addaction name="actLine"/>
+    <addaction name="actPoint"/>
     <addaction name="actDelete"/>
     <addaction name="separator"/>
     <addaction name="actClosePolyline"/>
@@ -231,11 +231,11 @@
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="actCircle"/>
    <addaction name="actRect"/>
+   <addaction name="actCircle"/>
    <addaction name="actPolyline"/>
-   <addaction name="actPoint"/>
    <addaction name="actLine"/>
+   <addaction name="actPoint"/>
   </widget>
   <widget class="QToolBar" name="toolBar_2">
    <property name="windowTitle">
@@ -270,30 +270,6 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Q</string>
-   </property>
-  </action>
-  <action name="actCreateRectangle">
-   <property name="text">
-    <string>Создать прямоугольник</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+N</string>
-   </property>
-  </action>
-  <action name="actCreateCircle">
-   <property name="text">
-    <string>Создать круг</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+T</string>
-   </property>
-  </action>
-  <action name="actCreatePolyline">
-   <property name="text">
-    <string>Создать полилинию</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+L</string>
    </property>
   </action>
   <action name="actConnect">
@@ -341,10 +317,13 @@
      <normaloff>:/images/resources/circle.svg</normaloff>:/images/resources/circle.svg</iconset>
    </property>
    <property name="text">
-    <string>Circle</string>
+    <string>Создать круг</string>
    </property>
    <property name="toolTip">
-    <string>Circle</string>
+    <string>Создать круг</string>
+   </property>
+   <property name="shortcut">
+    <string>Y</string>
    </property>
   </action>
   <action name="actRect">
@@ -353,10 +332,13 @@
      <normaloff>:/images/resources/rectangle.svg</normaloff>:/images/resources/rectangle.svg</iconset>
    </property>
    <property name="text">
-    <string>Rect</string>
+    <string>Создать прямоугольник</string>
    </property>
    <property name="toolTip">
-    <string>Rect</string>
+    <string>Создать прямоугольник</string>
+   </property>
+   <property name="shortcut">
+    <string>T</string>
    </property>
   </action>
   <action name="actPolyline">
@@ -365,10 +347,13 @@
      <normaloff>:/images/resources/hexagon.svg</normaloff>:/images/resources/hexagon.svg</iconset>
    </property>
    <property name="text">
-    <string>Line</string>
+    <string>Создать полилинию</string>
    </property>
    <property name="toolTip">
-    <string>Line</string>
+    <string>Создать полилинию</string>
+   </property>
+   <property name="shortcut">
+    <string>U</string>
    </property>
   </action>
   <action name="actSave">
@@ -425,6 +410,9 @@
    <property name="text">
     <string>Создать точку</string>
    </property>
+   <property name="shortcut">
+    <string>O</string>
+   </property>
   </action>
   <action name="actLine">
    <property name="icon">
@@ -434,15 +422,8 @@
    <property name="text">
     <string>Создать линию</string>
    </property>
-  </action>
-  <action name="actCreatePoint">
-   <property name="text">
-    <string>Создать точку</string>
-   </property>
-  </action>
-  <action name="actCreateLine">
-   <property name="text">
-    <string>Создать линию</string>
+   <property name="shortcut">
+    <string>I</string>
    </property>
   </action>
   <action name="actSettingsProj">

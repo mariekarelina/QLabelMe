@@ -188,7 +188,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->toolBar_2->setFloatable(false);
     ui->toolBar_2->setMovable(false);
 
-    // Создаем контейнер для тулбаров и кладём их рядом
+    // Создаем контейнер для тулбаров и кладем их рядом
     QWidget* toolBarsBlock = new QWidget(ui->layoutWidget1);
     auto* htb = new QHBoxLayout(toolBarsBlock);
     htb->setContentsMargins(0, 0, 0, 0);
@@ -540,7 +540,28 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(_projPropsDialog, &ProjectSettings::classesApplied, this,
         [this](const QStringList& classes){
             _projectClasses = classes;
-            saveProjectClasses(_projectClasses);
+
+            _projectClassColors = _projPropsDialog->projectClassColors();
+
+            if (!saveProjectClasses(_projectClasses, _projectClassColors))
+            {
+                QMessageBox::warning(this, tr("Ошибка"),
+                                     tr("Не удалось сохранить classes.yaml"));
+            }
+        });
+
+    connect(_projPropsDialog, &ProjectSettings::classColorsApplied, this,
+        [this](const QMap<QString, QColor>& colors)
+        {
+            _projectClassColors = colors;
+
+            for (QGraphicsItem* it : _scene->items())
+            {
+                const QString cls = it->data(0).toString();
+                if (!cls.isEmpty())
+                    applyClassColorToItem(it, cls);
+            }
+            _scene->update();
         });
 
     // Чтобы Alt работал независимо от фокуса
@@ -574,7 +595,6 @@ MainWindow::MainWindow(QWidget *parent) :
         a->setShortcutContext(Qt::WindowShortcut);
         this->addAction(a);
     }
-
 }
 
 MainWindow::~MainWindow()
@@ -596,7 +616,7 @@ bool MainWindow::init()
         log_verbose_m << "Generated new ApplId: " << _applId;
     }
 
-    loadLastUsedFolder();  // Загружаем последнюю использованную папку
+    loadLastUsedFolder(); // Загружаем последнюю использованную папку
     loadGeometry();
     // Загружаем визуальный стиль
     loadVisualStyle();
@@ -635,7 +655,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         }
         if (!poly) return;
 
-        // Ищем ближайшую точку (берем и скрытые тоже — по их координатам)
+        // Ищем ближайшую точку
         DragCircle* nearest = nullptr;
         qreal bestDist2 = 10.0 * 10.0; // радиус 10 px
         for (DragCircle* c : poly->circles()) {
@@ -854,7 +874,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                         if (!root)
                             continue;
 
-                        // Избегаем дублей, если у нескольких выделенных общий ancestor
+                        // Избегаем дублей
                         if (_movingItems.contains(root))
                             continue;
 
@@ -960,7 +980,6 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                     apply_PointSize_ToItem(_polyline);
                     apply_NumberSize_ToItem(_polyline);
 
-                    // Выбор класса — как в Ctrl-ветке
                     // QStringList classes;
                     // for (int i = 0; i < ui->polygonLabel->count(); ++i)
                     //     classes << ui->polygonLabel->item(i)->text();
@@ -974,6 +993,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                         if (!selectedClass.isEmpty())
                         {
                             _polyline->setData(0, selectedClass);
+                            applyClassColorToItem(_polyline, selectedClass);
                             linkSceneItemToList(_polyline);
 
                             ShapeBackup b = makeBackupFromItem(_polyline);
@@ -1059,6 +1079,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             if (!selectedClass.isEmpty())
             {
                 _currPoint->setData(0, selectedClass);
+                applyClassColorToItem(_currPoint, selectedClass);
                 linkSceneItemToList(_currPoint);
 
                 ShapeBackup b = makeBackupFromItem(_currPoint);
@@ -1122,6 +1143,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                         if (!selectedClass.isEmpty())
                         {
                             _line->setData(0, selectedClass);
+                            applyClassColorToItem(_line, selectedClass);
                             linkSceneItemToList(_line);
 
                             ShapeBackup b = makeBackupFromItem(_line);
@@ -1480,6 +1502,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             if (!selectedClass.isEmpty())
             {
                 rectangle->setData(0, selectedClass);
+                applyClassColorToItem(rectangle, selectedClass);
                 linkSceneItemToList(rectangle); // Связываем новый элемент с списком
 
                 ShapeBackup b = makeBackupFromItem(rectangle);
@@ -1548,6 +1571,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             if (!selectedClass.isEmpty())
             {
                 circle->setData(0, selectedClass);
+                applyClassColorToItem(circle, selectedClass);
                 linkSceneItemToList(circle); // Связываем новый элемент с списком
 
                 ShapeBackup b = makeBackupFromItem(circle);
@@ -1585,6 +1609,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             if (!selectedClass.isEmpty())
             {
                 _polyline->setData(0, selectedClass);
+                applyClassColorToItem(_polyline, selectedClass);
                 linkSceneItemToList(_polyline);
 
                 ShapeBackup b = makeBackupFromItem(_polyline);
@@ -1626,6 +1651,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             if (!selectedClass.isEmpty())
             {
                 _line->setData(0, selectedClass);
+                applyClassColorToItem(_line, selectedClass);
                 linkSceneItemToList(_line);
 
                 ShapeBackup b = makeBackupFromItem(_line);
@@ -1810,6 +1836,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             if (!selectedClass.isEmpty())
                             {
                                 _polyline->setData(0, selectedClass);
+                                applyClassColorToItem(_polyline, selectedClass);
                                 linkSceneItemToList(_polyline);
 
                                 ShapeBackup b = makeBackupFromItem(_polyline);
@@ -1987,8 +2014,8 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             if (nz > kZoomMax) nz = kZoomMax;
 
             m_zoom = nz;
-            ui->graphView->setTransform(base);      // Вернуть базу
-            ui->graphView->scale(m_zoom, m_zoom);   // Применить абсолютный масштаб
+            ui->graphView->setTransform(base);    // Вернуть базу
+            ui->graphView->scale(m_zoom, m_zoom); // Применить абсолютный масштаб
             event->accept();
             return;
         }
@@ -2016,7 +2043,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
         for (QGraphicsItem* item : selectedItems)
         {
-            // Если выделена ручка, удаляем её владельца (фигуру), а не саму ручку
+            // Если выделена ручка, удаляем ее владельца (фигуру), а не саму ручку
             if (auto* h = dynamic_cast<qgraph::DragCircle*>(item))
             {
                 if (h->parentItem())
@@ -2148,21 +2175,6 @@ void MainWindow::on_actExit_triggered(bool)
 {
     //qApp->quit();
     close();
-}
-
-void MainWindow::on_actCreateRectangle_triggered()
-{
-
-}
-
-void MainWindow::on_actCreateCircle_triggered()
-{
-
-}
-
-void MainWindow::on_actCreatePolyline_triggered()
-{
-
 }
 
 void MainWindow::on_btnRect_clicked(bool)
@@ -2639,8 +2651,8 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 
 void MainWindow::updateFileListDisplay(const QString& filePath)
 {
-    QIcon modifiedIcon(":/images/resources/not_ok.svg");    // Красная иконка - есть изменения
-    QIcon savedIcon(":/images/resources/ok.svg");           // Зеленая иконка - сохранено
+    QIcon modifiedIcon(":/images/resources/not_ok.svg");     // Красная иконка - есть изменения
+    QIcon savedIcon(":/images/resources/ok.svg");            // Зеленая иконка - сохранено
     QIcon noAnnotationIcon(":/images/resources/not_ok.svg"); // Красная иконка - нет аннотаций
 
     for (int i = 0; i < ui->fileList->count(); ++i)
@@ -2757,6 +2769,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             circle->setData(0, label);
             apply_LineWidth_ToItem(circle);
             apply_PointSize_ToItem(circle);
+            applyClassColorToItem(circle, label);
         }
         return true;
     };
@@ -2797,6 +2810,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             apply_LineWidth_ToItem(polyline);
             apply_PointSize_ToItem(polyline);
             apply_NumberSize_ToItem(polyline);
+            applyClassColorToItem(polyline, label);
         }
         return true;
     };
@@ -2818,6 +2832,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             apply_LineWidth_ToItem(rect);
             apply_PointSize_ToItem(rect);
             apply_NumberSize_ToItem(rect);
+            applyClassColorToItem(rect, label);
         }
 
         return true;
@@ -2839,6 +2854,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             apply_PointSize_ToItem(p);
             apply_NumberSize_ToItem(p);
             apply_PointStyle_ToItem(p);
+            applyClassColorToItem(p, label);
         }
         return true;
     };
@@ -2878,6 +2894,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             apply_LineWidth_ToItem(line);
             apply_PointSize_ToItem(line);
             apply_NumberSize_ToItem(line);
+            applyClassColorToItem(line, label);
         }
         return true;
     };
@@ -3763,58 +3780,99 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
                              tr("Нет секции классов"));
         return false;
     }
+    QMap<QString, QColor> colors;
+    QList<QString> colorLines;
 
-    // ui->polygonLabel->clear();
-    // for (const QString& className : classes)
-    // {
-    //     ui->polygonLabel->addItem(className);
-    // }
+    if (yconfig.getValue("class_colors", colorLines, true))
+    {
+        for (const QString& s : colorLines)
+        {
+            // ожидаем "name=#AARRGGBB"
+            const int eq = s.indexOf('=');
+            if (eq <= 0) continue;
 
-    _projectClasses = classes; // Сохраняем единый список в MainWindow
+            const QString name = s.left(eq).trimmed();
+            const QString hex  = s.mid(eq + 1).trimmed();
 
-    // Синхронизируем открытый диалог, если есть
+            const QColor c(hex);
+            if (!name.isEmpty() && c.isValid())
+                colors[name] = c;
+        }
+    }
+
+    _projectClasses = classes;
+    _projectClassColors = colors;
+
+    // Cинхронизируем диалог
     if (_projPropsDialog)
+    {
         _projPropsDialog->setProjectClasses(_projectClasses);
-
+        _projPropsDialog->setProjectClassColors(_projectClassColors);
+    }
 
     return true;
 }
 
-bool MainWindow::saveProjectClasses(const QStringList& classes)
+bool MainWindow::saveProjectClasses(const QStringList& classes,
+                                    const QMap<QString, QColor>& colors)
 {
     const QString path = classesYamlPath();
     if (path.isEmpty())
         return false;
 
+    QList<QString> cls;
+    cls.reserve(classes.size());
+    for (const QString& s : classes)
+        cls.push_back(s);
+
+    // class_colors как список строк "name=#AARRGGBB"
+    QList<QString> colorLines;
+    colorLines.reserve(classes.size());
+    for (const QString& name : classes)
+    {
+        const QColor c = colors.value(name, QColor());
+        if (c.isValid())
+            colorLines.push_back(name + "=" + c.name(QColor::HexArgb));
+    }
+
     YamlConfig yconfig;
-    yconfig.setValue("classes", classes);
+    yconfig.setValue("classes", cls);
+    yconfig.setValue("class_colors", colorLines);
 
-    std::string str;
-    yconfig.saveString(str);
+    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(path));
+    return yconfig.saveFile(std::string(encoded.constData(), encoded.size()));
 
-    // YAML::Emitter seq;
-    // seq.SetIndent(2);
-    // seq << YAML::Flow << YAML::BeginSeq;
-    // for (const QString& s : classes)
-    //     seq << s.toUtf8().constData();
-    // seq << YAML::EndSeq;
-    // if (!seq.good())
+    // std::string str;
+    // yconfig.saveString(str);
+
+    // // YAML::Emitter seq;
+    // // seq.SetIndent(2);
+    // // seq << YAML::Flow << YAML::BeginSeq;
+    // // for (const QString& s : classes)
+    // //     seq << s.toUtf8().constData();
+    // // seq << YAML::EndSeq;
+    // // if (!seq.good())
+    // //     return false;
+
+    // // защита от "пустой записи"
+    // if (str.empty())
     //     return false;
 
-    QByteArray body;
-    body += "---\n";
-    body += "### QLabelMe YAML syntax ###\n\n";
-    body += str.c_str();
-    body += "\n\n...\n";
 
-    QSaveFile sf {path};
-    if (!sf.open(QIODevice::WriteOnly))
-        return false;
+    // QByteArray body;
+    // body += "---\n";
+    // body += "### QLabelMe YAML syntax ###\n\n";
+    // body += str.c_str();
+    // body += "\n\n...\n";
 
-    if (sf.write(body) != body.size())
-        return false;
+    // QSaveFile sf {path};
+    // if (!sf.open(QIODevice::WriteOnly))
+    //     return false;
 
-    return sf.commit();
+    // if (sf.write(body) != body.size())
+    //     return false;
+
+    // return sf.commit();
 }
 
 void MainWindow::onPolygonListItemClicked(QListWidgetItem* item)
@@ -4695,7 +4753,7 @@ void MainWindow::finishHandleDrag()
         }
         m_dragHandle->restoreBaseStyle();
     }
-    // UNDO: если что-то реально поменяли — пушим команду
+    // UNDO: если что-то реально поменяли - пушим команду
     if (_handleEditedItem && _handleDragHadChanges)
     {
         ShapeBackup after = makeBackupFromItem(_handleEditedItem);
@@ -5010,8 +5068,13 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
     {
         QPen p=r->pen();
         p.setWidthF(w);
-        p.setColor(_vis.rectangleLineColor);
+        //p.setColor(_vis.rectangleLineColor);
         p.setCosmetic(true);
+
+        const QString cls = r->data(0).toString();
+        const QColor cc = classColorFor(cls);
+        p.setColor(cc.isValid() ? cc : _vis.rectangleLineColor);
+
         r->setPen(p);
         return;
     }
@@ -5019,8 +5082,13 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
     {
         QPen p=c->pen();
         p.setWidthF(w);
-        p.setColor(_vis.circleLineColor);
+        //p.setColor(_vis.circleLineColor);
         p.setCosmetic(true);
+
+        const QString cls = c->data(0).toString();
+        const QColor cc = classColorFor(cls);
+        p.setColor(cc.isValid() ? cc : _vis.circleLineColor);
+
         c->setPen(p);
         c->applyLineStyle(w);
         return;
@@ -5029,8 +5097,13 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
     {
         QPen p=pl->pen();
         p.setWidthF(w);
-        p.setColor(_vis.polylineLineColor);
+        //p.setColor(_vis.polylineLineColor);
         p.setCosmetic(true);
+
+        const QString cls = pl->data(0).toString();
+        const QColor cc = classColorFor(cls);
+        p.setColor(cc.isValid() ? cc : _vis.polylineLineColor);
+
         pl->setPen(p);
         return;
     }
@@ -5038,8 +5111,13 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
     {
         QPen p = l->pen();
         p.setWidthF(_vis.lineWidth);
-        p.setColor(_vis.lineLineColor);
+        //p.setColor(_vis.lineLineColor);
         p.setCosmetic(true);
+
+        const QString cls = l->data(0).toString();
+        const QColor cc = classColorFor(cls);
+        p.setColor(cc.isValid() ? cc : _vis.lineLineColor);
+
         l->setPen(p);
         return;
     }
@@ -5048,6 +5126,11 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
         QPen p = pnt->pen();
         p.setWidthF(_vis.pointOutlineWidth); // Отдельная толщина для точки
         p.setCosmetic(true);
+
+        const QString cls = pnt->data(0).toString();
+        const QColor cc = classColorFor(cls);
+        p.setColor(cc.isValid() ? cc : _vis.pointOutlineWidth);
+
         pnt->setPen(p);
         return;
     }
@@ -5204,7 +5287,11 @@ void MainWindow::apply_PointStyle_ToItem(QGraphicsItem* it)
 
     if (auto* p = dynamic_cast<qgraph::Point*>(it))
     {
-        const QColor color = _vis.pointColor;
+
+        const QString cls = p->data(0).toString();
+        const QColor cc = classColorFor(cls);
+        const QColor color = cc.isValid() ? cc : _vis.pointColor;
+
         const qreal diam = std::max(2, _vis.pointSize);
         p->setDotStyle(color, diam);
     }
@@ -5212,26 +5299,6 @@ void MainWindow::apply_PointStyle_ToItem(QGraphicsItem* it)
 
 void MainWindow::applyLabelFontToUi()
 {
-    // QFont f = qApp->font();
-    // if (!_vis.labelFont.isEmpty())
-    //     f.setFamily(_vis.labelFont);
-    // f.setPointSize(_vis.labelFontPt);
-
-    // qApp->setFont(f);
-
-    // const auto widgets = qApp->allWidgets();
-    // for (QWidget* w : widgets)
-    // {
-    //     if (!w) continue;
-    //     w->setFont(f);
-    //     w->updateGeometry();
-    //     w->update();
-    // }
-
-    // if (this->centralWidget())
-    //     this->centralWidget()->updateGeometry();
-    // this->adjustSize();
-
     if (!ui || !ui->splitter)
         return;
 
@@ -5262,34 +5329,43 @@ void MainWindow::updateLineColorsForScene(QGraphicsScene* scene)
 
     for (QGraphicsItem* item : scene->items())
     {
+        const QString cls = item->data(0).toString();
+        const QColor classC = classColorFor(cls);
+        const bool hasClassColor = classC.isValid();
+
         if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
         {
             QPen pen = rect->pen();
-            pen.setColor(_vis.rectangleLineColor);
+            //pen.setColor(_vis.rectangleLineColor);
+            pen.setColor(hasClassColor ? classC : _vis.rectangleLineColor);
             rect->setPen(pen);
         }
         else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
         {
             QPen pen = circle->pen();
-            pen.setColor(_vis.circleLineColor);
+            //pen.setColor(_vis.circleLineColor);
+            pen.setColor(hasClassColor ? classC : _vis.circleLineColor);
             circle->setPen(pen);
         }
         else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             QPen pen = polyline->pen();
-            pen.setColor(_vis.polylineLineColor);
+            //pen.setColor(_vis.polylineLineColor);
+            pen.setColor(hasClassColor ? classC : _vis.polylineLineColor);
             polyline->setPen(pen);
         }
         else if (auto* line = dynamic_cast<qgraph::Line*>(item))
         {
             QPen pen = line->pen();
-            pen.setColor(_vis.lineLineColor);
+            //pen.setColor(_vis.lineLineColor);
+            pen.setColor(hasClassColor ? classC : _vis.lineLineColor);
             line->setPen(pen);
         }
         else if (auto* point = dynamic_cast<qgraph::Point*>(item))
         {
             QPen pen = point->pen();
-            pen.setColor(_vis.pointColor);
+            //pen.setColor(_vis.pointColor);
+            pen.setColor(hasClassColor ? classC : _vis.pointColor);
             pen.setWidthF(_vis.pointOutlineWidth);
             pen.setCosmetic(true);
             point->setPen(pen);
@@ -5314,7 +5390,7 @@ void MainWindow::applyZoom(qreal z)
     t.scale(z, z);
     ui->graphView->setTransform(t);
 
-    // Вернём центр
+    // Вернем центр
     ui->graphView->centerOn(centerScene);
 
     m_zoom = z;
@@ -5518,6 +5594,74 @@ void MainWindow::toggleMenuBarVisible()
     }
 }
 
+QColor MainWindow::classColorFor(const QString& className) const
+{
+    if (className.isEmpty())
+        return QColor();
+
+    const auto it = _projectClassColors.find(className);
+    if (it == _projectClassColors.end())
+        return QColor();
+
+    if (!it.value().isValid())
+        return QColor();
+
+    return it.value();
+}
+
+void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& className)
+{
+    if (!item)
+        return;
+
+    const QColor c = classColorFor(className);
+    if (!c.isValid())
+        return;
+
+    if (auto* r = dynamic_cast<qgraph::Rectangle*>(item))
+    {
+        QPen p = r->pen();
+        p.setColor(c);
+        p.setCosmetic(true);
+        r->setPen(p);
+        return;
+    }
+    if (auto* cir = dynamic_cast<qgraph::Circle*>(item))
+    {
+        QPen p = cir->pen();
+        p.setColor(c);
+        p.setCosmetic(true);
+        cir->setPen(p);
+        return;
+    }
+    if (auto* pl = dynamic_cast<qgraph::Polyline*>(item))
+    {
+        QPen p = pl->pen();
+        p.setColor(c);
+        p.setCosmetic(true);
+        pl->setPen(p);
+        return;
+    }
+    if (auto* l = dynamic_cast<qgraph::Line*>(item))
+    {
+        QPen p = l->pen();
+        p.setColor(c);
+        p.setCosmetic(true);
+        l->setPen(p);
+        return;
+    }
+    if (auto* pnt = dynamic_cast<qgraph::Point*>(item))
+    {
+        const QColor c = classColorFor(className);
+        if (!c.isValid())
+            return;
+
+        const qreal diam = std::max(2, _vis.pointSize);
+        pnt->setDotStyle(c, diam);
+        return;
+    }
+}
+
 // Создает и пушит в стек _undoStack новую LambdaCommand,
 void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString& description)
 {
@@ -5589,7 +5733,7 @@ QUndoStack* MainWindow::activeUndoStack() const
     if (!_undoGroup) return nullptr;
     if (QUndoStack* st = _undoGroup->activeStack()) return st;
 
-    // Запасной вариант — стек текущего документа
+    // Запасной вариант - стек текущего документа
     if (auto d = currentDocument())
         return d->_undoStack ? d->_undoStack.get() : nullptr;
 
@@ -5987,6 +6131,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
         apply_PointSize_ToItem(rect);
         apply_NumberSize_ToItem(rect);
         rect->setData(0, b.className);
+        applyClassColorToItem(rect, b.className);
         rect->setZValue(b.z);
         rect->setVisible(b.visible);
         linkSceneItemToList(rect);
@@ -6000,6 +6145,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
         apply_LineWidth_ToItem(c);
         apply_PointSize_ToItem(c);
         c->setData(0, b.className);
+        applyClassColorToItem(c, b.className);
         c->setZValue(b.z);
         c->setVisible(b.visible);
         c->updateHandlePosition();
@@ -6022,6 +6168,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
         apply_NumberSize_ToItem(pl);
 
         pl->setData(0, b.className);
+        applyClassColorToItem(pl, b.className);
         pl->setZValue(b.z);
         pl->setVisible(b.visible);
         pl->updateHandlePosition();
@@ -6044,6 +6191,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
         apply_NumberSize_ToItem(ln);
 
         ln->setData(0, b.className);
+        applyClassColorToItem(ln, b.className);
         ln->setZValue(b.z);
         ln->setVisible(b.visible);
         ln->updateHandlePosition();
@@ -6059,6 +6207,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
         apply_PointStyle_ToItem(pt);
         pt->setCenter(b.pointCenter);
         pt->setData(0, b.className);
+        applyClassColorToItem(pt, b.className);
         pt->setZValue(b.z);
         pt->setVisible(b.visible);
         linkSceneItemToList(pt);
@@ -6091,6 +6240,7 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
             apply_PointSize_ToItem(r);
             apply_NumberSize_ToItem(r);
             r->setData(0, b.className);
+            applyClassColorToItem(r, b.className);
             r->setZValue(b.z);
             r->setVisible(b.visible);
             r->updateHandlePosition();
@@ -6104,6 +6254,7 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
             apply_LineWidth_ToItem(c);
             apply_PointSize_ToItem(c);
             c->setData(0, b.className);
+            applyClassColorToItem(c, b.className);
             c->setZValue(b.z);
             c->setVisible(b.visible);
             c->updateHandlePosition();
@@ -6121,6 +6272,7 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
             apply_PointSize_ToItem(pl);
             apply_NumberSize_ToItem(pl);
             pl->setData(0, b.className);
+            applyClassColorToItem(pl, b.className);
             pl->setZValue(b.z);
             pl->setVisible(b.visible);
             pl->updateHandlePosition();
@@ -6139,6 +6291,7 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
             apply_PointSize_ToItem(ln);
             apply_NumberSize_ToItem(ln);
             ln->setData(0, b.className);
+            applyClassColorToItem(ln, b.className);
             ln->setZValue(b.z);
             ln->setVisible(b.visible);
             ln->updateHandlePosition();
@@ -6153,6 +6306,7 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
             apply_NumberSize_ToItem(pt);
             pt->setCenter(b.pointCenter);
             pt->setData(0, b.className);
+            applyClassColorToItem(pt, b.className);
             pt->setZValue(b.z);
             pt->setVisible(b.visible);
             pt->updateHandlePosition();
@@ -6525,6 +6679,7 @@ void MainWindow::on_actClosePolyline_triggered()
             if (!selectedClass.isEmpty())
             {
                 _polyline->setData(0, selectedClass);
+                applyClassColorToItem(_polyline, selectedClass);
                 linkSceneItemToList(_polyline);
 
                 ShapeBackup b = makeBackupFromItem(_polyline);
@@ -6560,6 +6715,7 @@ void MainWindow::on_actClosePolyline_triggered()
             if (!selectedClass.isEmpty())
             {
                 _line->setData(0, selectedClass);
+                applyClassColorToItem(_line, selectedClass);
                 linkSceneItemToList(_line);
 
                 ShapeBackup b = makeBackupFromItem(_line);
@@ -6743,14 +6899,15 @@ void MainWindow::on_actAbout_triggered()
     QLabel* titleLabel = new QLabel(tr("<b>QLabelMe<b>"));
 
     QLabel* versionLabel = new QLabel(
-        tr("Версия: %1 (gitrev: %2)<br>Программа для разметки изображений")
+        tr("Версия: %1 (gitrev: %2)<br>Программа для разметки и аннотирования изображений.")
             .arg(VERSION_PROJECT)
             .arg(GIT_REVISION)
         );
     versionLabel->setWordWrap(true);
 
     QLabel* descriptionLabel = new QLabel(
-        tr("Двухпанельная программа для разметки и аннотирования изображений<br><br>"
+        tr("Программа позволяет вручную создавать и редактировать аннотации с помощью графических примитивов. "
+           "Используется для подготовки датасетов в задачах компьютерного зрения и машинного обучения.<br><br>"
            "<b>Обратная связь:</b><br>"
            "https://github.com/mariekarelina/qlabelme/issues<br><br>")
         );
@@ -6784,9 +6941,9 @@ void MainWindow::on_actAbout_triggered()
     authorsText->setReadOnly(true);
     authorsText->setHtml(
         tr("<ul>"
-           "<li>Карелина Мария - разработчик</li>"
-           "<li>Карелин Павел - консультант по коду программы</li>"
-           "<li>Назаровский Александр - консультант по функциональной части программы</li>"
+           "<li>Карелина Мария - автор, разработчик</li>"
+           "<li>Карелин Павел - консультант по коду и проектным решениям / консультант по архитектуре и реализации кода</li>"
+           "<li>Назаровский Александр - консультант по функциональным требованиям и развитию проекта</li>"
            "</ul>")
         );
     authorsLayout->addWidget(authorsText);
@@ -6950,6 +7107,7 @@ void MainWindow::on_actSettingsApp_triggered()
 void MainWindow::on_actSettingsProj_triggered()
 {
     _projPropsDialog->setProjectClasses(_projectClasses);
+    _projPropsDialog->setProjectClassColors(_projectClassColors);
 
     QVector<int> geom{ -1, -1, 520, 360 };
     config::base().getValue("windows.project_settings_dialog.geometry", geom);
@@ -6973,7 +7131,8 @@ void MainWindow::on_actSettingsProj_triggered()
     if (rc == QDialog::Accepted)
     {
         _projectClasses = _projPropsDialog->projectClasses();
-        saveProjectClasses(_projectClasses);
+        _projectClassColors = _projPropsDialog->projectClassColors();
+        saveProjectClasses(_projectClasses, _projectClassColors);
     }
 }
 
@@ -6991,7 +7150,7 @@ void MainWindow::nextImage()
 
     const int newRow = (row + 1) % n; // Зацикливание вперед
     if (newRow == row && n == 1)
-        return; // Единственный файл — ничего не делаем
+        return; // Единственный файл - ничего не делаем
 
     list->setCurrentRow(newRow);
 }
