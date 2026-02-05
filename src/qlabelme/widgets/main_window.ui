@@ -196,6 +196,7 @@
     <addaction name="separator"/>
     <addaction name="actRuler"/>
     <addaction name="separator"/>
+    <addaction name="actResetAnnotation"/>
    </widget>
    <widget class="QMenu" name="menuSettings">
     <property name="title">
@@ -525,6 +526,11 @@
    </property>
    <property name="shortcut">
     <string>, Ctrl+Shift+Z</string>
+   </property>
+  </action>
+  <action name="actResetAnnotation">
+   <property name="text">
+    <string>Сбросить разметку</string>
    </property>
   </action>
  </widget>

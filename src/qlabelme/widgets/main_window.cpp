@@ -7302,3 +7302,99 @@ void MainWindow::on_actRedo_triggered()
         _undoGroup->redo();
 }
 
+void MainWindow::on_actResetAnnotation_triggered()
+{
+    auto doc = currentDocument();
+    if (!doc)
+        return;
+
+    // Если разметки нет
+    if (ui->polygonList->count() == 0)
+        return;
+
+    // Подтверждение
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle(tr("Сбросить разметку"));
+    msgBox.setText(tr("Удалить всю разметку на текущем снимке?"));
+    msgBox.setIcon(QMessageBox::Question);
+
+    QPushButton* btnYes = msgBox.addButton(tr("Да"), QMessageBox::AcceptRole);
+    QPushButton* btnNo  = msgBox.addButton(tr("Нет"), QMessageBox::RejectRole);
+    msgBox.setDefaultButton(btnNo);
+
+    msgBox.exec();
+
+    if (msgBox.clickedButton() != btnYes)
+        return;
+
+    // Собираем все элементы из списка
+    QList<QListWidgetItem*> allItems;
+    allItems.reserve(ui->polygonList->count());
+    for (int i = 0; i < ui->polygonList->count(); ++i)
+    {
+        if (auto* it = ui->polygonList->item(i))
+            allItems.push_back(it);
+    }
+
+    // Снимки для восстановления
+    const QVector<ShapeBackup> backups = collectBackupsForItems(allItems);
+
+    struct Payload
+    {
+        QVector<ShapeBackup>  backups;
+        QVector<qulonglong>   uids;
+    };
+
+    auto payload = std::make_shared<Payload>();
+    payload->backups = backups;
+    payload->uids.reserve(backups.size());
+
+    for (const ShapeBackup& b : backups)
+    {
+        if (b.uid != 0)
+            payload->uids.push_back(b.uid);
+    }
+
+    // redo: удалить все элементы по uid
+    auto redoFn = [this, payload]()
+    {
+        for (qulonglong uid : std::as_const(payload->uids))
+        {
+            if (!uid)
+                continue;
+
+            if (QGraphicsItem* gi = findItemByUid(uid))
+            {
+                _scene->removeItem(gi);
+                removeListEntryBySceneItem(gi);
+                delete gi;
+            }
+        }
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    // undo: восстановить по снапшотам
+    auto undoFn = [this, payload]()
+    {
+        for (const ShapeBackup& b : std::as_const(payload->backups))
+        {
+            QGraphicsItem* created = recreateFromBackup(b);
+            Q_UNUSED(created);
+        }
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    if (doc->_undoStack)
+        doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Сброс разметки")));
+}
+
