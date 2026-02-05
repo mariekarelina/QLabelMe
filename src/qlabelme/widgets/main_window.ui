@@ -197,6 +197,7 @@
     <addaction name="actRuler"/>
     <addaction name="separator"/>
     <addaction name="actResetAnnotation"/>
+    <addaction name="actRestoreAnnotation"/>
    </widget>
    <widget class="QMenu" name="menuSettings">
     <property name="title">
@@ -531,6 +532,11 @@
   <action name="actResetAnnotation">
    <property name="text">
     <string>Сбросить разметку</string>
+   </property>
+  </action>
+  <action name="actRestoreAnnotation">
+   <property name="text">
+    <string>Восстановить разметку</string>
    </property>
   </action>
  </widget>

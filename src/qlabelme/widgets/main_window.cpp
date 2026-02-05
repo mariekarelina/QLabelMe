@@ -302,17 +302,17 @@ MainWindow::MainWindow(QWidget *parent) :
 
     _videoRect = new qgraph::VideoRect(_scene);
 
-    _labelConnectStatus = new QLabel(u8"Нет подключения", this);
-    ui->statusBar->addWidget(_labelConnectStatus);
+    //_labelConnectStatus = new QLabel(u8"Нет подключения", this);
+    //ui->statusBar->addWidget(_labelConnectStatus);
 
     ui->graphView->viewport()->installEventFilter(this);
     ui->graphView->setMouseTracking(true);    
 
     // Создаем и настраиваем метки
-    _folderPathLabel = new QLabel(this);
-    _folderPathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    _folderPathLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    ui->statusBar->addWidget(_folderPathLabel, 1); // Растягиваемый
+    // _folderPathLabel = new QLabel(this);
+    // _folderPathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    // _folderPathLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    // ui->statusBar->addWidget(_folderPathLabel, 1); // Растягиваемый
 
     QString vers = u8"Версия: %1 (gitrev: %2)";
     vers = vers.arg(VERSION_PROJECT).arg(GIT_REVISION);
@@ -2740,14 +2740,24 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
     // Очищаем сцену только если нет несохраненных изменений
     if (!doc->isModified)
     {
-        QList<QGraphicsItem*> items = doc->scene->items();
+        const QList<QGraphicsItem*> items = doc->scene->items();
         for (QGraphicsItem* item : items)
         {
-            if (item != doc->videoRect)
-            {
-                doc->scene->removeItem(item);
-                delete item;
-            }
+            if (!item)
+                continue;
+
+            if (item == doc->videoRect || item == doc->pixmapItem)
+                continue;
+
+            if (item == _ghostHandle)
+                continue;
+
+            // Не удаляем дочерние элементы
+            if (item->parentItem() != nullptr)
+                continue;
+
+            doc->scene->removeItem(item);
+            delete item; // Удалит и всех детей автоматически
         }
     }
 
@@ -3098,21 +3108,21 @@ void MainWindow::updateWindowTitle()
 
 void MainWindow::updateFolderPathDisplay()
 {
-    if (_currentFolderPath.isEmpty())
-    {
-        _folderPathLabel->clear();
-        _folderPathLabel->setToolTip("");
-    }
-    else
-    {
-        QString displayPath = QDir::toNativeSeparators(_currentFolderPath);
-        _folderPathLabel->setText(displayPath);
-        _folderPathLabel->setToolTip(displayPath); // Полный путь в подсказке
+    // if (_currentFolderPath.isEmpty())
+    // {
+    //     _folderPathLabel->clear();
+    //     _folderPathLabel->setToolTip("");
+    // }
+    // else
+    // {
+    //     QString displayPath = QDir::toNativeSeparators(_currentFolderPath);
+    //     _folderPathLabel->setText(displayPath);
+    //     _folderPathLabel->setToolTip(displayPath); // Полный путь в подсказке
 
-        // Можно добавить иконку папки
-        QIcon folderIcon = style()->standardIcon(QStyle::SP_DirIcon);
-        _folderPathLabel->setPixmap(folderIcon.pixmap(16, 16));
-    }
+    //     // Можно добавить иконку папки
+    //     //QIcon folderIcon = style()->standardIcon(QStyle::SP_DirIcon);
+    //     //_folderPathLabel->setPixmap(folderIcon.pixmap(16, 16));
+    // }
 }
 
 void MainWindow::writeShapesJsonToClipboard(const QJsonObject& json) const
@@ -7398,3 +7408,61 @@ void MainWindow::on_actResetAnnotation_triggered()
         doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Сброс разметки")));
 }
 
+
+void MainWindow::on_actRestoreAnnotation_triggered()
+{
+    auto doc = currentDocument();
+    if (!doc)
+        return;
+
+    const QString yamlPath = annotationPathFor(doc->filePath);
+
+    if (!QFileInfo::exists(yamlPath))
+    {
+        QMessageBox::information(this,
+                                 tr("Восстановить разметку"),
+                                 tr("Файл разметки не найден:\n%1").arg(yamlPath));
+        return;
+    }
+
+    // Восстановление откатит все несохраненные изменения
+    const bool hasUnsaved = doc->isModified || (doc->_undoStack && !doc->_undoStack->isClean());
+
+    if (hasUnsaved || ui->polygonList->count() > 0)
+    {
+        QMessageBox msgBox(this);
+        msgBox.setWindowTitle(tr("Восстановить разметку"));
+        msgBox.setText(tr("Восстановить разметку из файла .yaml?\nВсе несохранённые изменения будут потеряны."));
+        msgBox.setIcon(QMessageBox::Question);
+
+        QPushButton* btnYes = msgBox.addButton(tr("Да"), QMessageBox::AcceptRole);
+        QPushButton* btnNo  = msgBox.addButton(tr("Нет"), QMessageBox::RejectRole);
+        msgBox.setDefaultButton(btnNo);
+
+        msgBox.exec();
+
+        if (msgBox.clickedButton() != btnYes)
+            return;
+    }
+
+    // Очищаем undo/redo стек
+    if (doc->_undoStack)
+    {
+        doc->_undoStack->clear();
+        doc->_undoStack->setClean();
+    }
+
+    // Помечаем документ неизмененным
+    doc->isModified = false;
+    updateFileListDisplay(doc->filePath);
+
+    hideGhost();
+    // Загружаем заново из yaml
+    loadAnnotationFromFile(doc);
+
+    doc->isModified = false;
+    if (doc->_undoStack)
+        doc->_undoStack->setClean();
+
+    updateFileListDisplay(doc->filePath);
+}

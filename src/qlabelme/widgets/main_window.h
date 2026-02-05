@@ -237,6 +237,7 @@ private slots:
     void on_actRedo_triggered();
 
     void on_actResetAnnotation_triggered();
+    void on_actRestoreAnnotation_triggered();
 
 private:
     Q_OBJECT

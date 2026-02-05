@@ -72,31 +72,17 @@ Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
 
 Circle::~Circle()
 {
-    // // Удаляем ручку, если она была создана
-    if (_circle && _circle->scene())
+    if (_circle)
     {
-        _circle->scene()->removeItem(_circle);
+        if (_circle->scene())
+            _circle->scene()->removeItem(_circle);
         delete _circle;
-    }
-    if (_verticalLine)
-    {
-        if (_verticalLine->scene())
-        {
-            _verticalLine->scene()->removeItem(_verticalLine);
-        }
-        delete _verticalLine;
-        _verticalLine = nullptr;
+        _circle = nullptr;
     }
 
-    if (_horizontalLine)
-    {
-        if (_horizontalLine->scene())
-        {
-            _horizontalLine->scene()->removeItem(_horizontalLine);
-        }
-        delete _horizontalLine;
-        _horizontalLine = nullptr;
-    }
+    _verticalLine = nullptr;
+    _horizontalLine = nullptr;
+
     detachSceneFilter();
 }
 
