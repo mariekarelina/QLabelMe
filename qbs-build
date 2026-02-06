@@ -197,8 +197,8 @@ qbs build \
     --jobs $jobs \
     --no-install \
     qbs.buildVariant:$build_mode \
+    project.warnAsError:true \
     config:$build_config
-    #project.warnAsError:true \
     #profile:qt5sys
 
 echo "Build is complete (configuration: ${build_config})"
