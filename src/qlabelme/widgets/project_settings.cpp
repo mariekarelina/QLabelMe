@@ -39,12 +39,12 @@ static void applyColorToButton(QToolButton* btn, const QColor& c)
     ).arg(c.name(QColor::HexRgb)));
 }
 
-static QColor normalizeColor(const QColor& c, const QColor& fallback)
-{
-    if (!c.isValid())
-        return fallback;
-    return c;
-}
+// static QColor normalizeColor(const QColor& c, const QColor& fallback)
+// {
+//     if (!c.isValid())
+//         return fallback;
+//     return c;
+// }
 
 ProjectSettings::ProjectSettings(QWidget* parent)
     : QDialog(parent),
