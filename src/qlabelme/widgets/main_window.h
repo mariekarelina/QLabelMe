@@ -590,7 +590,7 @@ private:
         qreal lineWidth = 2.0;
         qreal handleSize = 10.0;
         qreal numberFontPt = 10.0;
-        int labelFontPt = 12;
+        int labelFontPt = 0;
         QString labelFont;
         QColor handleColor = Qt::red;
         QColor selectedHandleColor = Qt::yellow;

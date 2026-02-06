@@ -4952,7 +4952,9 @@ void MainWindow::loadVisualStyle()
     else
         _vis.pointOutlineWidth = 1;
 
-    config::base().getValue("vis.all.label_font_pt", _vis.labelFontPt);
+    //config::base().getValue("vis.all.label_font_pt", _vis.labelFontPt);
+    if (!config::base().getValue("vis.all.label_font_pt", _vis.labelFontPt))
+        _vis.labelFontPt = 0;
 
     QString font;
     if (config::base().getValue("vis.all.label_font_family", font))
@@ -4981,8 +4983,13 @@ void MainWindow::saveVisualStyle() const
     config::base().setValue("vis.colors.line",  _vis.lineLineColor.name(QColor::HexArgb));
     config::base().setValue("vis.colors.point", _vis.pointColor.name(QColor::HexArgb));
     config::base().setValue("vis.point.outline_width", _vis.pointOutlineWidth);
-    config::base().setValue("vis.all.label_font_pt", _vis.labelFontPt);
-    config::base().setValue("vis.all.label_font_family", _vis.labelFont);
+    // config::base().setValue("vis.all.label_font_pt", _vis.labelFontPt);
+    // config::base().setValue("vis.all.label_font_family", _vis.labelFont);
+    if (_vis.labelFontPt > 0)
+        config::base().setValue("vis.all.label_font_pt", _vis.labelFontPt);
+
+    if (!_vis.labelFont.isEmpty())
+        config::base().setValue("vis.all.label_font_family", _vis.labelFont);
 }
 
 void MainWindow::applyStyle_AllDocuments()
