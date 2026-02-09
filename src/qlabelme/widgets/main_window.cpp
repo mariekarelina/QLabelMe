@@ -4890,74 +4890,74 @@ void MainWindow::updateAllPointNumbers()
 void MainWindow::loadVisualStyle()
 {
     // Устанавливаем значения по умолчанию, если они не найдены в конфиге
-    if (!config::base().getValue("vis.all.line_width", _vis.lineWidth))
+    if (!config::base().getValue("graphics.line_width", _vis.lineWidth))
         _vis.lineWidth = 2.0;
 
-    if (!config::base().getValue("vis.all.handle_size", _vis.handleSize))
+    if (!config::base().getValue("graphics.handle_size", _vis.handleSize))
         _vis.handleSize = 10.0;
 
-    if (!config::base().getValue("vis.all.number_font_pt", _vis.numberFontPt))
+    if (!config::base().getValue("graphics.number_font_pt", _vis.numberFontPt))
         _vis.numberFontPt = 10.0;
 
-    if (!config::base().getValue("vis.all.point_size", _vis.pointSize))
+    if (!config::base().getValue("graphics.point_size", _vis.pointSize))
         _vis.pointSize = 6;
 
     // Загружаем цвета
     QString colorStr;
-    if (config::base().getValue("vis.all.handle_color", colorStr))
+    if (config::base().getValue("graphics.handle_color", colorStr))
         _vis.handleColor = QColor(colorStr);
     else
         _vis.handleColor = Qt::red;
 
-    if (config::base().getValue("vis.all.number_color", colorStr))
+    if (config::base().getValue("graphics.number_color", colorStr))
         _vis.numberColor = QColor(colorStr);
     else
         _vis.numberColor = Qt::white;
 
-    if (config::base().getValue("vis.all.number_bg_color", colorStr))
+    if (config::base().getValue("graphics.number_bg_color", colorStr))
         _vis.numberBgColor = QColor(colorStr);
     else
         _vis.numberBgColor = QColor(0, 0, 0, 180);
 
     // Загружаем цвета линий
-    if (config::base().getValue("vis.colors.rectangle", colorStr))
+    if (config::base().getValue("graphics.colors.rectangle", colorStr))
         _vis.rectangleLineColor = QColor(colorStr);
     else
         _vis.rectangleLineColor = Qt::green;
 
-    if (config::base().getValue("vis.colors.circle", colorStr))
+    if (config::base().getValue("graphics.colors.circle", colorStr))
         _vis.circleLineColor = QColor(colorStr);
     else
         _vis.circleLineColor = Qt::red;
 
-    if (config::base().getValue("vis.colors.polyline", colorStr))
+    if (config::base().getValue("graphics.colors.polyline", colorStr))
         _vis.polylineLineColor = QColor(colorStr);
     else
         _vis.polylineLineColor = Qt::blue;
 
-    if (config::base().getValue("vis.all.selected_handle_color", colorStr))
+    if (config::base().getValue("graphics.all.selected_handle_color", colorStr))
         _vis.selectedHandleColor = QColor(colorStr);
     else
         _vis.selectedHandleColor = Qt::yellow;
 
-    if (config::base().getValue("vis.colors.line", colorStr))
+    if (config::base().getValue("graphics.colors.line", colorStr))
         _vis.lineLineColor = QColor(colorStr);
 
-    if (config::base().getValue("vis.colors.point", colorStr))
+    if (config::base().getValue("graphics.colors.point", colorStr))
         _vis.pointColor = QColor(colorStr);
 
     int ow = 1;
-    if (config::base().getValue("vis.point.outline_width", ow))
+    if (config::base().getValue("graphics.point.outline_width", ow))
         _vis.pointOutlineWidth = ow;
     else
         _vis.pointOutlineWidth = 1;
 
     //config::base().getValue("vis.all.label_font_pt", _vis.labelFontPt);
-    if (!config::base().getValue("vis.all.label_font_pt", _vis.labelFontPt))
+    if (!config::base().getValue("graphics.label_font_pt", _vis.labelFontPt))
         _vis.labelFontPt = 0;
 
     QString font;
-    if (config::base().getValue("vis.all.label_font_family", font))
+    if (config::base().getValue("graphics.label_font_family", font))
         _vis.labelFont = font;
     else
         _vis.labelFont.clear();
@@ -4969,27 +4969,27 @@ void MainWindow::loadVisualStyle()
 
 void MainWindow::saveVisualStyle() const
 {
-    config::base().setValue("vis.all.line_width", _vis.lineWidth);
-    config::base().setValue("vis.all.handle_size", _vis.handleSize);
-    config::base().setValue("vis.all.number_font_pt", _vis.numberFontPt);
-    config::base().setValue("vis.all.point_size", _vis.pointSize);
-    config::base().setValue("vis.all.handle_color", _vis.handleColor.name(QColor::HexArgb));
-    config::base().setValue("vis.all.selected_handle_color", _vis.selectedHandleColor.name(QColor::HexArgb));
-    config::base().setValue("vis.all.number_color", _vis.numberColor.name(QColor::HexArgb));
-    config::base().setValue("vis.all.number_bg_color", _vis.numberBgColor.name(QColor::HexArgb));
-    config::base().setValue("vis.colors.rectangle", _vis.rectangleLineColor.name(QColor::HexArgb));
-    config::base().setValue("vis.colors.circle", _vis.circleLineColor.name(QColor::HexArgb));
-    config::base().setValue("vis.colors.polyline", _vis.polylineLineColor.name(QColor::HexArgb));
-    config::base().setValue("vis.colors.line",  _vis.lineLineColor.name(QColor::HexArgb));
-    config::base().setValue("vis.colors.point", _vis.pointColor.name(QColor::HexArgb));
-    config::base().setValue("vis.point.outline_width", _vis.pointOutlineWidth);
+    config::base().setValue("graphics.line_width", _vis.lineWidth);
+    config::base().setValue("graphics.handle_size", _vis.handleSize);
+    config::base().setValue("graphics.number_font_pt", _vis.numberFontPt);
+    config::base().setValue("graphics.point_size", _vis.pointSize);
+    config::base().setValue("graphics.handle_color", _vis.handleColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.selected_handle_color", _vis.selectedHandleColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.number_color", _vis.numberColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.number_bg_color", _vis.numberBgColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.rectangle", _vis.rectangleLineColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.circle", _vis.circleLineColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.polyline", _vis.polylineLineColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.line",  _vis.lineLineColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.point", _vis.pointColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.point.outline_width", _vis.pointOutlineWidth);
     // config::base().setValue("vis.all.label_font_pt", _vis.labelFontPt);
     // config::base().setValue("vis.all.label_font_family", _vis.labelFont);
     if (_vis.labelFontPt > 0)
-        config::base().setValue("vis.all.label_font_pt", _vis.labelFontPt);
+        config::base().setValue("graphics.label_font_pt", _vis.labelFontPt);
 
     if (!_vis.labelFont.isEmpty())
-        config::base().setValue("vis.all.label_font_family", _vis.labelFont);
+        config::base().setValue("graphics.label_font_family", _vis.labelFont);
 }
 
 void MainWindow::applyStyle_AllDocuments()
@@ -6994,7 +6994,7 @@ void MainWindow::on_actSettingsApp_triggered()
     Settings dlg(this);
 
     QVector<int> geom{ -1, -1, 520, 360 };
-    config::base().getValue("windows.settings_dialog.geometry", geom);
+    config::base().getValue("windows.settings.geometry", geom);
     if (geom.size() == 4) {
         // Защита от слишком маленького размера
         if (geom[2] < 320)
@@ -7100,7 +7100,7 @@ void MainWindow::on_actSettingsApp_triggered()
                     ? dlg.normalGeometry()
                     : dlg.geometry();
     QVector<int> out { r.x(), r.y(), r.width(), r.height() };
-    config::base().setValue("windows.settings_dialog.geometry", out);
+    config::base().setValue("windows.settings.geometry", out);
     config::base().saveFile();
 
     if (rc == QDialog::Rejected)
@@ -7132,7 +7132,7 @@ void MainWindow::on_actSettingsProj_triggered()
     _projPropsDialog->setProjectClassColors(_projectClassColors);
 
     QVector<int> geom{ -1, -1, 520, 360 };
-    config::base().getValue("windows.project_settings_dialog.geometry", geom);
+    config::base().getValue("windows.project_settings.geometry", geom);
     if (geom.size() == 4) {
         if (geom[2] < 320) geom[2] = 320;
         if (geom[3] < 200) geom[3] = 200;
@@ -7147,7 +7147,7 @@ void MainWindow::on_actSettingsProj_triggered()
                     ? _projPropsDialog->normalGeometry()
                     : _projPropsDialog->geometry();
     QVector<int> out { r.x(), r.y(), r.width(), r.height() };
-    config::base().setValue("windows.project_settings_dialog.geometry", out);
+    config::base().setValue("windows.project_settings.geometry", out);
     config::base().saveFile();
 
     if (rc == QDialog::Accepted)

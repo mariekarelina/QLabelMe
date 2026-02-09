@@ -518,10 +518,13 @@ void ProjectSettings::onEditClass()
 QWidget* ProjectSettings::makeClassRowWidget(QListWidgetItem* item)
 {
     auto* w = new QWidget(ui->listClasses);
+    w->setMinimumHeight(36);
+    item->setSizeHint(QSize(0, 36));
 
     auto* lay = new QHBoxLayout(w);
     lay->setContentsMargins(6, 0, 6, 0);
     lay->setSpacing(6);
+    lay->setContentsMargins(6, 4, 6, 4);
 
     auto* lbl = new QLabel(item->data(RoleClassName).toString(), w);
 
