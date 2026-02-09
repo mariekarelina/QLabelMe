@@ -518,11 +518,11 @@ void ProjectSettings::onEditClass()
 QWidget* ProjectSettings::makeClassRowWidget(QListWidgetItem* item)
 {
     auto* w = new QWidget(ui->listClasses);
-    w->setMinimumHeight(36);
-    item->setSizeHint(QSize(0, 36));
+    //w->setMinimumHeight(36);
+    //item->setSizeHint(QSize(0, 36));
 
     auto* lay = new QHBoxLayout(w);
-    lay->setContentsMargins(6, 0, 6, 0);
+    //lay->setContentsMargins(6, 0, 6, 0);
     lay->setSpacing(6);
     lay->setContentsMargins(6, 4, 6, 4);
 
@@ -539,12 +539,27 @@ QWidget* ProjectSettings::makeClassRowWidget(QListWidgetItem* item)
     btn->setFocusPolicy(Qt::NoFocus);
 
     QColor c = item->data(Qt::UserRole).value<QColor>();
-    if (!c.isValid()) c = QColor("#3b6cff");
+    if (!c.isValid())
+        c = QColor("#3b6cff");
     applyColorToButton(btn, c);
 
     lay->addWidget(lbl);
     lay->addStretch(1);
     lay->addWidget(btn);
+
+    const QFontMetrics fm(lbl->font());
+
+    const int marginsV =
+        lay->contentsMargins().top() + lay->contentsMargins().bottom();
+
+    const int safeFontHeight = fm.height() + fm.leading();
+
+    const int rowH = qMax(safeFontHeight, btn->sizeHint().height())
+                     + marginsV + 6;
+
+    w->setMinimumHeight(rowH);
+    w->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    item->setSizeHint(w->sizeHint());
 
     connect(btn, &QToolButton::clicked, this, [this, item, btn]()
     {
@@ -580,7 +595,7 @@ void ProjectSettings::rebuildClassRowWidget(QListWidgetItem* item)
     }
 
     // Высота строки
-    item->setSizeHint(QSize(0, 22));
+    //item->setSizeHint(QSize(0, 22));
     ui->listClasses->setItemWidget(item, makeClassRowWidget(item));
 }
 
