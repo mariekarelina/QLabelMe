@@ -318,7 +318,10 @@ MainWindow::MainWindow(QWidget *parent) :
     vers = vers.arg(VERSION_PROJECT).arg(GIT_REVISION);
     ui->statusBar->addPermanentWidget(new QLabel(vers, this));
 
-
+    _imageSizeLabel = new QLabel(this);
+    _imageSizeLabel->setText(tr("Размер изображения: —"));
+    _imageSizeLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    statusBar()->addWidget(_imageSizeLabel, 1);
 
     QString fileName = "/home/marie/фон.png";
     QPixmap pix(fileName);
@@ -829,6 +832,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             _isDraggingImage = (clickedItem == _videoRect);
             _draggingItem = nullptr;
             _shiftImageDragging = false;
+            _isAllMoved = false;
         }
 
         _lastMousePos = mouseEvent->pos();
@@ -1342,6 +1346,7 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
             updateAllPointNumbers();
             _scene->update();
             ui->graphView->viewport()->update();
+            _isAllMoved = true;
         }
         else if (_draggingItem && (mouseEvent->modifiers() & Qt::ShiftModifier))
         {
@@ -1699,6 +1704,11 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     Document::Ptr doc = currentDocument();
     if (doc && mouseEvent->button() == Qt::LeftButton)
     {
+        if (_isAllMoved)
+        {
+            _isAllMoved = false;
+            return;
+        }
         // Проверяем, были ли перемещены какие-либо фигуры
         bool anyItemMoved = false;
         for (QGraphicsItem* item : _scene->items())
@@ -5665,6 +5675,24 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
     }
 }
 
+void MainWindow::updateImageSizeLabel(const QSize& size)
+{
+    if (!_imageSizeLabel)
+        return;
+
+    if (!size.isValid())
+    {
+        _imageSizeLabel->setText(tr("Размер изображения: —"));
+        return;
+    }
+
+    _imageSizeLabel->setText(
+        tr("Размер изображения: %1 × %2")
+            .arg(size.width())
+            .arg(size.height())
+    );
+}
+
 // Создает и пушит в стек _undoStack новую LambdaCommand,
 void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString& description)
 {
@@ -6457,6 +6485,7 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
 
         if (!currentDoc->loadImage())
             return;
+
         // Загружаем аннотации, если они есть
         loadAnnotationFromFile(currentDoc);
     }
@@ -6465,6 +6494,11 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     ui->graphView->setScene(currentDoc->scene);
     _scene = currentDoc->scene;
     _videoRect = currentDoc->videoRect;
+
+    if (_videoRect && !_videoRect->pixmap().isNull())
+        updateImageSizeLabel(_videoRect->pixmap().size());
+    else
+        updateImageSizeLabel(QSize());
 
     ensureGhostAllocated();
 
@@ -7463,5 +7497,11 @@ void MainWindow::on_actRestoreAnnotation_triggered()
 void MainWindow::on_actMenu_triggered()
 {
     toggleMenuBarVisible();
+}
+
+
+void MainWindow::on_actFitImageToView_triggered()
+{
+    fitImageToView();
 }
 

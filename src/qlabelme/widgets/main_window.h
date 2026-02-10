@@ -240,6 +240,7 @@ private slots:
     void on_actRestoreAnnotation_triggered();
 
     void on_actMenu_triggered();
+    void on_actFitImageToView_triggered();
 
 private:
     Q_OBJECT
@@ -428,6 +429,8 @@ private:
     QColor classColorFor(const QString& className) const;
     void applyClassColorToItem(QGraphicsItem* item, const QString& className);
 
+    void updateImageSizeLabel(const QSize& size);
+
 private:
     Ui::MainWindow* ui;
     static QUuidEx _applId;
@@ -436,6 +439,8 @@ private:
 
     QGraphicsScene* _scene = nullptr;
     //GraphicsView* _graphView;
+
+    QLabel* _imageSizeLabel = nullptr; // Размер изображения в statusBar
 
     QString _windowTitle;
     QString _currentFolderPath; // Переменную для хранения пути
@@ -471,6 +476,7 @@ private:
     bool _drawingPoint = {false};
     bool _isInDrawingMode = false; // Флаг, указывающий что мы в режиме рисования новой фигуры
     bool _isDraggingImage = false; // Флаг для перетаскивания изображения
+    bool _isAllMoved = false; // Флаг для перетаскивания изображения вместе с разметкой
     qgraph::Polyline* _currentLine = {nullptr}; // Текущая линия
     SquareDrawingItem* _currentSquare = {nullptr}; // Текущий квадрат
     QList<QPointF> _polylinePoints; // Точки текущей полилинии
