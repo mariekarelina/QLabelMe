@@ -1770,20 +1770,6 @@ Document::Ptr MainWindow::currentDocument() const
 
 bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 {
-    // Скрыть/показать верхнее меню
-    if (event->type() == QEvent::KeyPress)
-    {
-        auto* ke = static_cast<QKeyEvent*>(event);
-        if (ke->key() == Qt::Key_Alt &&
-            !ke->isAutoRepeat() &&
-            ke->modifiers() == Qt::AltModifier)
-        {
-            toggleMenuBarVisible();
-            ke->accept();
-            return true;
-        }
-    }
-
     if (obj != ui->graphView->viewport())
         return QMainWindow::eventFilter(obj, event);
 
@@ -7473,3 +7459,9 @@ void MainWindow::on_actRestoreAnnotation_triggered()
 
     updateFileListDisplay(doc->filePath);
 }
+
+void MainWindow::on_actMenu_triggered()
+{
+    toggleMenuBarVisible();
+}
+

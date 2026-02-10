@@ -161,7 +161,7 @@
      <x>0</x>
      <y>0</y>
      <width>931</width>
-     <height>27</height>
+     <height>30</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -198,6 +198,7 @@
     <addaction name="separator"/>
     <addaction name="actResetAnnotation"/>
     <addaction name="actRestoreAnnotation"/>
+    <addaction name="actMenu"/>
    </widget>
    <widget class="QMenu" name="menuSettings">
     <property name="title">
@@ -537,6 +538,14 @@
   <action name="actRestoreAnnotation">
    <property name="text">
     <string>Восстановить разметку</string>
+   </property>
+  </action>
+  <action name="actMenu">
+   <property name="text">
+    <string>Скрыть/показать меню</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+M</string>
    </property>
   </action>
  </widget>

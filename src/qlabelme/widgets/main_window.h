@@ -239,6 +239,8 @@ private slots:
     void on_actResetAnnotation_triggered();
     void on_actRestoreAnnotation_triggered();
 
+    void on_actMenu_triggered();
+
 private:
     Q_OBJECT
     void loadFilesFromFolder(const QString& folderPath);
