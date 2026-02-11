@@ -32,7 +32,7 @@
       </sizepolicy>
      </property>
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="tabGeneral">
       <attribute name="title">
@@ -153,6 +153,13 @@
            </property>
           </widget>
          </item>
+         <item>
+          <widget class="QLabel" name="pointSize">
+           <property name="text">
+            <string>Размер точки</string>
+           </property>
+          </widget>
+         </item>
         </layout>
        </widget>
        <widget class="QWidget" name="layoutWidget2">
@@ -186,6 +193,9 @@
             <number>50</number>
            </property>
           </widget>
+         </item>
+         <item>
+          <widget class="QSpinBox" name="spinPointSize"/>
          </item>
         </layout>
        </widget>

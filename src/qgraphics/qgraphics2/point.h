@@ -40,7 +40,8 @@ public:
     QRectF boundingRect() const override;
 
     // Получить стиль из настроек
-    void setDotStyle(const QColor& color, qreal diameterPx);
+    void setDotStyle(const QColor& color, qreal dotDiameterPx, qreal handleSizePx);
+
     QGraphicsEllipseItem* ensureDotVis();
 
 public slots:
@@ -52,6 +53,10 @@ protected:
     void hoverLeaveEvent(QGraphicsSceneHoverEvent* ev) override;
     void mousePressEvent(QGraphicsSceneMouseEvent* ev) override;
     void mouseReleaseEvent(QGraphicsSceneMouseEvent* ev) override;
+
+    void paint(QPainter* painter,
+               const QStyleOptionGraphicsItem* option,
+               QWidget* widget) override;
 
 private:
     void showDotIfIdle();

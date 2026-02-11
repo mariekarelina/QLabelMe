@@ -5308,7 +5308,7 @@ void MainWindow::apply_PointStyle_ToItem(QGraphicsItem* it)
         const QColor color = cc.isValid() ? cc : _vis.pointColor;
 
         const qreal diam = std::max(2, _vis.pointSize);
-        p->setDotStyle(color, diam);
+        p->setDotStyle(color, diam, _vis.handleSize);
     }
 }
 
@@ -5672,7 +5672,7 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
             return;
 
         const qreal diam = std::max(2, _vis.pointSize);
-        pnt->setDotStyle(c, diam);
+        pnt->setDotStyle(c, diam, _vis.handleSize);
         return;
     }
 }

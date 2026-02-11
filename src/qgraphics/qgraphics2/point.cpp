@@ -8,6 +8,9 @@
 #include <QPen>
 #include <QBrush>
 #include <QObject>
+#include <QStyle>
+#include <QStyleOptionGraphicsItem>
+
 
 namespace qgraph {
 
@@ -17,13 +20,8 @@ Point::Point(QGraphicsScene* scene)
     setAcceptHoverEvents(true);
     setFlag(QGraphicsItem::ItemIsSelectable, true);
 
-    // Тонкая «рамка» точки
-    QPen pen = this->pen();
-    pen.setColor(QColor(0, 255, 0));
-    pen.setWidth(2);
-    pen.setCosmetic(true);
-    setPen(pen);
-    setBrush(Qt::transparent);
+    setPen(Qt::NoPen);
+    setBrush(Qt::NoBrush);
 
     // Базовый эллипс диаметром
     const qreal r = _baseDiameter * 0.5;
@@ -35,7 +33,7 @@ Point::Point(QGraphicsScene* scene)
     // Ручка
     _handle = new DragCircle(scene);
     _handle->setParentItem(this);
-    _handle->setHoverSizingEnabled(true);
+    _handle->setHoverSizingEnabled(false);
     _handle->setVisible(true);
     _handle->setZValue(10000);
     QObject::connect(_handle, &DragCircle::hoverEntered, _handle, [this]{ raiseHandlesToTop(); });
@@ -43,13 +41,6 @@ Point::Point(QGraphicsScene* scene)
 
     updateHandlePosition();
     raiseHandlesToTop();
-
-    // _dotVis = new QGraphicsEllipseItem(this);
-    // _dotVis->setZValue(1e5);
-    // _dotVis->setAcceptedMouseButtons(Qt::NoButton);
-    // _dotVis->setFlag(QGraphicsItem::ItemIsSelectable, false);
-    // _dotVis->setFlag(QGraphicsItem::ItemIsMovable, false);
-    // _dotVis->setPen(Qt::NoPen);
 
     ensureDotVis();
     syncDotGeometry();
@@ -101,7 +92,6 @@ void Point::dragCircleMove(DragCircle* circle)
     qgraph::Shape::HandleBlocker guard(this);
 
     if (circle != _handle) return;
-    hideDot();
 
     // Для точки центр = позиция ручки в сцене
     const QPointF newScenePos = _handle->mapToScene(QPointF(0,0));
@@ -150,17 +140,27 @@ QRectF Point::boundingRect() const
     return QRectF(-r - pad, -r - pad, 2*(r + pad), 2*(r + pad));
 }
 
-void Point::setDotStyle(const QColor& color, qreal diameterPx)
+void Point::setDotStyle(const QColor& color, qreal dotDiameterPx, qreal handleSizePx)
 {
     _dotColor = color;
-    //_dotRadiusPx = diameterPx * 0.5;
-    _dotRadiusPx  = std::max<qreal>(diameterPx * 0.5, 0.5);
+
+    const qreal d = std::max<qreal>(dotDiameterPx, 1.0);
+    _dotRadiusPx  = std::max<qreal>(d * 0.5, 0.5);
+
+    // Если точка меньше общего размера узла уменьшаем узел именно у точки
+    if (_handle)
+    {
+        const qreal h = std::max<qreal>(1.0, std::min<qreal>(handleSizePx, d));
+        _handle->setBaseSize(h);
+        _handle->restoreBaseStyle();
+    }
 
     ensureDotVis();
     syncDotColors();
     syncDotGeometry();
     showDotIfIdle();
 }
+
 
 QGraphicsEllipseItem* Point::ensureDotVis()
 {
@@ -199,14 +199,14 @@ QVariant Point::itemChange(GraphicsItemChange change, const QVariant& value)
         syncDotColors();
         showDotIfIdle();
     }
-    if (change == QGraphicsItem::ItemSelectedChange)
-    {
-        bool willBeSelected = value.toBool();
-        if (willBeSelected)
-            hideDot();
-        else
-            showDotIfIdle();
-    }
+    // if (change == QGraphicsItem::ItemSelectedChange)
+    // {
+    //     bool willBeSelected = value.toBool();
+    //     if (willBeSelected)
+    //         hideDot();
+    //     else
+    //         showDotIfIdle();
+    // }
     else if (change == QGraphicsItem::ItemPositionHasChanged)
     {
         updateHandlePosition();
@@ -216,22 +216,22 @@ QVariant Point::itemChange(GraphicsItemChange change, const QVariant& value)
 
 void Point::hoverEnterEvent(QGraphicsSceneHoverEvent* ev)
 {
-    _interacting = true;
-    hideDot();
+    //_interacting = true;
+    //hideDot();
     QGraphicsItem::hoverEnterEvent(ev);
 }
 
 void Point::hoverLeaveEvent(QGraphicsSceneHoverEvent* ev)
 {
-    _interacting = false;
+    //_interacting = false;
     showDotIfIdle();
     QGraphicsItem::hoverLeaveEvent(ev);
 }
 
 void Point::mousePressEvent(QGraphicsSceneMouseEvent* ev)
 {
-    _interacting = true;
-    hideDot();
+    // _interacting = true;
+    // hideDot();
     setSelected(true); // Гарантируем, что точка стала выбранной
     QGraphicsEllipseItem::mousePressEvent(ev);
 }
@@ -239,15 +239,48 @@ void Point::mousePressEvent(QGraphicsSceneMouseEvent* ev)
 void Point::mouseReleaseEvent(QGraphicsSceneMouseEvent* ev)
 {
     QGraphicsItem::mouseReleaseEvent(ev);
-    _interacting = false;
+    //_interacting = false;
     showDotIfIdle();
+}
+
+void Point::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget)
+{
+    Q_UNUSED(widget);
+
+    if (!(option->state & QStyle::State_Selected))
+        return;
+
+    QPen pen;
+    pen.setStyle(Qt::DashLine);
+    pen.setCosmetic(true);
+    pen.setWidthF(1.0);
+    pen.setColor(QColor(255, 255, 255, 200));
+
+    painter->setPen(pen);
+    painter->setBrush(Qt::NoBrush);
+
+    QRectF rc;
+
+    if (auto* dv = ensureDotVis())
+    {
+        rc = dv->shape().boundingRect();
+
+        const qreal pad = 1.0;
+        rc = rc.adjusted(-pad, -pad, pad, pad);
+    }
+    else
+    {
+        qreal R = std::max<qreal>(_dotRadiusPx, 1.0);
+        rc = QRectF(-R, -R, 2*R, 2*R);
+    }
+
+    painter->drawRect(rc);
 }
 
 void Point::showDotIfIdle()
 {
-    const bool idle = !_interacting;
     if (auto* dv = ensureDotVis())
-        dv->setVisible(idle);
+        dv->setVisible(true);
 }
 
 void Point::hideDot()
@@ -257,38 +290,15 @@ void Point::hideDot()
 }
 
 
-static constexpr qreal kCoverPaddingPx = 1.0; // запас на неточности между пикселями
+//static constexpr qreal kCoverPaddingPx = 1.0; // запас на неточности между пикселями
 
 void Point::syncDotGeometry()
 {
     QGraphicsEllipseItem* dv = ensureDotVis();
-    if (!dv) return;
-
-    if (_handle)
-    {
-        const QRectF hr = _handle->rect();
-        const qreal w   = std::abs(hr.width());
-        const qreal h   = std::abs(hr.height());
-
-        // Радиус должен быть >= половины диагонали квадрата
-        const qreal halfDiag = 0.5 * std::hypot(w, h);
-
-        // Толщина пера квадрата может быть видна по краю - добавим ее половину
-        qreal penHalf = 0.0;
-        const QPen pen = _handle->pen();
-        penHalf = 0.5 * pen.widthF();
-
-        // Если ручка игнорирует трансформации, добавим небольшой пиксельный запас
-        const bool ignores = _handle->flags() & QGraphicsItem::ItemIgnoresTransformations;
-        const qreal pad = ignores ? kCoverPaddingPx : 0.0;
-
-        const qreal R = halfDiag + penHalf + pad;
-
-        dv->setRect(QRectF(-R, -R, 2*R, 2*R));
+    if (!dv)
         return;
-    }
 
-    const qreal R = 4.0;
+    const qreal R = std::max<qreal>(_dotRadiusPx, 0.5);
     dv->setRect(QRectF(-R, -R, 2*R, 2*R));
 }
 

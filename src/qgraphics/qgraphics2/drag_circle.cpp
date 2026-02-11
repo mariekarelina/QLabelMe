@@ -1,5 +1,6 @@
 #include "drag_circle.h"
 #include "circle.h"
+#include "point.h"
 #include "shape.h"
 #include "square.h"
 #include <QtGui>
@@ -155,8 +156,21 @@ void DragCircle::applyHoverStyle(QGraphicsRectItem* item, bool active)
         rememberCurrentAsBase(item);
 
     const QRectF baseRect = item->data(kRoleBaseRect).toRectF();
-    const QPen   basePen  = item->data(kRoleBasePen).value<QPen>();
-    const QBrush baseBr   = item->data(kRoleBaseBrush).value<QBrush>();
+    const QPen basePen = item->data(kRoleBasePen).value<QPen>();
+    const QBrush baseBr = item->data(kRoleBaseBrush).value<QBrush>();
+
+    // Для Circle/Point не рисуем hover-квадрат (узлы у них невидимые)
+    if (auto* p = item->parentItem())
+    {
+        if (dynamic_cast<qgraph::Circle*>(p) != nullptr ||
+            dynamic_cast<qgraph::Point*>(p)  != nullptr)
+        {
+            // На всякий случай держим в "невидимом" виде
+            item->setPen(Qt::NoPen);
+            item->setBrush(Qt::NoBrush);
+            return;
+        }
+    }
 
     if (active)
     {
@@ -212,8 +226,9 @@ void DragCircle::restoreBaseStyle()
 
     // Определяем, является ли родителем Circle
     bool isCircleHandle = (dynamic_cast<qgraph::Circle*>(parentItem()) != nullptr);
+    bool isPointHandle  = (dynamic_cast<qgraph::Point*>(parentItem())  != nullptr);
 
-    if (isCircleHandle)
+    if (isCircleHandle || isPointHandle)
     {
         // Для кругов - невидимая точка
         setRect(_baseRect);
