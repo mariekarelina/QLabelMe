@@ -2705,6 +2705,8 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
     // Временно блокируем обработку изменений
     _loadingNow = true;
     QSignalBlocker blocker(doc->scene); // временно глушим QGraphicsScene::changed
+    // Сдвиг изображения, если восстанавливаем разметку
+    const QPointF imageOffset = (doc->videoRect ? doc->videoRect->pos() : QPointF(0.0, 0.0));
 
     // Получаем путь к файлу аннотаций (заменяем расширение изображения на .yaml)
     // QFileInfo fileInfo(doc->filePath);
@@ -2770,7 +2772,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             int radius = 0;
             conf->getValue(ycircle, "radius", radius);
 
-            qgraph::Circle* circle = new qgraph::Circle(doc->scene, center);
+            qgraph::Circle* circle = new qgraph::Circle(doc->scene, QPointF(center) + imageOffset);
             circle->setRealRadius(radius);
             circle->setData(0, label);
             apply_LineWidth_ToItem(circle);
@@ -2788,14 +2790,14 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             conf->getValue(ypolyline, "label", label);
 
             QVector<QPointF> points;
-            YamlConfig::Func loadPoints = [&points](YamlConfig* conf, YAML::Node& ypoints, bool)
+            YamlConfig::Func loadPoints = [&points, &imageOffset](YamlConfig* conf, YAML::Node& ypoints, bool)
             {
                 for (const YAML::Node& ypoint : ypoints)
                 {
                     int x = 0, y = 0;
                     conf->getValue(ypoint, "x", x);
                     conf->getValue(ypoint, "y", y);
-                    points.append(QPoint(x, y));
+                    points.append(QPointF(x, y) + imageOffset);
                 }
                 return true;
             };
@@ -2833,7 +2835,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
 
             // Создаем прямоугольник на сцене
             qgraph::Rectangle* rect = new qgraph::Rectangle(doc->scene);
-            rect->setRealSceneRect(QRectF(point1, point2));
+            rect->setRealSceneRect(QRectF(QPointF(point1) + imageOffset, QPointF(point2) + imageOffset));
             rect->setData(0, label);
             apply_LineWidth_ToItem(rect);
             apply_PointSize_ToItem(rect);
@@ -2854,7 +2856,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             conf->getValue(ypoint, "point", center);
 
             qgraph::Point* p = new qgraph::Point(doc->scene);
-            p->setCenter(center);
+            p->setCenter(center + imageOffset);
             p->setData(0, label);
 
             apply_PointSize_ToItem(p);
@@ -2872,14 +2874,14 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             conf->getValue(yline, "label", label);
 
             QVector<QPointF> points;
-            YamlConfig::Func loadPoints = [&points](YamlConfig* conf, YAML::Node& ypoints, bool)
+            YamlConfig::Func loadPoints = [&points, &imageOffset](YamlConfig* conf, YAML::Node& ypoints, bool)
             {
                 for (const YAML::Node& ypoint : ypoints)
                 {
                     int x = 0, y = 0;
                     conf->getValue(ypoint, "x", x);
                     conf->getValue(ypoint, "y", y);
-                    points.append(QPoint(x, y));
+                    points.append(QPointF(x, y) + imageOffset);
                 }
                 return true;
             };
