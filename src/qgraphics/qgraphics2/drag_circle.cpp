@@ -108,6 +108,10 @@ void DragCircle::setBaseSize(qreal size)
     _largeSize = size * 1.5;
     _currentSize = size;
     _baseRect = QRectF(-size/2, -size/2, size, size);
+
+    setRect(_baseRect);
+    rememberCurrentAsBase(this);
+    restoreBaseStyle();
 }
 
 void DragCircle::setSmallSize()
@@ -204,21 +208,39 @@ void DragCircle::setHoverStyle(bool hover)
 {
     if (!_isValid) return;
 
+    const bool isCircleHandle = (dynamic_cast<qgraph::Circle*>(parentItem()) != nullptr);
+    const bool isPointHandle  = (dynamic_cast<qgraph::Point*>(parentItem())  != nullptr);
+
     if (hover)
     {
-        // Увеличиваем размер
+        // Размер увеличиваем (чтобы удобнее было попадать), но для Circle/Point НЕ рисуем квадрат.
         const qreal side = _baseRect.width() * 1.5;
         setRect(-side/2.0, -side/2.0, side, side);
-        setBrush(QBrush(_selectedHandleColor));
-        setPen(QPen(Qt::black, 1));
+
+        if (isCircleHandle)
+        {
+            setPen(Qt::NoPen);
+            setBrush(Qt::NoBrush);
+        }
+        else if (isPointHandle)
+        {
+            setBrush(QBrush(_selectedHandleColor));
+            setPen(QPen(Qt::black, 1));
+        }
+        else
+        {
+            setBrush(QBrush(_selectedHandleColor));
+            setPen(QPen(Qt::black, 1));
+        }
     }
     else
     {
-        // Возвращаем базовый стиль
         restoreBaseStyle();
     }
+
     update();
 }
+
 
 void DragCircle::restoreBaseStyle()
 {

@@ -5246,10 +5246,14 @@ void MainWindow::apply_PointSize_ToItem(QGraphicsItem* it)
     {
         if (auto h = dynamic_cast<qgraph::DragCircle*>(ch))
         {
-            h->setBaseStyle(_vis.handleColor, _vis.handleSize);
+            const bool isPoint = (dynamic_cast<qgraph::Point*>(it) != nullptr);
+
+            // Размер узла для Point должен следовать размеру точки
+            const qreal pointHandleSize = std::max<qreal>(_vis.pointSize, 4.0);
+
+            h->setBaseStyle(_vis.handleColor, isPoint ? pointHandleSize : _vis.handleSize);
             h->setSelectedHandleColor(_vis.selectedHandleColor);
             h->restoreBaseStyle();
-
             qgraph::DragCircle::rememberCurrentAsBase(h);
         }
     }

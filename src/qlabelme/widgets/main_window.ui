@@ -214,6 +214,7 @@
      <string>Справка</string>
     </property>
     <addaction name="actAbout"/>
+    <addaction name="actGuide"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
@@ -564,6 +565,11 @@
    </property>
    <property name="shortcut">
     <string>S</string>
+   </property>
+  </action>
+  <action name="actGuide">
+   <property name="text">
+    <string>Руководство пользователся QLabelMe</string>
    </property>
   </action>
  </widget>

@@ -147,20 +147,11 @@ void Point::setDotStyle(const QColor& color, qreal dotDiameterPx, qreal handleSi
     const qreal d = std::max<qreal>(dotDiameterPx, 1.0);
     _dotRadiusPx  = std::max<qreal>(d * 0.5, 0.5);
 
-    // Если точка меньше общего размера узла уменьшаем узел именно у точки
-    if (_handle)
-    {
-        const qreal h = std::max<qreal>(1.0, std::min<qreal>(handleSizePx, d));
-        _handle->setBaseSize(h);
-        _handle->restoreBaseStyle();
-    }
-
     ensureDotVis();
     syncDotColors();
     syncDotGeometry();
     showDotIfIdle();
 }
-
 
 QGraphicsEllipseItem* Point::ensureDotVis()
 {
@@ -180,7 +171,6 @@ QGraphicsEllipseItem* Point::ensureDotVis()
     _dotVis->setPen(Qt::NoPen);
     return _dotVis;    
 }
-
 
 void Point::deleteItem()
 {
