@@ -243,7 +243,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->actScrollBars->setChecked(false); // По умолчанию скрыто
 
     ui->graphView->setResizeAnchor(QGraphicsView::AnchorViewCenter);
-    ui->graphView->setTransformationAnchor(QGraphicsView::AnchorViewCenter);
+    ui->graphView->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
     ui->graphView->setAlignment(Qt::AlignCenter);
 
 
@@ -1983,6 +1983,54 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 return true;
             }
             break;
+        }
+        case QEvent::Wheel:
+        {
+            if (obj != ui->graphView->viewport())
+                break;
+
+            auto* we = static_cast<QWheelEvent*>(event);
+
+            if (!(we->modifiers() & Qt::ControlModifier))
+                break;
+
+            // На мыши angleDelta, на тачпаде pixelDelta
+            int dy = we->angleDelta().y();
+            if (dy == 0)
+                dy = we->pixelDelta().y();
+
+            if (dy == 0)
+                return true;
+
+            // Переводим в "шаги колеса": 120 = один щелчок
+            const double steps = dy / 120.0;
+
+            constexpr double kZoomStep = 1.10;
+            constexpr double kZoomMin  = 0.10;
+            constexpr double kZoomMax  = 8.00;
+
+            QTransform base = ui->graphView->transform();
+            if (m_zoom != 0.0)
+            {
+                QTransform inv; inv.scale(1.0 / m_zoom, 1.0 / m_zoom);
+                base = base * inv;
+            }
+
+            // Новый абсолютный зум
+            double nz = m_zoom * std::pow(kZoomStep, steps);
+            if (nz < kZoomMin) nz = kZoomMin;
+            if (nz > kZoomMax) nz = kZoomMax;
+
+            m_zoom = nz;
+            ui->graphView->setTransform(base);
+            ui->graphView->scale(m_zoom, m_zoom);
+
+            // Сохраняем состояние при изменении масштаба
+            if (auto doc = currentDocument())
+                saveCurrentViewState(doc);
+
+            we->accept();
+            return true;
         }
         default:
             break; // Другие события сцены не интересуют
