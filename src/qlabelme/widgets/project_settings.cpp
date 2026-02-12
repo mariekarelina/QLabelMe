@@ -538,6 +538,17 @@ QWidget* ProjectSettings::makeClassRowWidget(QListWidgetItem* item)
     btn->setCursor(Qt::PointingHandCursor);
     btn->setFocusPolicy(Qt::NoFocus);
 
+    // Центрируем содержимое QLabel
+    lbl->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+
+    // Запрещаем кнопке растягиваться и фиксируем размер
+    btn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    btn->setFixedSize(16, 16);
+
+    // Выравниваем элементы в layout по вертикальному центру
+    lay->setAlignment(lbl, Qt::AlignVCenter);
+    lay->setAlignment(btn, Qt::AlignVCenter);
+
     QColor c = item->data(Qt::UserRole).value<QColor>();
     if (!c.isValid())
         c = QColor("#3b6cff");
@@ -555,7 +566,7 @@ QWidget* ProjectSettings::makeClassRowWidget(QListWidgetItem* item)
     const int safeFontHeight = fm.height() + fm.leading();
 
     const int rowH = qMax(safeFontHeight, btn->sizeHint().height())
-                     + marginsV + 6;
+                     + marginsV;
 
     w->setMinimumHeight(rowH);
     w->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
