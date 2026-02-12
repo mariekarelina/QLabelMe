@@ -241,6 +241,7 @@ private slots:
 
     void on_actMenu_triggered();
     void on_actFitImageToView_triggered();
+    void on_actScrollBars_triggered(bool checked);
 
 private:
     Q_OBJECT

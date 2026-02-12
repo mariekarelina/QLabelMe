@@ -68,6 +68,7 @@
 #include <QtGlobal>
 #include <QShortcut>
 #include <QKeySequence>
+#include <QStyleFactory>
 
 
 using namespace qgraph;
@@ -237,6 +238,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->graphView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     ui->graphView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+    ui->actScrollBars->setCheckable(true);
+    ui->actScrollBars->setChecked(false); // По умолчанию скрыто
 
     ui->graphView->setResizeAnchor(QGraphicsView::AnchorViewCenter);
     ui->graphView->setTransformationAnchor(QGraphicsView::AnchorViewCenter);
@@ -7501,9 +7505,38 @@ void MainWindow::on_actMenu_triggered()
     toggleMenuBarVisible();
 }
 
-
 void MainWindow::on_actFitImageToView_triggered()
 {
     fitImageToView();
 }
 
+void MainWindow::on_actScrollBars_triggered(bool checked)
+{
+    ui->graphView->setHorizontalScrollBarPolicy(
+        checked ? Qt::ScrollBarAlwaysOn : Qt::ScrollBarAlwaysOff);
+    ui->graphView->setVerticalScrollBarPolicy(
+        checked ? Qt::ScrollBarAlwaysOn : Qt::ScrollBarAlwaysOff);
+
+    if (checked)
+    {
+        ui->graphView->setStyleSheet(
+            "QScrollBar:vertical { width: 14px; }"
+            "QScrollBar:horizontal { height: 14px; }"
+            "QScrollBar::add-line, QScrollBar::sub-line { width: 14px; height: 14px; }"
+            "QScrollBar::handle:vertical { min-height: 20px; }"
+            "QScrollBar::handle:horizontal { min-width: 20px; }"
+        );
+
+        ui->graphView->horizontalScrollBar()->show();
+        ui->graphView->verticalScrollBar()->show();
+    }
+    else
+    {
+        ui->graphView->setStyleSheet(QString());
+        ui->graphView->horizontalScrollBar()->hide();
+        ui->graphView->verticalScrollBar()->hide();
+    }
+
+    ui->graphView->updateGeometry();
+    ui->graphView->viewport()->update();
+}

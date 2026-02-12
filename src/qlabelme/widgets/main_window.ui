@@ -199,6 +199,7 @@
     <addaction name="actResetAnnotation"/>
     <addaction name="actRestoreAnnotation"/>
     <addaction name="actMenu"/>
+    <addaction name="actScrollBars"/>
     <addaction name="actFitImageToView"/>
    </widget>
    <widget class="QMenu" name="menuSettings">
@@ -555,6 +556,14 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+0</string>
+   </property>
+  </action>
+  <action name="actScrollBars">
+   <property name="text">
+    <string>Скрыть/показать скролл</string>
+   </property>
+   <property name="shortcut">
+    <string>S</string>
    </property>
   </action>
  </widget>
