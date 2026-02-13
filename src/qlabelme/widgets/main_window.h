@@ -243,6 +243,8 @@ private slots:
     void on_actFitImageToView_triggered();
     void on_actScrollBars_triggered(bool checked);
 
+    void on_actUserGuide_triggered();
+
 private:
     Q_OBJECT
     void loadFilesFromFolder(const QString& folderPath);
@@ -658,7 +660,6 @@ private:
 
     // Счетчик уникальных id на время жизни документа
     mutable qulonglong _uidCounter = 1;
-
 
     // Позволяем стороннему классу видеть все
     //friend class GraphicsView;

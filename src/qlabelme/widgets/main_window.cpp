@@ -26,6 +26,7 @@
 
 #include "select_class.h"
 #include "settings.h"
+#include "user_guide.h"
 
 #include <QApplication>
 #include <QHostInfo>
@@ -570,6 +571,12 @@ MainWindow::MainWindow(QWidget *parent) :
             }
             _scene->update();
         });
+
+    connect(ui->actUserGuide, &QAction::triggered, this, [this]()
+    {
+        UserGuide *guide = new UserGuide(this);
+        guide->show();
+    });
 
     // Чтобы Alt работал независимо от фокуса
     qApp->installEventFilter(this);
@@ -7592,3 +7599,9 @@ void MainWindow::on_actScrollBars_triggered(bool checked)
     ui->graphView->updateGeometry();
     ui->graphView->viewport()->update();
 }
+
+void MainWindow::on_actUserGuide_triggered()
+{
+
+}
+

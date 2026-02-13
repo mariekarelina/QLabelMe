@@ -66,6 +66,9 @@ Product {
             "settings.ui",
             "square.cpp",
             "square.h",
+            "user_guide.cpp",
+            "user_guide.h",
+            "user_guide.ui",
         ]
     }
 
