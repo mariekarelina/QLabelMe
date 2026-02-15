@@ -62,6 +62,7 @@
 #include <QDialogButtonBox>
 #include <QAbstractButton>
 #include <QAction>
+#include <QMenu>
 #include <QGraphicsSimpleTextItem>
 #include <QGraphicsRectItem>
 #include <QAbstractItemView>
@@ -69,6 +70,7 @@
 #include <QtGlobal>
 #include <QShortcut>
 #include <QKeySequence>
+#include <QPainterPathStroker>
 #include <QStyleFactory>
 
 
@@ -686,118 +688,6 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         }
 
         return;
-    }
-
-    if (mouseEvent->button() == Qt::RightButton)
-    {
-        QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
-        QGraphicsItem* item = graphView->itemAt(mouseEvent->pos());
-
-        if (auto* circle = dynamic_cast<DragCircle*>(item))
-        {
-            QGraphicsItem* parent = circle->parentItem();
-            if (auto* polyline = dynamic_cast<qgraph::Polyline*>(parent))
-            {
-                ShapeBackup before = makeBackupFromItem(polyline);
-                qulonglong uid = before.uid;
-
-                polyline->handlePointDeletion(circle);
-
-                ShapeBackup after = makeBackupFromItem(polyline);
-
-                if (!sameGeometry(before, after))
-                {
-                    pushModifyShapeCommand(uid, before, after, tr("Удаление узла"));
-                }
-
-                Document::Ptr doc = currentDocument();
-                if (doc && !doc->isModified)
-                {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
-                mouseEvent->accept();
-                return;
-            }
-        }
-
-        // Проверяем, кликнули ли на саму полилинию (для добавления точки)
-        if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-        {
-            ShapeBackup before = makeBackupFromItem(polyline);
-            qulonglong uid = before.uid;
-
-            polyline->insertPoint(scenePos);
-
-            ShapeBackup after = makeBackupFromItem(polyline);
-            if (!sameGeometry(before, after))
-            {
-                pushModifyShapeCommand(uid, before, after, tr("Добавление узла"));
-            }
-
-            Document::Ptr doc = currentDocument();
-            if (doc && !doc->isModified)
-            {
-                doc->isModified = true;
-                updateFileListDisplay(doc->filePath);
-            }
-            mouseEvent->accept();
-            return;
-        }
-
-        if (auto* circle = dynamic_cast<DragCircle*>(item))
-        {
-            QGraphicsItem* parent = circle->parentItem();
-            if (auto* line = dynamic_cast<qgraph::Line*>(parent))
-            {
-                ShapeBackup before = makeBackupFromItem(line);
-                qulonglong uid = before.uid;
-
-                line->handlePointDeletion(circle);
-
-                ShapeBackup after = makeBackupFromItem(line);
-
-                if (!sameGeometry(before, after))
-                {
-                    pushModifyShapeCommand(uid, before, after, tr("Удаление узла"));
-                }
-
-                Document::Ptr doc = currentDocument();
-                if (doc && !doc->isModified)
-                {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
-                mouseEvent->accept();
-                return;
-            }
-        }
-
-        // Проверяем, кликнули ли на саму линию (для добавления точки)
-        if (auto* line = dynamic_cast<qgraph::Line*>(item))
-        {
-            ShapeBackup before = makeBackupFromItem(line);
-            qulonglong uid = before.uid;
-
-            line->insertPoint(scenePos);
-
-            ShapeBackup after = makeBackupFromItem(line);
-
-            if (!sameGeometry(before, after))
-            {
-                pushModifyShapeCommand(uid, before, after, tr("Добавление узла"));
-            }
-
-            Document::Ptr doc = currentDocument();
-            if (doc && !doc->isModified)
-            {
-                doc->isModified = true;
-                updateFileListDisplay(doc->filePath);
-            }
-            mouseEvent->accept();
-            return;
-        }
-
     }
     if (mouseEvent->button() == Qt::LeftButton)
     {
@@ -2038,6 +1928,154 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
             we->accept();
             return true;
+        }
+        case QEvent::ContextMenu:
+        {
+            auto* ce = static_cast<QContextMenuEvent*>(event);
+
+            const QPoint  viewPos = ce->pos();
+            const QPointF scenePos = ui->graphView->mapToScene(viewPos);
+            QGraphicsItem* item = ui->graphView->itemAt(viewPos);
+
+            if (auto* circle = dynamic_cast<DragCircle*>(item))
+            {
+                if (auto* parent = circle->parentItem())
+                {
+                    if (auto* polyline = dynamic_cast<qgraph::Polyline*>(parent))
+                    {
+                        QMenu menu(ui->graphView);
+                        QAction* actRemove = menu.addAction(tr("Удалить узел"));
+
+                        QAction* chosen = menu.exec(ce->globalPos());
+                        if (chosen == actRemove)
+                        {
+                            ShapeBackup before = makeBackupFromItem(polyline);
+                            qulonglong uid = before.uid;
+
+                            polyline->handlePointDeletion(circle);
+
+                            ShapeBackup after = makeBackupFromItem(polyline);
+                            if (!sameGeometry(before, after))
+                                pushModifyShapeCommand(uid, before, after, tr("Удаление узла"));
+
+                            if (auto doc = currentDocument(); doc && !doc->isModified)
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
+                        }
+
+                        ce->accept();
+                        return true;
+                    }
+
+                    if (auto* line = dynamic_cast<qgraph::Line*>(parent))
+                    {
+                        QMenu menu(ui->graphView);
+                        QAction* actRemove = menu.addAction(tr("Удалить узел"));
+
+                        QAction* chosen = menu.exec(ce->globalPos());
+                        if (chosen == actRemove)
+                        {
+                            ShapeBackup before = makeBackupFromItem(line);
+                            qulonglong uid = before.uid;
+
+                            line->handlePointDeletion(circle);
+
+                            ShapeBackup after = makeBackupFromItem(line);
+                            if (!sameGeometry(before, after))
+                                pushModifyShapeCommand(uid, before, after, tr("Удаление узла"));
+
+                            if (auto doc = currentDocument(); doc && !doc->isModified)
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
+                        }
+
+                        ce->accept();
+                        return true;
+                    }
+                }
+            }
+
+            if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+            {
+                const QPainterPath p = polyline->path();
+
+                QPainterPathStroker stroker;
+                const qreal w = qMax<qreal>(18.0, polyline->pen().widthF() + 14.0);
+                stroker.setWidth(w);
+
+                const QPainterPath stroke = stroker.createStroke(p);
+                const QPointF localPos = polyline->mapFromScene(scenePos);
+                if (!stroke.contains(localPos))
+                    break;
+
+                QMenu menu(ui->graphView);
+                QAction* actAdd = menu.addAction(tr("Добавить узел"));
+
+                QAction* chosen = menu.exec(ce->globalPos());
+                if (chosen == actAdd)
+                {
+                    ShapeBackup before = makeBackupFromItem(polyline);
+                    qulonglong uid = before.uid;
+
+                    polyline->insertPoint(scenePos);
+
+                    ShapeBackup after = makeBackupFromItem(polyline);
+                    if (!sameGeometry(before, after))
+                        pushModifyShapeCommand(uid, before, after, tr("Добавление узла"));
+
+                    if (auto doc = currentDocument(); doc && !doc->isModified)
+                    {
+                        doc->isModified = true;
+                        updateFileListDisplay(doc->filePath);
+                    }
+                }
+
+                ce->accept();
+                return true;
+            }
+            if (auto* line = dynamic_cast<qgraph::Line*>(item))
+            {
+                const QPainterPath p = line->path();
+
+                QPainterPathStroker stroker;
+                const qreal w = qMax<qreal>(18.0, line->pen().widthF() + 14.0);
+                stroker.setWidth(w);
+
+                const QPainterPath stroke = stroker.createStroke(p);
+                const QPointF localPos = line->mapFromScene(scenePos);
+                if (!stroke.contains(localPos))
+                    break;
+
+                QMenu menu(ui->graphView);
+                QAction* actAdd = menu.addAction(tr("Добавить узел"));
+
+                QAction* chosen = menu.exec(ce->globalPos());
+                if (chosen == actAdd)
+                {
+                    ShapeBackup before = makeBackupFromItem(line);
+                    qulonglong uid = before.uid;
+
+                    line->insertPoint(scenePos);
+
+                    ShapeBackup after = makeBackupFromItem(line);
+                    if (!sameGeometry(before, after))
+                        pushModifyShapeCommand(uid, before, after, tr("Добавление узла"));
+
+                    if (auto doc = currentDocument(); doc && !doc->isModified)
+                    {
+                        doc->isModified = true;
+                        updateFileListDisplay(doc->filePath);
+                    }
+                }
+
+                ce->accept();
+                return true;
+            }
+            break;
         }
         default:
             break; // Другие события сцены не интересуют
