@@ -61,6 +61,7 @@ public:
     void rotatePointsClockwise();
     void rotatePointsCounterClockwise();
     void handleKeyPressEvent(QKeyEvent* event);
+    void resumeFromHandle(qgraph::DragCircle* h);
 
     void togglePointNumbers();
     bool isPointNumbersVisible() const { return _pointNumbersVisible; }

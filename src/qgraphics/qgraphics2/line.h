@@ -59,6 +59,7 @@ public:
     void rotatePointsClockwise();
     void rotatePointsCounterClockwise();
     void handleKeyPressEvent(QKeyEvent* event);
+    void resumeFromHandle(DragCircle* h);
 
     void togglePointNumbers();
     bool isPointNumbersVisible() const { return _pointNumbersVisible; }

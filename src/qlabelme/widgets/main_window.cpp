@@ -868,6 +868,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         _startPoint = graphView->mapToScene(mouseEvent->pos());
         if (!_polyline)
         {
+            _resumeEditing = false;
+            _resumeUid = 0;
             // Если полилиния еще не создана, создаем объект
             _polyline = new qgraph::Polyline(_scene, _startPoint);
             apply_LineWidth_ToItem(_polyline);
@@ -890,19 +892,22 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                     //     classes << ui->polygonLabel->item(i)->text();
 
                     // SelectClass dialog(classes, this);
-                    SelectClass dialog(_projectClasses, this);
-
-                    if (dialog.exec() == QDialog::Accepted)
+                    if (!_resumeEditing)
                     {
-                        const QString selectedClass = dialog.selectedClass();
-                        if (!selectedClass.isEmpty())
-                        {
-                            _polyline->setData(0, selectedClass);
-                            applyClassColorToItem(_polyline, selectedClass);
-                            linkSceneItemToList(_polyline);
+                        SelectClass dialog(_projectClasses, this);
 
-                            ShapeBackup b = makeBackupFromItem(_polyline);
-                            pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                        if (dialog.exec() == QDialog::Accepted)
+                        {
+                            const QString selectedClass = dialog.selectedClass();
+                            if (!selectedClass.isEmpty())
+                            {
+                                _polyline->setData(0, selectedClass);
+                                applyClassColorToItem(_polyline, selectedClass);
+                                linkSceneItemToList(_polyline);
+
+                                ShapeBackup b = makeBackupFromItem(_polyline);
+                                pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                            }
                         }
                     }
 
@@ -918,6 +923,14 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             });
         }
         _polyline->addPoint(_startPoint, _scene);
+        // Закрытие полилинии по Ctrl
+        if (qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::CtrlModifier &&
+            (mouseEvent->modifiers() & Qt::ControlModifier))
+        {
+            _polyline->closePolyline();
+        }
+        apply_PointSize_ToItem(_polyline);
+        raiseAllHandlesToTop();
     }
 
     else if (_drawingRectangle)
@@ -1017,6 +1030,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         _startPoint = graphView->mapToScene(mouseEvent->pos());
         if (!_line)
         {
+            _resumeEditing = false;
+            _resumeUid = 0;
             // Если линия еще не создана, создаем объект
             _line = new qgraph::Line(_scene, _startPoint);
             apply_LineWidth_ToItem(_line);
@@ -1040,22 +1055,24 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
                     // SelectClass dialog(classes, this);
 
-                    SelectClass dialog(_projectClasses, this);
-
-                    if (dialog.exec() == QDialog::Accepted)
+                    if (!_resumeEditing)
                     {
-                        const QString selectedClass = dialog.selectedClass();
-                        if (!selectedClass.isEmpty())
-                        {
-                            _line->setData(0, selectedClass);
-                            applyClassColorToItem(_line, selectedClass);
-                            linkSceneItemToList(_line);
+                        SelectClass dialog(_projectClasses, this);
 
-                            ShapeBackup b = makeBackupFromItem(_line);
-                            pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                        if (dialog.exec() == QDialog::Accepted)
+                        {
+                            const QString selectedClass = dialog.selectedClass();
+                            if (!selectedClass.isEmpty())
+                            {
+                                _line->setData(0, selectedClass);
+                                applyClassColorToItem(_line, selectedClass);
+                                linkSceneItemToList(_line);
+
+                                ShapeBackup b = makeBackupFromItem(_line);
+                                pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                            }
                         }
                     }
-
                     _line = nullptr;
 
                     if (auto doc = currentDocument())
@@ -1068,6 +1085,14 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             });
         }
         _line->addPoint(_startPoint, _scene);
+        // Завершение линии по Ctrl
+        if (qgraph::Line::globalCloseMode() == qgraph::Line::CloseMode::CtrlModifier &&
+            (mouseEvent->modifiers() & Qt::ControlModifier))
+        {
+            _line->closeLine();
+        }
+        apply_PointSize_ToItem(_line);
+        raiseAllHandlesToTop();
     }
     else if (_drawingRuler)
     {
@@ -1508,20 +1533,21 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         // // Показываем диалог выбора класса
         // SelectClass dialog(classes, this);
 
-        SelectClass dialog(_projectClasses, this);
-        if (dialog.exec() == QDialog::Accepted)
+        if (!_resumeEditing)
         {
-            const QString selectedClass = dialog.selectedClass();
-            if (!selectedClass.isEmpty())
+            SelectClass dialog(_projectClasses, this);
+            if (dialog.exec() == QDialog::Accepted)
             {
-                _polyline->setData(0, selectedClass);
-                applyClassColorToItem(_polyline, selectedClass);
-                linkSceneItemToList(_polyline);
+                const QString selectedClass = dialog.selectedClass();
+                if (!selectedClass.isEmpty())
+                {
+                    _polyline->setData(0, selectedClass);
+                    applyClassColorToItem(_polyline, selectedClass);
+                    linkSceneItemToList(_polyline);
 
-                ShapeBackup b = makeBackupFromItem(_polyline);
-                pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
-
-
+                    ShapeBackup b = makeBackupFromItem(_polyline);
+                    pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                }
             }
         }
         _polyline = nullptr;
@@ -1550,20 +1576,21 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         // // Показываем диалог выбора класса
         // SelectClass dialog(classes, this);
 
-        SelectClass dialog(_projectClasses, this);
-        if (dialog.exec() == QDialog::Accepted)
+        if (!_resumeEditing)
         {
-            const QString selectedClass = dialog.selectedClass();
-            if (!selectedClass.isEmpty())
+            SelectClass dialog(_projectClasses, this);
+            if (dialog.exec() == QDialog::Accepted)
             {
-                _line->setData(0, selectedClass);
-                applyClassColorToItem(_line, selectedClass);
-                linkSceneItemToList(_line);
+                const QString selectedClass = dialog.selectedClass();
+                if (!selectedClass.isEmpty())
+                {
+                    _line->setData(0, selectedClass);
+                    applyClassColorToItem(_line, selectedClass);
+                    linkSceneItemToList(_line);
 
-                ShapeBackup b = makeBackupFromItem(_line);
-                pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
-
-
+                    ShapeBackup b = makeBackupFromItem(_line);
+                    pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                }
             }
         }
         _line = nullptr;
@@ -1726,18 +1753,21 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                         // SelectClass dialog(classes, this);
 
-                        SelectClass dialog(_projectClasses, this);
-                        if (dialog.exec() == QDialog::Accepted)
+                        if (!_resumeEditing)
                         {
-                            const QString selectedClass = dialog.selectedClass();
-                            if (!selectedClass.isEmpty())
+                            SelectClass dialog(_projectClasses, this);
+                            if (dialog.exec() == QDialog::Accepted)
                             {
-                                _polyline->setData(0, selectedClass);
-                                applyClassColorToItem(_polyline, selectedClass);
-                                linkSceneItemToList(_polyline);
+                                const QString selectedClass = dialog.selectedClass();
+                                if (!selectedClass.isEmpty())
+                                {
+                                    _polyline->setData(0, selectedClass);
+                                    applyClassColorToItem(_polyline, selectedClass);
+                                    linkSceneItemToList(_polyline);
 
-                                ShapeBackup b = makeBackupFromItem(_polyline);
-                                pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                                    ShapeBackup b = makeBackupFromItem(_polyline);
+                                    pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                                }
                             }
                         }
 
@@ -1945,8 +1975,10 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     {
                         QMenu menu(ui->graphView);
                         QAction* actRemove = menu.addAction(tr("Удалить узел"));
+                        QAction* actResume = menu.addAction(tr("Возобновить редактирование"));
 
                         QAction* chosen = menu.exec(ce->globalPos());
+
                         if (chosen == actRemove)
                         {
                             ShapeBackup before = makeBackupFromItem(polyline);
@@ -1964,17 +1996,59 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                 updateFileListDisplay(doc->filePath);
                             }
                         }
+                        else if (chosen == actResume)
+                        {
+                            _resumeBefore = makeBackupFromItem(polyline);
+                            _resumeUid = _resumeBefore.uid;
+                            _resumeEditing = true;
+                            polyline->resumeFromHandle(circle);
 
+                            _drawingPolyline = true;
+                            _polyline = polyline;
+                            setSceneItemsMovable(false);
+
+                            _polyline->setModificationCallback([this]()
+                            {
+                                if (_drawingPolyline && _polyline && _polyline->isClosed())
+                                {
+                                    _drawingPolyline = false;
+
+                                    _polyline->updatePointNumbers();
+                                    apply_LineWidth_ToItem(_polyline);
+                                    apply_PointSize_ToItem(_polyline);
+                                    apply_NumberSize_ToItem(_polyline);
+
+                                    ShapeBackup after = makeBackupFromItem(_polyline);
+                                    if (!sameGeometry(_resumeBefore, after))
+                                        pushModifyShapeCommand(_resumeUid, _resumeBefore, after, tr("Продолжение полилинии"));
+
+                                    _polyline = nullptr;
+                                    _resumeEditing = false;
+                                    _resumeUid = 0;
+
+                                    if (auto doc = currentDocument(); doc && !doc->isModified)
+                                    {
+                                        doc->isModified = true;
+                                        updateFileListDisplay(doc->filePath);
+                                    }
+
+                                    raiseAllHandlesToTop();
+                                    setSceneItemsMovable(true);
+                                }
+                            });
+                        }
                         ce->accept();
                         return true;
                     }
-
                     if (auto* line = dynamic_cast<qgraph::Line*>(parent))
                     {
                         QMenu menu(ui->graphView);
+
                         QAction* actRemove = menu.addAction(tr("Удалить узел"));
+                        QAction* actResume = menu.addAction(tr("Возобновить редактирование"));
 
                         QAction* chosen = menu.exec(ce->globalPos());
+
                         if (chosen == actRemove)
                         {
                             ShapeBackup before = makeBackupFromItem(line);
@@ -1992,10 +2066,53 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                 updateFileListDisplay(doc->filePath);
                             }
                         }
+                        else if (chosen == actResume)
+                        {
+                            _resumeBefore = makeBackupFromItem(line);
+                            _resumeUid = _resumeBefore.uid;
+                            _resumeEditing = true;
 
+                            line->resumeFromHandle(circle);
+
+                            _drawingLine = true;
+                            _line = line;
+
+                            setSceneItemsMovable(false);
+
+                            _line->setModificationCallback([this]()
+                            {
+                                if (_drawingLine && _line && _line->isClosed())
+                                {
+                                    _drawingLine = false;
+
+                                    _line->updatePointNumbers();
+                                    apply_LineWidth_ToItem(_line);
+                                    apply_PointSize_ToItem(_line);
+                                    apply_NumberSize_ToItem(_line);
+
+                                    ShapeBackup after = makeBackupFromItem(_line);
+                                    if (!sameGeometry(_resumeBefore, after))
+                                        pushModifyShapeCommand(_resumeUid, _resumeBefore, after, tr("Продолжение линии"));
+
+                                    _line = nullptr;
+                                    _resumeEditing = false;
+                                    _resumeUid = 0;
+
+                                    if (auto doc = currentDocument(); doc && !doc->isModified)
+                                    {
+                                        doc->isModified = true;
+                                        updateFileListDisplay(doc->filePath);
+                                    }
+
+                                    raiseAllHandlesToTop();
+                                    setSceneItemsMovable(true);
+                                }
+                            });
+                        }
                         ce->accept();
                         return true;
                     }
+
                 }
             }
 
@@ -6812,18 +6929,21 @@ void MainWindow::on_actClosePolyline_triggered()
         apply_NumberSize_ToItem(_polyline);
 
         // Выбор класса
-        SelectClass dialog(_projectClasses, this);
-        if (dialog.exec() == QDialog::Accepted)
+        if (!_resumeEditing)
         {
-            const QString selectedClass = dialog.selectedClass();
-            if (!selectedClass.isEmpty())
+            SelectClass dialog(_projectClasses, this);
+            if (dialog.exec() == QDialog::Accepted)
             {
-                _polyline->setData(0, selectedClass);
-                applyClassColorToItem(_polyline, selectedClass);
-                linkSceneItemToList(_polyline);
+                const QString selectedClass = dialog.selectedClass();
+                if (!selectedClass.isEmpty())
+                {
+                    _polyline->setData(0, selectedClass);
+                    applyClassColorToItem(_polyline, selectedClass);
+                    linkSceneItemToList(_polyline);
 
-                ShapeBackup b = makeBackupFromItem(_polyline);
-                pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                    ShapeBackup b = makeBackupFromItem(_polyline);
+                    pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                }
             }
         }
 
@@ -6848,18 +6968,21 @@ void MainWindow::on_actClosePolyline_triggered()
         apply_PointSize_ToItem(_line);
         apply_NumberSize_ToItem(_line);
 
-        SelectClass dialog(_projectClasses, this);
-        if (dialog.exec() == QDialog::Accepted)
+        if (!_resumeEditing)
         {
-            const QString selectedClass = dialog.selectedClass();
-            if (!selectedClass.isEmpty())
+            SelectClass dialog(_projectClasses, this);
+            if (dialog.exec() == QDialog::Accepted)
             {
-                _line->setData(0, selectedClass);
-                applyClassColorToItem(_line, selectedClass);
-                linkSceneItemToList(_line);
+                const QString selectedClass = dialog.selectedClass();
+                if (!selectedClass.isEmpty())
+                {
+                    _line->setData(0, selectedClass);
+                    applyClassColorToItem(_line, selectedClass);
+                    linkSceneItemToList(_line);
 
-                ShapeBackup b = makeBackupFromItem(_line);
-                pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                    ShapeBackup b = makeBackupFromItem(_line);
+                    pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                }
             }
         }
 

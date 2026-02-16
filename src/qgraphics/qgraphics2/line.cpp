@@ -1036,6 +1036,50 @@ void Line::handleKeyPressEvent(QKeyEvent* event)
     keyPressEvent(event);
 }
 
+void Line::resumeFromHandle(DragCircle* h)
+{
+    if (!h) return;
+
+    const int idx = _circles.indexOf(h);
+    if (idx < 0) return;
+
+    if (_isClosed)
+    {
+        QVector<DragCircle*> rotated;
+        rotated.reserve(_circles.size());
+
+        for (int i = idx + 1; i < _circles.size(); ++i)
+            rotated.append(_circles[i]);
+        // Выбранная точка - последняя
+        for (int i = 0; i <= idx; ++i)
+            rotated.append(_circles[i]);
+
+        _circles = rotated;
+    }
+    else
+    {
+        for (int i = _circles.size() - 1; i > idx; --i)
+        {
+            DragCircle* c = _circles[i];
+            c->invalidate();
+            c->disconnect();
+            _circles.removeAt(i);
+
+            if (scene())
+                scene()->removeItem(c);
+
+            delete c;
+        }
+    }
+
+    _isClosed = false;
+
+    updateConnections();
+    updatePath();
+    updatePointNumbers();
+    updateSelectionRect();
+}
+
 void Line::togglePointNumbers()
 {
     _pointNumbersVisible = !_pointNumbersVisible;

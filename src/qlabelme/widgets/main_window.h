@@ -655,6 +655,11 @@ private:
 
     bool keepImageScale = false;
 
+    // Продолжение рисования
+    bool _resumeEditing = false;
+    qulonglong _resumeUid = 0;
+    ShapeBackup _resumeBefore;
+
     // Стабильный ключ в QGraphicsItem::data(...)
     static constexpr int RoleUid = 0x1337ABCD;
 
