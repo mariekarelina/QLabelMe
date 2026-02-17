@@ -340,7 +340,9 @@ void ProjectSettings::onAddClass()
     dlg.setSizeGripEnabled(false); // Без уголка растяжения
 
     dlg.setWindowModality(Qt::WindowModal);
-    dlg.move(this->geometry().center() - QPoint(sz.width()/2, sz.height()/2));
+    //dlg.move(this->geometry().center() - QPoint(sz.width()/2, sz.height()/2));
+    const QPoint centerGlobal = this->mapToGlobal(this->rect().center());
+    dlg.move(centerGlobal - QPoint(sz.width()/2, sz.height()/2));
 
     if (dlg.exec() != QDialog::Accepted)
         return;

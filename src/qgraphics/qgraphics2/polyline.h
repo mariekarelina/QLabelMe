@@ -38,6 +38,9 @@ public:
     bool isClickOnAnyPoint(const QPointF& scenePos, int* idx = nullptr) const;
     void updatePath(); // Метод для обновления пути на основе позиций кругов
     QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
+    // Undo/Redo узлов в режиме рисования
+    bool removeLastPointForce(bool callCallback = true);
+    void setClosed(bool closed, bool callCallback = true);
 
     void handlePointDeletion(DragCircle* circle);
 
@@ -129,6 +132,8 @@ public:
     bool _pointNumbersVisible = true; // Видимости нумерации
     QGraphicsRectItem* _selectionRect = nullptr;
     bool _selectionRectVisible = true;
+
+    bool _closeCallbackScheduled = false;
 
     std::function<void()> _modificationCallback; // Сallback для уведомлений
 };

@@ -876,11 +876,13 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             apply_PointSize_ToItem(_polyline);
             apply_NumberSize_ToItem(_polyline);
             _polyline->setFocus();
+            ShapeBackup b0 = makeBackupFromItem(_polyline);
+            pushAdoptExistingShapeCommand(_polyline, b0, tr("Узел полилинии"));
             _polyline->setModificationCallback([this]()
             {
                 if (_drawingPolyline && _polyline && _polyline->isClosed())
                 {
-                    _drawingPolyline = false;
+                    _drawingPolyline = false;                   
 
                     _polyline->updatePointNumbers();
                     apply_LineWidth_ToItem(_polyline);
@@ -901,15 +903,141 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                             const QString selectedClass = dialog.selectedClass();
                             if (!selectedClass.isEmpty())
                             {
-                                _polyline->setData(0, selectedClass);
-                                applyClassColorToItem(_polyline, selectedClass);
-                                linkSceneItemToList(_polyline);
+                                // _polyline->setData(0, selectedClass);
+                                // applyClassColorToItem(_polyline, selectedClass);
+                                // linkSceneItemToList(_polyline);
 
-                                ShapeBackup b = makeBackupFromItem(_polyline);
-                                pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                                // ShapeBackup b = makeBackupFromItem(_polyline);
+                                // pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                                const qulonglong uid = ensureUid(_polyline);
+                                const QString cls = selectedClass;
+
+                                _drawingPolyline = false;
+
+                                auto redoFn = [this, uid, cls]()
+                                {
+                                    auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                    if (!pl) return;
+
+                                    pl->setClosed(true, false);
+
+                                    pl->setData(0, cls);
+                                    applyClassColorToItem(pl, cls);
+                                    linkSceneItemToList(pl);
+
+                                    if (_polyline && ensureUid(_polyline) == uid)
+                                        _polyline = nullptr;
+
+                                    _drawingPolyline = false;
+                                    _resumeEditing = false;
+                                    _resumeUid = 0;
+
+                                    if (auto doc = currentDocument())
+                                    {
+                                        doc->isModified = true;
+                                        updateFileListDisplay(doc->filePath);
+                                    }
+                                };
+
+                                auto undoFn = [this, uid]()
+                                {
+                                    auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                    if (!pl) return;
+
+                                    pl->setClosed(false, false);
+                                    _drawingPolyline = true;
+                                    _polyline = pl;
+
+                                    _resumeEditing = true;
+                                    _resumeUid = uid;
+
+                                    pl->setSelected(true);
+                                    pl->setFocus();
+
+                                    removeListEntryBySceneItem(pl);
+
+                                    if (auto doc = currentDocument())
+                                    {
+                                        doc->isModified = true;
+                                        updateFileListDisplay(doc->filePath);
+                                    }
+
+                                    raiseAllHandlesToTop();
+                                };
+                                if (QUndoStack* st = activeUndoStack())
+                                    st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+                                else
+                                    redoFn();
                             }
                         }
                     }
+                    else
+                    {
+                        const QString cls = _polyline->data(0).toString();
+                        const qulonglong uid = ensureUid(_polyline);
+                        _drawingPolyline = false;
+
+                        auto redoFn = [this, uid, cls]()
+                        {
+                            auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                            if (!pl) return;
+
+                            pl->setClosed(true, false);
+
+                            if (!cls.isEmpty())
+                            {
+                                pl->setData(0, cls);
+                                applyClassColorToItem(pl, cls);
+                            }
+                            linkSceneItemToList(pl);
+
+                            if (_polyline && ensureUid(_polyline) == uid)
+                                _polyline = nullptr;
+
+                            _drawingPolyline = false;
+                            _resumeEditing = false;
+                            _resumeUid = 0;
+
+                            if (auto doc = currentDocument())
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
+                            raiseAllHandlesToTop();
+                        };
+
+                        auto undoFn = [this, uid]()
+                        {
+                            auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                            if (!pl) return;
+
+                            pl->setClosed(false, false);
+
+                            _drawingPolyline = true;
+                            _polyline = pl;
+
+                            _resumeEditing = true;
+                            _resumeUid = uid;
+
+                            pl->setSelected(true);
+                            pl->setFocus();
+
+                            removeListEntryBySceneItem(pl);
+
+                            if (auto doc = currentDocument())
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
+                            raiseAllHandlesToTop();
+                        };
+
+                        if (QUndoStack* st = activeUndoStack())
+                            st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+                        else
+                            redoFn();
+                    }
+
 
                     _polyline = nullptr;
 
@@ -922,12 +1050,71 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 }
             });
         }
-        _polyline->addPoint(_startPoint, _scene);
+        //_polyline->addPoint(_startPoint, _scene);
+        const QPointF p = _startPoint;
+
+        if (!_polyline->_circles.isEmpty() &&
+            QLineF(_polyline->_circles.last()->scenePos(), p).length() < 0.1)
+        {
+            // Ничего
+        }
+        else if (QUndoStack* st = activeUndoStack())
+        {
+            struct Payload
+            {
+                qulonglong uid = 0;
+                QPointF    pt;
+                bool       didAdd = false;
+            };
+
+            auto payload = std::make_shared<Payload>();
+            payload->uid = ensureUid(_polyline);
+            payload->pt  = p;
+
+            auto redoFn = [this, payload]()
+            {
+                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(payload->uid));
+                if (!pl) return;
+
+                const int before = pl->_circles.size();
+                pl->addPoint(payload->pt, _scene);
+                payload->didAdd = (pl->_circles.size() > before);
+
+                if (auto d = currentDocument())
+                {
+                    d->isModified = true;
+                    updateFileListDisplay(d->filePath);
+                }
+            };
+
+            auto undoFn = [this, payload]()
+            {
+                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(payload->uid));
+                if (!pl) return;
+
+                if (payload->didAdd)
+                    pl->removeLastPointForce(true);
+
+                if (auto d = currentDocument())
+                {
+                    d->isModified = true;
+                    updateFileListDisplay(d->filePath);
+                }
+            };
+
+            st->push(new LambdaCommand(redoFn, undoFn, tr("Узел полилинии")));
+        }
+
         // Закрытие полилинии по Ctrl
         if (qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::CtrlModifier &&
             (mouseEvent->modifiers() & Qt::ControlModifier))
         {
-            _polyline->closePolyline();
+            //_polyline->closePolyline();
+            if (_polyline && !_polyline->isClosed())
+            {
+                _polyline->closePolyline();
+            }
+
         }
         apply_PointSize_ToItem(_polyline);
         raiseAllHandlesToTop();
@@ -1064,15 +1251,144 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                             const QString selectedClass = dialog.selectedClass();
                             if (!selectedClass.isEmpty())
                             {
-                                _line->setData(0, selectedClass);
-                                applyClassColorToItem(_line, selectedClass);
-                                linkSceneItemToList(_line);
+                                // _line->setData(0, selectedClass);
+                                // applyClassColorToItem(_line, selectedClass);
+                                // linkSceneItemToList(_line);
 
-                                ShapeBackup b = makeBackupFromItem(_line);
-                                pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                                // ShapeBackup b = makeBackupFromItem(_line);
+                                // pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                                const qulonglong uid = ensureUid(_line);
+                                const QString cls = selectedClass;
+
+                                _drawingLine = false;
+
+                                auto redoFn = [this, uid, cls]()
+                                {
+                                    auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                                    if (!ln) return;
+
+                                    ln->setClosed(true, false);
+                                    ln->setData(0, cls);
+                                    applyClassColorToItem(ln, cls);
+                                    linkSceneItemToList(ln);
+
+                                    if (_line && ensureUid(_line) == uid)
+                                        _line = nullptr;
+
+                                    _drawingLine = false;
+                                    _resumeEditing = false;
+                                    _resumeUid = 0;
+
+                                    if (auto doc = currentDocument())
+                                    {
+                                        doc->isModified = true;
+                                        updateFileListDisplay(doc->filePath);
+                                    }
+                                    raiseAllHandlesToTop();
+                                };
+
+                                auto undoFn = [this, uid]()
+                                {
+                                    auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                                    if (!ln) return;
+
+                                    ln->setClosed(false, false);
+
+                                    _drawingLine = true;
+                                    _line = ln;
+
+                                    _resumeEditing = true;
+                                    _resumeUid = uid;
+
+                                    ln->setSelected(true);
+                                    ln->setFocus();
+
+                                    removeListEntryBySceneItem(ln);
+
+                                    if (auto doc = currentDocument())
+                                    {
+                                        doc->isModified = true;
+                                        updateFileListDisplay(doc->filePath);
+                                    }
+                                    raiseAllHandlesToTop();
+                                };
+
+                                if (QUndoStack* st = activeUndoStack())
+                                    st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
+                                else
+                                    redoFn();
+
                             }
                         }
                     }
+                    else
+                    {
+                        const qulonglong uid = ensureUid(_line);
+                        const QString cls = _line->data(0).toString();
+
+                        _drawingLine = false;
+
+                        auto redoFn = [this, uid, cls]()
+                        {
+                            auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                            if (!ln) return;
+
+                            ln->setClosed(true, false);
+
+                            if (!cls.isEmpty())
+                            {
+                                ln->setData(0, cls);
+                                applyClassColorToItem(ln, cls);
+                            }
+                            linkSceneItemToList(ln);
+
+                            if (_line && ensureUid(_line) == uid)
+                                _line = nullptr;
+
+                            _drawingLine = false;
+                            _resumeEditing = false;
+                            _resumeUid = 0;
+
+                            if (auto doc = currentDocument())
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
+                            raiseAllHandlesToTop();
+                        };
+
+                        auto undoFn = [this, uid]()
+                        {
+                            auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                            if (!ln) return;
+
+                            ln->setClosed(false, false);
+
+                            _drawingLine = true;
+                            _line = ln;
+
+                            _resumeEditing = true;
+                            _resumeUid = uid;
+
+                            ln->setSelected(true);
+                            ln->setFocus();
+
+                            removeListEntryBySceneItem(ln);
+
+                            if (auto doc = currentDocument())
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
+                            raiseAllHandlesToTop();
+                        };
+
+                        if (QUndoStack* st = activeUndoStack())
+                            st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
+                        else
+                            redoFn();
+                    }
+
                     _line = nullptr;
 
                     if (auto doc = currentDocument())
@@ -1084,7 +1400,60 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 }
             });
         }
-        _line->addPoint(_startPoint, _scene);
+        //_line->addPoint(_startPoint, _scene);
+        const QPointF p = _startPoint;
+        if (!_line->_circles.isEmpty() &&
+            QLineF(_line->_circles.last()->scenePos(), p).length() < 0.1)
+        {
+            // Ничего
+        }
+        else if (QUndoStack* st = activeUndoStack())
+        {
+            struct Payload
+            {
+                qulonglong uid = 0;
+                QPointF    pt;
+                bool       didAdd = false;
+            };
+
+            auto payload = std::make_shared<Payload>();
+            payload->uid = ensureUid(_line);
+            payload->pt  = p;
+
+            auto redoFn = [this, payload]()
+            {
+                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(payload->uid));
+                if (!ln) return;
+
+                const int before = ln->_circles.size();
+                ln->addPoint(payload->pt, _scene);
+                payload->didAdd = (ln->_circles.size() > before);
+
+                if (auto d = currentDocument())
+                {
+                    d->isModified = true;
+                    updateFileListDisplay(d->filePath);
+                }
+            };
+
+            auto undoFn = [this, payload]()
+            {
+                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(payload->uid));
+                if (!ln) return;
+
+                if (payload->didAdd)
+                    ln->removeLastPointForce(true);
+
+                if (auto d = currentDocument())
+                {
+                    d->isModified = true;
+                    updateFileListDisplay(d->filePath);
+                }
+            };
+
+            st->push(new LambdaCommand(redoFn, undoFn, tr("Узел линии")));
+        }
+
         // Завершение линии по Ctrl
         if (qgraph::Line::globalCloseMode() == qgraph::Line::CloseMode::CtrlModifier &&
             (mouseEvent->modifiers() & Qt::ControlModifier))
@@ -1541,15 +1910,143 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 const QString selectedClass = dialog.selectedClass();
                 if (!selectedClass.isEmpty())
                 {
-                    _polyline->setData(0, selectedClass);
-                    applyClassColorToItem(_polyline, selectedClass);
-                    linkSceneItemToList(_polyline);
+                    // _polyline->setData(0, selectedClass);
+                    // applyClassColorToItem(_polyline, selectedClass);
+                    // linkSceneItemToList(_polyline);
 
-                    ShapeBackup b = makeBackupFromItem(_polyline);
-                    pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                    // ShapeBackup b = makeBackupFromItem(_polyline);
+                    // pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                    const qulonglong uid = ensureUid(_polyline);
+                    const QString cls = selectedClass;
+
+                    auto redoFn = [this, uid, cls]()
+                    {
+                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                        if (!pl) return;
+
+                        pl->setClosed(true, true);
+
+                        pl->setData(0, cls);
+                        applyClassColorToItem(pl, cls);
+                        linkSceneItemToList(pl);
+
+                        if (_polyline && ensureUid(_polyline) == uid)
+                            _polyline = nullptr;
+
+                        _drawingPolyline = false;
+                        _resumeEditing = false;
+                        _resumeUid = 0;
+
+                        if (auto doc = currentDocument())
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                    };
+
+                    auto undoFn = [this, uid]()
+                    {
+                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                        if (!pl) return;
+
+                        pl->setClosed(false, false);
+                        _drawingPolyline = true;
+                        _polyline = pl;
+
+                        _resumeEditing = true;
+                        _resumeUid = uid;
+
+                        pl->setSelected(true);
+                        pl->setFocus();
+
+                        removeListEntryBySceneItem(pl);
+
+                        if (auto doc = currentDocument())
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+
+                        raiseAllHandlesToTop();
+                    };
+
+
+                    if (QUndoStack* st = activeUndoStack())
+                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+                    else
+                        redoFn();
+
                 }
             }
         }
+        else
+        {
+            const QString cls = _polyline->data(0).toString();
+            const qulonglong uid = ensureUid(_polyline);
+
+            _drawingPolyline = false;
+
+            auto redoFn = [this, uid, cls]()
+            {
+                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                if (!pl) return;
+
+                pl->setClosed(true, false);
+
+                if (!cls.isEmpty())
+                {
+                    pl->setData(0, cls);
+                    applyClassColorToItem(pl, cls);
+                }
+                linkSceneItemToList(pl);
+
+                if (_polyline && ensureUid(_polyline) == uid)
+                    _polyline = nullptr;
+
+                _drawingPolyline = false;
+                _resumeEditing = false;
+                _resumeUid = 0;
+
+                if (auto doc = currentDocument())
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+                raiseAllHandlesToTop();
+            };
+
+            auto undoFn = [this, uid]()
+            {
+                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                if (!pl) return;
+
+                pl->setClosed(false, false);
+
+                _drawingPolyline = true;
+                _polyline = pl;
+
+                _resumeEditing = true;
+                _resumeUid = uid;
+
+                pl->setSelected(true);
+                pl->setFocus();
+
+                removeListEntryBySceneItem(pl);
+
+                if (auto doc = currentDocument())
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+                raiseAllHandlesToTop();
+            };
+
+            if (QUndoStack* st = activeUndoStack())
+                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+            else
+                redoFn();
+        }
+
         _polyline = nullptr;
 
         if (auto doc = currentDocument())
@@ -1584,15 +2081,144 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 const QString selectedClass = dialog.selectedClass();
                 if (!selectedClass.isEmpty())
                 {
-                    _line->setData(0, selectedClass);
-                    applyClassColorToItem(_line, selectedClass);
-                    linkSceneItemToList(_line);
+                    // _line->setData(0, selectedClass);
+                    // applyClassColorToItem(_line, selectedClass);
+                    // linkSceneItemToList(_line);
 
-                    ShapeBackup b = makeBackupFromItem(_line);
-                    pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                    // ShapeBackup b = makeBackupFromItem(_line);
+                    // pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                    const qulonglong uid = ensureUid(_line);
+                    const QString cls = selectedClass;
+
+                    _drawingLine = false;
+
+                    auto redoFn = [this, uid, cls]()
+                    {
+                        auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        if (!ln) return;
+
+                        ln->setClosed(true, false);
+
+                        ln->setData(0, cls);
+                        applyClassColorToItem(ln, cls);
+                        linkSceneItemToList(ln);
+
+                        if (_line && ensureUid(_line) == uid)
+                            _line = nullptr;
+
+                        _drawingLine = false;
+                        _resumeEditing = false;
+                        _resumeUid = 0;
+
+                        if (auto doc = currentDocument())
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                        raiseAllHandlesToTop();
+                    };
+
+                    auto undoFn = [this, uid]()
+                    {
+                        auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        if (!ln) return;
+
+                        ln->setClosed(false, false);
+
+                        _drawingLine = true;
+                        _line = ln;
+
+                        _resumeEditing = true;
+                        _resumeUid = uid;
+
+                        ln->setSelected(true);
+                        ln->setFocus();
+
+                        removeListEntryBySceneItem(ln);
+
+                        if (auto doc = currentDocument())
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                        raiseAllHandlesToTop();
+                    };
+
+                    if (QUndoStack* st = activeUndoStack())
+                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
+                    else
+                        redoFn();
                 }
             }
         }
+        else
+        {
+            const qulonglong uid = ensureUid(_line);
+            const QString cls = _line->data(0).toString();
+
+            _drawingLine = false;
+
+            auto redoFn = [this, uid, cls]()
+            {
+                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                if (!ln) return;
+
+                ln->setClosed(true, false);
+
+                if (!cls.isEmpty())
+                {
+                    ln->setData(0, cls);
+                    applyClassColorToItem(ln, cls);
+                }
+                linkSceneItemToList(ln);
+
+                if (_line && ensureUid(_line) == uid)
+                    _line = nullptr;
+
+                _drawingLine = false;
+                _resumeEditing = false;
+                _resumeUid = 0;
+
+                if (auto doc = currentDocument())
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+                raiseAllHandlesToTop();
+            };
+
+            auto undoFn = [this, uid]()
+            {
+                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                if (!ln) return;
+
+                ln->setClosed(false, false);
+
+                _drawingLine = true;
+                _line = ln;
+
+                _resumeEditing = true;
+                _resumeUid = uid;
+
+                ln->setSelected(true);
+                ln->setFocus();
+
+                removeListEntryBySceneItem(ln);
+
+                if (auto doc = currentDocument())
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+                raiseAllHandlesToTop();
+            };
+
+            if (QUndoStack* st = activeUndoStack())
+                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
+            else
+                redoFn();
+        }
+
         _line = nullptr;
 
         if (auto doc = currentDocument())
@@ -1738,8 +2364,13 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     constexpr qreal kHit = 8.0;
                     if (QLineF(sp, p0).length() <= kHit)
                     {
-                        _drawingPolyline = false;
-                        _polyline->closePolyline();
+                        //_drawingPolyline = false;
+                        //_polyline->closePolyline();
+                        if (_polyline && !_polyline->isClosed())
+                        {
+                            _polyline->closePolyline();
+                        }
+
 
                         _polyline->updatePointNumbers();
                         apply_LineWidth_ToItem(_polyline);
@@ -1761,14 +2392,142 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                 const QString selectedClass = dialog.selectedClass();
                                 if (!selectedClass.isEmpty())
                                 {
-                                    _polyline->setData(0, selectedClass);
-                                    applyClassColorToItem(_polyline, selectedClass);
-                                    linkSceneItemToList(_polyline);
+                                    // _polyline->setData(0, selectedClass);
+                                    // applyClassColorToItem(_polyline, selectedClass);
+                                    // linkSceneItemToList(_polyline);
 
-                                    ShapeBackup b = makeBackupFromItem(_polyline);
-                                    pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                                    // ShapeBackup b = makeBackupFromItem(_polyline);
+                                    // pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                                    const qulonglong uid = ensureUid(_polyline);
+                                    const QString cls = selectedClass;
+
+                                    auto redoFn = [this, uid, cls]()
+                                    {
+                                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                        if (!pl) return;
+
+                                        pl->setClosed(true, true);
+
+                                        pl->setData(0, cls);
+                                        applyClassColorToItem(pl, cls);
+                                        linkSceneItemToList(pl);
+
+                                        if (_polyline && ensureUid(_polyline) == uid)
+                                            _polyline = nullptr;
+
+                                        _drawingPolyline = false;
+                                        _resumeEditing = false;
+                                        _resumeUid = 0;
+
+                                        if (auto doc = currentDocument())
+                                        {
+                                            doc->isModified = true;
+                                            updateFileListDisplay(doc->filePath);
+                                        }
+                                    };
+
+                                    auto undoFn = [this, uid]()
+                                    {
+                                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                        if (!pl) return;
+
+                                        pl->setClosed(false, false);
+
+                                        _drawingPolyline = true;
+                                        _polyline = pl;
+
+                                        _resumeEditing = true;
+                                        _resumeUid = uid;
+
+                                        pl->setSelected(true);
+                                        pl->setFocus();
+
+                                        removeListEntryBySceneItem(pl);
+
+                                        if (auto doc = currentDocument())
+                                        {
+                                            doc->isModified = true;
+                                            updateFileListDisplay(doc->filePath);
+                                        }
+
+                                        raiseAllHandlesToTop();
+                                    };
+
+
+                                    if (QUndoStack* st = activeUndoStack())
+                                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+                                    else
+                                        redoFn();
+
                                 }
                             }
+                        }
+                        else
+                        {
+                            const QString cls = _polyline->data(0).toString();
+                            const qulonglong uid = ensureUid(_polyline);
+
+                            _drawingPolyline = false;
+
+                            auto redoFn = [this, uid, cls]()
+                            {
+                                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                if (!pl) return;
+
+                                pl->setClosed(true, false);
+
+                                if (!cls.isEmpty())
+                                {
+                                    pl->setData(0, cls);
+                                    applyClassColorToItem(pl, cls);
+                                }
+                                linkSceneItemToList(pl);
+
+                                if (_polyline && ensureUid(_polyline) == uid)
+                                    _polyline = nullptr;
+
+                                _drawingPolyline = false;
+                                _resumeEditing = false;
+                                _resumeUid = 0;
+
+                                if (auto doc = currentDocument())
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
+                                raiseAllHandlesToTop();
+                            };
+
+                            auto undoFn = [this, uid]()
+                            {
+                                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                if (!pl) return;
+
+                                pl->setClosed(false, false);
+
+                                _drawingPolyline = true;
+                                _polyline = pl;
+
+                                _resumeEditing = true;
+                                _resumeUid = uid;
+
+                                pl->setSelected(true);
+                                pl->setFocus();
+
+                                removeListEntryBySceneItem(pl);
+
+                                if (auto doc = currentDocument())
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
+                                raiseAllHandlesToTop();
+                            };
+
+                            if (QUndoStack* st = activeUndoStack())
+                                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+                            else
+                                redoFn();
                         }
 
                         _polyline = nullptr;
@@ -6920,8 +7679,10 @@ void MainWindow::on_actClosePolyline_triggered()
     // Завершение рисования полилинии, если мы ее сейчас рисуем
     if (_drawingPolyline && _polyline)
     {
-        _drawingPolyline = false;
-        _polyline->closePolyline();
+        //_drawingPolyline = false;
+        //_polyline->closePolyline();
+        if (!_polyline->isClosed())
+                _polyline->closePolyline();
 
         _polyline->updatePointNumbers();
         apply_LineWidth_ToItem(_polyline);
@@ -6937,14 +7698,138 @@ void MainWindow::on_actClosePolyline_triggered()
                 const QString selectedClass = dialog.selectedClass();
                 if (!selectedClass.isEmpty())
                 {
-                    _polyline->setData(0, selectedClass);
-                    applyClassColorToItem(_polyline, selectedClass);
-                    linkSceneItemToList(_polyline);
+                    // _polyline->setData(0, selectedClass);
+                    // applyClassColorToItem(_polyline, selectedClass);
+                    // linkSceneItemToList(_polyline);
 
-                    ShapeBackup b = makeBackupFromItem(_polyline);
-                    pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                    // ShapeBackup b = makeBackupFromItem(_polyline);
+                    // pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                    const qulonglong uid = ensureUid(_polyline);
+                    const QString cls = selectedClass;
+
+                    auto redoFn = [this, uid, cls]()
+                    {
+                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                        if (!pl) return;
+                        pl->setClosed(true, true);
+
+                        pl->setData(0, cls);
+                        applyClassColorToItem(pl, cls);
+                        linkSceneItemToList(pl);
+
+                        if (_polyline && ensureUid(_polyline) == uid)
+                            _polyline = nullptr;
+
+                        _drawingPolyline = false;
+                        _resumeEditing = false;
+                        _resumeUid = 0;
+
+                        if (auto doc = currentDocument())
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                    };
+
+                    auto undoFn = [this, uid]()
+                    {
+                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                        if (!pl) return;
+
+                        pl->setClosed(false, false);
+
+                        _drawingPolyline = true;
+                        _polyline = pl;
+
+                        _resumeEditing = true;
+                        _resumeUid = uid;
+
+                        pl->setSelected(true);
+                        pl->setFocus();
+
+                        removeListEntryBySceneItem(pl);
+
+                        if (auto doc = currentDocument())
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+
+                        raiseAllHandlesToTop();
+                    };
+                    if (QUndoStack* st = activeUndoStack())
+                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+                    else
+                        redoFn();
                 }
             }
+        }
+        else
+        {
+            const QString cls = _polyline->data(0).toString();
+            const qulonglong uid = ensureUid(_polyline);
+
+            _drawingPolyline = false;
+
+            auto redoFn = [this, uid, cls]()
+            {
+                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                if (!pl) return;
+
+                pl->setClosed(true, false);
+
+                if (!cls.isEmpty())
+                {
+                    pl->setData(0, cls);
+                    applyClassColorToItem(pl, cls);
+                }
+                linkSceneItemToList(pl);
+
+                if (_polyline && ensureUid(_polyline) == uid)
+                    _polyline = nullptr;
+
+                _drawingPolyline = false;
+                _resumeEditing = false;
+                _resumeUid = 0;
+
+                if (auto doc = currentDocument())
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+                raiseAllHandlesToTop();
+            };
+
+            auto undoFn = [this, uid]()
+            {
+                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                if (!pl) return;
+
+                pl->setClosed(false, false);
+
+                _drawingPolyline = true;
+                _polyline = pl;
+
+                _resumeEditing = true;
+                _resumeUid = uid;
+
+                pl->setSelected(true);
+                pl->setFocus();
+
+                removeListEntryBySceneItem(pl);
+
+                if (auto doc = currentDocument())
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+                raiseAllHandlesToTop();
+            };
+
+            if (QUndoStack* st = activeUndoStack())
+                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+            else
+                redoFn();
         }
 
         _polyline = nullptr;
@@ -6976,15 +7861,144 @@ void MainWindow::on_actClosePolyline_triggered()
                 const QString selectedClass = dialog.selectedClass();
                 if (!selectedClass.isEmpty())
                 {
-                    _line->setData(0, selectedClass);
-                    applyClassColorToItem(_line, selectedClass);
-                    linkSceneItemToList(_line);
+                    // _line->setData(0, selectedClass);
+                    // applyClassColorToItem(_line, selectedClass);
+                    // linkSceneItemToList(_line);
 
-                    ShapeBackup b = makeBackupFromItem(_line);
-                    pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                    // ShapeBackup b = makeBackupFromItem(_line);
+                    // pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                    const qulonglong uid = ensureUid(_line);
+                    const QString cls = selectedClass;
+
+                    _drawingLine = false;
+
+                    auto redoFn = [this, uid, cls]()
+                    {
+                        auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        if (!ln) return;
+
+                        ln->setClosed(true, false);
+
+                        ln->setData(0, cls);
+                        applyClassColorToItem(ln, cls);
+                        linkSceneItemToList(ln);
+
+                        if (_line && ensureUid(_line) == uid)
+                            _line = nullptr;
+
+                        _drawingLine = false;
+                        _resumeEditing = false;
+                        _resumeUid = 0;
+
+                        if (auto doc = currentDocument())
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                        raiseAllHandlesToTop();
+                    };
+
+                    auto undoFn = [this, uid]()
+                    {
+                        auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        if (!ln) return;
+
+                        ln->setClosed(false, false);
+
+                        _drawingLine = true;
+                        _line = ln;
+
+                        _resumeEditing = true;
+                        _resumeUid = uid;
+
+                        ln->setSelected(true);
+                        ln->setFocus();
+
+                        removeListEntryBySceneItem(ln);
+
+                        if (auto doc = currentDocument())
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                        raiseAllHandlesToTop();
+                    };
+
+                    if (QUndoStack* st = activeUndoStack())
+                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
+                    else
+                        redoFn();
                 }
             }
         }
+        else
+        {
+            const qulonglong uid = ensureUid(_line);
+            const QString cls = _line->data(0).toString();
+
+            _drawingLine = false;
+
+            auto redoFn = [this, uid, cls]()
+            {
+                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                if (!ln) return;
+
+                ln->setClosed(true, false);
+
+                if (!cls.isEmpty())
+                {
+                    ln->setData(0, cls);
+                    applyClassColorToItem(ln, cls);
+                }
+                linkSceneItemToList(ln);
+
+                if (_line && ensureUid(_line) == uid)
+                    _line = nullptr;
+
+                _drawingLine = false;
+                _resumeEditing = false;
+                _resumeUid = 0;
+
+                if (auto doc = currentDocument())
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+                raiseAllHandlesToTop();
+            };
+
+            auto undoFn = [this, uid]()
+            {
+                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                if (!ln) return;
+
+                ln->setClosed(false, false);
+
+                _drawingLine = true;
+                _line = ln;
+
+                _resumeEditing = true;
+                _resumeUid = uid;
+
+                ln->setSelected(true);
+                ln->setFocus();
+
+                removeListEntryBySceneItem(ln);
+
+                if (auto doc = currentDocument())
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+                raiseAllHandlesToTop();
+            };
+
+            if (QUndoStack* st = activeUndoStack())
+                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
+            else
+                redoFn();
+        }
+
 
         _line = nullptr;
 

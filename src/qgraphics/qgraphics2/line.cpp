@@ -146,7 +146,7 @@ void Line::removePoint(QPointF position)
     }
 
     // Удаляем круг, если он есть
-    if (closestCircle && minDistance < 10.0) // 10.0 — радиус точности зоны удаления
+    if (closestCircle && minDistance < 10.0)
     {
         handlePointDeletion(closestCircle);
     }
@@ -247,18 +247,7 @@ void Line::insertPoint(QPointF position)
 
 void Line::closeLine()
 {
-    if (_circles.size() > 1)
-   {
-       _isClosed = true;
-
-       // Для замкнутой линию просто устанавливаем флаг
-       // и обновляем соединения между точками
-       updateConnections();
-       updatePath();
-
-       if (_modificationCallback)
-            _modificationCallback();
-   }
+    setClosed(true, true);
 }
 
 bool Line::isClickOnAnyPoint(const QPointF& scenePos, int* idx) const
@@ -308,6 +297,59 @@ QVariant Line::itemChange(GraphicsItemChange change, const QVariant& value)
     return QGraphicsPathItem::itemChange(change, value);
 }
 
+bool Line::removeLastPointForce(bool callCallback)
+{
+    if (!scene())
+        return false;
+
+    if (_circles.size() <= 1)
+        return false;
+
+    DragCircle* circle = _circles.takeLast();
+    if (!circle)
+        return false;
+
+    circle->invalidate();
+    circle->disconnect();
+
+    if (scene())
+        scene()->removeItem(circle);
+
+    delete circle;
+
+    if (_isClosed && _circles.size() <= 2)
+        _isClosed = false;
+
+    updatePath();
+    updatePointNumbers();
+
+    if (callCallback && _modificationCallback)
+        _modificationCallback();
+
+    return true;
+}
+
+void Line::setClosed(bool closed, bool callCallback)
+{
+    if (closed)
+    {
+        if (_circles.size() <= 1) return;
+        if (_isClosed) return;
+        _isClosed = true;
+    }
+    else
+    {
+        if (!_isClosed) return;
+        _isClosed = false;
+    }
+
+    updateConnections();
+    updatePath();
+    updatePointNumbers();
+
+    if (callCallback && _modificationCallback)
+        _modificationCallback();
+}
 
 
 void Line::handlePointDeletion(DragCircle* circle)

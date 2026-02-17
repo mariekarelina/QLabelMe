@@ -3,6 +3,7 @@
 #include <QPen>
 #include <QKeyEvent>
 #include <QRectF>
+#include <QTimer>
 #include <QGraphicsSceneMouseEvent>
 #include <QStyleOptionGraphicsItem>
 #include <QCursor>
@@ -119,10 +120,6 @@ void Polyline::addPoint(const QPointF& position, QGraphicsScene* scene)
     updateConnections();
     updatePath();
     updatePointNumbers();
-    if (_modificationCallback)
-    {
-        _modificationCallback();
-    }
 }
 
 void Polyline::removePoint(QPointF position)
@@ -148,7 +145,7 @@ void Polyline::removePoint(QPointF position)
     }
 
     // Удаляем круг, если он есть
-    if (closestCircle && minDistance < 10.0) // 10.0 — радиус точности зоны удаления
+    if (closestCircle && minDistance < 10.0)
     {
         handlePointDeletion(closestCircle);
     }
@@ -238,29 +235,13 @@ void Polyline::insertPoint(QPointF position)
 
         updateConnections();
         updatePath();
-        if (_modificationCallback)
-        {
-            _modificationCallback();
-        }
     }
     updatePointNumbers();
 }
 
-
 void Polyline::closePolyline()
 {
-    if (_circles.size() > 2 && !_isClosed)
-   {
-       _isClosed = true;
-
-       // Для замкнутой полилинии просто устанавливаем флаг
-       // и обновляем соединения между точками
-       updateConnections();
-       updatePath();
-
-       if (_modificationCallback)
-            _modificationCallback();
-   }
+    setClosed(true, true);
 }
 
 bool Polyline::isClickOnFirstPoint(const QPointF& scenePos) const
@@ -324,6 +305,68 @@ QVariant Polyline::itemChange(GraphicsItemChange change, const QVariant& value)
     return QGraphicsPathItem::itemChange(change, value);
 }
 
+bool Polyline::removeLastPointForce(bool callCallback)
+{
+    if (!scene())
+        return false;
+
+    if (_circles.size() <= 1)
+        return false; // оставляем стартовую точку
+
+    DragCircle* circle = _circles.takeLast();
+    if (!circle)
+        return false;
+
+    circle->invalidate();
+    circle->disconnect();
+
+    if (scene())
+        scene()->removeItem(circle);
+
+    delete circle;
+
+    // Если вдруг была замкнута и точек стало мало — размыкаем
+    if (_isClosed && _circles.size() <= 2)
+        _isClosed = false;
+
+    updatePath();
+    updatePointNumbers();
+
+    return true;
+}
+
+void Polyline::setClosed(bool closed, bool callCallback)
+{
+    // Полилинию имеет смысл замыкать только при >=3 точках
+    if (closed)
+    {
+        if (_circles.size() <= 2) return;
+        if (_isClosed) return;
+        _isClosed = true;
+    }
+    else
+    {
+        if (!_isClosed) return;
+        _isClosed = false;
+    }
+
+    updateConnections();
+    updatePath();
+
+    if (callCallback && _modificationCallback && !_closeCallbackScheduled)
+    {
+        _closeCallbackScheduled = true;
+
+        auto cb = _modificationCallback;
+
+        QTimer::singleShot(0, [this, cb]()
+        {
+            _closeCallbackScheduled = false;
+            cb();
+        });
+    }
+
+}
 
 void Polyline::handlePointDeletion(DragCircle* circle)
 {
@@ -357,10 +400,6 @@ void Polyline::handlePointDeletion(DragCircle* circle)
 
         updatePath();
         updatePointNumbers();
-        if (_modificationCallback)
-        {
-            _modificationCallback();
-        }
     }
 }
 
@@ -405,13 +444,6 @@ void Polyline::keyPressEvent(QKeyEvent* event)
         moveToBack();
         event->accept();
     }
-    else if (s_closeMode == CloseMode::KeyC &&
-            (event->key() == Qt::Key_C))
-    {
-        closePolyline();
-        event->accept();
-        return;
-    }
     else
     {
         // Передаем событие дальше, если это не `Del`
@@ -421,16 +453,17 @@ void Polyline::keyPressEvent(QKeyEvent* event)
 
 void Polyline::mousePressEvent(QGraphicsSceneMouseEvent* event)
 {
-    if (s_closeMode == CloseMode::SingleClickOnFirstPoint &&
-        event->button() == Qt::LeftButton)
-    {
-        if (isClickOnFirstPoint(event->scenePos()))
-        {
-            closePolyline();
-            event->accept();
-            return;
-        }
-    }
+    // if (s_closeMode == CloseMode::SingleClickOnFirstPoint &&
+    //     event->button() == Qt::LeftButton)
+    // {
+    //     if (isClickOnFirstPoint(event->scenePos()))
+    //     {
+    //         closePolyline();
+    //         event->accept();
+    //         return;
+    //     }
+    // }
+    QGraphicsPathItem::mousePressEvent(event);
 }
 
 void Polyline::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event)
@@ -632,9 +665,14 @@ void Polyline::dragCircleRelease(DragCircle* circle)
     Q_UNUSED(circle);
     updatePath(); // Обновляем путь при любом перемещении
     updatePointNumbers(); // Обновляем позиции номеров
+
+    if (_isClosed || _closeCallbackScheduled)
+        return;
+
     if (_modificationCallback)
     {
-        _modificationCallback();
+        auto cb = _modificationCallback;
+        QTimer::singleShot(0, [cb]() { cb(); });
     }
 }
 
@@ -790,10 +828,7 @@ void Polyline::replaceScenePoints(const QVector<QPointF>& scenePts, bool closed)
 
     updatePath();
     updatePointNumbers();
-    if (_modificationCallback)
-        _modificationCallback();
 }
-
 
 void Polyline::updateConnections()
 {
@@ -1033,8 +1068,8 @@ int Polyline::countIntersections(const QLineF& testLine, int excludePointIndex)
 void Polyline::applyNumberStyle(qreal fontSize, const QColor& textColor, const QColor& bgColor)
 {
     _numberFontSize = fontSize; // Сохраняем размер шрифта
-    _numberColor = textColor;   // Сохраняем цвет текста
-    _numberBgColor = bgColor;   // Сохраняем цвет фона
+    _numberColor = textColor; // Сохраняем цвет текста
+    _numberBgColor = bgColor; // Сохраняем цвет фона
 
     // Сохраняем текущие позиции кругов
     QVector<QPointF> circlePositions;

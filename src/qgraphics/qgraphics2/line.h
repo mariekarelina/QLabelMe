@@ -37,14 +37,17 @@ public:
     bool isClickOnAnyPoint(const QPointF& scenePos, int* idx = nullptr) const;
     void updatePath(); // Метод для обновления пути на основе позиций кругов
     QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
+    // Undo/Redo узлов в режиме рисования
+    bool removeLastPointForce(bool callCallback = true);
+    void setClosed(bool closed, bool callCallback = true);
 
     void handlePointDeletion(DragCircle* circle);
 
     enum class CloseMode
     {
         DoubleClick,      // 1) По двойному клику ЛКМ
-        CtrlModifier,               // 3) Через Ctrl
-        KeyC                        // 4) Нажатие 'C'
+        CtrlModifier,     // 3) Через Ctrl
+        KeyC              // 4) Нажатие 'C'
     };
 
     bool isClosed() const { return _isClosed; }
