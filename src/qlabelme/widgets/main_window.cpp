@@ -55,6 +55,7 @@
 #include <QClipboard>
 #include <QMimeData>
 #include <QGuiApplication>
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <QDoubleSpinBox>
@@ -149,7 +150,9 @@ static bool sameGeometry(const ShapeBackup& a, const ShapeBackup& b)
 
     case ShapeKind::Line:
         return a.points == b.points
+            && a.numberingFromLast == b.numberingFromLast
             && a.z == b.z && a.visible == b.visible && a.className == b.className;
+
 
     case ShapeKind::Point:
         return a.pointCenter == b.pointCenter
@@ -1249,6 +1252,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             apply_PointSize_ToItem(_line);
             apply_NumberSize_ToItem(_line);
             _line->setFocus();
+            ShapeBackup b0 = makeBackupFromItem(_line);
+            pushAdoptExistingShapeCommand(_line, b0, tr("Узел линии"));
             _line->setModificationCallback([this]()
             {
                 if (_drawingLine && _line && _line->isClosed())
@@ -2796,6 +2801,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         QMenu menu(ui->graphView);
                         QAction* actRemove = menu.addAction(tr("Удалить узел"));
                         QAction* actResume = menu.addAction(tr("Возобновить редактирование"));
+                        QAction* actRecalc = menu.addAction(tr("Пересчитать нумерацию"));
 
                         QAction* chosen = menu.exec(ce->globalPos());
 
@@ -2857,6 +2863,32 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                 }
                             });
                         }
+                        else if (chosen == actRecalc)
+                        {
+                            ShapeBackup before = makeBackupFromItem(polyline);
+                            qulonglong uid = before.uid;
+
+                            const auto& circles = polyline->circles();
+                            const int idx = circles.indexOf(circle);
+                            if (idx < 0)
+                            {
+                                ce->accept();
+                                return true;
+                            }
+
+                            for (int i = 0; i < idx; ++i)
+                                polyline->rotatePointsClockwise();
+
+                            ShapeBackup after = makeBackupFromItem(polyline);
+                            if (!sameGeometry(before, after))
+                                pushModifyShapeCommand(uid, before, after, tr("Пересчет нумерации"));
+
+                            if (auto doc = currentDocument(); doc && !doc->isModified)
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
+                        }
                         ce->accept();
                         return true;
                     }
@@ -2866,6 +2898,11 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                         QAction* actRemove = menu.addAction(tr("Удалить узел"));
                         QAction* actResume = menu.addAction(tr("Возобновить редактирование"));
+                        QAction* actRecalc = nullptr;
+                        const auto& circles = line->circles();
+                        const int idx = circles.indexOf(circle);
+                        if (idx == 0 || idx == circles.size() - 1)
+                            actRecalc = menu.addAction(tr("Пересчитать нумерацию"));
 
                         QAction* chosen = menu.exec(ce->globalPos());
 
@@ -2928,6 +2965,50 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                     setSceneItemsMovable(true);
                                 }
                             });
+                        }
+                        else if (actRecalc && chosen == actRecalc)
+                        {
+                            ShapeBackup before = makeBackupFromItem(line);
+                            qulonglong uid = before.uid;
+
+                            const bool fromLast = (idx == circles.size() - 1);
+                            line->setNumberingFromLast(fromLast);
+
+                            ShapeBackup after = makeBackupFromItem(line);
+                            if (!sameGeometry(before, after))
+                                pushModifyShapeCommand(uid, before, after, tr("Пересчет нумерации"));
+
+                            if (auto doc = currentDocument(); doc && !doc->isModified)
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
+                        }
+                        ce->accept();
+                        return true;
+                    }
+                    if (auto* rect = dynamic_cast<qgraph::Rectangle*>(parent))
+                    {
+                        QMenu menu(ui->graphView);
+                        QAction* actRecalc = menu.addAction(tr("Пересчитать нумерацию"));
+
+                        QAction* chosen = menu.exec(ce->globalPos());
+                        if (chosen == actRecalc)
+                        {
+                            ShapeBackup before = makeBackupFromItem(rect);
+                            qulonglong uid = before.uid;
+
+                            rect->recalcNumberingFromHandle(circle);
+
+                            ShapeBackup after = makeBackupFromItem(rect);
+                            if (!sameGeometry(before, after))
+                                pushModifyShapeCommand(uid, before, after, tr("Пересчет нумерации"));
+
+                            if (auto doc = currentDocument(); doc && !doc->isModified)
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
                         }
                         ce->accept();
                         return true;
@@ -5803,9 +5884,6 @@ void MainWindow::finishHandleDrag()
         {
             // красивое имя действия
             QString what = tr("Перемещение узла");
-            if (m_dragHandle) {
-                what += tr(" #1").arg(m_dragHandle->index());
-            }
             pushHandleEditCommand(_handleEditedItem, _handleBeforeSnap, after, what);
         }
     }
@@ -6834,7 +6912,9 @@ ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* gi) const
     else if (auto* c = dynamic_cast<qgraph::Circle*>(gi))
     {
         b.kind = ShapeKind::Circle;
-        b.circleCenter = c->center();
+        //b.circleCenter = c->center();
+        const QPointF sc = c->sceneBoundingRect().center(); // Центр в координатах сцены
+        b.circleCenter = QPoint(qRound(sc.x()), qRound(sc.y()));
         b.circleRadius = c->realRadius();
     }
     else if (auto* pl = dynamic_cast<qgraph::Polyline*>(gi))
@@ -6848,6 +6928,7 @@ ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* gi) const
         b.kind  = ShapeKind::Line;
         b.points = ln->points();
         b.closed = ln->isClosed();
+        b.numberingFromLast = ln->isNumberingFromLast();
     }
     else if (auto* p = dynamic_cast<qgraph::Point*>(gi))
     {
@@ -7328,6 +7409,13 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
             applyClassColorToItem(c, b.className);
             c->setZValue(b.z);
             c->setVisible(b.visible);
+
+            const QPointF cur = c->sceneBoundingRect().center();
+            const QPointF dst = QPointF(b.circleCenter);
+            const QPointF d = dst - cur;
+            if (!qFuzzyIsNull(d.x()) || !qFuzzyIsNull(d.y()))
+                c->moveBy(d.x(), d.y());
+
             c->updateHandlePosition();
         }
         break;
@@ -7357,7 +7445,7 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
         {
 
             ln->replaceScenePoints(b.points, b.closed);
-
+            ln->setNumberingFromLast(b.numberingFromLast);
             apply_LineWidth_ToItem(ln);
             apply_PointSize_ToItem(ln);
             apply_NumberSize_ToItem(ln);
@@ -8846,4 +8934,3 @@ void MainWindow::on_actUserGuide_triggered()
 {
 
 }
-

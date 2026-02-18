@@ -65,7 +65,7 @@ Rectangle::~Rectangle()
     delete _circleBL;
 
 
-    qDeleteAll(pointNumbers);    // Удаляем номера
+    qDeleteAll(pointNumbers); // Удаляем номера
     qDeleteAll(numberBackgrounds); // Удаляем фоны
     pointNumbers.clear();
     numberBackgrounds.clear();
@@ -237,8 +237,8 @@ void Rectangle::setRealSceneRect(const QRectF& r)
     QRectF rect(0, 0, r.width(), r.height()); // Размеры прямоугольника без учета масштаба
 
     prepareGeometryChange();
-    setRect(rect);   // Обновляем размеры
-    setPos(pos);     // Устанавливаем позицию
+    setRect(rect); // Обновляем размеры
+    setPos(pos); // Устанавливаем позицию
 
     _circleTL->setVisible(true);
     _circleTR->setVisible(true);
@@ -296,7 +296,6 @@ void Rectangle::keyPressEvent(QKeyEvent* event)
     }
     else
     {
-        // Передаем событие дальше, если это не `Del`
         QGraphicsRectItem::keyPressEvent(event);
     }
 }
@@ -660,6 +659,24 @@ void Rectangle::moveToBack()
     }
 
     scene()->update();
+}
+
+void Rectangle::recalcNumberingFromHandle(DragCircle* handle)
+{
+    if (!handle)
+        return;
+
+    int i = -1;
+    if (handle == _circleTL) i = 0;
+    else if (handle == _circleTR) i = 1;
+    else if (handle == _circleBR) i = 2;
+    else if (handle == _circleBL) i = 3;
+
+    if (i < 0)
+        return;
+
+    _numberingOffset = (4 - i) % 4;
+    updatePointNumbers();
 }
 
 } // namespace qgraph

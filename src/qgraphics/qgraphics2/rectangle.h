@@ -51,11 +51,10 @@ public:
     void updateHandlesZValue();
     void raiseHandlesToTop() override;
     void moveToBack();
-
+    void recalcNumberingFromHandle(DragCircle* handle);
 
 public slots:
     void deleteItem();
-
 
 protected:
     // Переопределяем обработчик событий клавиатуры
@@ -68,11 +67,9 @@ protected:
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
                QWidget* widget = nullptr) override;
 
-
 private slots:
     void handleHandleHoverEnter();
     void handleHandleHoverLeave();
-
 
 private:
     DragCircle* _circleTL; // Левый верхний угол

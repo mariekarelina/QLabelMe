@@ -42,6 +42,8 @@ public:
     void setClosed(bool closed, bool callCallback = true);
 
     void handlePointDeletion(DragCircle* circle);
+    bool isNumberingFromLast() const { return _numberingFromLast; }
+    void setNumberingFromLast(bool v);
 
     enum class CloseMode
     {
@@ -130,6 +132,9 @@ public:
     QGraphicsRectItem* _selectionRect = nullptr;
     bool _selectionRectVisible = true;
     std::function<void()> _modificationCallback; // Callback для уведомлений
+
+private:
+    bool _numberingFromLast = false;
 };
 
 } // namespace qgraph

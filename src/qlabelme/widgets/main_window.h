@@ -155,6 +155,8 @@ struct ShapeBackup
 
     bool closed = false;
     qulonglong uid = 0;
+
+    bool numberingFromLast = false;
 };
 
 class MainWindow : public QMainWindow

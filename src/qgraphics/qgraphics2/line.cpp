@@ -48,7 +48,7 @@ Line::Line(QGraphicsScene* scene, const QPointF& scenePos)
 
 Line::~Line()
 {
-    qDeleteAll(pointNumbers);    // Удаляем номера
+    qDeleteAll(pointNumbers); // Удаляем номера
     qDeleteAll(numberBackgrounds); // Удаляем фоны
     pointNumbers.clear();
     numberBackgrounds.clear();
@@ -156,7 +156,7 @@ void Line::insertPoint(QPointF position)
 {
     if (_circles.size() < 2)
     {
-        return;  // Если точек меньше двух, вставка невозможна
+        return; // Если точек меньше двух, вставка невозможна
     }
 
     // Преобразуем позицию в локальные координаты
@@ -381,6 +381,15 @@ void Line::handlePointDeletion(DragCircle* circle)
             _modificationCallback();
         }
     }
+}
+
+void Line::setNumberingFromLast(bool v)
+{
+    if (_numberingFromLast == v)
+        return;
+
+    _numberingFromLast = v;
+    updatePointNumbers();
 }
 
 QVector<QPointF> Line::points() const
@@ -908,7 +917,9 @@ void Line::updatePointNumbers()
         QPointF numberPos = circlePos + direction * offsetDistance;
 
         // Создаем номер
-        QGraphicsSimpleTextItem* number = new QGraphicsSimpleTextItem(QString::number(i), this);
+        //QGraphicsSimpleTextItem* number = new QGraphicsSimpleTextItem(QString::number(i), this);
+        const int labelIndex = _numberingFromLast ? (_circles.size() - 1 - i) : i;
+        QGraphicsSimpleTextItem* number = new QGraphicsSimpleTextItem(QString::number(labelIndex), this);
         number->setBrush(_numberColor);
         number->setZValue(1001);
         number->setPen(Qt::NoPen);
