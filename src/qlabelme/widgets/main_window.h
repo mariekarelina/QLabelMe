@@ -41,6 +41,7 @@
 #include <QUndoCommand>
 #include <QShortcut>
 #include <optional>
+#include <QRubberBand>
 #include <QPointer>
 
 #include <QUndoStack>
@@ -659,6 +660,13 @@ private:
     bool _resumeEditing = false;
     qulonglong _resumeUid = 0;
     ShapeBackup _resumeBefore;
+
+    // Зум прямоугольной области Ctrl + ЛКМ
+    bool _zoomRectActive = false;
+    QPoint _zoomRectOrigin;
+    QPointer<QRubberBand> _zoomRubberBand;
+    QPointer<GraphicsView> _zoomRectView;
+    bool _zoomRectWasInteractive = true;
 
     // Стабильный ключ в QGraphicsItem::data(...)
     static constexpr int RoleUid = 0x1337ABCD;

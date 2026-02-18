@@ -654,6 +654,30 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     {
         return;
     }
+    // Зум прямоугольной области Ctrl + ЛКМ
+    if (graphView &&
+        mouseEvent->button() == Qt::LeftButton &&
+        (mouseEvent->modifiers() & Qt::ControlModifier) &&
+        !(mouseEvent->modifiers() & Qt::ShiftModifier))
+    {
+        _zoomRectActive = true;
+        // Чтобы фигуры/сцена не начали двигались во время зума
+        _leftMouseButtonDown = false;
+
+        _zoomRectView = graphView;
+        _zoomRectWasInteractive = graphView->isInteractive();
+        graphView->setInteractive(false);
+        _zoomRectOrigin = mouseEvent->pos();
+
+        if (!_zoomRubberBand)
+            _zoomRubberBand = new QRubberBand(QRubberBand::Rectangle, graphView->viewport());
+
+        _zoomRubberBand->setGeometry(QRect(_zoomRectOrigin, QSize()));
+        _zoomRubberBand->show();
+
+        mouseEvent->accept();
+        return;
+    }
     // Было написано для создания иконки
     if ((mouseEvent->modifiers() & Qt::ControlModifier) &&
         (mouseEvent->button() == Qt::RightButton))
@@ -1514,7 +1538,13 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
 void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
 {
-
+    // Зум прямоугольной области Ctrl + ЛКМ
+    if (_zoomRectActive && _zoomRubberBand)
+    {
+        _zoomRubberBand->setGeometry(QRect(_zoomRectOrigin, mouseEvent->pos()).normalized());
+        mouseEvent->accept();
+        return;
+    }
     if (_isDrawingRuler && _rulerLine)
        {
            QPointF currentPoint = graphView->mapToScene(mouseEvent->pos());
@@ -1672,6 +1702,37 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 {
     if (mouseEvent->button() == Qt::LeftButton)
         _leftMouseButtonDown = false;
+
+    // Зум прямоугольной области Ctrl + ЛКМ
+    if (_zoomRectActive && graphView && mouseEvent->button() == Qt::LeftButton)
+    {
+        _zoomRectActive = false;
+        if (_zoomRectView)
+        {
+            _zoomRectView->setInteractive(_zoomRectWasInteractive);
+            _zoomRectView.clear();
+        }
+
+        QRect viewRect;
+        if (_zoomRubberBand)
+        {
+            viewRect = _zoomRubberBand->geometry().normalized();
+            _zoomRubberBand->hide();
+        }
+        if (viewRect.width() >= 10 && viewRect.height() >= 10)
+        {
+            const QRectF sceneRect = graphView->mapToScene(viewRect).boundingRect();
+
+            graphView->fitInView(sceneRect, Qt::KeepAspectRatio);
+            graphView->centerOn(sceneRect.center());
+
+            if (auto doc = currentDocument())
+                saveCurrentViewState(doc);
+        }
+
+        mouseEvent->accept();
+        return;
+    }
 
     if (_shiftImageDragging && mouseEvent->button() == Qt::LeftButton)
     {
