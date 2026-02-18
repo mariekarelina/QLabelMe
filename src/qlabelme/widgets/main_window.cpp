@@ -8122,6 +8122,12 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
     //loadClassesFromFile(folderPath + "/classes.yaml");
     QDir dir(folderPath);
     loadClassesFromFile(dir.filePath("classes.yaml"));
+    // Открыть первое изображение из папки
+    if (ui->fileList->count() > 0)
+    {
+        ui->fileList->setCurrentRow(0);
+        ui->fileList->scrollToItem(ui->fileList->currentItem());
+    }
 }
 
 void MainWindow::onSceneItemRemoved(QGraphicsItem* item)
