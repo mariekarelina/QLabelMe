@@ -325,7 +325,6 @@ bool Polyline::removeLastPointForce(bool callCallback)
 
     delete circle;
 
-    // Если вдруг была замкнута и точек стало мало — размыкаем
     if (_isClosed && _circles.size() <= 2)
         _isClosed = false;
 

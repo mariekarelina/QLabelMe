@@ -441,9 +441,6 @@
    <property name="text">
     <string>Завершить полилинию</string>
    </property>
-   <property name="shortcut">
-    <string>C</string>
-   </property>
   </action>
   <action name="actBack">
    <property name="text">

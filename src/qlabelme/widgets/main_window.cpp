@@ -427,12 +427,12 @@ MainWindow::MainWindow(QWidget *parent) :
 
     _lastHoverHandle = nullptr;
 
-    int cmPolyline = static_cast<int>(Settings::PolylineCloseMode::CtrlModifier);
+    int cmPolyline = static_cast<int>(Settings::PolylineCloseMode::DoubleClick);
     config::base().getValue("polyline.close_mode", cmPolyline);
     _polylineCloseMode = static_cast<Settings::PolylineCloseMode>(cmPolyline);
     applyClosePolyline();
 
-    int cmLine = static_cast<int>(Settings::LineFinishMode::CtrlModifier);
+    int cmLine = static_cast<int>(Settings::LineFinishMode::DoubleClick);
     config::base().getValue("line.finish_mode", cmLine);
     _lineFinishMode = static_cast<Settings::LineFinishMode>(cmLine);
     applyFinishLine();
@@ -6546,7 +6546,7 @@ void MainWindow::applyClosePolyline()
     using SDM = Settings::PolylineCloseMode;
     using PLM = qgraph::Polyline::CloseMode;
 
-    qgraph::Polyline::CloseMode mode = PLM::CtrlModifier;
+    qgraph::Polyline::CloseMode mode = PLM::DoubleClick;
     switch (_polylineCloseMode)
     {
         case SDM::DoubleClick:             mode = PLM::DoubleClick;   break;
@@ -6555,6 +6555,8 @@ void MainWindow::applyClosePolyline()
         case SDM::KeyCWithoutNewPoint:     mode = PLM::KeyC;                    break;
     }
     qgraph::Polyline::setGlobalCloseMode(mode);
+    if (ui && ui->actClosePolyline)
+        ui->actClosePolyline->setShortcut(mode == PLM::KeyC ? QKeySequence(Qt::Key_C) : QKeySequence());
 }
 
 void MainWindow::applyFinishLine()
@@ -6563,7 +6565,7 @@ void MainWindow::applyFinishLine()
     using SDM = Settings::LineFinishMode;
     using PLM = qgraph::Line::CloseMode;
 
-    qgraph::Line::CloseMode mode = PLM::CtrlModifier;
+    qgraph::Line::CloseMode mode = PLM::DoubleClick;
     switch (_lineFinishMode)
     {
         case SDM::DoubleClick: mode = PLM::DoubleClick;
