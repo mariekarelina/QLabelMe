@@ -661,7 +661,13 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     if (graphView &&
         mouseEvent->button() == Qt::LeftButton &&
         (mouseEvent->modifiers() & Qt::ControlModifier) &&
-        !(mouseEvent->modifiers() & Qt::ShiftModifier))
+        !(mouseEvent->modifiers() & Qt::ShiftModifier) &&
+        !_drawingPolyline &&
+        !_drawingLine &&
+        !_drawingRectangle &&
+        !_drawingCircle &&
+        !_drawingPoint &&
+        !_drawingRuler)
     {
         _zoomRectActive = true;
         // Чтобы фигуры/сцена не начали двигались во время зума
@@ -1731,6 +1737,10 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             graphView->fitInView(sceneRect, Qt::KeepAspectRatio);
             graphView->centerOn(sceneRect.center());
 
+            m_zoom = graphView->transform().m11();
+            if (m_zoom <= 0.000001)
+                m_zoom = 1.0;
+
             if (auto doc = currentDocument())
                 saveCurrentViewState(doc);
         }
@@ -2436,19 +2446,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         {
                             _polyline->closePolyline();
                         }
-
-
-                        _polyline->updatePointNumbers();
-                        apply_LineWidth_ToItem(_polyline);
-                        apply_PointSize_ToItem(_polyline);
-                        apply_NumberSize_ToItem(_polyline);
-
-                        // Выбор класса
-                        // QStringList classes;
-                        // for (int i = 0; i < ui->polygonLabel->count(); ++i)
-                        //     classes << ui->polygonLabel->item(i)->text();
-
-                        // SelectClass dialog(classes, this);
+                        event->accept();
+                        return true;
 
                         if (!_resumeEditing)
                         {
@@ -2761,21 +2760,22 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             constexpr double kZoomMin  = 0.10;
             constexpr double kZoomMax  = 8.00;
 
-            QTransform base = ui->graphView->transform();
-            if (m_zoom != 0.0)
-            {
-                QTransform inv; inv.scale(1.0 / m_zoom, 1.0 / m_zoom);
-                base = base * inv;
-            }
+            double oldZoom = m_zoom;
+            if (oldZoom <= 0.000001)
+                oldZoom = ui->graphView->transform().m11();
+            if (oldZoom <= 0.000001)
+                oldZoom = 1.0;
 
             // Новый абсолютный зум
-            double nz = m_zoom * std::pow(kZoomStep, steps);
+            double nz = oldZoom * std::pow(kZoomStep, steps);
             if (nz < kZoomMin) nz = kZoomMin;
             if (nz > kZoomMax) nz = kZoomMax;
 
+            // Применяем как относительный множитель
+            const double factor = nz / oldZoom;
             m_zoom = nz;
-            ui->graphView->setTransform(base);
-            ui->graphView->scale(m_zoom, m_zoom);
+
+            ui->graphView->scale(factor, factor);
 
             // Сохраняем состояние при изменении масштаба
             if (auto doc = currentDocument())
@@ -4791,6 +4791,9 @@ void MainWindow::restoreViewState(Document::Ptr doc)
     ui->graphView->horizontalScrollBar()->setValue(doc->viewState.hScroll);
     ui->graphView->verticalScrollBar()->setValue(doc->viewState.vScroll);
     ui->graphView->centerOn(doc->viewState.center);
+    m_zoom = ui->graphView->transform().m11();
+    if (m_zoom <= 0.000001)
+        m_zoom = 1.0;
 }
 
 void MainWindow::handleCheckBoxClick(QCheckBox* clickedCheckBox)
@@ -7510,6 +7513,9 @@ void MainWindow::fitImageToView()
     ui->graphView->horizontalScrollBar()->setValue(0);
     ui->graphView->verticalScrollBar()->setValue(0);
 
+    if (m_zoom <= 0.000001)
+        m_zoom = 1.0;
+
     if (auto doc = currentDocument())
     {
         const qreal zoom = ui->graphView->transform().m11();
@@ -7521,6 +7527,7 @@ void MainWindow::fitImageToView()
         };
         doc->viewState.zoom = zoom;
     }
+    m_zoom = ui->graphView->transform().m11();
 }
 
 void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem *previous)
@@ -7825,172 +7832,11 @@ void MainWindow::on_actRuler_triggered()
 
 void MainWindow::on_actClosePolyline_triggered()
 {
-    // Завершение рисования полилинии, если мы ее сейчас рисуем
     if (_drawingPolyline && _polyline)
     {
-        //_drawingPolyline = false;
-        //_polyline->closePolyline();
-        if (!_polyline->isClosed())
-                _polyline->closePolyline();
-
-        _polyline->updatePointNumbers();
-        apply_LineWidth_ToItem(_polyline);
-        apply_PointSize_ToItem(_polyline);
-        apply_NumberSize_ToItem(_polyline);
-
-        // Выбор класса
-        if (!_resumeEditing)
-        {
-            SelectClass dialog(_projectClasses, this);
-            if (dialog.exec() == QDialog::Accepted)
-            {
-                const QString selectedClass = dialog.selectedClass();
-                if (!selectedClass.isEmpty())
-                {
-                    // _polyline->setData(0, selectedClass);
-                    // applyClassColorToItem(_polyline, selectedClass);
-                    // linkSceneItemToList(_polyline);
-
-                    // ShapeBackup b = makeBackupFromItem(_polyline);
-                    // pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
-                    const qulonglong uid = ensureUid(_polyline);
-                    const QString cls = selectedClass;
-
-                    auto redoFn = [this, uid, cls]()
-                    {
-                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                        if (!pl) return;
-                        pl->setClosed(true, true);
-
-                        pl->setData(0, cls);
-                        applyClassColorToItem(pl, cls);
-                        linkSceneItemToList(pl);
-
-                        if (_polyline && ensureUid(_polyline) == uid)
-                            _polyline = nullptr;
-
-                        _drawingPolyline = false;
-                        _resumeEditing = false;
-                        _resumeUid = 0;
-
-                        if (auto doc = currentDocument())
-                        {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
-                        }
-                    };
-
-                    auto undoFn = [this, uid]()
-                    {
-                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                        if (!pl) return;
-
-                        pl->setClosed(false, false);
-
-                        _drawingPolyline = true;
-                        _polyline = pl;
-
-                        _resumeEditing = true;
-                        _resumeUid = uid;
-
-                        pl->setSelected(true);
-                        pl->setFocus();
-
-                        removeListEntryBySceneItem(pl);
-
-                        if (auto doc = currentDocument())
-                        {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
-                        }
-
-                        raiseAllHandlesToTop();
-                    };
-                    if (QUndoStack* st = activeUndoStack())
-                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
-                    else
-                        redoFn();
-                }
-            }
-        }
-        else
-        {
-            const QString cls = _polyline->data(0).toString();
-            const qulonglong uid = ensureUid(_polyline);
-
-            _drawingPolyline = false;
-
-            auto redoFn = [this, uid, cls]()
-            {
-                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                if (!pl) return;
-
-                pl->setClosed(true, false);
-
-                if (!cls.isEmpty())
-                {
-                    pl->setData(0, cls);
-                    applyClassColorToItem(pl, cls);
-                }
-                linkSceneItemToList(pl);
-
-                if (_polyline && ensureUid(_polyline) == uid)
-                    _polyline = nullptr;
-
-                _drawingPolyline = false;
-                _resumeEditing = false;
-                _resumeUid = 0;
-
-                if (auto doc = currentDocument())
-                {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
-                raiseAllHandlesToTop();
-            };
-
-            auto undoFn = [this, uid]()
-            {
-                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                if (!pl) return;
-
-                pl->setClosed(false, false);
-
-                _drawingPolyline = true;
-                _polyline = pl;
-
-                _resumeEditing = true;
-                _resumeUid = uid;
-
-                pl->setSelected(true);
-                pl->setFocus();
-
-                removeListEntryBySceneItem(pl);
-
-                if (auto doc = currentDocument())
-                {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
-                raiseAllHandlesToTop();
-            };
-
-            if (QUndoStack* st = activeUndoStack())
-                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
-            else
-                redoFn();
-        }
-
-        _polyline = nullptr;
-
-        if (auto doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-        raiseAllHandlesToTop();
+        if (_polyline && !_polyline->isClosed())
+            _polyline->closePolyline();
     }
-
     // Завершение рисования линии, если мы ее сейчас рисуем
     if (_drawingLine && _line)
     {
