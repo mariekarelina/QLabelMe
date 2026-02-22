@@ -6,6 +6,8 @@
 #include <cmath>
 #include <QApplication>
 #include <QCursor>
+#include <QMetaObject>
+#include <QVariant>
 
 namespace qgraph {
 
@@ -355,15 +357,16 @@ void Circle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     QMenu menu;
 
     QAction* moveToBackAction = menu.addAction("Переместить на задний план (B)");
+    QString frameText = _selectionRectVisible ? "Скрыть рамку (W)" : "Показать рамку (W)";
+    QAction* toggleFrameAction = menu.addAction(frameText);
+    QAction* changeClassAction = menu.addAction("Изменить класс");
 
     // Добавляем разделитель
     menu.addSeparator();
 
-    QString frameText = _selectionRectVisible ? "Скрыть рамку (W)" : "Показать рамку (W)";
 
     // Добавляем действие удаления
     QAction* deleteAction = menu.addAction("Удалить (Del)");
-    QAction* toggleFrameAction = menu.addAction(frameText);
 
     QObject::connect(moveToBackAction, &QAction::triggered, [this]() {
         this->moveToBack();
@@ -379,6 +382,22 @@ void Circle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
             scene->removeItem(this);
             delete this;
         }
+    });
+
+    QObject::connect(changeClassAction, &QAction::triggered, [this]() {
+        auto sc = this->scene();
+        if (!sc) return;
+
+        QObject* receiver = sc->property("classChangeReceiver").value<QObject*>();
+        if (!receiver) return;
+
+        const qulonglong uid = this->data(0x1337ABCD).toULongLong();
+        if (!uid) return;
+
+        QMetaObject::invokeMethod(receiver,
+                                  "changeClassByUid",
+                                  Qt::DirectConnection,
+                                  Q_ARG(qulonglong, uid));
     });
 
     menu.exec(event->screenPos());

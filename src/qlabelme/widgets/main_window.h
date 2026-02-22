@@ -176,6 +176,9 @@ public:
     QColor selectedHandleColor() const {return _vis.selectedHandleColor;}
     Document::Ptr currentDocument() const;
 
+public slots:
+    void changeClassByUid(qulonglong uid);
+
 protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
@@ -253,6 +256,7 @@ private:
     void loadFilesFromFolder(const QString& folderPath);
 
     void updatePolygonListForCurrentScene();
+    void changeClassForSceneItem(QGraphicsItem* item);
 
     void loadGeometry();
     void saveGeometry();

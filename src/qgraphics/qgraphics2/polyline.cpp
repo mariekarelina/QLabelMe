@@ -8,7 +8,8 @@
 #include <QStyleOptionGraphicsItem>
 #include <QCursor>
 #include <QGraphicsView>
-
+#include <QMetaObject>
+#include <QVariant>
 
 namespace qgraph {
 
@@ -528,6 +529,7 @@ void Polyline::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     QAction* moveToBackAction = menu.addAction("Переместить на задний план (B)");
     QAction* toggleNumbersAction = menu.addAction(numbersText);
     QAction* toggleFrameAction = menu.addAction(frameText);
+    QAction* changeClassAction = menu.addAction("Изменить класс");
 
     // Добавляем разделитель
     menu.addSeparator();
@@ -564,10 +566,25 @@ void Polyline::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
         }
     });
 
+    QObject::connect(changeClassAction, &QAction::triggered, [this]() {
+        auto sc = this->scene();
+        if (!sc) return;
+
+        QObject* receiver = sc->property("classChangeReceiver").value<QObject*>();
+        if (!receiver) return;
+
+        const qulonglong uid = this->data(0x1337ABCD).toULongLong();
+        if (!uid) return;
+
+        QMetaObject::invokeMethod(receiver,
+                                  "changeClassByUid",
+                                  Qt::DirectConnection,
+                                  Q_ARG(qulonglong, uid));
+    });
+
     menu.exec(event->screenPos());
     event->accept();
 }
-
 
 int Polyline::findClosestSegment(const QPointF& pos) const
 {

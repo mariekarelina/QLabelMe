@@ -441,7 +441,8 @@ MainWindow::MainWindow(QWidget *parent) :
 
     //config::base().getValue("view.keep_image_scale", init.keepImageScale);
 
-
+    // Приемник команд от фигур
+    _scene->setProperty("classChangeReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
 
     // Стек и действия
     // _undoStack = std::make_unique<QUndoStack>(this);
@@ -905,6 +906,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             _resumeUid = 0;
             // Если полилиния еще не создана, создаем объект
             _polyline = new qgraph::Polyline(_scene, _startPoint);
+            ensureUid(_polyline);
             apply_LineWidth_ToItem(_polyline);
             apply_PointSize_ToItem(_polyline);
             apply_NumberSize_ToItem(_polyline);
@@ -1195,6 +1197,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         const QPointF sceneP = graphView->mapToScene(mouseEvent->pos());
 
         _currPoint = new qgraph::Point(_scene);
+        ensureUid(_currPoint);
 
         // Применяем стили из настроек
         apply_PointSize_ToItem(_currPoint);
@@ -1254,6 +1257,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             _resumeUid = 0;
             // Если линия еще не создана, создаем объект
             _line = new qgraph::Line(_scene, _startPoint);
+            ensureUid(_line);
             apply_LineWidth_ToItem(_line);
             apply_PointSize_ToItem(_line);
             apply_NumberSize_ToItem(_line);
@@ -1854,6 +1858,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
         // Создаем объект класса Rectangle
         qgraph::Rectangle* rectangle = new qgraph::Rectangle(_scene);
+        ensureUid(rectangle);
         rectangle->setRealSceneRect(finalRect); // Устанавливаем координаты и размеры
         rectangle->updatePointNumbers();
         apply_LineWidth_ToItem(rectangle);
@@ -1925,6 +1930,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
         // Создаем объект класса Circle
         qgraph::Circle* circle = new qgraph::Circle(_scene, _startPoint);
+        ensureUid(circle);
         // Устанавливаем радиус финального круга
         qreal finalRadius = circleRect.width() / 2;
         circle->setRealRadius(static_cast<int>(finalRadius));
@@ -2406,6 +2412,33 @@ Document::Ptr MainWindow::currentDocument() const
     }
 
     return data.value<Document::Ptr>();
+}
+
+void MainWindow::changeClassByUid(qulonglong uid)
+{
+    if (!_scene || uid == 0)
+        return;
+
+    QGraphicsItem* target = nullptr;
+
+    for (QGraphicsItem* it : _scene->items())
+    {
+        if (!it || it == _videoRect || it == _tempRectItem
+            || it == _tempCircleItem || it == _tempPolyline)
+        {
+            continue;
+        }
+
+        if (it->data(RoleUid).toULongLong() == uid)
+        {
+            target = it;
+            break;
+        }
+    }
+    if (!target)
+        return;
+
+    changeClassForSceneItem(target);
 }
 
 bool MainWindow::eventFilter(QObject* obj, QEvent* event)
@@ -3325,26 +3358,26 @@ void MainWindow::closeEvent(QCloseEvent* event)
 
         switch (result)
         {
-        case QDialogButtonBox::SaveAll:
-            // Сохранить все
-            saveAllDocuments();
-            saveGeometry();
-            event->accept();
-            break;
-        case QDialogButtonBox::Discard:
-            // Не сохранять
-            saveGeometry();
-            event->accept();
-            break;
+            case QDialogButtonBox::SaveAll:
+                // Сохранить все
+                saveAllDocuments();
+                saveGeometry();
+                event->accept();
+                break;
+            case QDialogButtonBox::Discard:
+                // Не сохранять
+                saveGeometry();
+                event->accept();
+                break;
 
-        case QDialogButtonBox::Cancel:
-            // Отмена
-            event->ignore();
-            break;
+            case QDialogButtonBox::Cancel:
+                // Отмена
+                event->ignore();
+                break;
 
-        default:
-            event->ignore();
-            break;
+            default:
+                event->ignore();
+                break;
         }
     }
     else
@@ -3460,6 +3493,58 @@ void MainWindow::updatePolygonListForCurrentScene()
                 linkSceneItemToList(item);
             }
         }
+    }
+}
+
+void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
+{
+    if (!item)
+        return;
+
+    const QString oldClass = item->data(0).toString();
+
+    if (_projectClasses.isEmpty())
+        return;
+
+    SelectClass dialog(_projectClasses, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    const QString newClass = dialog.selectedClass();
+    if (newClass.isEmpty() || newClass == oldClass)
+        return;
+
+    ShapeBackup before = makeBackupFromItem(item);
+    const qulonglong uid = before.uid;
+
+    item->setData(0, newClass);
+    applyClassColorToItem(item, newClass);
+
+    bool foundInList = false;
+    for (int i = 0; i < ui->polygonList->count(); ++i)
+    {
+        QListWidgetItem* li = ui->polygonList->item(i);
+        if (!li)
+            continue;
+
+        if (li->data(Qt::UserRole).value<QGraphicsItem*>() == item)
+        {
+            li->setText(newClass);
+            foundInList = true;
+            break;
+        }
+    }
+    if (!foundInList)
+        linkSceneItemToList(item);
+
+    ShapeBackup after = makeBackupFromItem(item);
+    if (!sameGeometry(before, after))
+        pushModifyShapeCommand(uid, before, after, tr("Смена класса"));
+
+    if (auto doc = currentDocument(); doc && !doc->isModified)
+    {
+        doc->isModified = true;
+        updateFileListDisplay(doc->filePath);
     }
 }
 
@@ -3888,6 +3973,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             conf->getValue(ycircle, "radius", radius);
 
             qgraph::Circle* circle = new qgraph::Circle(doc->scene, QPointF(center) + imageOffset);
+            ensureUid(circle);
             circle->setRealRadius(radius);
             circle->setData(0, label);
             apply_LineWidth_ToItem(circle);
@@ -3923,6 +4009,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
 
             // Создаем полилинию на сцене
             qgraph::Polyline* polyline = new qgraph::Polyline(doc->scene, points.first());
+            ensureUid(polyline);
             for (int i = 1; i < points.size(); ++i)
             {
                 polyline->addPoint(points[i], doc->scene);
@@ -3950,6 +4037,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
 
             // Создаем прямоугольник на сцене
             qgraph::Rectangle* rect = new qgraph::Rectangle(doc->scene);
+            ensureUid(rect);
             rect->setRealSceneRect(QRectF(QPointF(point1) + imageOffset, QPointF(point2) + imageOffset));
             rect->setData(0, label);
             apply_LineWidth_ToItem(rect);
@@ -3971,6 +4059,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             conf->getValue(ypoint, "point", center);
 
             qgraph::Point* p = new qgraph::Point(doc->scene);
+            ensureUid(p);
             p->setCenter(center + imageOffset);
             p->setData(0, label);
 
@@ -4007,6 +4096,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
 
             // Создаем линию на сцене
             qgraph::Line* line = new qgraph::Line(doc->scene, points.first());
+            ensureUid(line);
             for (int i = 1; i < points.size(); ++i)
             {
                 line->addPoint(points[i], doc->scene);
@@ -4068,6 +4158,7 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
             qreal height = shapeObj["height"].toDouble();
 
             qgraph::Rectangle* rect = new qgraph::Rectangle(scene);
+            ensureUid(rect);
             //rect->setRect(QRectF(x, y, width, height));
             rect->setRealSceneRect(QRectF(QPointF(x, y), QSizeF(width, height)));
             rect->setData(0, className);
@@ -4082,6 +4173,7 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
             qreal radius = shapeObj["radius"].toDouble();
 
             qgraph::Circle* circle = new qgraph::Circle(scene, QPointF(x, y));
+            ensureUid(circle);
             circle->setRealRadius(radius);
             circle->setData(0, className);
             apply_LineWidth_ToItem(circle);
@@ -4098,6 +4190,7 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
                                pointsArray[0].toObject()["y"].toDouble());
 
             qgraph::Polyline* polyline = new qgraph::Polyline(scene, firstPoint);
+            ensureUid(polyline);
             for (int i = 1; i < pointsArray.size(); ++i)
             {
                 QPointF point(pointsArray[i].toObject()["x"].toDouble(),
@@ -4119,7 +4212,7 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
                                pointsArray[0].toObject()["y"].toDouble());
 
             qgraph::Line* line = new qgraph::Line(scene, firstPoint);
-
+            ensureUid(line);
             for (int i = 1; i < pointsArray.size(); ++i)
             {
                 QJsonObject ptObj = pointsArray[i].toObject();
@@ -4138,6 +4231,7 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
             qreal y = shapeObj["y"].toDouble();
 
             qgraph::Point* p = new qgraph::Point(scene);
+            ensureUid(p);
             p->setCenter(QPointF(x, y));
             p->setData(0, className);
 
@@ -6768,6 +6862,16 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
         p.setColor(c);
         p.setCosmetic(true);
         cir->setPen(p);
+        for (QGraphicsItem* ch : cir->childItems())
+        {
+            if (auto* li = dynamic_cast<QGraphicsLineItem*>(ch))
+            {
+                QPen cp = li->pen();
+                cp.setColor(c);
+                cp.setCosmetic(true);
+                li->setPen(cp);
+            }
+        }
         return;
     }
     if (auto* pl = dynamic_cast<qgraph::Polyline*>(item))
@@ -7279,98 +7383,103 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
 
     switch (b.kind)
     {
-    case ShapeKind::Rectangle:
-    {
-        auto* rect = new qgraph::Rectangle(_scene);
-        rect->setRealSceneRect(b.rect);
-        rect->updatePointNumbers();
-        apply_LineWidth_ToItem(rect);
-        apply_PointSize_ToItem(rect);
-        apply_NumberSize_ToItem(rect);
-        rect->setData(0, b.className);
-        applyClassColorToItem(rect, b.className);
-        rect->setZValue(b.z);
-        rect->setVisible(b.visible);
-        linkSceneItemToList(rect);
-        created = rect;
-        break;
-    }
-    case ShapeKind::Circle:
-    {
-        auto* c = new qgraph::Circle(_scene, b.circleCenter);
-        c->setRealRadius(b.circleRadius);
-        apply_LineWidth_ToItem(c);
-        apply_PointSize_ToItem(c);
-        c->setData(0, b.className);
-        applyClassColorToItem(c, b.className);
-        c->setZValue(b.z);
-        c->setVisible(b.visible);
-        c->updateHandlePosition();
-        linkSceneItemToList(c);
-        created = c;
-        break;
-    }
-    case ShapeKind::Polyline:
-    {
-        if (b.points.isEmpty())
+        case ShapeKind::Rectangle:
+        {
+            auto* rect = new qgraph::Rectangle(_scene);
+            ensureUid(rect);
+            rect->setRealSceneRect(b.rect);
+            rect->updatePointNumbers();
+            apply_LineWidth_ToItem(rect);
+            apply_PointSize_ToItem(rect);
+            apply_NumberSize_ToItem(rect);
+            rect->setData(0, b.className);
+            applyClassColorToItem(rect, b.className);
+            rect->setZValue(b.z);
+            rect->setVisible(b.visible);
+            linkSceneItemToList(rect);
+            created = rect;
             break;
-        auto* pl = new qgraph::Polyline(_scene, b.points.front());
-        for (int i = 1; i < b.points.size(); ++i)
-            pl->addPoint(b.points[i], _scene);
-        if (b.closed)
-            pl->closePolyline();
-
-        apply_LineWidth_ToItem(pl);
-        apply_PointSize_ToItem(pl);
-        apply_NumberSize_ToItem(pl);
-
-        pl->setData(0, b.className);
-        applyClassColorToItem(pl, b.className);
-        pl->setZValue(b.z);
-        pl->setVisible(b.visible);
-        pl->updateHandlePosition();
-        linkSceneItemToList(pl);
-        created = pl;
-        break;
-    }
-    case ShapeKind::Line:
-    {
-        if (b.points.isEmpty())
+        }
+        case ShapeKind::Circle:
+        {
+            auto* c = new qgraph::Circle(_scene, b.circleCenter);
+            ensureUid(c);
+            c->setRealRadius(b.circleRadius);
+            apply_LineWidth_ToItem(c);
+            apply_PointSize_ToItem(c);
+            c->setData(0, b.className);
+            applyClassColorToItem(c, b.className);
+            c->setZValue(b.z);
+            c->setVisible(b.visible);
+            c->updateHandlePosition();
+            linkSceneItemToList(c);
+            created = c;
             break;
-        auto* ln = new qgraph::Line(_scene, b.points.front());
-        for (int i = 1; i < b.points.size(); ++i)
-            ln->addPoint(b.points[i], _scene);
-        if (b.closed)
-            ln->closeLine();
+        }
+        case ShapeKind::Polyline:
+        {
+            if (b.points.isEmpty())
+                break;
+            auto* pl = new qgraph::Polyline(_scene, b.points.front());
+            ensureUid(pl);
+            for (int i = 1; i < b.points.size(); ++i)
+                pl->addPoint(b.points[i], _scene);
+            if (b.closed)
+                pl->closePolyline();
 
-        apply_LineWidth_ToItem(ln);
-        apply_PointSize_ToItem(ln);
-        apply_NumberSize_ToItem(ln);
+            apply_LineWidth_ToItem(pl);
+            apply_PointSize_ToItem(pl);
+            apply_NumberSize_ToItem(pl);
 
-        ln->setData(0, b.className);
-        applyClassColorToItem(ln, b.className);
-        ln->setZValue(b.z);
-        ln->setVisible(b.visible);
-        ln->updateHandlePosition();
-        linkSceneItemToList(ln);
-        created = ln;
-        break;
-    }
-    case ShapeKind::Point:
-    {
-        auto* pt = new qgraph::Point(_scene);
-        apply_PointSize_ToItem(pt);
-        apply_NumberSize_ToItem(pt);
-        apply_PointStyle_ToItem(pt);
-        pt->setCenter(b.pointCenter);
-        pt->setData(0, b.className);
-        applyClassColorToItem(pt, b.className);
-        pt->setZValue(b.z);
-        pt->setVisible(b.visible);
-        linkSceneItemToList(pt);
-        created = pt;
-        break;
-    }
+            pl->setData(0, b.className);
+            applyClassColorToItem(pl, b.className);
+            pl->setZValue(b.z);
+            pl->setVisible(b.visible);
+            pl->updateHandlePosition();
+            linkSceneItemToList(pl);
+            created = pl;
+            break;
+        }
+        case ShapeKind::Line:
+        {
+            if (b.points.isEmpty())
+                break;
+            auto* ln = new qgraph::Line(_scene, b.points.front());
+            ensureUid(ln);
+            for (int i = 1; i < b.points.size(); ++i)
+                ln->addPoint(b.points[i], _scene);
+            if (b.closed)
+                ln->closeLine();
+
+            apply_LineWidth_ToItem(ln);
+            apply_PointSize_ToItem(ln);
+            apply_NumberSize_ToItem(ln);
+
+            ln->setData(0, b.className);
+            applyClassColorToItem(ln, b.className);
+            ln->setZValue(b.z);
+            ln->setVisible(b.visible);
+            ln->updateHandlePosition();
+            linkSceneItemToList(ln);
+            created = ln;
+            break;
+        }
+        case ShapeKind::Point:
+        {
+            auto* pt = new qgraph::Point(_scene);
+            ensureUid(pt);
+            apply_PointSize_ToItem(pt);
+            apply_NumberSize_ToItem(pt);
+            apply_PointStyle_ToItem(pt);
+            pt->setCenter(b.pointCenter);
+            pt->setData(0, b.className);
+            applyClassColorToItem(pt, b.className);
+            pt->setZValue(b.z);
+            pt->setVisible(b.visible);
+            linkSceneItemToList(pt);
+            created = pt;
+            break;
+        }
     }
 
     if (created)
@@ -7388,94 +7497,114 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
 
     switch (b.kind)
     {
-    case ShapeKind::Rectangle:
-        if (auto* r = qgraphicsitem_cast<qgraph::Rectangle*>(it))
+        case ShapeKind::Rectangle:
+            if (auto* r = qgraphicsitem_cast<qgraph::Rectangle*>(it))
+            {
+                r->setRealSceneRect(b.rect);
+                r->updatePointNumbers();
+                apply_LineWidth_ToItem(r);
+                apply_PointSize_ToItem(r);
+                apply_NumberSize_ToItem(r);
+                r->setData(0, b.className);
+                applyClassColorToItem(r, b.className);
+                r->setZValue(b.z);
+                r->setVisible(b.visible);
+                r->updateHandlePosition();
+            }
+            break;
+
+        case ShapeKind::Circle:
+            if (auto* c = qgraphicsitem_cast<qgraph::Circle*>(it))
+            {
+                c->setRealRadius(b.circleRadius);
+                apply_LineWidth_ToItem(c);
+                apply_PointSize_ToItem(c);
+                c->setData(0, b.className);
+                applyClassColorToItem(c, b.className);
+                c->setZValue(b.z);
+                c->setVisible(b.visible);
+
+                const QPointF cur = c->sceneBoundingRect().center();
+                const QPointF dst = QPointF(b.circleCenter);
+                const QPointF d = dst - cur;
+                if (!qFuzzyIsNull(d.x()) || !qFuzzyIsNull(d.y()))
+                    c->moveBy(d.x(), d.y());
+
+                c->updateHandlePosition();
+            }
+            break;
+
+        case ShapeKind::Polyline:
         {
-            r->setRealSceneRect(b.rect);
-            r->updatePointNumbers();
-            apply_LineWidth_ToItem(r);
-            apply_PointSize_ToItem(r);
-            apply_NumberSize_ToItem(r);
-            r->setData(0, b.className);
-            applyClassColorToItem(r, b.className);
-            r->setZValue(b.z);
-            r->setVisible(b.visible);
-            r->updateHandlePosition();
-        }
-        break;
+            if (auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(it))
+            {
+                // Полная замена узлов из снапшота
+                pl->replaceScenePoints(b.points, b.closed);
 
-    case ShapeKind::Circle:
-        if (auto* c = qgraphicsitem_cast<qgraph::Circle*>(it))
+                apply_LineWidth_ToItem(pl);
+                apply_PointSize_ToItem(pl);
+                apply_NumberSize_ToItem(pl);
+                pl->setData(0, b.className);
+                applyClassColorToItem(pl, b.className);
+                pl->setZValue(b.z);
+                pl->setVisible(b.visible);
+                pl->updateHandlePosition();
+            }
+            break;
+        }
+
+        case ShapeKind::Line:
         {
-            c->setRealRadius(b.circleRadius);
-            apply_LineWidth_ToItem(c);
-            apply_PointSize_ToItem(c);
-            c->setData(0, b.className);
-            applyClassColorToItem(c, b.className);
-            c->setZValue(b.z);
-            c->setVisible(b.visible);
+            if (auto* ln = qgraphicsitem_cast<qgraph::Line*>(it))
+            {
 
-            const QPointF cur = c->sceneBoundingRect().center();
-            const QPointF dst = QPointF(b.circleCenter);
-            const QPointF d = dst - cur;
-            if (!qFuzzyIsNull(d.x()) || !qFuzzyIsNull(d.y()))
-                c->moveBy(d.x(), d.y());
-
-            c->updateHandlePosition();
+                ln->replaceScenePoints(b.points, b.closed);
+                ln->setNumberingFromLast(b.numberingFromLast);
+                apply_LineWidth_ToItem(ln);
+                apply_PointSize_ToItem(ln);
+                apply_NumberSize_ToItem(ln);
+                ln->setData(0, b.className);
+                applyClassColorToItem(ln, b.className);
+                ln->setZValue(b.z);
+                ln->setVisible(b.visible);
+                ln->updateHandlePosition();
+            }
+            break;
         }
-        break;
-
-    case ShapeKind::Polyline:
-    {
-        if (auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(it))
-        {
-            // Полная замена узлов из снапшота
-            pl->replaceScenePoints(b.points, b.closed);
-
-            apply_LineWidth_ToItem(pl);
-            apply_PointSize_ToItem(pl);
-            apply_NumberSize_ToItem(pl);
-            pl->setData(0, b.className);
-            applyClassColorToItem(pl, b.className);
-            pl->setZValue(b.z);
-            pl->setVisible(b.visible);
-            pl->updateHandlePosition();
-        }
-        break;
+        case ShapeKind::Point:
+            if (auto* pt = qgraphicsitem_cast<qgraph::Point*>(it))
+            {
+                apply_PointStyle_ToItem(pt);
+                apply_PointSize_ToItem(pt);
+                apply_NumberSize_ToItem(pt);
+                pt->setCenter(b.pointCenter);
+                pt->setData(0, b.className);
+                applyClassColorToItem(pt, b.className);
+                pt->setZValue(b.z);
+                pt->setVisible(b.visible);
+                pt->updateHandlePosition();
+            }
+            break;
     }
-
-    case ShapeKind::Line:
+    if (ui && ui->polygonList)
     {
-        if (auto* ln = qgraphicsitem_cast<qgraph::Line*>(it))
+        bool found = false;
+        for (int i = 0; i < ui->polygonList->count(); ++i)
         {
+            QListWidgetItem* li = ui->polygonList->item(i);
+            if (!li) continue;
 
-            ln->replaceScenePoints(b.points, b.closed);
-            ln->setNumberingFromLast(b.numberingFromLast);
-            apply_LineWidth_ToItem(ln);
-            apply_PointSize_ToItem(ln);
-            apply_NumberSize_ToItem(ln);
-            ln->setData(0, b.className);
-            applyClassColorToItem(ln, b.className);
-            ln->setZValue(b.z);
-            ln->setVisible(b.visible);
-            ln->updateHandlePosition();
+            if (li->data(Qt::UserRole).value<QGraphicsItem*>() == it)
+            {
+                li->setText(b.className);
+                found = true;
+                break;
+            }
         }
-        break;
-    }
-    case ShapeKind::Point:
-        if (auto* pt = qgraphicsitem_cast<qgraph::Point*>(it))
-        {
-            apply_PointStyle_ToItem(pt);
-            apply_PointSize_ToItem(pt);
-            apply_NumberSize_ToItem(pt);
-            pt->setCenter(b.pointCenter);
-            pt->setData(0, b.className);
-            applyClassColorToItem(pt, b.className);
-            pt->setZValue(b.z);
-            pt->setVisible(b.visible);
-            pt->updateHandlePosition();
-        }
-        break;
+
+        // На всякий случай: если фигура есть, а пункта в списке нет
+        if (!found && !b.className.isEmpty())
+            linkSceneItemToList(it);
     }
 }
 
@@ -7631,6 +7760,9 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     ui->graphView->setScene(currentDoc->scene);
     _scene = currentDoc->scene;
     _videoRect = currentDoc->videoRect;
+    // Приемник команд от фигур на каждую сцену
+    if (_scene)
+        _scene->setProperty("classChangeReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
 
     if (_videoRect && !_videoRect->pixmap().isNull())
         updateImageSizeLabel(_videoRect->pixmap().size());

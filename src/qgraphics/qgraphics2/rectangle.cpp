@@ -2,6 +2,8 @@
 #include "drag_circle.h"
 #include <QtGui>
 #include <QMenu>
+#include <QMetaObject>
+#include <QVariant>
 
 namespace qgraph {
 
@@ -309,6 +311,7 @@ void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     QString numbersText = _pointNumbersVisible ? "Скрыть нумерацию (N)" : "Показать нумерацию (N)";
     QAction* moveToBackAction = menu.addAction("Переместить на задний план (B)");
     QAction* toggleNumbersAction = menu.addAction(numbersText);
+    QAction* changeClassAction = menu.addAction("Изменить класс");
 
     // Добавляем разделитель
     menu.addSeparator();
@@ -339,6 +342,25 @@ void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
             scene->removeItem(this);
             delete this;
         }
+    });
+
+    QObject::connect(changeClassAction, &QAction::triggered, [this]() {
+        auto sc = this->scene();
+        if (!sc)
+            return;
+
+        QObject* receiver = sc->property("classChangeReceiver").value<QObject*>();
+        if (!receiver)
+            return;
+
+        const qulonglong uid = this->data(0x1337ABCD).toULongLong();
+        if (uid == 0)
+            return;
+
+        QMetaObject::invokeMethod(receiver,
+                                  "changeClassByUid",
+                                  Qt::DirectConnection,
+                                  Q_ARG(qulonglong, uid));
     });
 
     menu.exec(event->screenPos());

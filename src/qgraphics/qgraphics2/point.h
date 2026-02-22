@@ -53,6 +53,7 @@ protected:
     void hoverLeaveEvent(QGraphicsSceneHoverEvent* ev) override;
     void mousePressEvent(QGraphicsSceneMouseEvent* ev) override;
     void mouseReleaseEvent(QGraphicsSceneMouseEvent* ev) override;
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
 
     void paint(QPainter* painter,
                const QStyleOptionGraphicsItem* option,

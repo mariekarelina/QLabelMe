@@ -9,8 +9,10 @@
 #include <QBrush>
 #include <QObject>
 #include <QStyle>
+#include <QMetaObject>
+#include <QVariant>
+#include <QGraphicsSceneContextMenuEvent>
 #include <QStyleOptionGraphicsItem>
-
 
 namespace qgraph {
 
@@ -231,6 +233,38 @@ void Point::mouseReleaseEvent(QGraphicsSceneMouseEvent* ev)
     QGraphicsItem::mouseReleaseEvent(ev);
     //_interacting = false;
     showDotIfIdle();
+}
+
+void Point::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
+{
+    QMenu menu;
+
+    QAction* changeClassAction = menu.addAction("Изменить класс");
+    menu.addSeparator();
+    QAction* deleteAction = menu.addAction("Удалить (Del)");
+
+    QObject::connect(changeClassAction, &QAction::triggered, [this]() {
+        auto sc = this->scene();
+        if (!sc) return;
+
+        QObject* receiver = sc->property("classChangeReceiver").value<QObject*>();
+        if (!receiver) return;
+
+        const qulonglong uid = this->data(0x1337ABCD).toULongLong();
+        if (!uid) return;
+
+        QMetaObject::invokeMethod(receiver,
+                                  "changeClassByUid",
+                                  Qt::DirectConnection,
+                                  Q_ARG(qulonglong, uid));
+    });
+
+    QObject::connect(deleteAction, &QAction::triggered, [this]() {
+        this->deleteItem();
+    });
+
+    menu.exec(event->screenPos());
+    event->accept();
 }
 
 void Point::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget)
