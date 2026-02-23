@@ -71,6 +71,9 @@ public:
     void setUserHidden(bool on);
     bool isUserHidden() const { return _userHidden; }
 
+    void setInteractionRadius(qreal r);
+    qreal interactionRadius() const { return _interactionRadius; }
+
 signals:
     void moved(DragCircle* circle);      // Сигнал, вызываемый при перемещении
     void released(DragCircle* circle);  // Сигнал, вызываемый при отпускании мыши

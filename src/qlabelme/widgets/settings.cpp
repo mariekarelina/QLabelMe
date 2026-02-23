@@ -151,6 +151,9 @@ void Settings::applyModelToUi()
     ui->keepImageScale->setChecked(_values.keepImageScale);
     ui->keepMenuBarVisibility->setChecked(_values.keepMenuBarVisibility);
 
+    if (ui->spinHandlePickRadius)
+        ui->spinHandlePickRadius->setValue(_values.handlePickRadius);
+
     // if (!_values.labelFont.isEmpty())
     //     ui->fontComboLabels->setCurrentFont(QFont(_values.labelFont));
     // else
@@ -239,6 +242,8 @@ void Settings::applyUiToModel()
     _values.keepMenuBarVisibility = ui->keepMenuBarVisibility->isChecked();
 
 
+    if (ui->spinHandlePickRadius)
+        _values.handlePickRadius = ui->spinHandlePickRadius->value();
 
     if (ui->doubleClickLMB->isChecked())
         _values.closePolyline = PolylineCloseMode::DoubleClick;

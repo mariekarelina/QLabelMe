@@ -5,6 +5,7 @@
 #include "square.h"
 #include <QtGui>
 #include <QApplication>
+#include <algorithm>
 
 namespace qgraph {
 
@@ -145,9 +146,9 @@ bool DragCircle::collidesWithItem(const QGraphicsItem* other,
 
 QPainterPath DragCircle::shape() const
 {
-    // Увеличиваем область взаимодействия для удобства
+    const qreal r = std::max<qreal>(_interactionRadius, 0.0);
     QPainterPath path;
-    path.addRect(rect().adjusted(-4, -4, 4, 4));
+    path.addRect(rect().adjusted(-r, -r, r, r));
     return path;
 }
 
@@ -320,6 +321,13 @@ void DragCircle::setUserHidden(bool on)
 
        _userHidden = on;
        QGraphicsItem::setVisible(!_userHidden && _runtimeVisible);
+}
+
+void DragCircle::setInteractionRadius(qreal r)
+{
+    _interactionRadius = std::max<qreal>(0.0, r);
+    prepareGeometryChange();
+    update();
 }
 
 void DragCircle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)

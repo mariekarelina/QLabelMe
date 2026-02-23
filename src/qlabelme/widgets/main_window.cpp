@@ -6104,6 +6104,9 @@ void MainWindow::loadVisualStyle()
     if (!config::base().getValue("graphics.handle_size", _vis.handleSize))
         _vis.handleSize = 10.0;
 
+    if (!config::base().getValue("graphics.handle_pick_radius", _ghostPickRadius))
+        _ghostPickRadius = 6.0;
+
     if (!config::base().getValue("graphics.number_font_pt", _vis.numberFontPt))
         _vis.numberFontPt = 10.0;
 
@@ -6179,6 +6182,7 @@ void MainWindow::saveVisualStyle() const
 {
     config::base().setValue("graphics.line_width", _vis.lineWidth);
     config::base().setValue("graphics.handle_size", _vis.handleSize);
+    config::base().setValue("graphics.handle_pick_radius", _ghostPickRadius);
     config::base().setValue("graphics.number_font_pt", _vis.numberFontPt);
     config::base().setValue("graphics.point_size", _vis.pointSize);
     config::base().setValue("graphics.handle_color", _vis.handleColor.name(QColor::HexArgb));
@@ -6410,6 +6414,7 @@ void MainWindow::apply_PointSize_ToItem(QGraphicsItem* it)
             const qreal pointHandleSize = std::max<qreal>(_vis.pointSize, 4.0);
 
             h->setBaseStyle(_vis.handleColor, isPoint ? pointHandleSize : _vis.handleSize);
+            h->setInteractionRadius(_ghostPickRadius);
             h->setSelectedHandleColor(_vis.selectedHandleColor);
             h->restoreBaseStyle();
             qgraph::DragCircle::rememberCurrentAsBase(h);
@@ -8432,6 +8437,8 @@ void MainWindow::on_actSettingsApp_triggered()
     init.labelFontPt   = _vis.labelFontPt;      // Размер и шрифт
     init.labelFont     = _vis.labelFont;
 
+    init.handlePickRadius = static_cast<int>(_ghostPickRadius + 0.5);
+
     config::base().getValue("view.keep_image_scale_per_image", init.keepImageScale);
     config::base().getValue("ui.keep_menu_visibility", init.keepMenuBarVisibility);
 
@@ -8448,6 +8455,7 @@ void MainWindow::on_actSettingsApp_triggered()
         // 1) Обновляем визуальные настройки из v
         _vis.lineWidth = v.lineWidth;
         _vis.handleSize = v.handleSize;
+        _ghostPickRadius = v.handlePickRadius;
         _vis.numberFontPt = v.numberFontPt;
         _vis.pointSize = v.pointSize;
 
