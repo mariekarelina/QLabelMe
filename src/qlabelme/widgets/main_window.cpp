@@ -443,6 +443,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     // Приемник команд от фигур
     _scene->setProperty("classChangeReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
+    _scene->setProperty("shapeDeleteReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
 
     // Стек и действия
     // _undoStack = std::make_unique<QUndoStack>(this);
@@ -7762,7 +7763,10 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     _videoRect = currentDoc->videoRect;
     // Приемник команд от фигур на каждую сцену
     if (_scene)
+    {
         _scene->setProperty("classChangeReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
+        _scene->setProperty("shapeDeleteReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
+    }
 
     if (_videoRect && !_videoRect->pixmap().isNull())
         updateImageSizeLabel(_videoRect->pixmap().size());

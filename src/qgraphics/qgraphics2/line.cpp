@@ -410,6 +410,13 @@ void Line::keyPressEvent(QKeyEvent* event)
         auto scene = this->scene();
         if (scene)
         {
+            if (QObject* receiver = scene->property("shapeDeleteReceiver").value<QObject*>())
+            {
+                QMetaObject::invokeMethod(receiver,
+                                          "onSceneItemRemoved",
+                                          Qt::DirectConnection,
+                                          Q_ARG(QGraphicsItem*, static_cast<QGraphicsItem*>(this)));
+            }
             scene->removeItem(this);
             delete this; // Удаляем объект
         }
@@ -541,9 +548,18 @@ void Line::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     });
 
     QObject::connect(deleteAction, &QAction::triggered, [this]() {
-        auto scene = this->scene();
-        if (scene) {
-            scene->removeItem(this);
+        auto sc = this->scene();
+        if (sc)
+        {
+            if (QObject* receiver = sc->property("shapeDeleteReceiver").value<QObject*>())
+            {
+                QMetaObject::invokeMethod(receiver,
+                                          "onSceneItemRemoved",
+                                          Qt::DirectConnection,
+                                          Q_ARG(QGraphicsItem*, static_cast<QGraphicsItem*>(this)));
+            }
+
+            sc->removeItem(this);
             delete this;
         }
     });
