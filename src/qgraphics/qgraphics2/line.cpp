@@ -584,7 +584,6 @@ void Line::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     event->accept();
 }
 
-
 int Line::findClosestSegment(const QPointF& pos) const
 {
     if (_circles.size() < 2) return -1;
@@ -814,6 +813,7 @@ void Line::setModificationCallback(std::function<void()> callback)
 
 void Line::replaceScenePoints(const QVector<QPointF>& scenePts, bool closed)
 {
+    Q_UNUSED(closed);
     for (DragCircle* c : _circles)
     {
         if (!c) continue;
@@ -838,7 +838,6 @@ void Line::replaceScenePoints(const QVector<QPointF>& scenePts, bool closed)
     if (_modificationCallback)
         _modificationCallback();
 }
-
 
 void Line::updateConnections()
 {

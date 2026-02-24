@@ -2462,6 +2462,15 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 break;
 
             const QPointF sp = ui->graphView->mapToScene(me->pos());
+            // Соединение лиинй
+            if (_mergeLinesMode)
+            {
+                if (handleMergeLinesClick(sp))
+                {
+                    event->accept();
+                    return true;
+                }
+            }
             bool topIsHandle = false;
 
             if (_drawingPolyline && _polyline &&
@@ -2750,7 +2759,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         case QEvent::ShortcutOverride:
         case QEvent::KeyPress:
         {
-            //auto* ke = static_cast<QKeyEvent*>(event);
+            auto* ke = static_cast<QKeyEvent*>(event);
 
             // Завершение рисования по 'C' при выбранном режиме KeyC
             if (_drawingPolyline && _polyline &&
@@ -2764,6 +2773,12 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             if (_drawingLine && _line &&
                 qgraph::Line::globalCloseMode() == qgraph::Line::CloseMode::KeyC)
             {
+                event->accept();
+                return true;
+            }
+            if (_mergeLinesMode && ke->key() == Qt::Key_Escape)
+            {
+                cancelMergeLinesMode();
                 event->accept();
                 return true;
             }
@@ -3104,6 +3119,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                 QMenu menu(ui->graphView);
                 QAction* actAdd = menu.addAction(tr("Добавить узел"));
+                QAction* actMerge = menu.addAction(tr("Объединить линии"));
 
                 QAction* chosen = menu.exec(ce->globalPos());
                 if (chosen == actAdd)
@@ -3123,7 +3139,12 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         updateFileListDisplay(doc->filePath);
                     }
                 }
-
+                else if (chosen == actMerge)
+                {
+                    startMergeLinesMode();
+                    ce->accept();
+                    return true;
+                }
                 ce->accept();
                 return true;
             }
@@ -6926,7 +6947,311 @@ void MainWindow::updateImageSizeLabel(const QSize& size)
     );
 }
 
-// Создает и пушит в стек _undoStack новую LambdaCommand,
+void MainWindow::startMergeLinesMode()
+{
+    _mergeLinesMode = true;
+    _mergeLineA = nullptr;
+    _mergeLineAEndIdx = -1;
+
+    if (statusBar())
+        statusBar()->showMessage(tr("Объединение линий: кликните по КОНЕЧНОЙ точке первой линии"), 0);
+}
+
+void MainWindow::cancelMergeLinesMode()
+{
+    _mergeLinesMode = false;
+    _mergeLineA = nullptr;
+    _mergeLineAEndIdx = -1;
+
+    if (statusBar())
+        statusBar()->showMessage(tr("Объединение линий отменено"), 2000);
+}
+
+bool MainWindow::handleMergeLinesClick(const QPointF& scenePos)
+{
+    if (!_mergeLinesMode)
+        return false;
+
+    qgraph::DragCircle* h = pickHandleAt(scenePos);
+    if (!h || !h->isValid())
+        return false;
+
+    QGraphicsItem* parent = h->parentItem();
+    auto* line = dynamic_cast<qgraph::Line*>(parent);
+    if (!line)
+        return false;
+
+    const auto& circles = line->circles();
+    const int idx = circles.indexOf(h);
+    if (idx != 0 && idx != circles.size() - 1)
+        return false; // Нужен только конец линии
+
+    if (!_mergeLineA)
+    {
+        _mergeLineA = line;
+        _mergeLineAEndIdx = idx;
+
+        if (statusBar())
+            statusBar()->showMessage(tr("Объединение линий: теперь кликните по КОНЕЧНОЙ точке второй линии"), 0);
+
+        return true;
+    }
+
+    // Второй клик
+    if (line == _mergeLineA)
+        return true; // Игнорируем “в ту же линию”, но клик съедаем чтобы не двигать/редактировать
+
+    const bool ok = performMergeLines(_mergeLineA, _mergeLineAEndIdx, line, idx);
+    cancelMergeLinesMode();
+    return ok ? true : true;
+}
+
+bool MainWindow::isBetterTopLeft(const QPointF& a, const QPointF& b)
+{
+    // “верхний-левый”: меньше y, при равных y - меньше x
+    if (a.y() < b.y()) return true;
+    if (a.y() > b.y()) return false;
+    return a.x() < b.x();
+}
+
+bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, int bIdx)
+{
+    auto doc = currentDocument();
+    if (!doc || !doc->_undoStack || !a || !b) return false;
+    if (a == b) return false;
+
+    // Только концы
+    const int aLast = a->circles().size() - 1;
+    const int bLast = b->circles().size() - 1;
+    if (!((aIdx == 0) || (aIdx == aLast))) return false;
+    if (!((bIdx == 0) || (bIdx == bLast))) return false;
+
+    // Класс должен совпадать
+    const QString la = a->data(0).toString();
+    const QString lb = b->data(0).toString();
+    if (!la.isEmpty() && !lb.isEmpty() && la != lb)
+    {
+        QMessageBox::warning(this, tr("Объединить линии"),
+                             tr("Нельзя объединить линии разных классов:\n\"%1\" и \"%2\".")
+                                 .arg(la, lb));
+        return false;
+    }
+    const QString outLabel = !la.isEmpty() ? la : lb;
+
+    // Собираем точки
+    QVector<QPointF> pa = a->points();
+    QVector<QPointF> pb = b->points();
+
+    if (pa.size() < 2 || pb.size() < 2)
+        return false;
+
+    // Разворачиваем так, чтобы выбранный конец A стал последним,
+    // а выбранный конец B стал первым.
+    if (aIdx == 0)
+        std::reverse(pa.begin(), pa.end());
+    if (bIdx == bLast)
+        std::reverse(pb.begin(), pb.end());
+
+    // Склейка + удаление дубликата в месте стыка
+    QVector<QPointF> merged;
+    merged.reserve(pa.size() + pb.size());
+    merged += pa;
+
+    const QPointF lastA = merged.last();
+    const QPointF firstB = pb.first();
+
+    const qreal eps = 2.0;
+    if (QLineF(lastA, firstB).length() < eps)
+    {
+        // Не добавляем первый узел B
+        for (int i = 1; i < pb.size(); ++i)
+            merged.push_back(pb[i]);
+    }
+    else
+    {
+        merged += pb;
+    }
+
+    if (merged.size() < 2)
+        return false;    
+
+    auto rotateToIndex = [](QVector<QPointF>& pts, int k)
+    {
+        if (pts.isEmpty()) return;
+        k %= pts.size();
+        if (k < 0) k += pts.size();
+        if (k == 0) return;
+
+        QVector<QPointF> tmp;
+        tmp.reserve(pts.size());
+        for (int i = 0; i < pts.size(); ++i)
+            tmp.push_back(pts[(k + i) % pts.size()]);
+        pts = std::move(tmp);
+    };
+
+    // Нормализация нумерации
+    const qreal epsClose = 6.0;
+    const bool looksClosed =
+        (merged.size() >= 3) && (QLineF(merged.first(), merged.last()).length() < epsClose);
+
+    const double a2 = signedArea2(merged);
+
+    const bool numberingFromLast = (a2 > 0.0);
+
+    if (looksClosed)
+    {
+        // Старт - верхний-левый
+        const int k = topLeftIndex(merged);
+        rotateToIndex(merged, k);
+
+        // Если после поворота первый и последний почти совпали, то убираем дубль
+        if (merged.size() >= 2 && QLineF(merged.first(), merged.last()).length() < epsClose)
+            merged.pop_back();
+    }
+    else
+    {
+        // Открытая линия: старт - верхне-левый конец
+        if (isBetterTopLeft(merged.last(), merged.first()))
+            std::reverse(merged.begin(), merged.end());
+    }
+
+    struct Payload
+    {
+        ShapeBackup aBackup;
+        ShapeBackup bBackup;
+        QVector<QPointF> mergedPts;
+        QString label;
+        qulonglong mergedUid = 0;
+        qreal z = 0.0;
+        bool numberingFromLast = false;
+    };
+
+    auto payload = std::make_shared<Payload>();
+
+    auto backupForSceneItem = [this](QGraphicsItem* gi) -> ShapeBackup
+    {
+        ShapeBackup b{};
+        b.uid = gi->data(RoleUid).toULongLong();
+        if (b.uid == 0) b.uid = ensureUid(gi);
+        b.className = gi->data(0).toString();
+        b.z = gi->zValue();
+        b.visible = gi->isVisible();
+
+        if (auto* ln = dynamic_cast<qgraph::Line*>(gi))
+        {
+            b.kind = ShapeKind::Line;
+            b.points = ln->points();
+            b.closed = false;
+        }
+        return b;
+    };
+
+    payload->numberingFromLast = numberingFromLast;
+    payload->aBackup = backupForSceneItem(a);
+    payload->bBackup = backupForSceneItem(b);
+    payload->mergedPts = merged;
+    payload->label = outLabel;
+    payload->z = qMax(a->zValue(), b->zValue());
+
+    payload->mergedUid = _uidCounter++; // Резервируем uid
+
+    auto redoFn = [this, payload]()
+    {
+        // Удаляем А и В по uid
+        for (qulonglong uid : {payload->aBackup.uid, payload->bBackup.uid})
+        {
+            if (!uid) continue;
+            if (QGraphicsItem* gi = findItemByUid(uid))
+            {
+                _scene->removeItem(gi);
+                removeListEntryBySceneItem(gi);
+                delete gi;
+            }
+        }
+
+        if (payload->mergedPts.isEmpty())
+            return;
+
+        auto* ln = new qgraph::Line(_scene, payload->mergedPts.front());
+        ln->setData(RoleUid, QVariant::fromValue<qulonglong>(payload->mergedUid));
+
+        for (int i = 1; i < payload->mergedPts.size(); ++i)
+            ln->addPoint(payload->mergedPts[i], _scene);
+        ln->setNumberingFromLast(payload->numberingFromLast);
+
+        apply_LineWidth_ToItem(ln);
+        apply_PointSize_ToItem(ln);
+        apply_NumberSize_ToItem(ln);
+
+        ln->setData(0, payload->label);
+        applyClassColorToItem(ln, payload->label);
+        ln->setZValue(payload->z);
+        ln->setVisible(true);
+        ln->updateHandlePosition();
+        linkSceneItemToList(ln);
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, payload]()
+    {
+        if (payload->mergedUid)
+        {
+            if (QGraphicsItem* gi = findItemByUid(payload->mergedUid))
+            {
+                _scene->removeItem(gi);
+                removeListEntryBySceneItem(gi);
+                delete gi;
+            }
+        }
+
+        // Восстанавливаем A и B
+        recreateFromBackup(payload->aBackup);
+        recreateFromBackup(payload->bBackup);
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Объединить линии")));
+    return true;
+}
+
+int MainWindow::topLeftIndex(const QVector<QPointF>& pts)
+{
+    if (pts.isEmpty()) return -1;
+    int best = 0;
+    for (int i = 1; i < pts.size(); ++i)
+        if (isBetterTopLeft(pts[i], pts[best]))
+            best = i;
+    return best;
+}
+
+// Формула шнуровки
+double MainWindow::signedArea2(const QVector<QPointF>& pts)
+{
+    // Удвоенная ориентированная площадь для замкнутого контура
+    // Без дублирования первой точки в конце
+    const int n = pts.size();
+    if (n < 3) return 0.0;
+
+    double s = 0.0;
+    for (int i = 0; i < n; ++i)
+    {
+        const QPointF& a = pts[i];
+        const QPointF& b = pts[(i + 1) % n];
+        s += (double)a.x() * (double)b.y() - (double)b.x() * (double)a.y();
+    }
+    return s;
+}
+
 void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString& description)
 {
     struct Payload
@@ -6941,20 +7266,19 @@ void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString
 
     auto redoFn = [this, payload]()
     {
-        // Пытаемся найти существующий объект по uid
+        // Ищем существующий объект по uid
         QGraphicsItem* it = nullptr;
         if (payload->uid != 0)
             it = findItemByUid(payload->uid);
 
         if (it)
         {
-            // Фигура уже есть (первый redo после push) -
-            // просто приводим ее к нужному состоянию из снапшота
+            // Фигура уже есть
             applyBackupToExisting(it, payload->b);
         }
         else
         {
-            // Фигуры нет - создаем по снапшоту
+            // Фигуры нет, создаем по снапшоту
             it = recreateFromBackup(payload->b);
             if (it && payload->uid != 0)
             {
@@ -7387,12 +7711,28 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
 {
     QGraphicsItem* created = nullptr;
 
+    auto applyBackupUid = [this](QGraphicsItem* it, qulonglong uid)
+    {
+        if (!it) return;
+        if (uid != 0)
+        {
+            it->setData(RoleUid, QVariant::fromValue<qulonglong>(uid));
+            if (uid >= _uidCounter)
+                _uidCounter = uid + 1;
+        }
+        else
+        {
+            ensureUid(it);
+        }
+    };
+
     switch (b.kind)
     {
         case ShapeKind::Rectangle:
         {
             auto* rect = new qgraph::Rectangle(_scene);
-            ensureUid(rect);
+            //ensureUid(rect);
+            applyBackupUid(rect, b.uid);
             rect->setRealSceneRect(b.rect);
             rect->updatePointNumbers();
             apply_LineWidth_ToItem(rect);
@@ -7409,7 +7749,8 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
         case ShapeKind::Circle:
         {
             auto* c = new qgraph::Circle(_scene, b.circleCenter);
-            ensureUid(c);
+            //ensureUid(c);
+            applyBackupUid(c, b.uid);
             c->setRealRadius(b.circleRadius);
             apply_LineWidth_ToItem(c);
             apply_PointSize_ToItem(c);
@@ -7427,7 +7768,8 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
             if (b.points.isEmpty())
                 break;
             auto* pl = new qgraph::Polyline(_scene, b.points.front());
-            ensureUid(pl);
+            //ensureUid(pl);
+            applyBackupUid(pl, b.uid);
             for (int i = 1; i < b.points.size(); ++i)
                 pl->addPoint(b.points[i], _scene);
             if (b.closed)
@@ -7451,7 +7793,8 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
             if (b.points.isEmpty())
                 break;
             auto* ln = new qgraph::Line(_scene, b.points.front());
-            ensureUid(ln);
+            //ensureUid(ln);
+            applyBackupUid(ln, b.uid);
             for (int i = 1; i < b.points.size(); ++i)
                 ln->addPoint(b.points[i], _scene);
             if (b.closed)
@@ -7473,7 +7816,8 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
         case ShapeKind::Point:
         {
             auto* pt = new qgraph::Point(_scene);
-            ensureUid(pt);
+            //ensureUid(pt);
+            applyBackupUid(pt, b.uid);
             apply_PointSize_ToItem(pt);
             apply_NumberSize_ToItem(pt);
             apply_PointStyle_ToItem(pt);

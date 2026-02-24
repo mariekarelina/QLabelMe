@@ -441,6 +441,17 @@ private:
 
     void updateImageSizeLabel(const QSize& size);
 
+    // Соединение линий
+    void startMergeLinesMode();
+    void cancelMergeLinesMode();
+    bool handleMergeLinesClick(const QPointF& scenePos); // true если клик обработан
+    bool performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, int bIdx);
+
+    // Нормализация нумерации
+    static double signedArea2(const QVector<QPointF>& pts);
+    static int topLeftIndex(const QVector<QPointF>& pts); // Нумерация по часовой
+    static bool isBetterTopLeft(const QPointF& a, const QPointF& b);
+
 private:
     Ui::MainWindow* ui;
     static QUuidEx _applId;
@@ -656,6 +667,11 @@ private:
     QGraphicsItem* _handleEditedItem = nullptr; // Владелец перетаскиваемой ручки
     ShapeBackup    _handleBeforeSnap;           // Снимок "до"
     bool           _handleDragHadChanges = false;
+
+    // Соединение линий
+    bool _mergeLinesMode = false;
+    qgraph::Line* _mergeLineA = {nullptr};
+    int _mergeLineAEndIdx = -1; // Первая или последняя
 
     QPointF _shiftImageBeforePos;
     bool _shiftImageDragging = false;
