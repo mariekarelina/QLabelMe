@@ -197,21 +197,50 @@ MainWindow::MainWindow(QWidget *parent) :
 
     // Создаем контейнер для тулбаров и кладем их рядом
     QWidget* toolBarsBlock = new QWidget(ui->layoutWidget1);
-    auto* htb = new QHBoxLayout(toolBarsBlock);
+
+    auto* vtb = new QVBoxLayout(toolBarsBlock);
+    vtb->setContentsMargins(0, 0, 0, 0);
+    vtb->setSpacing(0); // Расстояние между тулбарами
+
+    // Строка для тулбаров
+    QWidget* toolBarsRow = new QWidget(toolBarsBlock);
+    auto* htb = new QHBoxLayout(toolBarsRow);
     htb->setContentsMargins(0, 0, 0, 0);
-    htb->setSpacing(6); // Расстояние между тулбарами
+    htb->setSpacing(8);
+
+    ui->toolBar->setStyleSheet("QToolBar{border:none; background:transparent;} QToolButton{padding:2px;}");
+    ui->toolBar_2->setStyleSheet("QToolBar{border:none; background:transparent;} QToolButton{padding:2px;}");
 
     // Чтобы первый тулбар не растягивался, а второй занимал остаток
     ui->toolBar->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
     ui->toolBar_2->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
+    // Вертикальный разделитель между тулбарами
+    QFrame* vSep = new QFrame(toolBarsRow);
+    vSep->setFixedWidth(1);
+    vSep->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    vSep->setStyleSheet("background-color: #505050;");
+
     // Выравниваем по центру по вертикали
     htb->addWidget(ui->toolBar, 0, Qt::AlignVCenter);
-    htb->addWidget(ui->toolBar_2,   1, Qt::AlignVCenter);
+    htb->addWidget(vSep);
+    htb->addWidget(ui->toolBar_2, 1, Qt::AlignVCenter);
 
     htb->setStretch(0, 0); // toolBar_2 не растягиваем
-    htb->setStretch(1, 1); // toolBar растягиваем
+    htb->setStretch(1, 0);
+    htb->setStretch(2, 1);
+
     ui->toolBar->setMinimumWidth(ui->toolBar->sizeHint().width());
+
+    // Нижняя общая линия под тулбарами
+    QFrame* hSep = new QFrame(toolBarsBlock);
+    hSep->setFrameShape(QFrame::HLine);
+    hSep->setFrameShadow(QFrame::Plain);
+    hSep->setFixedHeight(1);
+    hSep->setStyleSheet("background-color:#3a3a3a;");
+
+    vtb->addWidget(toolBarsRow);
+    vtb->addWidget(hSep);
 
     // Убираем старые виджеты из сетки и вставляем блок тулбаров в row 0
     ui->gridLayout->removeWidget(ui->label_5);

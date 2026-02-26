@@ -76,26 +76,6 @@
        </property>
        <widget class="QWidget" name="layoutWidget1">
         <layout class="QGridLayout" name="gridLayout">
-         <item row="1" column="2">
-          <widget class="QUndoView" name="undoView"/>
-         </item>
-         <item row="0" column="2">
-          <widget class="QLabel" name="label_4">
-           <property name="text">
-            <string>Стек действий</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QListWidget" name="polygonList">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-          </widget>
-         </item>
          <item row="0" column="0">
           <widget class="QLabel" name="label_5">
            <property name="sizePolicy">
@@ -109,13 +89,33 @@
            </property>
           </widget>
          </item>
-         <item row="1" column="1">
-          <widget class="QListWidget" name="coordinateList"/>
+         <item row="1" column="2">
+          <widget class="QUndoView" name="undoView"/>
+         </item>
+         <item row="1" column="0">
+          <widget class="QListWidget" name="polygonList">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+          </widget>
          </item>
          <item row="0" column="1">
           <widget class="QLabel" name="label">
            <property name="text">
             <string>Координаты</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QListWidget" name="coordinateList"/>
+         </item>
+         <item row="0" column="2">
+          <widget class="QLabel" name="label_4">
+           <property name="text">
+            <string>Стек действий</string>
            </property>
           </widget>
          </item>
