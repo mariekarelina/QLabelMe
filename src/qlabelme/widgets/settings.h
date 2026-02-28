@@ -57,6 +57,7 @@ public:
         bool keepImageScale = false;
         bool keepMenuBarVisibility = false;
         int handlePickRadius = 6; // Область захвата узла
+        int edgePickRadius = 8;  // Область захвата ребра
 
         PolylineCloseMode closePolyline = PolylineCloseMode::DoubleClick;
         LineFinishMode finishLine = LineFinishMode::DoubleClick;

@@ -153,6 +153,8 @@ void Settings::applyModelToUi()
 
     if (ui->spinHandlePickRadius)
         ui->spinHandlePickRadius->setValue(_values.handlePickRadius);
+    if (ui->spinEdgePickRadius)
+        ui->spinEdgePickRadius->setValue(_values.edgePickRadius);
 
     // if (!_values.labelFont.isEmpty())
     //     ui->fontComboLabels->setCurrentFont(QFont(_values.labelFont));
@@ -244,6 +246,8 @@ void Settings::applyUiToModel()
 
     if (ui->spinHandlePickRadius)
         _values.handlePickRadius = ui->spinHandlePickRadius->value();
+    if (ui->spinEdgePickRadius)
+        _values.edgePickRadius = ui->spinEdgePickRadius->value();
 
     if (ui->doubleClickLMB->isChecked())
         _values.closePolyline = PolylineCloseMode::DoubleClick;

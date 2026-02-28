@@ -340,6 +340,7 @@ private:
     void startGhostDrag(const QPointF& scenePos);
 
     qgraph::DragCircle* pickHandleAt(const QPointF& scenePos) const;
+    QGraphicsItem* pickItemByEdgeAt(GraphicsView* view, const QPoint& viewPos) const;
     void startHandleDrag(qgraph::DragCircle* h, const QPointF& scenePos);
     void updateHandleDrag(const QPointF& scenePos);
     void finishHandleDrag();
@@ -589,6 +590,7 @@ private:
     bool _ghostHover  = false;
     QPointF _ghostGrabOffset; // Смещение точки хвата
     qreal _ghostPickRadius = 6.0; // Радиус поиска ручки под курсором
+    qreal _edgePickRadius  = 8.0; // Радиус захвата ребер
 
     QVector<qgraph::DragCircle*> m_circles;
     qgraph::DragCircle* m_selectedCircle = nullptr;

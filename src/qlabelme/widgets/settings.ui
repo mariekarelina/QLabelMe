@@ -113,6 +113,33 @@
         </layout>
        </item>
        <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_3">
+         <item>
+          <widget class="QLabel" name="edgePickRadius">
+           <property name="text">
+            <string>Область захвата ребра</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSpinBox" name="spinEdgePickRadius"/>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_4">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
         <widget class="QCheckBox" name="keepImageScale">
          <property name="text">
           <string>Сохранять масштаб снимка при смене сцен</string>
@@ -133,8 +160,8 @@
          </property>
          <property name="sizeHint" stdset="0">
           <size>
-           <width>14</width>
-           <height>245</height>
+           <width>914</width>
+           <height>200</height>
           </size>
          </property>
         </spacer>

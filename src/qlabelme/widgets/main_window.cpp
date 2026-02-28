@@ -756,6 +756,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     if (mouseEvent->button() == Qt::LeftButton)
     {
         QGraphicsItem* clickedItem = graphView->itemAt(mouseEvent->pos());
+        if (!clickedItem)
+            clickedItem = pickItemByEdgeAt(graphView, mouseEvent->pos());
 
         if (mouseEvent->modifiers() & Qt::ShiftModifier)
         {
@@ -807,6 +809,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     if (mouseEvent->button() == Qt::LeftButton)
     {
         QGraphicsItem* clickedItem = graphView->itemAt(mouseEvent->pos());
+        if (!clickedItem)
+            clickedItem = pickItemByEdgeAt(graphView, mouseEvent->pos());
 
         if (clickedItem && !qgraphicsitem_cast<qgraph::DragCircle*>(clickedItem))
         {
@@ -2869,6 +2873,11 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             const QPoint  viewPos = ce->pos();
             const QPointF scenePos = ui->graphView->mapToScene(viewPos);
             QGraphicsItem* item = ui->graphView->itemAt(viewPos);
+            if (!item || item == _videoRect)
+            {
+                if (QGraphicsItem* byEdge = pickItemByEdgeAt(ui->graphView, viewPos))
+                    item = byEdge;
+            }
 
             if (auto* circle = dynamic_cast<DragCircle*>(item))
             {
@@ -3100,7 +3109,15 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 const QPainterPath p = polyline->path();
 
                 QPainterPathStroker stroker;
-                const qreal w = qMax<qreal>(18.0, polyline->pen().widthF() + 14.0);
+                const QPointF s0 = ui->graphView->mapToScene(QPoint(0, 0));
+                const QPointF s1 = ui->graphView->mapToScene(QPoint(static_cast<int>(std::lround(_edgePickRadius)), 0));
+                const qreal rScene = QLineF(s0, s1).length();
+
+                const QPointF lp0 = polyline->mapFromScene(scenePos);
+                const QPointF lp1 = polyline->mapFromScene(scenePos + QPointF(rScene, 0));
+                const qreal rLocal = QLineF(lp0, lp1).length();
+
+                const qreal w = qMax<qreal>(2.0 * rLocal, polyline->pen().widthF() + 1.0);
                 stroker.setWidth(w);
 
                 const QPainterPath stroke = stroker.createStroke(p);
@@ -3138,7 +3155,15 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 const QPainterPath p = line->path();
 
                 QPainterPathStroker stroker;
-                const qreal w = qMax<qreal>(18.0, line->pen().widthF() + 14.0);
+                const QPointF s0 = ui->graphView->mapToScene(QPoint(0, 0));
+                const QPointF s1 = ui->graphView->mapToScene(QPoint(static_cast<int>(std::lround(_edgePickRadius)), 0));
+                const qreal rScene = QLineF(s0, s1).length();
+
+                const QPointF lp0 = line->mapFromScene(scenePos);
+                const QPointF lp1 = line->mapFromScene(scenePos + QPointF(rScene, 0));
+                const qreal rLocal = QLineF(lp0, lp1).length();
+
+                const qreal w = qMax<qreal>(2.0 * rLocal, line->pen().widthF() + 1.0);
                 stroker.setWidth(w);
 
                 const QPainterPath stroke = stroker.createStroke(p);
@@ -3149,7 +3174,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 QMenu menu(ui->graphView);
                 QAction* actAdd = menu.addAction(tr("Добавить узел"));
                 QAction* actMerge = menu.addAction(tr("Объединить линии"));
-
                 QAction* chosen = menu.exec(ce->globalPos());
                 if (chosen == actAdd)
                 {
@@ -5971,6 +5995,69 @@ qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
     return nullptr;
 }
 
+QGraphicsItem* MainWindow::pickItemByEdgeAt(GraphicsView* view, const QPoint& viewPos) const
+{
+    if (!view)
+        return nullptr;
+
+    QGraphicsScene* sc = view->scene();
+    if (!sc)
+        return nullptr;
+
+    const QPointF scenePos = view->mapToScene(viewPos);
+
+    const QPointF s0 = view->mapToScene(QPoint(0, 0));
+    const QPointF s1 = view->mapToScene(QPoint(static_cast<int>(std::lround(_edgePickRadius)), 0));
+    const qreal radiusScene = QLineF(s0, s1).length();
+    if (radiusScene <= 0.0)
+        return nullptr;
+
+    const QRectF probe(scenePos - QPointF(radiusScene, radiusScene),
+                       QSizeF(radiusScene * 2.0, radiusScene * 2.0));
+
+    const QList<QGraphicsItem*> items =
+        _scene->items(probe, Qt::IntersectsItemBoundingRect, Qt::DescendingOrder);
+
+    for (QGraphicsItem* it : items)
+    {
+        if (!it || !it->isVisible() || !it->scene())
+            continue;
+
+        if (it == _videoRect)
+            continue;
+
+        if (qgraphicsitem_cast<qgraph::DragCircle*>(it))
+            continue;
+
+        // Берем только фигуры
+        const bool isShape =
+                (dynamic_cast<qgraph::Polyline*>(it)  != nullptr) ||
+                (dynamic_cast<qgraph::Line*>(it)      != nullptr) ||
+                (dynamic_cast<qgraph::Rectangle*>(it) != nullptr) ||
+                (dynamic_cast<qgraph::Circle*>(it)    != nullptr);
+
+        if (!isShape)
+            continue;
+
+        const QPointF pLocal  = it->mapFromScene(scenePos);
+        const QPointF pLocal2 = it->mapFromScene(scenePos + QPointF(radiusScene, 0));
+        const qreal radiusLocal = QLineF(pLocal, pLocal2).length();
+        if (radiusLocal <= 0.0)
+            continue;
+
+        QPainterPathStroker stroker;
+        stroker.setWidth(2.0 * radiusLocal);
+        stroker.setCapStyle(Qt::RoundCap);
+        stroker.setJoinStyle(Qt::RoundJoin);
+
+        const QPainterPath hit = stroker.createStroke(it->shape());
+        if (hit.contains(pLocal))
+            return it;
+    }
+
+    return nullptr;
+}
+
 void MainWindow::startHandleDrag(qgraph::DragCircle* h, const QPointF& scenePos)
 {    
     m_isDraggingHandle = true;
@@ -6157,6 +6244,9 @@ void MainWindow::loadVisualStyle()
     if (!config::base().getValue("graphics.handle_pick_radius", _ghostPickRadius))
         _ghostPickRadius = 6.0;
 
+    if (!config::base().getValue("graphics.edge_pick_radius", _edgePickRadius))
+        _edgePickRadius = 8.0;
+
     if (!config::base().getValue("graphics.number_font_pt", _vis.numberFontPt))
         _vis.numberFontPt = 10.0;
 
@@ -6233,6 +6323,7 @@ void MainWindow::saveVisualStyle() const
     config::base().setValue("graphics.line_width", _vis.lineWidth);
     config::base().setValue("graphics.handle_size", _vis.handleSize);
     config::base().setValue("graphics.handle_pick_radius", _ghostPickRadius);
+    config::base().setValue("graphics.edge_pick_radius", _edgePickRadius);
     config::base().setValue("graphics.number_font_pt", _vis.numberFontPt);
     config::base().setValue("graphics.point_size", _vis.pointSize);
     config::base().setValue("graphics.handle_color", _vis.handleColor.name(QColor::HexArgb));
@@ -8811,6 +8902,7 @@ void MainWindow::on_actSettingsApp_triggered()
     init.labelFont     = _vis.labelFont;
 
     init.handlePickRadius = static_cast<int>(_ghostPickRadius + 0.5);
+    init.edgePickRadius = static_cast<int>(_edgePickRadius + 0.5);
 
     config::base().getValue("view.keep_image_scale_per_image", init.keepImageScale);
     config::base().getValue("ui.keep_menu_visibility", init.keepMenuBarVisibility);
@@ -8829,6 +8921,7 @@ void MainWindow::on_actSettingsApp_triggered()
         _vis.lineWidth = v.lineWidth;
         _vis.handleSize = v.handleSize;
         _ghostPickRadius = v.handlePickRadius;
+        _edgePickRadius  = v.edgePickRadius;
         _vis.numberFontPt = v.numberFontPt;
         _vis.pointSize = v.pointSize;
 
