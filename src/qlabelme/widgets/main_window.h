@@ -453,6 +453,9 @@ private:
     static int topLeftIndex(const QVector<QPointF>& pts); // Нумерация по часовой
     static bool isBetterTopLeft(const QPointF& a, const QPointF& b);
 
+    // Режим в statusBar
+    void updateModeLabel();
+
 private:
     Ui::MainWindow* ui;
     static QUuidEx _applId;
@@ -697,6 +700,8 @@ private:
 
     // Счетчик уникальных id на время жизни документа
     mutable qulonglong _uidCounter = 1;
+
+    QLabel* _modeLabel = {nullptr}; // Режим в statusBar
 
     // Позволяем стороннему классу видеть все
     //friend class GraphicsView;

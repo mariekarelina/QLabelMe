@@ -360,7 +360,25 @@ MainWindow::MainWindow(QWidget *parent) :
     _imageSizeLabel = new QLabel(this);
     _imageSizeLabel->setText(tr("Размер изображения: —"));
     _imageSizeLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    statusBar()->addWidget(_imageSizeLabel, 1);
+    statusBar()->addWidget(_imageSizeLabel, 0);
+
+    // Режим в statusBar
+    _modeLabel = new QLabel(this);
+    _modeLabel->setText(tr("Режим: просмотр"));
+    _modeLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    _modeLabel->setObjectName("modeLabel");
+    _modeLabel->setMinimumWidth(220);
+
+    _modeLabel->setStyleSheet(
+        "QLabel#modeLabel {"
+        "  padding: 2px 8px;"
+        "  border: 1px solid rgba(0,0,0,60);"
+        "  border-radius: 6px;"
+        "  background: rgba(0,0,0,25);"
+        "}"
+    );
+    statusBar()->addWidget(_modeLabel, 0);
+    updateModeLabel();
 
     QString fileName = "/home/marie/фон.png";
     QPixmap pix(fileName);
@@ -681,6 +699,23 @@ void MainWindow::deinit()
 
 void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
 {
+    auto isAnyDrawingNow = [&]() -> bool
+    {
+        return _isInDrawingMode
+            || _isDrawingPolyline || _isDrawingLine
+            || _isDrawingRectangle || _isDrawingCircle || _isDrawingPoint
+            || _drawingPolyline  || _drawingLine  || _drawingRectangle
+            || _drawingCircle  || _drawingPoint;
+    };
+    // Если мы в режиме рисования, то не меняем режим при нажатии на _videoRect
+    if (isAnyDrawingNow())
+    {
+        _isDraggingImage = false;
+        _isAllMoved = false;
+        _shiftImageDragging = false;
+        updateModeLabel();
+    }
+
     if (mouseEvent->button() == Qt::LeftButton)
         _leftMouseButtonDown = true;
 
@@ -701,6 +736,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         !_drawingRuler)
     {
         _zoomRectActive = true;
+        updateModeLabel();
         // Чтобы фигуры/сцена не начали двигались во время зума
         _leftMouseButtonDown = false;
 
@@ -773,6 +809,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
                 _lastMousePos = mouseEvent->pos();
                 mouseEvent->accept();
+                updateModeLabel();
                 return;
             }
 
@@ -791,19 +828,30 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
             _lastMousePos = mouseEvent->pos();
             mouseEvent->accept();
+            updateModeLabel();
             return;
         }
         else
         {
-            // Без Shift - проверяем, кликнули ли на изображение
-            _isDraggingImage = (clickedItem == _videoRect);
-            _draggingItem = nullptr;
-            _shiftImageDragging = false;
-            _isAllMoved = false;
+            if (!isAnyDrawingNow())
+            {
+                // Без Shift - проверяем, кликнули ли на изображение
+                _isDraggingImage = (clickedItem == _videoRect);
+                _draggingItem = nullptr;
+                _shiftImageDragging = false;
+                _isAllMoved = false;
+                updateModeLabel();
+            }
+            else
+            {
+                _isDraggingImage = false;
+                _isAllMoved = false;
+                _shiftImageDragging = false;
+            }
+            updateModeLabel();
         }
 
         _lastMousePos = mouseEvent->pos();
-
     }
 
     if (mouseEvent->button() == Qt::LeftButton)
@@ -872,6 +920,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     {
         _isInDrawingMode = true;
         setSceneItemsMovable(false);
+        updateModeLabel();
         if (!_isDrawingCircle)
         {
             _startPoint = graphView->mapToScene(mouseEvent->pos());
@@ -933,6 +982,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     {
         _isInDrawingMode = true;
         setSceneItemsMovable(false);
+        updateModeLabel();
         _startPoint = graphView->mapToScene(mouseEvent->pos());
         if (!_polyline)
         {
@@ -951,7 +1001,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             {
                 if (_drawingPolyline && _polyline && _polyline->isClosed())
                 {
-                    _drawingPolyline = false;                   
+                    _drawingPolyline = false;
+                    updateModeLabel();
 
                     _polyline->updatePointNumbers();
                     apply_LineWidth_ToItem(_polyline);
@@ -982,6 +1033,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                                 const QString cls = selectedClass;
 
                                 _drawingPolyline = false;
+                                updateModeLabel();
 
                                 auto redoFn = [this, uid, cls]()
                                 {
@@ -1000,6 +1052,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                                     _drawingPolyline = false;
                                     _resumeEditing = false;
                                     _resumeUid = 0;
+                                    updateModeLabel();
 
                                     if (auto doc = currentDocument())
                                     {
@@ -1016,6 +1069,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                                     pl->setClosed(false, false);
                                     _drawingPolyline = true;
                                     _polyline = pl;
+                                    updateModeLabel();
 
                                     _resumeEditing = true;
                                     _resumeUid = uid;
@@ -1045,6 +1099,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                         const QString cls = _polyline->data(0).toString();
                         const qulonglong uid = ensureUid(_polyline);
                         _drawingPolyline = false;
+                        updateModeLabel();
 
                         auto redoFn = [this, uid, cls]()
                         {
@@ -1066,6 +1121,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                             _drawingPolyline = false;
                             _resumeEditing = false;
                             _resumeUid = 0;
+                            updateModeLabel();
 
                             if (auto doc = currentDocument())
                             {
@@ -1084,6 +1140,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
                             _drawingPolyline = true;
                             _polyline = pl;
+                            updateModeLabel();
 
                             _resumeEditing = true;
                             _resumeUid = uid;
@@ -1193,6 +1250,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     {
         _isInDrawingMode = true;
         setSceneItemsMovable(false);
+        updateModeLabel();
         if (!_isDrawingRectangle)
         {
             _startPoint = graphView->mapToScene(mouseEvent->pos()); // Сохраняем начальную точку
@@ -1227,7 +1285,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     {
         _isInDrawingMode = true;
         setSceneItemsMovable(false);
-
+        updateModeLabel();
         const QPointF sceneP = graphView->mapToScene(mouseEvent->pos());
 
         _currPoint = new qgraph::Point(_scene);
@@ -1276,7 +1334,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         _drawingPoint = false;
         _isInDrawingMode = false;
         setSceneItemsMovable(true);
-
+        updateModeLabel();
         raiseAllHandlesToTop();
         return;
     }
@@ -1284,6 +1342,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     {
         _isInDrawingMode = true;
         setSceneItemsMovable(false);
+        updateModeLabel();
         _startPoint = graphView->mapToScene(mouseEvent->pos());
         if (!_line)
         {
@@ -1303,6 +1362,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 if (_drawingLine && _line && _line->isClosed())
                 {
                     _drawingLine = false;
+                    updateModeLabel();
 
                     _line->updatePointNumbers();
                     apply_LineWidth_ToItem(_line);
@@ -1334,6 +1394,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                                 const QString cls = selectedClass;
 
                                 _drawingLine = false;
+                                updateModeLabel();
 
                                 auto redoFn = [this, uid, cls]()
                                 {
@@ -1351,6 +1412,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                                     _drawingLine = false;
                                     _resumeEditing = false;
                                     _resumeUid = 0;
+                                    updateModeLabel();
 
                                     if (auto doc = currentDocument())
                                     {
@@ -1369,6 +1431,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
                                     _drawingLine = true;
                                     _line = ln;
+                                    updateModeLabel();
 
                                     _resumeEditing = true;
                                     _resumeUid = uid;
@@ -1400,6 +1463,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                         const QString cls = _line->data(0).toString();
 
                         _drawingLine = false;
+                        updateModeLabel();
 
                         auto redoFn = [this, uid, cls]()
                         {
@@ -1421,6 +1485,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                             _drawingLine = false;
                             _resumeEditing = false;
                             _resumeUid = 0;
+                            updateModeLabel();
 
                             if (auto doc = currentDocument())
                             {
@@ -1439,6 +1504,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
                             _drawingLine = true;
                             _line = ln;
+                            updateModeLabel();
 
                             _resumeEditing = true;
                             _resumeUid = uid;
@@ -1545,7 +1611,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         {
             // Первая точка линейки
             _rulerStartPoint = graphView->mapToScene(mouseEvent->pos());
-            _isDrawingRuler  = true;
+            _isDrawingRuler = true;
+            updateModeLabel();
 
             // Удаляем старую линейку (если осталась от прошлого измерения)
             if (_rulerLine)
@@ -1587,6 +1654,12 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
 void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
 {
+    auto isAnyDrawingNow = [&]() -> bool {
+        return _isInDrawingMode
+            || _isDrawingPolyline || _isDrawingLine || _isDrawingRectangle || _isDrawingCircle || _isDrawingPoint
+            || _drawingPolyline  || _drawingLine  || _drawingRectangle  || _drawingCircle  || _drawingPoint;
+    };
+
     // Зум прямоугольной области Ctrl + ЛКМ
     if (_zoomRectActive && _zoomRubberBand)
     {
@@ -1720,7 +1793,19 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
             updateAllPointNumbers();
             _scene->update();
             ui->graphView->viewport()->update();
-            _isAllMoved = true;
+            if (isAnyDrawingNow())
+            {
+                if (_isAllMoved)
+                {
+                    _isAllMoved = false;
+                    updateModeLabel();
+                }
+            }
+            else
+            {
+                _isAllMoved = true;
+                updateModeLabel();
+            }
         }
         else if (_draggingItem && (mouseEvent->modifiers() & Qt::ShiftModifier))
         {
@@ -1756,6 +1841,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     if (_zoomRectActive && graphView && mouseEvent->button() == Qt::LeftButton)
     {
         _zoomRectActive = false;
+        updateModeLabel();
         if (_zoomRectView)
         {
             _zoomRectView->setInteractive(_zoomRectWasInteractive);
@@ -1790,7 +1876,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     if (_shiftImageDragging && mouseEvent->button() == Qt::LeftButton)
     {
         _shiftImageDragging = false;
-
+        updateModeLabel();
         if (_videoRect)
         {
             QPointF after = _videoRect->pos();
@@ -1798,7 +1884,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                                  after,
                                  tr("Перемещение изображения"));
         }
-
+        updateModeLabel();
         mouseEvent->accept();
     }
 
@@ -1806,11 +1892,13 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     {
         _isDraggingImage = false;
         _draggingItem    = nullptr;
+        updateModeLabel();
 
         if (_isInDrawingMode)
         {
             _isInDrawingMode = false;
             setSceneItemsMovable(true);
+            updateModeLabel();
         }
     }
     if (mouseEvent->button() == Qt::LeftButton)
@@ -2005,6 +2093,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     else if (_drawingPolyline && _polyline && _polyline->isClosed())
     {
         _drawingPolyline = false;
+        updateModeLabel();
 
         _polyline->updatePointNumbers();
         apply_LineWidth_ToItem(_polyline);
@@ -2052,6 +2141,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                         _drawingPolyline = false;
                         _resumeEditing = false;
                         _resumeUid = 0;
+                        updateModeLabel();
 
                         if (auto doc = currentDocument())
                         {
@@ -2068,6 +2158,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                         pl->setClosed(false, false);
                         _drawingPolyline = true;
                         _polyline = pl;
+                        updateModeLabel();
 
                         _resumeEditing = true;
                         _resumeUid = uid;
@@ -2101,6 +2192,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             const qulonglong uid = ensureUid(_polyline);
 
             _drawingPolyline = false;
+            updateModeLabel();
 
             auto redoFn = [this, uid, cls]()
             {
@@ -2122,6 +2214,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 _drawingPolyline = false;
                 _resumeEditing = false;
                 _resumeUid = 0;
+                updateModeLabel();
 
                 if (auto doc = currentDocument())
                 {
@@ -2140,6 +2233,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                 _drawingPolyline = true;
                 _polyline = pl;
+                updateModeLabel();
 
                 _resumeEditing = true;
                 _resumeUid = uid;
@@ -2175,6 +2269,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     else if (_drawingLine && _line && _line->isClosed())
     {
         _drawingLine = false;
+        updateModeLabel();
 
         _line->updatePointNumbers();
         apply_LineWidth_ToItem(_line);
@@ -2207,6 +2302,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                     const QString cls = selectedClass;
 
                     _drawingLine = false;
+                    updateModeLabel();
 
                     auto redoFn = [this, uid, cls]()
                     {
@@ -2225,6 +2321,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                         _drawingLine = false;
                         _resumeEditing = false;
                         _resumeUid = 0;
+                        updateModeLabel();
 
                         if (auto doc = currentDocument())
                         {
@@ -2243,6 +2340,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                         _drawingLine = true;
                         _line = ln;
+                        updateModeLabel();
 
                         _resumeEditing = true;
                         _resumeUid = uid;
@@ -2273,6 +2371,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             const QString cls = _line->data(0).toString();
 
             _drawingLine = false;
+            updateModeLabel();
 
             auto redoFn = [this, uid, cls]()
             {
@@ -2294,6 +2393,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 _drawingLine = false;
                 _resumeEditing = false;
                 _resumeUid = 0;
+                updateModeLabel();
 
                 if (auto doc = currentDocument())
                 {
@@ -2312,6 +2412,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                 _drawingLine = true;
                 _line = ln;
+                updateModeLabel();
 
                 _resumeEditing = true;
                 _resumeUid = uid;
@@ -2348,6 +2449,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     {
         // Фиксируем конечную точку и окончательно считаем расстояние
         _isDrawingRuler = false;
+        updateModeLabel();
         //_isInDrawingMode = false;
         //setSceneItemsMovable(true);
 
@@ -2377,6 +2479,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         if (_isAllMoved)
         {
             _isAllMoved = false;
+            updateModeLabel();
             return;
         }
         // Проверяем, были ли перемещены какие-либо фигуры
@@ -2557,6 +2660,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                             _polyline = nullptr;
 
                                         _drawingPolyline = false;
+                                        updateModeLabel();
                                         _resumeEditing = false;
                                         _resumeUid = 0;
 
@@ -2576,6 +2680,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                         _drawingPolyline = true;
                                         _polyline = pl;
+                                        updateModeLabel();
 
                                         _resumeEditing = true;
                                         _resumeUid = uid;
@@ -2609,6 +2714,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             const qulonglong uid = ensureUid(_polyline);
 
                             _drawingPolyline = false;
+                            updateModeLabel();
 
                             auto redoFn = [this, uid, cls]()
                             {
@@ -2628,6 +2734,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                     _polyline = nullptr;
 
                                 _drawingPolyline = false;
+                                updateModeLabel();
                                 _resumeEditing = false;
                                 _resumeUid = 0;
 
@@ -2648,6 +2755,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                 _drawingPolyline = true;
                                 _polyline = pl;
+                                updateModeLabel();
 
                                 _resumeEditing = true;
                                 _resumeUid = uid;
@@ -2919,12 +3027,14 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             _drawingPolyline = true;
                             _polyline = polyline;
                             setSceneItemsMovable(false);
+                            updateModeLabel();
 
                             _polyline->setModificationCallback([this]()
                             {
                                 if (_drawingPolyline && _polyline && _polyline->isClosed())
                                 {
                                     _drawingPolyline = false;
+                                    updateModeLabel();
 
                                     _polyline->updatePointNumbers();
                                     apply_LineWidth_ToItem(_polyline);
@@ -3020,6 +3130,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             _drawingLine = true;
                             _line = line;
+                            updateModeLabel();
 
                             setSceneItemsMovable(false);
 
@@ -3028,6 +3139,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                 if (_drawingLine && _line && _line->isClosed())
                                 {
                                     _drawingLine = false;
+                                    updateModeLabel();
 
                                     _line->updatePointNumbers();
                                     apply_LineWidth_ToItem(_line);
@@ -5875,7 +5987,7 @@ void MainWindow::endGhost()
     _ghostHover  = false;
     _ghostTarget = nullptr;
     _handleDragging = false; // Завершение перетаскивания
-
+    updateModeLabel();
     if (_ghostHandle)
     {
         _ghostHandle->hide();
@@ -6063,6 +6175,7 @@ void MainWindow::startHandleDrag(qgraph::DragCircle* h, const QPointF& scenePos)
     m_isDraggingHandle = true;
     m_dragHandle = h;
     _handleDragging = true; // Начало перетаскивания ручки
+    updateModeLabel();
 
     // UNDO: запомним владельца и снимок "до"
     _handleEditedItem = h ? h->parentItem() : nullptr;
@@ -6129,6 +6242,7 @@ void MainWindow::finishHandleDrag()
     m_dragHandle = nullptr;
     _handleDragging = false; // Завершение перетаскивания ручки
     updateAllPointNumbers();
+    updateModeLabel();
 }
 
 void MainWindow::clearAllHandleHoverEffects()
@@ -6953,6 +7067,7 @@ void MainWindow::cancelRulerMode()
         delete _rulerText;
         _rulerText = nullptr;
     }
+    updateModeLabel();
 }
 
 void MainWindow::toggleMenuBarVisible()
@@ -7075,6 +7190,7 @@ void MainWindow::startMergeLinesMode()
 
     if (statusBar())
         statusBar()->showMessage(tr("Объединение линий: кликните по КОНЕЧНОЙ точке первой линии"), 0);
+    updateModeLabel();
 }
 
 void MainWindow::cancelMergeLinesMode()
@@ -7085,6 +7201,7 @@ void MainWindow::cancelMergeLinesMode()
 
     if (statusBar())
         statusBar()->showMessage(tr("Объединение линий отменено"), 2000);
+    updateModeLabel();
 }
 
 bool MainWindow::handleMergeLinesClick(const QPointF& scenePos)
@@ -7132,6 +7249,70 @@ bool MainWindow::isBetterTopLeft(const QPointF& a, const QPointF& b)
     if (a.y() < b.y()) return true;
     if (a.y() > b.y()) return false;
     return a.x() < b.x();
+}
+
+void MainWindow::updateModeLabel()
+{
+    if (!_modeLabel) return;
+
+    if (_isInDrawingMode
+        || _isDrawingRectangle || _isDrawingCircle || _isDrawingLine || _isDrawingPolyline || _isDrawingPoint
+        || _drawingRectangle  || _drawingCircle  || _drawingLine  || _drawingPolyline  || _drawingPoint)
+    {
+        QString tool = tr("фигура");
+        if (_isDrawingRectangle || _drawingRectangle)
+            tool = tr("прямоугольник");
+        else if (_isDrawingCircle || _drawingCircle)
+            tool = tr("круг");
+        else if (_isDrawingPolyline || _drawingPolyline)
+            tool = tr("полилиния");
+        else if (_isDrawingLine || _drawingLine)
+            tool = tr("линия");
+        else if (_isDrawingPoint || _drawingPoint)
+            tool = tr("точка");
+
+        _modeLabel->setText(tr("Режим: рисование (%1)").arg(tool));
+        return;
+    }
+    if (_zoomRectActive)
+    {
+        _modeLabel->setText(tr("Режим: зум-область"));
+        return;
+    }
+    if (_mergeLinesMode)
+    {
+        _modeLabel->setText(tr("Режим: соединение линий"));
+        return;
+    }
+    if (_shiftImageDragging)
+    {
+        _modeLabel->setText(tr("Режим: сдвиг изображения"));
+        return;
+    }
+    if (_isDraggingImage)
+    {
+        _modeLabel->setText(_isAllMoved
+            ? tr("Режим: перемещение (изображение + разметка)")
+            : tr("Режим: перемещение (изображение)"));
+        return;
+    }
+    if (_drawingRuler || _isDrawingRuler) {
+        _modeLabel->setText(_isDrawingRuler
+            ? tr("Режим: линейка (измерение...)")
+            : tr("Режим: линейка"));
+        return;
+    }
+    if (_editInProgress || _handleDragging || m_isDraggingHandle || _ghostActive)
+    {
+        _modeLabel->setText(tr("Режим: редактирование"));
+        return;
+    }
+    if (_resumeEditing)
+    {
+        _modeLabel->setText(tr("Режим: продолжение"));
+        return;
+    }
+    _modeLabel->setText(tr("Режим: просмотр"));
 }
 
 bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, int bIdx)
@@ -8359,6 +8540,7 @@ void MainWindow::on_actRect_triggered()
     _drawingPolyline = false;
     _drawingLine = false;
     _drawingPoint = false;
+    updateModeLabel();
 }
 
 void MainWindow::on_actCircle_triggered()
@@ -8370,7 +8552,7 @@ void MainWindow::on_actCircle_triggered()
     _drawingRectangle = false;
     _drawingLine = false;
     _drawingPoint = false;
-
+    updateModeLabel();
 }
 
 void MainWindow::on_actPolyline_triggered()
@@ -8382,6 +8564,7 @@ void MainWindow::on_actPolyline_triggered()
     _drawingCircle = false;
     _drawingLine = false;
     _drawingPoint = false;
+    updateModeLabel();
 }
 
 void MainWindow::on_actPoint_triggered()
@@ -8393,8 +8576,8 @@ void MainWindow::on_actPoint_triggered()
     _drawingCircle = false;
     _drawingPolyline = false;
     _drawingLine = false;
+    updateModeLabel();
 }
-
 
 void MainWindow::on_actLine_triggered()
 {
@@ -8405,6 +8588,7 @@ void MainWindow::on_actLine_triggered()
     _drawingRectangle = false;
     _drawingCircle = false;
     _drawingPolyline = false;
+    updateModeLabel();
 }
 
 void MainWindow::on_actRuler_triggered()
@@ -8435,6 +8619,7 @@ void MainWindow::on_actRuler_triggered()
         delete _rulerText;
         _rulerText = nullptr;
     }
+    updateModeLabel();
 }
 
 void MainWindow::on_actClosePolyline_triggered()
@@ -8449,6 +8634,7 @@ void MainWindow::on_actClosePolyline_triggered()
     {
         _drawingLine = false;
         _line->closeLine();
+        updateModeLabel();
 
         _line->updatePointNumbers();
         apply_LineWidth_ToItem(_line);
@@ -8473,6 +8659,7 @@ void MainWindow::on_actClosePolyline_triggered()
                     const QString cls = selectedClass;
 
                     _drawingLine = false;
+                    updateModeLabel();
 
                     auto redoFn = [this, uid, cls]()
                     {
@@ -8491,6 +8678,7 @@ void MainWindow::on_actClosePolyline_triggered()
                         _drawingLine = false;
                         _resumeEditing = false;
                         _resumeUid = 0;
+                        updateModeLabel();
 
                         if (auto doc = currentDocument())
                         {
@@ -8509,9 +8697,9 @@ void MainWindow::on_actClosePolyline_triggered()
 
                         _drawingLine = true;
                         _line = ln;
-
                         _resumeEditing = true;
                         _resumeUid = uid;
+                        updateModeLabel();
 
                         ln->setSelected(true);
                         ln->setFocus();
@@ -8539,6 +8727,7 @@ void MainWindow::on_actClosePolyline_triggered()
             const QString cls = _line->data(0).toString();
 
             _drawingLine = false;
+            updateModeLabel();
 
             auto redoFn = [this, uid, cls]()
             {
@@ -8560,6 +8749,7 @@ void MainWindow::on_actClosePolyline_triggered()
                 _drawingLine = false;
                 _resumeEditing = false;
                 _resumeUid = 0;
+                updateModeLabel();
 
                 if (auto doc = currentDocument())
                 {
@@ -8581,6 +8771,7 @@ void MainWindow::on_actClosePolyline_triggered()
 
                 _resumeEditing = true;
                 _resumeUid = uid;
+                updateModeLabel();
 
                 ln->setSelected(true);
                 ln->setFocus();
@@ -8600,8 +8791,6 @@ void MainWindow::on_actClosePolyline_triggered()
             else
                 redoFn();
         }
-
-
         _line = nullptr;
 
         if (auto doc = currentDocument())
