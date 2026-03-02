@@ -2598,6 +2598,22 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 break;
 
             const QPointF sp = ui->graphView->mapToScene(me->pos());
+            // Если мы были в режиме "продолжение" и пользователь откатился undo
+            // до состояния, где фигуры уже нет
+            if (_resumeEditing && _resumeUid)
+            {
+                if (!findItemByUid(_resumeUid))
+                {
+                    _resumeEditing = false;
+                    _resumeUid = 0;
+                    _drawingLine = false;
+                    _drawingPolyline = false;
+                    _line = nullptr;
+                    _polyline = nullptr;
+                    setSceneItemsMovable(true);
+                    updateModeLabel();
+                }
+            }
             // Соединение лиинй
             if (_mergeLinesMode)
             {
@@ -7049,6 +7065,45 @@ qulonglong MainWindow::ensureUid(QGraphicsItem* it) const
     return uid;
 }
 
+void MainWindow::clearLinePolylineStateForDeletedItem(QGraphicsItem* item)
+{
+    if (!item)
+        return;
+
+    const qulonglong uid = item->data(RoleUid).toULongLong();
+
+    const bool isLine = (dynamic_cast<qgraph::Line*>(item) != nullptr);
+    const bool isPolyline = (dynamic_cast<qgraph::Polyline*>(item) != nullptr);
+
+    if (isLine)
+    {
+        if (_line == item)
+            _line = nullptr;
+        _drawingLine = false;
+    }
+
+    if (isPolyline)
+    {
+        if (_polyline == item)
+            _polyline = nullptr;
+        _drawingPolyline = false;
+    }
+
+    if (_resumeEditing && _resumeUid != 0 && uid != 0 && uid == _resumeUid)
+    {
+        _resumeEditing = false;
+        _resumeUid = 0;
+    }
+
+    // Возврат в режим просмотра, если мы больше не рисуем
+    if (!_drawingLine && !_drawingPolyline && (!_resumeEditing || _resumeUid == 0))
+    {
+        _isInDrawingMode = false;
+        setSceneItemsMovable(true);
+        updateModeLabel();
+    }
+}
+
 void MainWindow::cancelRulerMode()
 {
     _isDrawingRuler = false;
@@ -7466,6 +7521,7 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
             {
                 _scene->removeItem(gi);
                 removeListEntryBySceneItem(gi);
+                clearLinePolylineStateForDeletedItem(gi);
                 delete gi;
             }
         }
@@ -7506,6 +7562,7 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
             {
                 _scene->removeItem(gi);
                 removeListEntryBySceneItem(gi);
+                clearLinePolylineStateForDeletedItem(gi);
                 delete gi;
             }
         }
@@ -7603,6 +7660,7 @@ void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString
         {
             _scene->removeItem(it);
             removeListEntryBySceneItem(it);
+            clearLinePolylineStateForDeletedItem(it);
             delete it;
         }
 
@@ -7740,6 +7798,7 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
             if (auto sc = item->scene())
                 sc->removeItem(item);
             removeListEntryBySceneItem(item);
+            clearLinePolylineStateForDeletedItem(item);
             delete item;
         }
 
@@ -8001,6 +8060,7 @@ void MainWindow::removeSceneAndListItems(const QList<QListWidgetItem*>& listItem
         if (gi)
         {
             _scene->removeItem(gi);
+            clearLinePolylineStateForDeletedItem(gi);
             delete gi;
         }
         // Удаляем сам элемент списка
@@ -8268,6 +8328,7 @@ void MainWindow::removePolygonListItem(QListWidgetItem* item)
     if (sceneItem && sceneItem->scene() == _scene)
     {
         _scene->removeItem(sceneItem);
+        clearLinePolylineStateForDeletedItem(sceneItem);
         delete sceneItem;
     }
     // Удаляем из списка
@@ -8868,6 +8929,35 @@ void MainWindow::onSceneItemRemoved(QGraphicsItem* item)
     {
         return;
     }
+    clearLinePolylineStateForDeletedItem(item);
+    if (_resumeEditing)
+    {
+        const qulonglong uid = item ? item->data(RoleUid).toULongLong() : 0;
+        if (uid && uid == _resumeUid)
+        {
+            _resumeEditing = false;
+            _resumeUid = 0;
+            _drawingLine = false;
+            _drawingPolyline = false;
+            _line = nullptr;
+            _polyline = nullptr;
+            setSceneItemsMovable(true);
+            updateModeLabel();
+        }
+    }
+
+    if (item == _line)
+    {
+        _line = nullptr;
+        _drawingLine = false;
+        updateModeLabel();
+    }
+    if (item == _polyline)
+    {
+        _polyline = nullptr;
+        _drawingPolyline = false;
+        updateModeLabel();
+    }
 
     // Ищем соответствующий элемент в списке полигонов
     for (int i = 0; i < ui->polygonList->count(); ++i)
@@ -8924,6 +9014,7 @@ void MainWindow::on_actDelete_triggered()
             {
                 _scene->removeItem(gi);
                 removeListEntryBySceneItem(gi);
+                clearLinePolylineStateForDeletedItem(gi);
                 delete gi;
             }
         }
@@ -9446,6 +9537,7 @@ void MainWindow::on_actResetAnnotation_triggered()
             {
                 _scene->removeItem(gi);
                 removeListEntryBySceneItem(gi);
+                clearLinePolylineStateForDeletedItem(gi);
                 delete gi;
             }
         }

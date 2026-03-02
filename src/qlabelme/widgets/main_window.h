@@ -432,6 +432,8 @@ private:
     QGraphicsItem* findItemByUid(qulonglong uid) const;
     // Выдать/присвоить uid предмету
     qulonglong ensureUid(QGraphicsItem* it) const;
+    // Сбросить состояния рисования при удалении line/polyline из сцены
+    void clearLinePolylineStateForDeletedItem(QGraphicsItem* item);
     // "Отмена" линейки
     void cancelRulerMode();
     // Видимость menuBar

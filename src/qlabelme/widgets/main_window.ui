@@ -326,7 +326,7 @@
     <string>Создать круг</string>
    </property>
    <property name="toolTip">
-    <string>Создать круг</string>
+    <string>Создать круг (Y)</string>
    </property>
    <property name="shortcut">
     <string>Y</string>
@@ -341,7 +341,7 @@
     <string>Создать прямоугольник</string>
    </property>
    <property name="toolTip">
-    <string>Создать прямоугольник</string>
+    <string>Создать прямоугольник (T)</string>
    </property>
    <property name="shortcut">
     <string>T</string>
@@ -356,7 +356,7 @@
     <string>Создать полилинию</string>
    </property>
    <property name="toolTip">
-    <string>Создать полилинию</string>
+    <string>Создать полилинию (U)</string>
    </property>
    <property name="shortcut">
     <string>U</string>
@@ -416,6 +416,9 @@
    <property name="text">
     <string>Создать точку</string>
    </property>
+   <property name="toolTip">
+    <string>Создать точку (O)</string>
+   </property>
    <property name="shortcut">
     <string>O</string>
    </property>
@@ -427,6 +430,9 @@
    </property>
    <property name="text">
     <string>Создать линию</string>
+   </property>
+   <property name="toolTip">
+    <string>Создать линию (I)</string>
    </property>
    <property name="shortcut">
     <string>I</string>
