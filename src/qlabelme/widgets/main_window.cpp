@@ -424,6 +424,10 @@ MainWindow::MainWindow(QWidget *parent) :
     shPrev->setContext(Qt::ApplicationShortcut);
     connect(shPrev, &QShortcut::activated, this, &MainWindow::prevImage);
 
+    auto shSelectAll = new QShortcut(QKeySequence::SelectAll, this);
+    shSelectAll->setContext(Qt::ApplicationShortcut);
+    connect(shSelectAll, &QShortcut::activated, this, &MainWindow::selectAllShapes);
+
     ui->polygonList->setContextMenuPolicy(Qt::CustomContextMenu);
     ui->polygonList->setSelectionMode(QAbstractItemView::ExtendedSelection);
     connect(ui->polygonList, &QListWidget::customContextMenuRequested,
@@ -8641,6 +8645,39 @@ void MainWindow::onPolygonListSelectionChanged()
         if (QGraphicsItem* scItem = selected.first()->data(Qt::UserRole).value<QGraphicsItem*>())
             ui->graphView->ensureVisible(scItem);
     }
+    raiseAllHandlesToTop();
+}
+
+void MainWindow::selectAllShapes()
+{
+    if (!_scene)
+        return;
+
+    const QSignalBlocker blockList(ui->polygonList);
+    const QSignalBlocker blockScene(_scene);
+
+    // Выделяем все в списке и на сцене
+    for (int i = 0; i < ui->polygonList->count(); ++i)
+    {
+        if (auto* li = ui->polygonList->item(i))
+        {
+            li->setSelected(true);
+            if (QGraphicsItem* scItem = li->data(Qt::UserRole).value<QGraphicsItem*>())
+                scItem->setSelected(true);
+        }
+    }
+
+    updateCoordinateList();
+
+    if (ui->polygonList->count() > 0)
+    {
+        if (auto* li0 = ui->polygonList->item(0))
+        {
+            if (QGraphicsItem* sc0 = li0->data(Qt::UserRole).value<QGraphicsItem*>())
+                ui->graphView->ensureVisible(sc0);
+        }
+    }
+
     raiseAllHandlesToTop();
 }
 

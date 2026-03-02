@@ -203,6 +203,7 @@ private slots:
     void onPolylineModified();
     void onSceneChanged();
     void onPolygonListSelectionChanged();
+    void selectAllShapes();
 
     void on_actRect_triggered();
     void on_actCircle_triggered();
