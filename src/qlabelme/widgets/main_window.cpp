@@ -3237,9 +3237,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 const QPainterPath p = polyline->path();
 
                 QPainterPathStroker stroker;
-                const QPointF s0 = ui->graphView->mapToScene(QPoint(0, 0));
-                const QPointF s1 = ui->graphView->mapToScene(QPoint(static_cast<int>(std::lround(_edgePickRadius)), 0));
-                const qreal rScene = QLineF(s0, s1).length();
+                const qreal rScene = viewPixelsToSceneRadius(ui->graphView,
+                                                            effectiveViewPickPx(_edgePickRadius));
 
                 const QPointF lp0 = polyline->mapFromScene(scenePos);
                 const QPointF lp1 = polyline->mapFromScene(scenePos + QPointF(rScene, 0));
@@ -3283,9 +3282,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 const QPainterPath p = line->path();
 
                 QPainterPathStroker stroker;
-                const QPointF s0 = ui->graphView->mapToScene(QPoint(0, 0));
-                const QPointF s1 = ui->graphView->mapToScene(QPoint(static_cast<int>(std::lround(_edgePickRadius)), 0));
-                const qreal rScene = QLineF(s0, s1).length();
+                const qreal rScene = viewPixelsToSceneRadius(ui->graphView,
+                                                            effectiveViewPickPx(_edgePickRadius));
 
                 const QPointF lp0 = line->mapFromScene(scenePos);
                 const QPointF lp1 = line->mapFromScene(scenePos + QPointF(rScene, 0));
@@ -5848,9 +5846,13 @@ qgraph::DragCircle* MainWindow::pickHiddenHandle(const QPointF& scenePos, bool& 
     topIsHandle = false;
     if (!_scene) return nullptr;
 
-    // Берем все элементы под курсором в окрестности
-    const QRectF pickRect(scenePos - QPointF(_ghostPickRadius, _ghostPickRadius),
-                          QSizeF(2 * _ghostPickRadius, 2 * _ghostPickRadius));
+    GraphicsView* view = ui ? ui->graphView : nullptr;
+    const qreal radiusScene = viewPixelsToSceneRadius(view, effectiveViewPickPx(_ghostPickRadius));
+    if (radiusScene <= 0.0)
+      return nullptr;
+
+    const QRectF pickRect(scenePos - QPointF(radiusScene, radiusScene),
+                        QSizeF(2 * radiusScene, 2 * radiusScene));
 
     const auto items = _scene->items(pickRect, Qt::IntersectsItemShape, Qt::DescendingOrder);
 
@@ -6080,25 +6082,64 @@ void MainWindow::startGhostDrag(const QPointF& scenePos)
     setGhostStyleHover();
 }
 
+qreal MainWindow::imagePickScale() const
+{
+    constexpr qreal kRefMinDim = 2000.0;
+    constexpr qreal kMinScale  = 0.5;
+    constexpr qreal kMaxScale  = 3.0;
+
+    const auto doc = currentDocument();
+    if (!doc || doc->pixmap.isNull())
+        return 1.0;
+
+    const qreal minDim = std::min<qreal>(doc->pixmap.width(), doc->pixmap.height());
+    if (minDim <= 0.0)
+        return 1.0;
+
+    const qreal s = minDim / kRefMinDim;
+    return std::clamp(s, kMinScale, kMaxScale);
+}
+
+qreal MainWindow::effectiveViewPickPx(qreal baseViewPx) const
+{
+    return baseViewPx * imagePickScale();
+}
+
+qreal MainWindow::viewPixelsToSceneRadius(GraphicsView* view, qreal viewPx) const
+{
+    if (!view)
+        return 0.0;
+    if (viewPx <= 0.0)
+        return 0.0;
+
+    const QPointF s0 = view->mapToScene(QPoint(0, 0));
+    const QPointF s1 = view->mapToScene(QPoint(static_cast<int>(std::lround(viewPx)), 0));
+    return QLineF(s0, s1).length();
+}
+
 qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
 {
     if (!_scene) return nullptr;
 
-    const qreal pickRadius = 10.0; // Радиус поиска
+    GraphicsView* view = ui ? ui->graphView : nullptr;
+    const qreal pickRadius = viewPixelsToSceneRadius(view, effectiveViewPickPx(_ghostPickRadius));
+    if (pickRadius <= 0.0)
+        return nullptr;
+
     const QRectF probe(scenePos - QPointF(pickRadius, pickRadius),
                        QSizeF(pickRadius * 2, pickRadius * 2));
 
+    qgraph::DragCircle* best = nullptr;
+    qreal bestD2 = std::numeric_limits<qreal>::max();
+
     for (QGraphicsItem* item : _scene->items(probe, Qt::IntersectsItemShape))
     {
-        // Проверяем, что элемент все еще существует и валиден
         if (!item || !item->scene()) continue;
 
         if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
         {
-            // Для кругов всегда возвращаем их ручку, если курсор рядом с окружностью
             if (circle->isCursorNearCircle(circle->mapFromScene(scenePos)))
             {
-                // Получаем ручку круга и обновляем ее позицию
                 auto* handle = circle->getDragCircle();
                 if (handle && handle->isValid())
                 {
@@ -6113,12 +6154,24 @@ qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
         {
             if (!handle->isValid())
                 continue;
-            // Для других фигур используем стандартную проверку
-            if (handle->contains(handle->mapFromScene(scenePos)))
+
+            const QPointF c = handle->mapToScene(handle->rect().center());
+            const qreal dx = c.x() - scenePos.x();
+            const qreal dy = c.y() - scenePos.y();
+            const qreal d2 = dx*dx + dy*dy;
+            if (d2 <= bestD2)
             {
-                return handle;
+                bestD2 = d2;
+                best = handle;
             }
         }
+    }
+    // Фильтр по радиусу
+    if (best)
+    {
+        const qreal limit2 = pickRadius * pickRadius;
+        if (bestD2 <= limit2)
+            return best;
     }
     return nullptr;
 }
@@ -6134,9 +6187,8 @@ QGraphicsItem* MainWindow::pickItemByEdgeAt(GraphicsView* view, const QPoint& vi
 
     const QPointF scenePos = view->mapToScene(viewPos);
 
-    const QPointF s0 = view->mapToScene(QPoint(0, 0));
-    const QPointF s1 = view->mapToScene(QPoint(static_cast<int>(std::lround(_edgePickRadius)), 0));
-    const qreal radiusScene = QLineF(s0, s1).length();
+    const qreal radiusScene = viewPixelsToSceneRadius(view, effectiveViewPickPx(_edgePickRadius));
+
     if (radiusScene <= 0.0)
         return nullptr;
 

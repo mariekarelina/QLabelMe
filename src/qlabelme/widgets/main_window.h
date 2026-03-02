@@ -339,6 +339,11 @@ private:
     void showGhostPreview(qgraph::DragCircle* target, const QPointF& scenePos);
     void startGhostDrag(const QPointF& scenePos);
 
+    // Масштабируемые области захвата
+    qreal imagePickScale() const;
+    qreal viewPixelsToSceneRadius(GraphicsView* view, qreal viewPx) const;
+    qreal effectiveViewPickPx(qreal baseViewPx) const;
+
     qgraph::DragCircle* pickHandleAt(const QPointF& scenePos) const;
     QGraphicsItem* pickItemByEdgeAt(GraphicsView* view, const QPoint& viewPos) const;
     void startHandleDrag(qgraph::DragCircle* h, const QPointF& scenePos);
