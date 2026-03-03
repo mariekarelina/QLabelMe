@@ -463,6 +463,9 @@ private:
 
     // Режим в statusBar
     void updateModeLabel();
+    // Перемещение в режиме рисования
+    void handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers mods, GraphicsView* graphView);
+    void handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers mods, GraphicsView* graphView);
 
 private:
     Ui::MainWindow* ui;
@@ -514,6 +517,10 @@ private:
     SquareDrawingItem* _currentSquare = {nullptr}; // Текущий квадрат
     QList<QPointF> _polylinePoints; // Точки текущей полилинии
 
+    enum class PendingDrawTool { None, Polyline, Line };
+    PendingDrawTool _pendingDrawTool = PendingDrawTool::None;
+    QPoint _pendingDrawPressViewPos;
+    QPointF _pendingDrawPressScenePos;
 
     QPointF _startPoint;
 
