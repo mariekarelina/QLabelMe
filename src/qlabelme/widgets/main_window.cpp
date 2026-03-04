@@ -944,7 +944,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             _currCircle->setRect(QRectF(_startPoint, QSizeF(1, 1)));
             _isDrawingCircle = true;
 
-            const qreal crossSize = 10.0;
+            const qreal crossSize = 6.0;
             if (!_currCircleCrossV)
             {
                 _currCircleCrossV = _scene->addLine(0, 0, 0, 0);
@@ -952,6 +952,9 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 _currCircleCrossV->setFlag(QGraphicsItem::ItemIsSelectable, false);
                 _currCircleCrossV->setFlag(QGraphicsItem::ItemIsFocusable, false);
                 _currCircleCrossV->setAcceptedMouseButtons(Qt::NoButton);
+
+                _currCircleCrossV->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+                _currCircleCrossV->setZValue(1e9);
             }
             if (!_currCircleCrossH)
             {
@@ -960,8 +963,10 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 _currCircleCrossH->setFlag(QGraphicsItem::ItemIsSelectable, false);
                 _currCircleCrossH->setFlag(QGraphicsItem::ItemIsFocusable, false);
                 _currCircleCrossH->setAcceptedMouseButtons(Qt::NoButton);
-            }
 
+                _currCircleCrossH->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+                _currCircleCrossH->setZValue(1e9);
+            }
             QPen pen;
             pen.setWidthF(_vis.lineWidth);
             pen.setColor(_vis.circleLineColor);
@@ -971,9 +976,11 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
             const qreal cx = _startPoint.x();
             const qreal cy = _startPoint.y();
+            _currCircleCrossV->setPos(cx, cy);
+            _currCircleCrossH->setPos(cx, cy);
 
-            _currCircleCrossV->setLine(cx, cy - crossSize, cx, cy + crossSize);
-            _currCircleCrossH->setLine(cx - crossSize, cy, cx + crossSize, cy);
+            _currCircleCrossV->setLine(0, -crossSize, 0, +crossSize);
+            _currCircleCrossH->setLine(-crossSize, 0, +crossSize, 0);
         }
         else if (_currCircle)
         {
@@ -1222,6 +1229,24 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
                               radius * 2, radius * 2);
             // Устанавливаем обновленный прямоугольник
             _currCircle->setRect(circleRect);
+            if (_currCircleCrossV && _currCircleCrossH)
+            {
+                const qreal viewScale = graphView->transform().m11();
+                const qreal radiusPx = radius * viewScale;
+
+                const qreal baseLenPx = 6.0;
+                const qreal maxLenPx = qMax<qreal>(1.0, radiusPx - 1.0);
+                const qreal lenPx = qMin(baseLenPx, maxLenPx);
+
+                const qreal cx = _startPoint.x();
+                const qreal cy = _startPoint.y();
+
+                _currCircleCrossV->setPos(cx, cy);
+                _currCircleCrossH->setPos(cx, cy);
+
+                _currCircleCrossV->setLine(0, -lenPx, 0, +lenPx);
+                _currCircleCrossH->setLine(-lenPx, 0, +lenPx, 0);
+            }
             return;
         }
         //return;

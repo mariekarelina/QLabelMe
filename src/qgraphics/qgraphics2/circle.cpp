@@ -60,6 +60,8 @@ Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
     _horizontalLine->setFlag(QGraphicsItem::ItemIsSelectable, false);
     _horizontalLine->setFlag(QGraphicsItem::ItemIsFocusable, false);
     _horizontalLine->setAcceptedMouseButtons(Qt::NoButton);
+    _verticalLine->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+    _horizontalLine->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
 
     // Отключаем обработку событий наведения для линий
     _verticalLine->setAcceptHoverEvents(false);
@@ -105,7 +107,7 @@ void Circle::setFrameScale(float newScale)
 
     _circle->setPos(w / 2, 0);
     _frameScale = newScale;
-
+    updateCrossLines();
     updateSelectionRect();
     //changeSignal.emit_(this);
 }
@@ -127,7 +129,7 @@ void Circle::dragCircleMove(DragCircle* circle)
     updateSelectionRect();
     prepareGeometryChange();
     setRect(r);
-
+    updateCrossLines();
     circleMoveSignal.emit_(this);
 }
 
@@ -192,7 +194,7 @@ void Circle::setRealRadius(int val)
 
     prepareGeometryChange();
     setRect(r);
-
+    updateCrossLines();
     _circle->setPos(rect().width() / 2, 0);
     updateSelectionRect();
 }
@@ -269,14 +271,10 @@ void Circle::updateCrossLines()
     }
     QRectF r = rect();
     QPointF center = r.center();
-
-    _verticalLine->setFlag(QGraphicsItem::ItemIgnoresTransformations,
-                           this->flags() & QGraphicsItem::ItemIgnoresTransformations);
-    _horizontalLine->setFlag(QGraphicsItem::ItemIgnoresTransformations,
-                             this->flags() & QGraphicsItem::ItemIgnoresTransformations);
-
-    // Длина линий крестика
-    qreal lineLength = _radius * 0.5;
+    // // Длина линий крестика
+    const qreal baseLenPx = 6.0;
+    const qreal maxLenByRadius = qMax<qreal>(1.0, _radius - 1.0);
+    const qreal lineLength = qMin(baseLenPx, maxLenByRadius);
 
     // Вертикальная линия
     QLineF verticalLine(center.x(), center.y() - lineLength,
