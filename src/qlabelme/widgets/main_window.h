@@ -432,7 +432,6 @@ private:
                                  const ShapeBackup& after,
                                  const QString& description);
 
-
     // Удаляет несколько фигур сразу
     void removeSceneAndListItems(const QList<QListWidgetItem*>& listItems);
 
@@ -460,6 +459,8 @@ private:
     void cancelMergeLinesMode();
     bool handleMergeLinesClick(const QPointF& scenePos); // true если клик обработан
     bool performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, int bIdx);
+    // Разрыв линии
+    bool performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePos);
 
     // Нормализация нумерации
     static double signedArea2(const QVector<QPointF>& pts);

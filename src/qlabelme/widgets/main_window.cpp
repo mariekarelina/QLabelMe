@@ -2920,7 +2920,9 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 QMenu menu(ui->graphView);
                 QAction* actAdd = menu.addAction(tr("Добавить узел"));
                 QAction* actMerge = menu.addAction(tr("Объединить линии"));
+                QAction* actSplit = menu.addAction(tr("Разорвать линию"));
                 QAction* actToPolyline = menu.addAction(tr("Линия -> полилиния"));
+
                 QAction* chosen = menu.exec(ce->globalPos());
                 if (chosen == actAdd)
                 {
@@ -2944,6 +2946,10 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     startMergeLinesMode();
                     ce->accept();
                     return true;
+                }
+                else if (chosen == actSplit)
+                {
+                    performSplitLineByEdge(line, scenePos);
                 }
                 else if (chosen == actToPolyline)
                 {
@@ -7808,6 +7814,171 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
     };
 
     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Объединить линии")));
+    return true;
+}
+
+bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePos)
+{
+    auto doc = currentDocument();
+    if (!doc || !doc->_undoStack || !ln)
+        return false;
+
+    ShapeBackup before = makeBackupFromItem(ln);
+    const int n = before.points.size();
+    if (n < 4)
+    {
+        QMessageBox::warning(this, tr("Разорвать линию"),
+                             tr("Нельзя разорвать линию: нужно минимум 4 точки."));
+        return false;
+    }
+
+    auto dist2PointToSegment = [](const QPointF& p, const QPointF& a, const QPointF& b) -> double
+    {
+        const double vx = b.x() - a.x();
+        const double vy = b.y() - a.y();
+        const double wx = p.x() - a.x();
+        const double wy = p.y() - a.y();
+        const double vv = vx*vx + vy*vy;
+        double t = 0.0;
+        if (vv > 1e-12)
+            t = (wx*vx + wy*vy) / vv;
+        if (t < 0.0) t = 0.0;
+        if (t > 1.0) t = 1.0;
+        const double px = a.x() + t*vx;
+        const double py = a.y() + t*vy;
+        const double dx = p.x() - px;
+        const double dy = p.y() - py;
+        return dx*dx + dy*dy;
+    };
+
+    // Ищем ребро (i, i+1), ближайшее к клику
+    int bestIdx = 0;
+    double bestD2 = std::numeric_limits<double>::infinity();
+    for (int i = 0; i < n - 1; ++i)
+    {
+        const QPointF& a = before.points[i];
+        const QPointF& b = before.points[i + 1];
+        const double d2 = dist2PointToSegment(scenePos, a, b);
+        if (d2 < bestD2)
+        {
+            bestD2 = d2;
+            bestIdx = i;
+        }
+    }
+
+    // Чтобы обе линии были валидны (>=2 точки), ребро не должно быть крайним
+    if (bestIdx < 1 || bestIdx > n - 3)
+    {
+        QMessageBox::warning(this, tr("Разорвать линию"),
+                             tr("Нельзя разорвать по этому ребру: получится линия из одной точки.\n"
+                                "Выберите внутреннее ребро."));
+        return false;
+    }
+
+    struct Payload
+    {
+        ShapeBackup oldBackup;
+        QVector<QPointF> pts1;
+        QVector<QPointF> pts2;
+        QString label;
+        qreal z = 0.0;
+        bool visible = true;
+        bool numberingFromLast = false;
+        qulonglong uid1 = 0;
+        qulonglong uid2 = 0;
+    };
+
+    auto payload = std::make_shared<Payload>();
+    payload->oldBackup = before;
+    payload->label = before.className;
+    payload->z = before.z;
+    payload->visible = before.visible;
+    payload->numberingFromLast = before.numberingFromLast;
+
+    payload->uid1 = _uidCounter++;
+    payload->uid2 = _uidCounter++;
+
+    payload->pts1.reserve(bestIdx + 1);
+    for (int i = 0; i <= bestIdx; ++i)
+        payload->pts1.push_back(before.points[i]);
+
+    payload->pts2.reserve(n - (bestIdx + 1));
+    for (int i = bestIdx + 1; i < n; ++i)
+        payload->pts2.push_back(before.points[i]);
+
+    auto redoFn = [this, payload]()
+    {
+        // Удалить старую линию
+        if (payload->oldBackup.uid)
+        {
+            if (QGraphicsItem* gi = findItemByUid(payload->oldBackup.uid))
+            {
+                _scene->removeItem(gi);
+                removeListEntryBySceneItem(gi);
+                clearLinePolylineStateForDeletedItem(gi);
+                delete gi;
+            }
+        }
+
+        auto makeLine = [this, payload](const QVector<QPointF>& pts, qulonglong uid)
+        {
+            if (pts.size() < 2) return;
+
+            auto* ln = new qgraph::Line(_scene, pts.front());
+            ln->setData(RoleUid, QVariant::fromValue<qulonglong>(uid));
+            for (int i = 1; i < pts.size(); ++i)
+                ln->addPoint(pts[i], _scene);
+
+            ln->setNumberingFromLast(payload->numberingFromLast);
+
+            apply_LineWidth_ToItem(ln);
+            apply_PointSize_ToItem(ln);
+            apply_NumberSize_ToItem(ln);
+
+            ln->setData(0, payload->label);
+            applyClassColorToItem(ln, payload->label);
+            ln->setZValue(payload->z);
+            ln->setVisible(payload->visible);
+            ln->updateHandlePosition();
+            linkSceneItemToList(ln);
+        };
+
+        makeLine(payload->pts1, payload->uid1);
+        makeLine(payload->pts2, payload->uid2);
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, payload]()
+    {
+        // Удалить две новые линии
+        for (qulonglong uid : {payload->uid1, payload->uid2})
+        {
+            if (!uid) continue;
+            if (QGraphicsItem* gi = findItemByUid(uid))
+            {
+                _scene->removeItem(gi);
+                removeListEntryBySceneItem(gi);
+                clearLinePolylineStateForDeletedItem(gi);
+                delete gi;
+            }
+        }
+
+        // Восстановить старую
+        recreateFromBackup(payload->oldBackup);
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Разрыв линию")));
     return true;
 }
 
