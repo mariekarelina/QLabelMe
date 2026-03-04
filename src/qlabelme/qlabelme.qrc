@@ -33,5 +33,6 @@
         <file>resources/edit.svg</file>
         <file>resources/undo.svg</file>
         <file>resources/redo.svg</file>
+        <file>resources/polyline.svg</file>
     </qresource>
 </RCC>

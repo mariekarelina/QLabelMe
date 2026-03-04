@@ -350,7 +350,7 @@
   <action name="actPolyline">
    <property name="icon">
     <iconset resource="../qlabelme.qrc">
-     <normaloff>:/images/resources/hexagon.svg</normaloff>:/images/resources/hexagon.svg</iconset>
+     <normaloff>:/images/resources/polyline.svg</normaloff>:/images/resources/polyline.svg</iconset>
    </property>
    <property name="text">
     <string>Создать полилинию</string>
