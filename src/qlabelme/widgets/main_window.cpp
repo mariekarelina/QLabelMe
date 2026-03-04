@@ -2811,6 +2811,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                 QMenu menu(ui->graphView);
                 QAction* actAdd = menu.addAction(tr("Добавить узел"));
+                QAction* actToLine = menu.addAction(tr("Полилиния -> линия"));
 
                 QAction* chosen = menu.exec(ce->globalPos());
                 if (chosen == actAdd)
@@ -2830,7 +2831,69 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         updateFileListDisplay(doc->filePath);
                     }
                 }
+                else if (chosen == actToLine)
+                {
+                    ShapeBackup before = makeBackupFromItem(polyline);
+                    const int n = before.points.size();
+                    if (n < 2)
+                    {
+                        ce->accept();
+                        return true;
+                    }
 
+                    ShapeBackup after = before;
+                    after.kind = ShapeKind::Line;
+                    after.closed = true;
+                    after.numberingFromLast = false;
+
+                    // Если полилиния замкнута, разрываем именно то ребро, по которому был ПКМ
+                    if (polyline->isClosed() && n >= 3)
+                    {
+                        auto dist2PointToSegment = [](const QPointF& p, const QPointF& a, const QPointF& b) -> double
+                        {
+                            const double vx = b.x() - a.x();
+                            const double vy = b.y() - a.y();
+                            const double wx = p.x() - a.x();
+                            const double wy = p.y() - a.y();
+                            const double vv = vx*vx + vy*vy;
+                            double t = 0.0;
+                            if (vv > 1e-12)
+                                t = (wx*vx + wy*vy) / vv;
+                            if (t < 0.0) t = 0.0;
+                            if (t > 1.0) t = 1.0;
+                            const double px = a.x() + t*vx;
+                            const double py = a.y() + t*vy;
+                            const double dx = p.x() - px;
+                            const double dy = p.y() - py;
+                            return dx*dx + dy*dy;
+                        };
+
+                        int bestIdx = 0;
+                        double bestD2 = std::numeric_limits<double>::infinity();
+
+                        // Ищем ближайший сегмент
+                        for (int i = 0; i < n; ++i)
+                        {
+                            const QPointF& a = before.points[i];
+                            const QPointF& b = before.points[(i + 1) % n];
+                            const double d2 = dist2PointToSegment(scenePos, a, b);
+                            if (d2 < bestD2)
+                            {
+                                bestD2 = d2;
+                                bestIdx = i;
+                            }
+                        }
+                        QVector<QPointF> reordered;
+                        reordered.reserve(n);
+                        const int start = (bestIdx + 1) % n; // Новая первая точка
+                        for (int k = 0; k < n; ++k)
+                            reordered.push_back(before.points[(start + k) % n]);
+
+                        after.points = reordered;
+                    }
+
+                    pushReplaceShapeCommand(before.uid, before, after, tr("Полилиния -> линия"));
+                }
                 ce->accept();
                 return true;
             }
@@ -2857,6 +2920,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 QMenu menu(ui->graphView);
                 QAction* actAdd = menu.addAction(tr("Добавить узел"));
                 QAction* actMerge = menu.addAction(tr("Объединить линии"));
+                QAction* actToPolyline = menu.addAction(tr("Линия -> полилиния"));
                 QAction* chosen = menu.exec(ce->globalPos());
                 if (chosen == actAdd)
                 {
@@ -2880,6 +2944,22 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     startMergeLinesMode();
                     ce->accept();
                     return true;
+                }
+                else if (chosen == actToPolyline)
+                {
+                    ShapeBackup before = makeBackupFromItem(line);
+                    if (before.points.size() < 2)
+                    {
+                        ce->accept();
+                        return true;
+                    }
+
+                    ShapeBackup after = before;
+                    after.kind = ShapeKind::Polyline;
+                    after.closed = true;
+                    after.numberingFromLast = false;
+
+                    pushReplaceShapeCommand(before.uid, before, after, tr("Линия -> полилиния"));
                 }
                 ce->accept();
                 return true;
@@ -8188,6 +8268,72 @@ void MainWindow::pushMoveImageCommand(const QPointF& before,
     auto undoFn = [this, payload, applyPos]()
     {
         applyPos(payload->before);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+}
+
+void MainWindow::pushReplaceShapeCommand(qulonglong uid,
+                                        const ShapeBackup& before,
+                                        const ShapeBackup& after,
+                                        const QString& description)
+{
+    auto doc = currentDocument();
+    if (!doc || !doc->_undoStack)
+        return;
+
+    struct Payload
+    {
+        qulonglong uid = 0;
+        ShapeBackup before;
+        ShapeBackup after;
+    };
+
+    auto p = std::make_shared<Payload>();
+    p->uid = uid;
+    p->before = before;
+    p->after  = after;
+
+    p->before.uid = uid;
+    p->after.uid  = uid;
+
+    auto replaceBySnap = [this](qulonglong uid, const ShapeBackup& snap)
+    {
+        if (!uid)
+            return;
+
+        if (QGraphicsItem* it = findItemByUid(uid))
+        {
+            if (auto sc = it->scene())
+                sc->removeItem(it);
+            removeListEntryBySceneItem(it);
+            clearLinePolylineStateForDeletedItem(it);
+            delete it;
+        }
+
+        QGraphicsItem* created = recreateFromBackup(snap);
+        if (created)
+            created->setData(RoleUid, QVariant::fromValue<qulonglong>(uid));
+    };
+
+    auto redoFn = [this, p, replaceBySnap]()
+    {
+        replaceBySnap(p->uid, p->after);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, p, replaceBySnap]()
+    {
+        replaceBySnap(p->uid, p->before);
         if (auto d = currentDocument())
         {
             d->isModified = true;

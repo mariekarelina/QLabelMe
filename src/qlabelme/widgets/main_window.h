@@ -426,6 +426,11 @@ private:
     void pushMoveImageCommand(const QPointF& before,
                               const QPointF& after,
                               const QString& description);
+    // Полилиния->линия
+    void pushReplaceShapeCommand(qulonglong uid,
+                                 const ShapeBackup& before,
+                                 const ShapeBackup& after,
+                                 const QString& description);
 
 
     // Удаляет несколько фигур сразу
