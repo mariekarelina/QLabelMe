@@ -892,7 +892,8 @@ void Polyline::updatePointNumbers()
     pointNumbers.clear();
     numberBackgrounds.clear();
 
-    if (!_pointNumbersVisible) return;
+    if (!(_globalPointNumbersVisible || _pointNumbersVisible))
+        return;
 
     for (int i = 0; i < _circles.size(); ++i)
     {
@@ -1225,6 +1226,15 @@ void Polyline::resumeFromHandle(DragCircle* h)
 void Polyline::togglePointNumbers()
 {
     _pointNumbersVisible = !_pointNumbersVisible;
+    updatePointNumbers();
+}
+
+void Polyline::setGlobalPointNumbersVisible(bool visible)
+{
+    if (_globalPointNumbersVisible == visible)
+        return;
+
+    _globalPointNumbersVisible = visible;
     updatePointNumbers();
 }
 

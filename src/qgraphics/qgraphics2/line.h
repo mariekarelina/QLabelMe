@@ -67,10 +67,17 @@ public:
     void resumeFromHandle(DragCircle* h);
 
     void togglePointNumbers();
+    void setGlobalPointNumbersVisible(bool visible);
+
     bool isPointNumbersVisible() const { return _pointNumbersVisible; }
+    bool isGlobalPointNumbersVisible() const { return _globalPointNumbersVisible; }
+    bool isAnyPointNumbersVisible() const
+    {
+        return _globalPointNumbersVisible || _pointNumbersVisible;
+    }
+
     void toggleSelectionRect();
     bool isSelectionRectVisible() const { return _selectionRectVisible; }
-
 
     void updateHandlesZValue();
     void raiseHandlesToTop() override;
@@ -128,7 +135,8 @@ public:
     QColor _numberColor = Qt::white;
     QColor _numberBgColor = QColor(0, 0, 0, 180);
 
-    bool _pointNumbersVisible = true; // Видимости нумерации
+    bool _pointNumbersVisible = false; // Видимости нумерации
+    bool _globalPointNumbersVisible = false;
     QGraphicsRectItem* _selectionRect = nullptr;
     bool _selectionRectVisible = true;
     std::function<void()> _modificationCallback; // Callback для уведомлений

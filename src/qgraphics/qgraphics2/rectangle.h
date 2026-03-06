@@ -46,7 +46,14 @@ public:
     void handleKeyPressEvent(QKeyEvent* event);
 
     void togglePointNumbers();
+    void setGlobalPointNumbersVisible(bool visible);
+
     bool isPointNumbersVisible() const { return _pointNumbersVisible; }
+    bool isGlobalPointNumbersVisible() const { return _globalPointNumbersVisible; }
+    bool isAnyPointNumbersVisible() const
+    {
+        return _globalPointNumbersVisible || _pointNumbersVisible;
+    }
 
     void updateHandlesZValue();
     void raiseHandlesToTop() override;
@@ -91,7 +98,8 @@ private:
     QColor _numberColor = Qt::white;
     QColor _numberBgColor = QColor(0, 0, 0, 180);
 
-    bool _pointNumbersVisible = true; // Видимости нумерации
+    bool _pointNumbersVisible = false; // Видимости нумерации по N
+    bool _globalPointNumbersVisible = false; // Глобальная видимость из настроек
 };
 
 } // namespace qgraph

@@ -869,7 +869,8 @@ void Line::updatePointNumbers()
     pointNumbers.clear();
     numberBackgrounds.clear();
 
-    if (!_pointNumbersVisible) return;
+    if (!(_globalPointNumbersVisible || _pointNumbersVisible))
+        return;
 
     for (int i = 0; i < _circles.size(); ++i)
     {
@@ -1201,6 +1202,15 @@ void Line::resumeFromHandle(DragCircle* h)
 void Line::togglePointNumbers()
 {
     _pointNumbersVisible = !_pointNumbersVisible;
+    updatePointNumbers();
+}
+
+void Line::setGlobalPointNumbersVisible(bool visible)
+{
+    if (_globalPointNumbersVisible == visible)
+        return;
+
+    _globalPointNumbersVisible = visible;
     updatePointNumbers();
 }
 

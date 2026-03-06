@@ -6075,6 +6075,9 @@ void MainWindow::loadVisualStyle()
     if (!config::base().getValue("graphics.number_font_pt", _vis.numberFontPt))
         _vis.numberFontPt = 10.0;
 
+    if (!config::base().getValue("graphics.show_numbers", _vis.showNumbers))
+        _vis.showNumbers = false;
+
     if (!config::base().getValue("graphics.point_size", _vis.pointSize))
         _vis.pointSize = 6;
 
@@ -6150,6 +6153,7 @@ void MainWindow::saveVisualStyle() const
     config::base().setValue("graphics.handle_pick_radius", _ghostPickRadius);
     config::base().setValue("graphics.edge_pick_radius", _edgePickRadius);
     config::base().setValue("graphics.number_font_pt", _vis.numberFontPt);
+    config::base().setValue("graphics.show_numbers", _vis.showNumbers);
     config::base().setValue("graphics.point_size", _vis.pointSize);
     config::base().setValue("graphics.handle_color", _vis.handleColor.name(QColor::HexArgb));
     config::base().setValue("graphics.selected_handle_color", _vis.selectedHandleColor.name(QColor::HexArgb));
@@ -6241,17 +6245,24 @@ void MainWindow::apply_PointSize_ToScene(QGraphicsScene* sc)
 
 void MainWindow::apply_NumberSize_ToScene(QGraphicsScene* sc)
 {
+    auto applyForScene = [this](QGraphicsScene* scene)
+    {
+        if (!scene)
+            return;
+
+        for (auto* it : scene->items())
+            apply_NumberSize_ToItem(it);
+        scene->update();
+    };
     if (!sc)
     {
-        forEachScene([this](QGraphicsScene* scene){
-            for (auto *it : scene->items()) apply_NumberSize_ToItem(it);
-            scene->update();
+        forEachScene([&](QGraphicsScene* scene){
+            applyForScene(scene);
         });
         return;
     }
-    for (auto *it : sc->items())
-        apply_NumberSize_ToItem(it);
-    sc->update();
+
+    applyForScene(sc);
 }
 
 void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
@@ -6395,16 +6406,19 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* it)
     // Для классов фигур
     if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(it))
     {
+        rectangle->setGlobalPointNumbersVisible(_vis.showNumbers);
         rectangle->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
         return;
     }
     if (auto* polyline = dynamic_cast<qgraph::Polyline*>(it))
     {
+        polyline->setGlobalPointNumbersVisible(_vis.showNumbers);
         polyline->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
         return;
     }
     if (auto* line = dynamic_cast<qgraph::Line*>(it))
     {
+        line->setGlobalPointNumbersVisible(_vis.showNumbers);
         line->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
         return;
     }
@@ -9658,6 +9672,7 @@ void MainWindow::on_actSettingsApp_triggered()
     init.handleSize        = _vis.handleSize;
     init.numberFontPt      = _vis.numberFontPt;
     init.pointSize         = _vis.pointSize;
+    init.showNumbers = _vis.showNumbers;
 
     init.nodeColor         = _vis.handleColor;           // «Цвет узла»
     init.nodeSelectedColor = _vis.selectedHandleColor;   // «Цвет выбранного узла»
@@ -9696,6 +9711,7 @@ void MainWindow::on_actSettingsApp_triggered()
         _ghostPickRadius = v.handlePickRadius;
         _edgePickRadius  = v.edgePickRadius;
         _vis.numberFontPt = v.numberFontPt;
+        _vis.showNumbers = v.showNumbers;
         _vis.pointSize = v.pointSize;
 
         _vis.handleColor = v.nodeColor;

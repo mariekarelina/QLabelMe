@@ -8,7 +8,7 @@
 namespace qgraph {
 
 Rectangle::Rectangle(QGraphicsScene* scene)
-    :_isDrawing(false), _pointNumbersVisible(true) // Изначально режим рисования выключен
+    :_isDrawing(false) // Изначально режим рисования выключен
 {
     setFlags(ItemIsMovable | ItemIsFocusable);
     setAcceptHoverEvents(true); // Включаем обработку событий наведения
@@ -464,7 +464,7 @@ void Rectangle::updatePointNumbers()
     pointNumbers.clear();
     numberBackgrounds.clear();
 
-    if (!_pointNumbersVisible)
+    if (!(_globalPointNumbersVisible || _pointNumbersVisible))
         return;
 
     // Массив узлов
@@ -597,6 +597,15 @@ void Rectangle::handleKeyPressEvent(QKeyEvent* event)
 void Rectangle::togglePointNumbers()
 {
     _pointNumbersVisible = !_pointNumbersVisible;
+    updatePointNumbers();
+}
+
+void Rectangle::setGlobalPointNumbersVisible(bool visible)
+{
+    if (_globalPointNumbersVisible == visible)
+        return;
+
+    _globalPointNumbersVisible = visible;
     updatePointNumbers();
 }
 

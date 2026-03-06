@@ -66,8 +66,16 @@ public:
     void handleKeyPressEvent(QKeyEvent* event);
     void resumeFromHandle(qgraph::DragCircle* h);
 
-    void togglePointNumbers();
+    void togglePointNumbers(); // Локально по N
+    void setGlobalPointNumbersVisible(bool visible);
+
     bool isPointNumbersVisible() const { return _pointNumbersVisible; }
+    bool isGlobalPointNumbersVisible() const { return _globalPointNumbersVisible; }
+    bool isAnyPointNumbersVisible() const
+    {
+        return _globalPointNumbersVisible || _pointNumbersVisible;
+    }
+
     void toggleSelectionRect();
     bool isSelectionRectVisible() const { return _selectionRectVisible; }
 
@@ -129,7 +137,8 @@ public:
     QColor _numberColor = Qt::white;
     QColor _numberBgColor = QColor(0, 0, 0, 180);
 
-    bool _pointNumbersVisible = true; // Видимости нумерации
+    bool _pointNumbersVisible = false; // Видимости нумерации по N
+    bool _globalPointNumbersVisible = false;
     QGraphicsRectItem* _selectionRect = nullptr;
     bool _selectionRectVisible = true;
 

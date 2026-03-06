@@ -645,6 +645,7 @@ private:
         qreal lineWidth = 2.0;
         qreal handleSize = 10.0;
         qreal numberFontPt = 10.0;
+        bool showNumbers = true;
         int labelFontPt = 0;
         QString labelFont;
         QColor handleColor = Qt::red;

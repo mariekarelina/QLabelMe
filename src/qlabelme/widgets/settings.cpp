@@ -150,6 +150,8 @@ void Settings::applyModelToUi()
     //ui->spinLabelFontSize->setValue(_values.labelFontPt);
     ui->keepImageScale->setChecked(_values.keepImageScale);
     ui->keepMenuBarVisibility->setChecked(_values.keepMenuBarVisibility);
+    ui->showNumbers->setChecked(_values.showNumbers);
+
 
     if (ui->spinHandlePickRadius)
         ui->spinHandlePickRadius->setValue(_values.handlePickRadius);
@@ -242,6 +244,7 @@ void Settings::applyUiToModel()
 
     _values.keepImageScale = ui->keepImageScale->isChecked();
     _values.keepMenuBarVisibility = ui->keepMenuBarVisibility->isChecked();
+    _values.showNumbers = ui->showNumbers->isChecked();
 
 
     if (ui->spinHandlePickRadius)
