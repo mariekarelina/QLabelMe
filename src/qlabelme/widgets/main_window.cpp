@@ -3232,6 +3232,21 @@ void MainWindow::closeEvent(QCloseEvent* event)
     }
 }
 
+void MainWindow::showEvent(QShowEvent* event)
+{
+    QMainWindow::showEvent(event);
+
+    if (!_openLastFolderOnFirstShow)
+        return;
+
+    _openLastFolderOnFirstShow = false;
+
+    if (!_lastUsedFolder.isEmpty() && QDir(_lastUsedFolder).exists())
+    {
+        setWorkingFolder(_lastUsedFolder);
+    }
+}
+
 void MainWindow::loadFilesFromFolder(const QString& folderPath)
 {
     QDir directory(folderPath);

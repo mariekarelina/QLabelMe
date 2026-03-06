@@ -24,6 +24,7 @@
 #include <QMainWindow>
 #include <QFileDialog>
 #include <QCloseEvent>
+#include <QShowEvent>
 #include <QGraphicsScene>
 #include <QWheelEvent>
 #include <QToolButton>
@@ -183,6 +184,7 @@ protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void closeEvent(QCloseEvent*) override;
+    void showEvent(QShowEvent* event) override;
 
 private slots:
     void togglePointerMode();
@@ -487,6 +489,7 @@ private:
     QString _windowTitle;
     QString _currentFolderPath; // Переменную для хранения пути
     QString _lastUsedFolder; // Последняя открытая папка
+    bool _openLastFolderOnFirstShow = true;
     QLabel* _labelConnectStatus;
 
     QLabel* _folderPathLabel; // Для отображения пути к папке рядом с версией
