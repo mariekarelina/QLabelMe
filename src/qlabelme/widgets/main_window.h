@@ -600,7 +600,7 @@ private:
     qreal m_zoom = 1.0;
     static constexpr qreal kZoomStep = 1.1;
     static constexpr qreal kMinZoom  = 0.10;
-    static constexpr qreal kMaxZoom  = 10.0;
+    static constexpr qreal kMaxZoom  = 100.0;
 
     QList<int> _savedSplitterSizes; // Хранит нормальные размеры сплиттера
     bool _isRightSplitterCollapsed = false;

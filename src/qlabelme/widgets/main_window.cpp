@@ -2519,9 +2519,9 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             // Переводим в "шаги колеса": 120 = один щелчок
             const double steps = dy / 120.0;
 
-            constexpr double kZoomStep = 1.10;
-            constexpr double kZoomMin  = 0.10;
-            constexpr double kZoomMax  = 8.00;
+            const double kZoomStep = MainWindow::kZoomStep;
+            const double kZoomMin = MainWindow::kMinZoom;
+            const double kZoomMax = MainWindow::kMaxZoom;
 
             double oldZoom = m_zoom;
             if (oldZoom <= 0.000001)
@@ -2989,9 +2989,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             base = base * inv;
         }
 
-        constexpr double kZoomStep = 1.10;
-        constexpr double kZoomMin  = 0.10;
-        constexpr double kZoomMax  = 8.00;
+        const double kZoomStep = MainWindow::kZoomStep;
+        const double kZoomMin = MainWindow::kMinZoom;
+        const double kZoomMax = MainWindow::kMaxZoom;
 
         const int key = event->key();
 
