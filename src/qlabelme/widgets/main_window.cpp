@@ -8964,10 +8964,6 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
                 Qt::UniqueConnection);
     }
 
-    // _loadingNow = false;
-    // fitImageToView();
-    // updatePolygonListForCurrentScene();
-
     _loadingNow = false;
 
     bool keepPerImageZoom = false;
@@ -8984,10 +8980,8 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
         else
             fitImageToView();
     }
-
+    updateAllPointNumbers();
     updatePolygonListForCurrentScene();
-
-
     clearAllHandleHoverEffects();
     // Обновляем отображение звездочки (файл изменен)
     updateFileListDisplay(currentDoc->filePath);
