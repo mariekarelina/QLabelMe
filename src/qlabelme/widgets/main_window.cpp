@@ -723,10 +723,6 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     if (mouseEvent->button() == Qt::LeftButton)
         _leftMouseButtonDown = true;
 
-    if (_isInDrawingMode && !(_drawingPolyline || _drawingLine))
-    {
-        return;
-    }
     // Зум прямоугольной области Ctrl + ЛКМ
     if (graphView &&
         mouseEvent->button() == Qt::LeftButton &&
@@ -793,42 +789,46 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
         return;
     }
-    if (mouseEvent->button() == Qt::LeftButton)
+    if (mouseEvent->button() == Qt::LeftButton && !isAnyDrawingNow())
     {
         QGraphicsItem* clickedItem = graphView->itemAt(mouseEvent->pos());
         if (!clickedItem)
             clickedItem = pickItemByEdgeAt(graphView, mouseEvent->pos());
 
-        if (mouseEvent->modifiers() & Qt::ShiftModifier)
+        // Сбрасываем состояния перемещения
+        _movingItem = nullptr;
+        _movingItems.clear();
+        _moveGroupBefore.clear();
+        _moveGroupInitialPos.clear();
+        _moveIsGroup = false;
+        _moveHadChanges = false;
+
+        _draggingItem = nullptr;
+        _isDraggingImage = false;
+        _shiftImageDragging = false;
+        _isAllMoved = false;
+
+        const bool drawingLineLike =
+                _drawingLine || _drawingPolyline || _isDrawingLine || _isDrawingPolyline;
+
+        if (drawingLineLike)
         {
-            // Shift - двигаем только фото и пишем это в стек
+            // Во время рисования line/polyline не захватываем фигуры
+        }
+        else if (mouseEvent->modifiers() & Qt::ShiftModifier)
+        {
             if (clickedItem == _videoRect && _videoRect)
             {
-                _shiftImageBeforePos  = _videoRect->pos();
-                _shiftImageDragging   = true;
-
-                // В этом режиме мы не двигаем фигуры
-                _isDraggingImage = false;
-                _draggingItem    = nullptr;
-
+                _shiftImageBeforePos = _videoRect->pos();
+                _shiftImageDragging = true;
                 _lastMousePos = mouseEvent->pos();
                 mouseEvent->accept();
                 updateModeLabel();
                 return;
             }
 
-            // При зажатом Shift двигаем именно фигуру, а не ее дочерние элементы
             if (clickedItem && !qgraphicsitem_cast<qgraph::DragCircle*>(clickedItem))
-            {
                 _draggingItem = findMovableAncestor(clickedItem);
-            }
-            else
-            {
-                _draggingItem = nullptr;
-            }
-
-            _isDraggingImage = false;
-            _shiftImageDragging = false;
 
             _lastMousePos = mouseEvent->pos();
             mouseEvent->accept();
@@ -837,89 +837,71 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         }
         else
         {
-            if (!isAnyDrawingNow())
+            // Обычный режим просмотра
+            if (clickedItem == _videoRect)
             {
-                // Без Shift - проверяем, кликнули ли на изображение
-                _isDraggingImage = (clickedItem == _videoRect);
-                _draggingItem = nullptr;
-                _shiftImageDragging = false;
-                _isAllMoved = false;
+                _isDraggingImage = true;
+                _lastMousePos = mouseEvent->pos();
+                mouseEvent->accept();
                 updateModeLabel();
+                return;
             }
-            else
+
+            if (clickedItem && !qgraphicsitem_cast<qgraph::DragCircle*>(clickedItem))
             {
-                _isDraggingImage = false;
-                _isAllMoved = false;
-                _shiftImageDragging = false;
-            }
-            updateModeLabel();
-        }
-
-        _lastMousePos = mouseEvent->pos();
-    }
-
-    if (mouseEvent->button() == Qt::LeftButton)
-    {
-        QGraphicsItem* clickedItem = graphView->itemAt(mouseEvent->pos());
-        if (!clickedItem)
-            clickedItem = pickItemByEdgeAt(graphView, mouseEvent->pos());
-
-        if (clickedItem && !qgraphicsitem_cast<qgraph::DragCircle*>(clickedItem))
-        {
-            QGraphicsItem* mov = findMovableAncestor(clickedItem);
-            if (mov && mov->flags().testFlag(QGraphicsItem::ItemIsMovable))
-            {
-                _movingItem = mov;
-                _moveBeforeSnap = makeBackupFromItem(_movingItem);
-                _moveHadChanges = false;
-
-                const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
-                _moveGrabOffsetScene = scenePos - _movingItem->scenePos();
-                _moveSavedFlags = _movingItem->flags();
-                _movingItem->setFlag(QGraphicsItem::ItemIsMovable, false);
-
-                _movingItems.clear();
-                _moveGroupBefore.clear();
-                _moveGroupInitialPos.clear();
-                _moveIsGroup        = false;
-                _movePressScenePos  = scenePos;
-
-                // Если выделено несколько фигур
-                const QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
-                if (selectedItems.size() > 1 && mov->isSelected())
+                QGraphicsItem* mov = findMovableAncestor(clickedItem);
+                if (mov && mov->flags().testFlag(QGraphicsItem::ItemIsMovable))
                 {
-                    _moveIsGroup = true;
+                    _movingItem = mov;
+                    _moveBeforeSnap = makeBackupFromItem(_movingItem);
+                    _moveHadChanges = false;
 
-                    for (QGraphicsItem* sel : selectedItems)
+                    const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
+                    _moveGrabOffsetScene = scenePos - _movingItem->scenePos();
+                    _moveSavedFlags = _movingItem->flags();
+                    _movingItem->setFlag(QGraphicsItem::ItemIsMovable, false);
+
+                    _movingItems.clear();
+                    _moveGroupBefore.clear();
+                    _moveGroupInitialPos.clear();
+                    _moveIsGroup = false;
+                    _movePressScenePos = scenePos;
+
+                    const QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+                    if (selectedItems.size() > 1 && mov->isSelected())
                     {
-                        if (!sel)
-                            continue;
+                        _moveIsGroup = true;
 
-                        QGraphicsItem* root = findMovableAncestor(sel);
-                        if (!root)
-                            continue;
+                        for (QGraphicsItem* sel : selectedItems)
+                        {
+                            if (!sel)
+                                continue;
 
-                        // Избегаем дублей
-                        if (_movingItems.contains(root))
-                            continue;
+                            QGraphicsItem* root = findMovableAncestor(sel);
+                            if (!root)
+                                continue;
 
-                        _movingItems.append(root);
-                        _moveGroupBefore.append(makeBackupFromItem(root));
-                        _moveGroupInitialPos.append(root->scenePos());
-                    }
+                            if (_movingItems.contains(root))
+                                continue;
 
-                    // На всякий случай гарантируем, что "ведущий" item есть в списке
-                    if (!_movingItems.contains(_movingItem))
-                    {
-                        _movingItems.append(_movingItem);
-                        _moveGroupBefore.append(makeBackupFromItem(_movingItem));
-                        _moveGroupInitialPos.append(_movingItem->scenePos());
+                            _movingItems.append(root);
+                            _moveGroupBefore.append(makeBackupFromItem(root));
+                            _moveGroupInitialPos.append(root->scenePos());
+                        }
+
+                        if (!_movingItems.contains(_movingItem))
+                        {
+                            _movingItems.append(_movingItem);
+                            _moveGroupBefore.append(makeBackupFromItem(_movingItem));
+                            _moveGroupInitialPos.append(_movingItem->scenePos());
+                        }
                     }
                 }
             }
         }
-    }
 
+        _lastMousePos = mouseEvent->pos();
+    }
     if (_drawingCircle)
     {
         _isInDrawingMode = true;
@@ -1072,8 +1054,6 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
                 ShapeBackup b = makeBackupFromItem(_currPoint);
                 pushAdoptExistingShapeCommand(_currPoint, b, tr("Добавление точки"));
-
-
             }
         }
 
@@ -1173,8 +1153,22 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
         const int dragDist = QApplication::startDragDistance();
         if ((mouseEvent->pos() - _pendingDrawPressViewPos).manhattanLength() >= dragDist)
         {
-            _pendingDrawTool = PendingDrawTool::None; // отменяем постановку точки
+            // Не постановка новой точки, а перетаскивание изображения
+            _pendingDrawTool = PendingDrawTool::None;
+
+            _movingItem = nullptr;
+            _movingItems.clear();
+            _moveGroupBefore.clear();
+            _moveGroupInitialPos.clear();
+            _moveIsGroup = false;
+            _moveHadChanges = false;
+
+            _draggingItem = nullptr;
+            _shiftImageDragging = false;
+
             _isDraggingImage = true;
+            _lastMousePos = mouseEvent->pos();
+
             updateModeLabel();
         }
     }
@@ -1327,6 +1321,8 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
                     rect->updateHandlePosition();
                 else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
                     polyline->updateHandlePosition();
+                else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+                    line->updateHandlePosition();
             }
             updateAllPointNumbers();
             _scene->update();
@@ -1361,6 +1357,9 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
                 rect->updateHandlePosition();
             else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(_draggingItem))
                 polyline->updateHandlePosition();
+            else if (auto* line = dynamic_cast<qgraph::Line*>(_draggingItem))
+                line->updateHandlePosition();
+
             updateAllPointNumbers();
         }
 
@@ -1449,14 +1448,23 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     {
         _isDraggingImage = false;
         _draggingItem    = nullptr;
-        updateModeLabel();
+
+        const bool keepLineLikeDrawing =
+                _drawingPolyline || _drawingLine || _isDrawingPolyline || _isDrawingLine;
 
         if (_isInDrawingMode)
         {
-            _isInDrawingMode = false;
-            setSceneItemsMovable(true);
-            updateModeLabel();
+            if (keepLineLikeDrawing)
+            {
+                setSceneItemsMovable(false);
+            }
+            else
+            {
+                _isInDrawingMode = false;
+                setSceneItemsMovable(true);
+            }
         }
+        updateModeLabel();
     }
     if (mouseEvent->button() == Qt::LeftButton)
     {
@@ -1651,6 +1659,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     {
         _drawingPolyline = false;
         updateModeLabel();
+        if (_polyline)
+            _polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
 
         _polyline->updatePointNumbers();
         apply_LineWidth_ToItem(_polyline);
@@ -1687,6 +1697,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                         if (!pl) return;
 
                         pl->setClosed(true, true);
+                        pl->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                         pl->setData(0, cls);
                         applyClassColorToItem(pl, cls);
@@ -1713,6 +1724,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                         if (!pl) return;
 
                         pl->setClosed(false, false);
+                        pl->setFlag(QGraphicsItem::ItemIsMovable, false);
                         _drawingPolyline = true;
                         _polyline = pl;
                         updateModeLabel();
@@ -1733,13 +1745,10 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                         raiseAllHandlesToTop();
                     };
-
-
                     if (QUndoStack* st = activeUndoStack())
                         st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
                     else
                         redoFn();
-
                 }
             }
         }
@@ -1757,6 +1766,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 if (!pl) return;
 
                 pl->setClosed(true, false);
+                pl->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                 if (!cls.isEmpty())
                 {
@@ -1787,6 +1797,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 if (!pl) return;
 
                 pl->setClosed(false, false);
+                pl->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                 _drawingPolyline = true;
                 _polyline = pl;
@@ -1813,7 +1824,6 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             else
                 redoFn();
         }
-
         _polyline = nullptr;
 
         if (auto doc = currentDocument())
@@ -1827,6 +1837,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     {
         _drawingLine = false;
         updateModeLabel();
+        if (_line)
+                _line->setFlag(QGraphicsItem::ItemIsMovable, true);
 
         _line->updatePointNumbers();
         apply_LineWidth_ToItem(_line);
@@ -1867,6 +1879,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                         if (!ln) return;
 
                         ln->setClosed(true, false);
+                        ln->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                         ln->setData(0, cls);
                         applyClassColorToItem(ln, cls);
@@ -1894,6 +1907,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                         if (!ln) return;
 
                         ln->setClosed(false, false);
+                        ln->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                         _drawingLine = true;
                         _line = ln;
@@ -1936,6 +1950,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 if (!ln) return;
 
                 ln->setClosed(true, false);
+                ln->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                 if (!cls.isEmpty())
                 {
@@ -1966,6 +1981,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 if (!ln) return;
 
                 ln->setClosed(false, false);
+                ln->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                 _drawingLine = true;
                 _line = ln;
@@ -2224,6 +2240,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                         if (!pl) return;
 
                                         pl->setClosed(true, true);
+                                        pl->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                                         pl->setData(0, cls);
                                         applyClassColorToItem(pl, cls);
@@ -2250,6 +2267,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                         if (!pl) return;
 
                                         pl->setClosed(false, false);
+                                        pl->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                                         _drawingPolyline = true;
                                         _polyline = pl;
@@ -2271,8 +2289,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                         raiseAllHandlesToTop();
                                     };
-
-
                                     if (QUndoStack* st = activeUndoStack())
                                         st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
                                     else
@@ -2295,6 +2311,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                 if (!pl) return;
 
                                 pl->setClosed(true, false);
+                                pl->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                                 if (!cls.isEmpty())
                                 {
@@ -2325,6 +2342,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                 if (!pl) return;
 
                                 pl->setClosed(false, false);
+                                pl->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                                 _drawingPolyline = true;
                                 _polyline = pl;
@@ -7137,7 +7155,8 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
         apply_PointSize_ToItem(_polyline);
         apply_NumberSize_ToItem(_polyline);
 
-        _polyline->setSelected(true);
+        _polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
+        _polyline->setSelected(false);
         _polyline->setFocus();
         _polyline->updatePointNumbers();
 
@@ -7187,6 +7206,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
                                 if (!pl) return;
 
                                 pl->setClosed(true, false);
+                                pl->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                                 pl->setData(0, cls);
                                 applyClassColorToItem(pl, cls);
@@ -7213,6 +7233,8 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
                                 if (!pl) return;
 
                                 pl->setClosed(false, false);
+                                pl->setFlag(QGraphicsItem::ItemIsMovable, false);
+
                                 _drawingPolyline = true;
                                 _polyline = pl;
                                 updateModeLabel();
@@ -7253,6 +7275,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
                         if (!pl) return;
 
                         pl->setClosed(true, false);
+                        pl->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                         if (!cls.isEmpty())
                         {
@@ -7283,6 +7306,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
                         if (!pl) return;
 
                         pl->setClosed(false, false);
+                        pl->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                         _drawingPolyline = true;
                         _polyline = pl;
@@ -7351,7 +7375,8 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
             const int before = pl->_circles.size();
             pl->addPoint(payload->pt, _scene);
 
-            pl->setSelected(true);
+            pl->setFlag(QGraphicsItem::ItemIsMovable, false);
+            pl->setSelected(false);
             pl->setFocus();
             pl->updatePointNumbers();
 
@@ -7466,6 +7491,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                                 if (!ln) return;
 
                                 ln->setClosed(true, false);
+                                ln->setFlag(QGraphicsItem::ItemIsMovable, true);
                                 ln->setData(0, cls);
                                 applyClassColorToItem(ln, cls);
                                 linkSceneItemToList(ln);
@@ -7492,6 +7518,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                                 if (!ln) return;
 
                                 ln->setClosed(false, false);
+                                ln->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                                 _drawingLine = true;
                                 _line = ln;
@@ -7535,6 +7562,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                         if (!ln) return;
 
                         ln->setClosed(true, false);
+                        ln->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                         if (!cls.isEmpty())
                         {
@@ -7565,6 +7593,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                         if (!ln) return;
 
                         ln->setClosed(false, false);
+                        ln->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                         _drawingLine = true;
                         _line = ln;
@@ -9288,6 +9317,7 @@ void MainWindow::on_actClosePolyline_triggered()
                         if (!ln) return;
 
                         ln->setClosed(true, false);
+                        ln->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                         ln->setData(0, cls);
                         applyClassColorToItem(ln, cls);
@@ -9315,6 +9345,7 @@ void MainWindow::on_actClosePolyline_triggered()
                         if (!ln) return;
 
                         ln->setClosed(false, false);
+                        ln->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                         _drawingLine = true;
                         _line = ln;
@@ -9356,6 +9387,7 @@ void MainWindow::on_actClosePolyline_triggered()
                 if (!ln) return;
 
                 ln->setClosed(true, false);
+                ln->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                 if (!cls.isEmpty())
                 {
@@ -9386,6 +9418,7 @@ void MainWindow::on_actClosePolyline_triggered()
                 if (!ln) return;
 
                 ln->setClosed(false, false);
+                ln->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                 _drawingLine = true;
                 _line = ln;
