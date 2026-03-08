@@ -3062,6 +3062,28 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     }
     else if (event->key() == Qt::Key_N)
     {
+        if (_drawingPolyline && _polyline)
+        {
+            _polyline->togglePointNumbers();
+            _polyline->updatePointNumbers();
+            if (_scene)
+                _scene->update();
+
+            event->accept();
+            return;
+        }
+
+        if (_drawingLine && _line)
+        {
+            _line->togglePointNumbers();
+            _line->updatePointNumbers();
+            if (_scene)
+                _scene->update();
+
+            event->accept();
+            return;
+        }
+
         event->accept();
         return;
     }
@@ -7114,7 +7136,11 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
         apply_LineWidth_ToItem(_polyline);
         apply_PointSize_ToItem(_polyline);
         apply_NumberSize_ToItem(_polyline);
+
+        _polyline->setSelected(true);
         _polyline->setFocus();
+        _polyline->updatePointNumbers();
+
         ShapeBackup b0 = makeBackupFromItem(_polyline);
         pushAdoptExistingShapeCommand(_polyline, b0, tr("Узел полилинии"));
         _polyline->setModificationCallback([this]()
@@ -7324,6 +7350,11 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
 
             const int before = pl->_circles.size();
             pl->addPoint(payload->pt, _scene);
+
+            pl->setSelected(true);
+            pl->setFocus();
+            pl->updatePointNumbers();
+
             payload->didAdd = (pl->_circles.size() > before);
 
             if (auto d = currentDocument())
@@ -7385,7 +7416,9 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
         apply_LineWidth_ToItem(_line);
         apply_PointSize_ToItem(_line);
         apply_NumberSize_ToItem(_line);
+        _line->setSelected(true);
         _line->setFocus();
+        _line->updatePointNumbers();
         ShapeBackup b0 = makeBackupFromItem(_line);
         pushAdoptExistingShapeCommand(_line, b0, tr("Узел линии"));
         _line->setModificationCallback([this]()
@@ -7597,6 +7630,11 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
             const int before = ln->_circles.size();
             ln->addPoint(payload->pt, _scene);
+
+            ln->setSelected(true);
+            ln->setFocus();
+            ln->updatePointNumbers();
+
             payload->didAdd = (ln->_circles.size() > before);
 
             if (auto d = currentDocument())
