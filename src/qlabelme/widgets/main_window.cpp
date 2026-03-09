@@ -708,8 +708,10 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         return _isInDrawingMode
             || _isDrawingPolyline || _isDrawingLine
             || _isDrawingRectangle || _isDrawingCircle || _isDrawingPoint
+            || _isDrawingRuler
             || _drawingPolyline  || _drawingLine  || _drawingRectangle
-            || _drawingCircle  || _drawingPoint;
+            || _drawingCircle  || _drawingPoint
+            || _drawingRuler;
     };
     // Если мы в режиме рисования, то не меняем режим при нажатии на _videoRect
     if (isAnyDrawingNow())
@@ -787,6 +789,57 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             nearest->setUserHidden(!nearest->isUserHidden());
         }
 
+        return;
+    }
+    if (mouseEvent->button() == Qt::LeftButton && _drawingRuler)
+    {
+        if (!_isDrawingRuler)
+        {
+            _rulerStartPoint = graphView->mapToScene(mouseEvent->pos());
+            _isDrawingRuler = true;
+            updateModeLabel();
+
+            if (_rulerLine)
+            {
+                _scene->removeItem(_rulerLine);
+                delete _rulerLine;
+                _rulerLine = nullptr;
+            }
+            if (_rulerText)
+            {
+                _scene->removeItem(_rulerText);
+                delete _rulerText;
+                _rulerText = nullptr;
+            }
+
+            QPen pen(_vis.rulerColor);
+            pen.setWidthF(2.0);
+            pen.setStyle(Qt::DotLine);
+            pen.setCapStyle(Qt::RoundCap);
+            pen.setJoinStyle(Qt::RoundJoin);
+            pen.setCosmetic(true);
+
+            _rulerLine = _scene->addLine(QLineF(_rulerStartPoint, _rulerStartPoint), pen);
+            _rulerLine->setZValue(1000);
+
+            _rulerText = _scene->addText(QStringLiteral("0"));
+            _rulerText->setDefaultTextColor(_vis.rulerColor);
+            // Масштабируем размер текста от размера изображения
+            if (_videoRect)
+            {
+                const QSize imgSize = _videoRect->pixmap().size();
+                const int maxSide = std::max(imgSize.width(), imgSize.height());
+
+                QFont f = _rulerText->font();
+                f.setPointSizeF(std::max(6.0, maxSide / 200.0));
+                _rulerText->setFont(f);
+            }
+            _rulerText->setZValue(1001);
+            _rulerText->setPos(_rulerStartPoint);
+        }
+
+        _drawingRuler = false;
+        mouseEvent->accept();
         return;
     }
     if (mouseEvent->button() == Qt::LeftButton && !isAnyDrawingNow())
@@ -1113,7 +1166,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 _rulerText = nullptr;
             }
 
-            QPen pen(QColor(200, 200, 200));
+            QPen pen(_vis.rulerColor);
             pen.setWidthF(2.0);
             pen.setStyle(Qt::DotLine);
             pen.setCapStyle(Qt::RoundCap);
@@ -1125,7 +1178,17 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
             // Текст с расстоянием
             _rulerText = _scene->addText(QStringLiteral("0"));
-            _rulerText->setDefaultTextColor(QColor(200, 200, 200));
+            _rulerText->setDefaultTextColor(_vis.rulerColor);
+            // Масштабируем размер текста от размера изображения
+            if (_videoRect)
+            {
+                const QSize imgSize = _videoRect->pixmap().size();
+                const int maxSide = std::max(imgSize.width(), imgSize.height());
+
+                QFont f = _rulerText->font();
+                f.setPointSizeF(std::max(6.0, maxSide / 200.0));
+                _rulerText->setFont(f);
+            }
             _rulerText->setZValue(1001);
             _rulerText->setPos(_rulerStartPoint);
         }
@@ -3126,6 +3189,12 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     }
     else if (event->key() == Qt::Key_B)
     {
+        event->accept();
+        return;
+    }
+    else if (event->key() == Qt::Key_L && event->modifiers() == Qt::NoModifier)
+    {
+        on_actRuler_triggered();
         event->accept();
         return;
     }
@@ -6190,6 +6259,11 @@ void MainWindow::loadVisualStyle()
     if (config::base().getValue("graphics.colors.point", colorStr))
         _vis.pointColor = QColor(colorStr);
 
+    if (config::base().getValue("graphics.colors.ruler", colorStr))
+        _vis.rulerColor = QColor(colorStr);
+    else
+        _vis.rulerColor = QColor(200, 200, 200);
+
     int ow = 1;
     if (config::base().getValue("graphics.point.outline_width", ow))
         _vis.pointOutlineWidth = ow;
@@ -6229,6 +6303,7 @@ void MainWindow::saveVisualStyle() const
     config::base().setValue("graphics.colors.polyline", _vis.polylineLineColor.name(QColor::HexArgb));
     config::base().setValue("graphics.colors.line",  _vis.lineLineColor.name(QColor::HexArgb));
     config::base().setValue("graphics.colors.point", _vis.pointColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.ruler", _vis.rulerColor.name(QColor::HexArgb));
     config::base().setValue("graphics.point.outline_width", _vis.pointOutlineWidth);
     // config::base().setValue("vis.all.label_font_pt", _vis.labelFontPt);
     // config::base().setValue("vis.all.label_font_family", _vis.labelFont);
@@ -9779,6 +9854,7 @@ void MainWindow::on_actSettingsApp_triggered()
     init.polylineLineColor = _vis.polylineLineColor;     // «Линии полилинии»
     init.lineLineColor     = _vis.lineLineColor;
     init.pointColor        = _vis.pointColor;
+    init.rulerColor        = _vis.rulerColor;
 
     init.closePolyline = _polylineCloseMode;    // Текущий режим замыкания
     init.finishLine    = _lineFinishMode;       // Текущий режим завершения рисования линии
@@ -9822,6 +9898,20 @@ void MainWindow::on_actSettingsApp_triggered()
         _vis.pointOutlineWidth = v.pointOutlineWidth;
         _vis.labelFontPt = v.labelFontPt;
         _vis.labelFont = v.labelFont;
+        _vis.rulerColor = v.rulerColor;
+        if (_rulerLine)
+        {
+            QPen pen = _rulerLine->pen();
+            pen.setColor(_vis.rulerColor);
+            _rulerLine->setPen(pen);
+        }
+        if (_rulerText)
+        {
+            _rulerText->setDefaultTextColor(_vis.rulerColor);
+        }
+        if (_scene)
+            _scene->update();
+
         applyLabelFontToUi();
 
         // 2) Сохраняем и применяем

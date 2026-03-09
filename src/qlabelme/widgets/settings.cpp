@@ -43,25 +43,16 @@ void Settings::showEvent(QShowEvent* e)
 
 void Settings::wireUi()
 {
-    const auto all = this->findChildren<QPushButton*>(
-        QRegularExpression("^pushButton(_\\d+)?$")
-    );
-    auto byName = all;
-    std::sort(byName.begin(), byName.end(),
-              [](QPushButton* a, QPushButton* b){ return a->objectName() < b->objectName(); });
-
-    if (byName.size() >= 9)
-    {
-        _btnNode = byName.at(0);
-        _btnNodeSel = byName.at(1);
-        _btnNumber = byName.at(2);
-        _btnNumberBg = byName.at(3);
-        _btnRect = byName.at(4);
-        _btnCircle = byName.at(5);
-        _btnPolyline = byName.at(6);
-        _btnLine = byName.at(7);
-        _btnPoint = byName.at(8);
-    }
+    _btnNode = ui->pushButton;
+    _btnNodeSel = ui->pushButton_2;
+    _btnNumber = ui->pushButton_3;
+    _btnNumberBg = ui->pushButton_4;
+    _btnRect = ui->pushButton_5;
+    _btnCircle = ui->pushButton_6;
+    _btnPolyline = ui->pushButton_7;
+    _btnLine = ui->pushButton_8;
+    _btnPoint = ui->pushButton_9;
+    _btnRuler = ui->pushButton_10;
 
     // Привязываем диалог выбора цвета
     attachColorPicker(_btnNode, &_values.nodeColor);
@@ -73,6 +64,7 @@ void Settings::wireUi()
     attachColorPicker(_btnPolyline, &_values.polylineLineColor);
     attachColorPicker(_btnLine,  &_values.lineLineColor);
     attachColorPicker(_btnPoint, &_values.pointColor);
+    attachColorPicker(_btnRuler, &_values.rulerColor);
 
     // Кнопки диалога
     connect(ui->buttonBox, &QDialogButtonBox::clicked,
@@ -201,6 +193,8 @@ void Settings::applyModelToUi()
         updateColorPreview(_btnLine, _values.lineLineColor);
     if (_btnPoint)
         updateColorPreview(_btnPoint, _values.pointColor);
+    if (_btnRuler)
+        updateColorPreview(_btnRuler, _values.rulerColor);
 
     switch (_values.closePolyline)
     {
@@ -245,7 +239,6 @@ void Settings::applyUiToModel()
     _values.keepImageScale = ui->keepImageScale->isChecked();
     _values.keepMenuBarVisibility = ui->keepMenuBarVisibility->isChecked();
     _values.showNumbers = ui->showNumbers->isChecked();
-
 
     if (ui->spinHandlePickRadius)
         _values.handlePickRadius = ui->spinHandlePickRadius->value();

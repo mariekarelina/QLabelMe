@@ -52,6 +52,7 @@ public:
         QColor polylineLineColor = QColor("#40ff40");
         QColor lineLineColor = QColor("#40ff40");
         QColor pointColor = QColor("#00ff00");
+        QColor rulerColor = QColor(200, 200, 200);
         int pointOutlineWidth = 1;
         int pointSize = 6;
         bool keepImageScale = false;
@@ -108,6 +109,7 @@ private:
     QPushButton* _btnPolyline = {nullptr};
     QPushButton* _btnLine = {nullptr};
     QPushButton* _btnPoint = {nullptr};
+    QPushButton* _btnRuler = {nullptr};
 
     QFont _labelFont; // Выбранный шрифт
 };

@@ -665,6 +665,7 @@ private:
 
         QColor lineLineColor = Qt::red;
         QColor pointColor = Qt::green;
+        QColor rulerColor = QColor(200, 200, 200);
         int pointOutlineWidth = 1;
         int pointSize = 6;
 

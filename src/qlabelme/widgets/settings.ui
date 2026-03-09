@@ -7,13 +7,13 @@
     <x>0</x>
     <y>0</y>
     <width>969</width>
-    <height>546</height>
+    <height>600</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
     <width>800</width>
-    <height>400</height>
+    <height>600</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -32,7 +32,7 @@
       </sizepolicy>
      </property>
      <property name="currentIndex">
-      <number>0</number>
+      <number>2</number>
      </property>
      <widget class="QWidget" name="tabGeneral">
       <attribute name="title">
@@ -353,7 +353,14 @@
          <item>
           <widget class="QLabel" name="pointColor">
            <property name="text">
-            <string>Цыет точки</string>
+            <string>Цвет точки</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="rulerColor">
+           <property name="text">
+            <string>Цвет линейки</string>
            </property>
           </widget>
          </item>
@@ -550,6 +557,29 @@ background: #000000;</string>
          </item>
          <item>
           <widget class="QPushButton" name="pushButton_9">
+           <property name="minimumSize">
+            <size>
+             <width>26</width>
+             <height>22</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>26</width>
+             <height>22</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">border: 1px solid #777; 
+background: #000000;</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_10">
            <property name="minimumSize">
             <size>
              <width>26</width>
