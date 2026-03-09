@@ -56,8 +56,8 @@ public:
         int pointSize = 6;
         bool keepImageScale = false;
         bool keepMenuBarVisibility = false;
-        int handlePickRadius = 6; // Область захвата узла
-        int edgePickRadius = 8;  // Область захвата ребра
+        double handlePickRadius = 6.0; // Область захвата узла
+        double edgePickRadius = 8.0;  // Область захвата ребра
         bool showNumbers = true; // Глобальная видимость нумерации
 
         PolylineCloseMode closePolyline = PolylineCloseMode::DoubleClick;

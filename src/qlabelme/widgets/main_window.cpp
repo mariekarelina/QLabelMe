@@ -2205,7 +2205,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 if (!circles.isEmpty())
                 {
                     const QPointF p0 = circles.first()->scenePos();
-                    constexpr qreal kHit = 8.0;
+                    const qreal kHit = _drawHandleCommitRadius;
                     if (QLineF(sp, p0).length() <= kHit)
                     {
                         //_drawingPolyline = false;
@@ -2383,6 +2383,25 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         return true;
                     }
                 }
+            }
+
+            const bool drawingLineLike =
+                    _drawingPolyline || _drawingLine || _isDrawingPolyline || _isDrawingLine;
+
+            // Во время рисования line/polyline не даем ближайшему узлу перехватывать клик
+            // Захватываем существующий узел только при очень точном попадании
+            if (drawingLineLike)
+            {
+                if (auto* preciseHandle = pickHandleAt(sp, _drawHandleCommitRadius))
+                {
+                    if (preciseHandle->scene() && _scene && _scene->items().contains(preciseHandle))
+                    {
+                        startHandleDrag(preciseHandle, sp);
+                        return true;
+                    }
+                }
+
+                break; // иначе пусть клик дойдет до handleLineLmbClick / handlePolylineLmbClick
             }
 
             if (auto* target = pickHiddenHandle(sp, topIsHandle))
@@ -5782,45 +5801,37 @@ void MainWindow::startGhostDrag(const QPointF& scenePos)
 
 qreal MainWindow::imagePickScale() const
 {
-    constexpr qreal kRefMinDim = 2000.0;
-    constexpr qreal kMinScale  = 0.5;
-    constexpr qreal kMaxScale  = 3.0;
-
-    const auto doc = currentDocument();
-    if (!doc || doc->pixmap.isNull())
-        return 1.0;
-
-    const qreal minDim = std::min<qreal>(doc->pixmap.width(), doc->pixmap.height());
-    if (minDim <= 0.0)
-        return 1.0;
-
-    const qreal s = minDim / kRefMinDim;
-    return std::clamp(s, kMinScale, kMaxScale);
+    return 1.0;
 }
 
-qreal MainWindow::effectiveViewPickPx(qreal baseViewPx) const
+qreal MainWindow::effectiveViewPickPx(qreal baseValue) const
 {
-    return baseViewPx * imagePickScale();
+    return baseValue * imagePickScale();
 }
 
 qreal MainWindow::viewPixelsToSceneRadius(GraphicsView* view, qreal viewPx) const
 {
-    if (!view)
-        return 0.0;
+    Q_UNUSED(view);
+
     if (viewPx <= 0.0)
         return 0.0;
 
-    const QPointF s0 = view->mapToScene(QPoint(0, 0));
-    const QPointF s1 = view->mapToScene(QPoint(static_cast<int>(std::lround(viewPx)), 0));
-    return QLineF(s0, s1).length();
+    // Значение уже трактуется как радиус в координатах сцены/изображени
+    return viewPx;
 }
 
 qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
 {
-    if (!_scene) return nullptr;
+    return pickHandleAt(scenePos, _ghostPickRadius);
+}
+
+qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos, qreal customRadius) const
+{
+    if (!_scene)
+        return nullptr;
 
     GraphicsView* view = ui ? ui->graphView : nullptr;
-    const qreal pickRadius = viewPixelsToSceneRadius(view, effectiveViewPickPx(_ghostPickRadius));
+    const qreal pickRadius = viewPixelsToSceneRadius(view, effectiveViewPickPx(customRadius));
     if (pickRadius <= 0.0)
         return nullptr;
 
@@ -5832,7 +5843,8 @@ qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
 
     for (QGraphicsItem* item : _scene->items(probe, Qt::IntersectsItemShape))
     {
-        if (!item || !item->scene()) continue;
+        if (!item || !item->scene())
+            continue;
 
         if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
         {
@@ -5856,22 +5868,20 @@ qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
             const QPointF c = handle->mapToScene(handle->rect().center());
             const qreal dx = c.x() - scenePos.x();
             const qreal dy = c.y() - scenePos.y();
-            const qreal d2 = dx*dx + dy*dy;
-            if (d2 <= bestD2)
+            const qreal d2 = dx * dx + dy * dy;
+            const qreal r2 = pickRadius * pickRadius;
+
+            if (d2 > r2)
+                continue;
+
+            if (d2 < bestD2)
             {
                 bestD2 = d2;
                 best = handle;
             }
         }
     }
-    // Фильтр по радиусу
-    if (best)
-    {
-        const qreal limit2 = pickRadius * pickRadius;
-        if (bestD2 <= limit2)
-            return best;
-    }
-    return nullptr;
+    return best;
 }
 
 QGraphicsItem* MainWindow::pickItemByEdgeAt(GraphicsView* view, const QPoint& viewPos) const
@@ -9775,8 +9785,8 @@ void MainWindow::on_actSettingsApp_triggered()
     init.labelFontPt   = _vis.labelFontPt;      // Размер и шрифт
     init.labelFont     = _vis.labelFont;
 
-    init.handlePickRadius = static_cast<int>(_ghostPickRadius + 0.5);
-    init.edgePickRadius = static_cast<int>(_edgePickRadius + 0.5);
+    init.handlePickRadius = _ghostPickRadius;
+    init.edgePickRadius = _edgePickRadius;
 
     config::base().getValue("view.keep_image_scale_per_image", init.keepImageScale);
     config::base().getValue("ui.keep_menu_visibility", init.keepMenuBarVisibility);

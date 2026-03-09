@@ -348,6 +348,7 @@ private:
     qreal effectiveViewPickPx(qreal baseViewPx) const;
 
     qgraph::DragCircle* pickHandleAt(const QPointF& scenePos) const;
+    qgraph::DragCircle* pickHandleAt(const QPointF& scenePos, qreal customRadius) const;
     QGraphicsItem* pickItemByEdgeAt(GraphicsView* view, const QPoint& viewPos) const;
     void startHandleDrag(qgraph::DragCircle* h, const QPointF& scenePos);
     void updateHandleDrag(const QPointF& scenePos);
@@ -618,6 +619,7 @@ private:
     QPointF _ghostGrabOffset; // Смещение точки хвата
     qreal _ghostPickRadius = 6.0; // Радиус поиска ручки под курсором
     qreal _edgePickRadius  = 8.0; // Радиус захвата ребер
+    qreal _drawHandleCommitRadius = 0.01; // Точное попадание в узел именно во время рисования line/polyline
 
     QVector<qgraph::DragCircle*> m_circles;
     qgraph::DragCircle* m_selectedCircle = nullptr;
