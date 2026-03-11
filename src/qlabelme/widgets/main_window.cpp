@@ -725,6 +725,60 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     if (mouseEvent->button() == Qt::LeftButton)
         _leftMouseButtonDown = true;
 
+    // Alt + ЛКМ / Alt + Shift + ЛКМ для редактирования узлов
+    if (mouseEvent->button() == Qt::LeftButton && graphView)
+    {
+        const Qt::KeyboardModifiers mods = mouseEvent->modifiers();
+        const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
+        // Удаление в eventFilter()
+        // Alt + ЛКМ добавить узел на ребро
+        if ((mods & Qt::AltModifier) && !(mods & Qt::ShiftModifier))
+        {
+            QGraphicsItem* item = pickItemByEdgeAt(graphView, mouseEvent->pos());
+
+            if (auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(item))
+            {
+                ShapeBackup before = makeBackupFromItem(pl);
+                const qulonglong uid = before.uid;
+
+                pl->insertPoint(scenePos);
+
+                ShapeBackup after = makeBackupFromItem(pl);
+                if (!sameGeometry(before, after))
+                    pushModifyShapeCommand(uid, before, after, tr("Добавление узла"));
+
+                if (auto doc = currentDocument(); doc && !doc->isModified)
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+
+                mouseEvent->accept();
+                return;
+            }
+
+            if (auto* ln = qgraphicsitem_cast<qgraph::Line*>(item))
+            {
+                ShapeBackup before = makeBackupFromItem(ln);
+                const qulonglong uid = before.uid;
+
+                ln->insertPoint(scenePos);
+
+                ShapeBackup after = makeBackupFromItem(ln);
+                if (!sameGeometry(before, after))
+                    pushModifyShapeCommand(uid, before, after, tr("Добавление узла"));
+
+                if (auto doc = currentDocument(); doc && !doc->isModified)
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+
+                mouseEvent->accept();
+                return;
+            }
+        }
+    }
     // Зум прямоугольной области Ctrl + ЛКМ
     if (graphView &&
         mouseEvent->button() == Qt::LeftButton &&
@@ -1675,7 +1729,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         }
 
         // Проверяем минимальный радиус
-        if (circleRect.width() < 10 || circleRect.height() < 10)
+        if (circleRect.width() < 1 || circleRect.height() < 1)
             return; // Прерываем, если круг слишком маленький
 
 
@@ -2235,6 +2289,62 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 break;
 
             const QPointF sp = ui->graphView->mapToScene(me->pos());
+            // Alt + Shift + ЛКМ удалить узел
+            if ((me->modifiers() & Qt::AltModifier) && (me->modifiers() & Qt::ShiftModifier))
+            {
+                qgraph::DragCircle* handle = pickHandleAt(sp);
+
+                if (!handle)
+                {
+                    bool topIsHandle = false;
+                    handle = pickHiddenHandle(sp, topIsHandle);
+                }
+
+                if (handle && handle->parentItem())
+                {
+                    if (auto* polyline = dynamic_cast<qgraph::Polyline*>(handle->parentItem()))
+                    {
+                        ShapeBackup before = makeBackupFromItem(polyline);
+                        const qulonglong uid = before.uid;
+
+                        polyline->handlePointDeletion(handle);
+
+                        ShapeBackup after = makeBackupFromItem(polyline);
+                        if (!sameGeometry(before, after))
+                            pushModifyShapeCommand(uid, before, after, tr("Удаление узла"));
+
+                        if (auto doc = currentDocument(); doc && !doc->isModified)
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+
+                        event->accept();
+                        return true;
+                    }
+
+                    if (auto* line = dynamic_cast<qgraph::Line*>(handle->parentItem()))
+                    {
+                        ShapeBackup before = makeBackupFromItem(line);
+                        const qulonglong uid = before.uid;
+
+                        line->handlePointDeletion(handle);
+
+                        ShapeBackup after = makeBackupFromItem(line);
+                        if (!sameGeometry(before, after))
+                            pushModifyShapeCommand(uid, before, after, tr("Удаление узла"));
+
+                        if (auto doc = currentDocument(); doc && !doc->isModified)
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+
+                        event->accept();
+                        return true;
+                    }
+                }
+            }
             // Если мы были в режиме "продолжение" и пользователь откатился undo
             // до состояния, где фигуры уже нет
             if (_resumeEditing && _resumeUid)

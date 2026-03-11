@@ -85,7 +85,7 @@ private:
     DragCircle* _circleBL; // Левый нижний
 
     // Добавлено для предотвращения полного схлопывания прямоугольника
-    const qreal _minSize = 10.0;
+    const qreal _minSize = 1.0;
 
     bool _isDrawing = false;
     QPointF _startPoint;

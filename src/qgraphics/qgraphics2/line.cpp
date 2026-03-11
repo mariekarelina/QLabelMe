@@ -358,7 +358,7 @@ void Line::handlePointDeletion(DragCircle* circle)
     if (!circle || !scene()) return;
 
     // Не позволяем удалять точки, если их меньше 2 в незамкнутой
-    if (!_isClosed && _circles.size() <= 2)
+    if (_circles.size() <= 2)
         return;
 
     if (_circles.contains(circle))
