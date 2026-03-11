@@ -868,26 +868,27 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         {
             // Во время рисования line/polyline не захватываем фигуры
         }
-        else if (mouseEvent->modifiers() & Qt::ShiftModifier)
-        {
-            if (clickedItem == _videoRect && _videoRect)
-            {
-                _shiftImageBeforePos = _videoRect->pos();
-                _shiftImageDragging = true;
-                _lastMousePos = mouseEvent->pos();
-                mouseEvent->accept();
-                updateModeLabel();
-                return;
-            }
+        // Решили убрать на вермя, пока этот функционал не нужен
+        // else if (mouseEvent->modifiers() & Qt::ShiftModifier)
+        // {
+        //     if (clickedItem == _videoRect && _videoRect)
+        //     {
+        //         _shiftImageBeforePos = _videoRect->pos();
+        //         _shiftImageDragging = true;
+        //         _lastMousePos = mouseEvent->pos();
+        //         mouseEvent->accept();
+        //         updateModeLabel();
+        //         return;
+        //     }
 
-            if (clickedItem && !qgraphicsitem_cast<qgraph::DragCircle*>(clickedItem))
-                _draggingItem = findMovableAncestor(clickedItem);
+        //     if (clickedItem && !qgraphicsitem_cast<qgraph::DragCircle*>(clickedItem))
+        //         _draggingItem = findMovableAncestor(clickedItem);
 
-            _lastMousePos = mouseEvent->pos();
-            mouseEvent->accept();
-            updateModeLabel();
-            return;
-        }
+        //     _lastMousePos = mouseEvent->pos();
+        //     mouseEvent->accept();
+        //     updateModeLabel();
+        //     return;
+        // }
         else
         {
             // Обычный режим просмотра
@@ -2604,6 +2605,32 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 break;
 
             auto* we = static_cast<QWheelEvent*>(event);
+            // Shift + колесико = горизонтальный скролл
+            if ((we->modifiers() & Qt::ShiftModifier) &&
+                !(we->modifiers() & Qt::ControlModifier))
+            {
+                int dx = we->angleDelta().y();
+                if (dx == 0)
+                    dx = we->pixelDelta().y();
+                if (dx == 0)
+                    dx = we->angleDelta().x();
+                if (dx == 0)
+                    dx = we->pixelDelta().x();
+
+                if (dx != 0)
+                {
+                    auto* hbar = ui->graphView->horizontalScrollBar();
+                    hbar->setValue(hbar->value() - dx);
+
+                    if (auto doc = currentDocument())
+                        saveCurrentViewState(doc);
+                }
+                we->accept();
+                return true;
+            }
+            // Ctrl + колесико = зум
+            if (obj != ui->graphView->viewport())
+                break;
 
             if (!(we->modifiers() & Qt::ControlModifier))
                 break;
