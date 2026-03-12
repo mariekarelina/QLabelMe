@@ -1204,6 +1204,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         {
             // Первая точка линейки
             _rulerStartPoint = graphView->mapToScene(mouseEvent->pos());
+
             _isDrawingRuler = true;
             updateModeLabel();
 
@@ -1301,7 +1302,6 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
     if (_isDrawingRuler && _rulerLine)
     {
        QPointF currentPoint = graphView->mapToScene(mouseEvent->pos());
-
        QLineF line(_rulerStartPoint, currentPoint);
        _rulerLine->setLine(line);
 
@@ -2289,6 +2289,13 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 break;
 
             const QPointF sp = ui->graphView->mapToScene(me->pos());
+
+            if (_drawingRuler || _isDrawingRuler)
+            {
+                clearAllHandleHoverEffects();
+                hideGhost();
+                break;
+            }
             // Alt + Shift + ЛКМ удалить узел
             if ((me->modifiers() & Qt::AltModifier) && (me->modifiers() & Qt::ShiftModifier))
             {
@@ -2601,6 +2608,12 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             auto* me = static_cast<QMouseEvent*>(event);
             const QPointF sp = ui->graphView->mapToScene(me->pos());
 
+            if (_drawingRuler || _isDrawingRuler)
+            {
+                clearAllHandleHoverEffects();
+                hideGhost();
+                break;
+            }
             if (m_isDraggingHandle && m_dragHandle)
             {
                 // Проверяем валидность указателя перед обновлением
@@ -2786,6 +2799,13 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         }
         case QEvent::ContextMenu:
         {
+            if (_drawingRuler || _isDrawingRuler)
+            {
+                clearAllHandleHoverEffects();
+                hideGhost();
+                event->accept();
+                return true;
+            }
             auto* ce = static_cast<QContextMenuEvent*>(event);
 
             const QPoint  viewPos = ce->pos();
@@ -7092,8 +7112,13 @@ void MainWindow::clearLinePolylineStateForDeletedItem(QGraphicsItem* item)
 
 void MainWindow::cancelRulerMode()
 {
-    _isDrawingRuler = false;
     _drawingRuler = false;
+    _isDrawingRuler = false;
+    _isInDrawingMode = false;
+
+    clearAllHandleHoverEffects();
+    hideGhost();
+    setSceneItemsMovable(true);
 
     if (_rulerLine)
     {
@@ -7108,6 +7133,7 @@ void MainWindow::cancelRulerMode()
         delete _rulerText;
         _rulerText = nullptr;
     }
+
     updateModeLabel();
 }
 
@@ -7296,6 +7322,12 @@ void MainWindow::updateModeLabel()
 {
     if (!_modeLabel) return;
 
+    if (_drawingRuler || _isDrawingRuler) {
+        _modeLabel->setText(_isDrawingRuler
+            ? tr("Режим: линейка (измерение...)")
+            : tr("Режим: линейка"));
+        return;
+    }
     if (_isInDrawingMode
         || _isDrawingRectangle || _isDrawingCircle || _isDrawingLine || _isDrawingPolyline || _isDrawingPoint
         || _drawingRectangle  || _drawingCircle  || _drawingLine  || _drawingPolyline  || _drawingPoint)
@@ -7335,12 +7367,6 @@ void MainWindow::updateModeLabel()
         _modeLabel->setText(_isAllMoved
             ? tr("Режим: перемещение (изображение + разметка)")
             : tr("Режим: перемещение (изображение)"));
-        return;
-    }
-    if (_drawingRuler || _isDrawingRuler) {
-        _modeLabel->setText(_isDrawingRuler
-            ? tr("Режим: линейка (измерение...)")
-            : tr("Режим: линейка"));
         return;
     }
     if (_editInProgress || _handleDragging || m_isDraggingHandle || _ghostActive)
@@ -9475,8 +9501,11 @@ void MainWindow::on_actRuler_triggered()
     // Включаем режим линейки
     _drawingRuler     = true;
     _isDrawingRuler   = false;
-    //_isInDrawingMode  = true;
-    //setSceneItemsMovable(false);
+    _isInDrawingMode  = true;
+
+    setSceneItemsMovable(false);
+    clearAllHandleHoverEffects();
+    hideGhost();
 
     // При включении инструмента очищаем старую линейку
     if (_rulerLine)
@@ -9491,6 +9520,7 @@ void MainWindow::on_actRuler_triggered()
         delete _rulerText;
         _rulerText = nullptr;
     }
+
     updateModeLabel();
 }
 
