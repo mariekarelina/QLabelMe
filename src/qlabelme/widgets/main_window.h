@@ -651,6 +651,7 @@ private:
         qreal handleSize = 10.0;
         qreal numberFontPt = 10.0;
         bool showNumbers = true;
+        bool fillShapeWhenSelected = true;
         int labelFontPt = 0;
         QString labelFont;
         QColor handleColor = Qt::red;

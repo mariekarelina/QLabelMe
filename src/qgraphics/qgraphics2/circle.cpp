@@ -31,6 +31,7 @@ Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
     pen.setWidth(2);
     pen.setCosmetic(true);
     setPen(pen);
+    setBrush(Qt::NoBrush);
 
     setZLevel(5);
     scene->addItem(this);
@@ -249,6 +250,27 @@ QVariant Circle::itemChange(GraphicsItemChange change, const QVariant& value)
 {
     if (change == QGraphicsItem::ItemSelectedHasChanged)
     {
+        const bool selectedNow = value.toBool();
+
+        bool fillEnabled = true;
+        if (scene())
+        {
+            const QVariant v = scene()->property("fillShapeWhenSelected");
+            if (v.isValid())
+                fillEnabled = v.toBool();
+        }
+
+        if ((selectedNow || _hovered) && fillEnabled)
+        {
+            QColor fill = pen().color();
+            fill.setAlpha(60);
+            setBrush(QBrush(fill));
+        }
+        else
+        {
+            setBrush(Qt::NoBrush);
+        }
+
         update();
         updateSelectionRect();
     }
@@ -493,18 +515,32 @@ void Circle::moveToBack()
 
 void Circle::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
 {
-    QColor baseColor = pen().color();
-    QColor highlightColor = baseColor;
-    highlightColor.setAlpha(100);
+    _hovered = true;
 
-    setBrush(highlightColor);
-
+    bool fillEnabled = true;
+    if (scene())
+    {
+        const QVariant v = scene()->property("fillShapeWhenSelected");
+        if (v.isValid())
+            fillEnabled = v.toBool();
+    }
+    if (fillEnabled)
+    {
+        QColor fill = pen().color();
+        fill.setAlpha(60);
+        setBrush(QBrush(fill));
+    }
+    else
+    {
+        setBrush(Qt::NoBrush);
+    }
     if (!_circle)
+    {
+        update();
         return;
-    // Проверяем, находится ли курсор рядом с окружностью
+    }
     if (isCursorNearCircle(event->pos()))
     {
-        // Обновляем позицию ручки в зависимости от положения курсора
         updateHandlePosition(mapToScene(event->pos()));
 
         const QPointF onCirc = pointOnCircle(rect(), event->pos());
@@ -517,6 +553,7 @@ void Circle::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
         _circle->setHoverStyle(false);
         _circle->setVisible(false);
     }
+
     _ghostLocalPos = pointOnCircle(rect(), event->pos());
     update();
 }
@@ -551,13 +588,33 @@ void Circle::hoverMoveEvent(QGraphicsSceneHoverEvent* event)
 void Circle::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
 {
     QGraphicsEllipseItem::hoverLeaveEvent(event);
-    setBrush(Qt::transparent);
 
-    if (!_circle)
-        return;
+    _hovered = false;
 
-    _circle->setVisible(false);
-    _circle->setHoverStyle(false);
+    bool fillEnabled = true;
+    if (scene())
+    {
+        const QVariant v = scene()->property("fillShapeWhenSelected");
+        if (v.isValid())
+            fillEnabled = v.toBool();
+    }
+
+    if (isSelected() && fillEnabled)
+    {
+        QColor fill = pen().color();
+        fill.setAlpha(60);
+        setBrush(QBrush(fill));
+    }
+    else
+    {
+        setBrush(Qt::NoBrush);
+    }
+
+    if (_circle)
+    {
+        _circle->setVisible(false);
+        _circle->setHoverStyle(false);
+    }
 
     update();
 }
@@ -567,24 +624,13 @@ void Circle::paint(QPainter* painter,
                    QWidget* widget)
 {
     Q_UNUSED(option);
-    Q_UNUSED(option);
+    Q_UNUSED(widget);
 
     QPainterPath path;
     path.addEllipse(rect());
 
-    if (isSelected() || isUnderMouse())
-    {
-        QColor fill = pen().color();
-        fill.setAlpha(80);
-        painter->save();
-        painter->setBrush(fill);
-        painter->setPen(Qt::NoPen);
-        painter->drawPath(path);
-        painter->restore();
-    }
-
     painter->save();
-    painter->setBrush(Qt::NoBrush);
+    painter->setBrush(brush());
     painter->setPen(pen());
     painter->drawPath(path);
     painter->restore();

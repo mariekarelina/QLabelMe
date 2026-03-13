@@ -36,7 +36,7 @@ void Settings::showEvent(QShowEvent* e)
     QDialog::showEvent(e);
     // Всегда открываемся на первой вкладке
     if (ui && ui->tabWidget)
-        ui->tabWidget->setCurrentIndex(0);   // 0 — «Общее»
+        ui->tabWidget->setCurrentIndex(0);   // 0-«Общее»
     //_draft = _values;
     applyModelToUi();
 }
@@ -143,6 +143,7 @@ void Settings::applyModelToUi()
     ui->keepImageScale->setChecked(_values.keepImageScale);
     ui->keepMenuBarVisibility->setChecked(_values.keepMenuBarVisibility);
     ui->showNumbers->setChecked(_values.showNumbers);
+    ui->fillShapeWhenSelected->setChecked(_values.fillShapeWhenSelected);
 
 
     if (ui->spinHandlePickRadius)
@@ -230,11 +231,12 @@ void Settings::applyUiToModel()
     _values.lineWidth = ui->spinLineWidth->value();
     _values.handleSize = ui->spinHandleSize->value();
     _values.numberFontPt = ui->spinNumberSize->value();
+    _values.fillShapeWhenSelected = ui->fillShapeWhenSelected->isChecked();
     _values.pointSize = ui->spinPointSize->value();
     // _values.labelFontPt = ui->spinLabelFontSize->value();
     // _values.labelFont = ui->fontComboLabels->currentFont().family();
     _values.labelFontPt = (_labelFont.pointSize() > 0) ? _labelFont.pointSize() : _values.labelFontPt;
-    _values.labelFont   = _labelFont.family();
+    _values.labelFont = _labelFont.family();
 
     _values.keepImageScale = ui->keepImageScale->isChecked();
     _values.keepMenuBarVisibility = ui->keepMenuBarVisibility->isChecked();

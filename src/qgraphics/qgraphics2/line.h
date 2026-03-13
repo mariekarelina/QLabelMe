@@ -129,6 +129,7 @@ public:
     static CloseMode s_closeMode;
 
     QColor _highlightColor = Qt::transparent; // Цвет выделения
+    bool _hovered = false;
     QList<QGraphicsSimpleTextItem*> pointNumbers;
     QList<QGraphicsRectItem*> numberBackgrounds;
     qreal _numberFontSize = 10.0; // Размер шрифта по умолчанию

@@ -60,6 +60,7 @@ public:
         double handlePickRadius = 6.0; // Область захвата узла
         double edgePickRadius = 8.0;  // Область захвата ребра
         bool showNumbers = true; // Глобальная видимость нумерации
+        bool fillShapeWhenSelected = true; // Заполнять фигуру при выделении
 
         PolylineCloseMode closePolyline = PolylineCloseMode::DoubleClick;
         LineFinishMode finishLine = LineFinishMode::DoubleClick;

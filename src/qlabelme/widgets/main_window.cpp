@@ -495,6 +495,7 @@ MainWindow::MainWindow(QWidget *parent) :
     // Приемник команд от фигур
     _scene->setProperty("classChangeReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
     _scene->setProperty("shapeDeleteReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
+    _scene->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
 
     // Стек и действия
     // _undoStack = std::make_unique<QUndoStack>(this);
@@ -692,8 +693,6 @@ bool MainWindow::init()
     loadGeometry();
     // Загружаем визуальный стиль
     loadVisualStyle();
-    // Применяем загруженный стиль ко всем документам
-    applyStyle_AllDocuments();
     return true;
 }
 
@@ -1026,8 +1025,16 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 pen.setColor(_vis.circleLineColor);
                 pen.setCosmetic(true);
                 _currCircle->setPen(pen);
-                _currCircle->setBrush(Qt::transparent);
-
+                if (_vis.fillShapeWhenSelected)
+                {
+                    QColor fill = _vis.circleLineColor;
+                    fill.setAlpha(60);
+                    _currCircle->setBrush(QBrush(fill));
+                }
+                else
+                {
+                    _currCircle->setBrush(Qt::NoBrush);
+                }
                 _scene->addItem(_currCircle);
             }
             // Задаем позицию и начальный размер
@@ -1113,8 +1120,16 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 pen.setColor(_vis.rectangleLineColor);
                 pen.setCosmetic(true);
                 _currRectangle->setPen(pen);
-                _currRectangle->setBrush(Qt::transparent);
-
+                if (_vis.fillShapeWhenSelected)
+                {
+                    QColor fill = _vis.rectangleLineColor;
+                    fill.setAlpha(60);
+                    _currRectangle->setBrush(QBrush(fill));
+                }
+                else
+                {
+                    _currRectangle->setBrush(Qt::NoBrush);
+                }
                 _scene->addItem(_currRectangle);
             }
             _currRectangle->setRect(QRectF(_startPoint, startPoint2));
@@ -5264,33 +5279,67 @@ void MainWindow::onPolygonListItemDoubleClicked(QListWidgetItem* item)
 
 void MainWindow::onSceneSelectionChanged()
 {
-    // Блокируем сигналы списка, чтобы избежать рекурсии
-    ui->polygonList->blockSignals(true);
+    if (!_scene || !ui || !ui->polygonList)
+        return;
 
-    // Снимаем выделение со всех элементов в списке
-    for (int i = 0; i < ui->polygonList->count(); ++i)
+    // Обновляем цвета/заливку всех фигур с учетом текущего выделения
+    for (QGraphicsItem* it : _scene->items())
     {
-        ui->polygonList->item(i)->setSelected(false);
+        if (!it)
+            continue;
+
+        if (it == _videoRect ||
+            it == _tempRectItem ||
+            it == _tempCircleItem ||
+            it == _tempPolyline)
+        {
+            continue;
+        }
+
+        // Дочерние элементы отдельно не трогаем
+        if (it->parentItem() != nullptr)
+            continue;
+
+        const QString cls = it->data(0).toString();
+        if (!cls.isEmpty())
+            applyClassColorToItem(it, cls);
     }
 
-    // Выделяем соответствующие элементы в списке
-    for (QGraphicsItem* item : _scene->selectedItems())
+    // Синхронизация списка фигур со сценой
+    QSignalBlocker blocker(ui->polygonList);
+    ui->polygonList->clearSelection();
+
+    const QList<QGraphicsItem*> selected = _scene->selectedItems();
+    for (QGraphicsItem* sceneItem : selected)
     {
+        if (!sceneItem)
+            continue;
+
+        // Если вдруг выбрана ручка, берем владельца
+        if (auto* h = dynamic_cast<qgraph::DragCircle*>(sceneItem))
+        {
+            if (h->parentItem())
+                sceneItem = h->parentItem();
+        }
+
         for (int i = 0; i < ui->polygonList->count(); ++i)
         {
             QListWidgetItem* listItem = ui->polygonList->item(i);
-            if (listItem->data(Qt::UserRole).value<QGraphicsItem*>() == item)
+            if (!listItem)
+                continue;
+
+            QGraphicsItem* boundItem =
+                listItem->data(Qt::UserRole).value<QGraphicsItem*>();
+
+            if (boundItem == sceneItem)
             {
                 listItem->setSelected(true);
-                ui->polygonList->scrollToItem(listItem);
                 break;
             }
         }
     }
-    // Разблокируем сигналы списка
-    ui->polygonList->blockSignals(false);
     updateCoordinateList();
-    raiseAllHandlesToTop();
+    _scene->update();
 }
 
 void MainWindow::updateCoordinateList()
@@ -6369,6 +6418,9 @@ void MainWindow::loadVisualStyle()
     if (!config::base().getValue("graphics.show_numbers", _vis.showNumbers))
         _vis.showNumbers = false;
 
+    if (!config::base().getValue("graphics.fill_shape_when_selected", _vis.fillShapeWhenSelected))
+        _vis.fillShapeWhenSelected = true;
+
     if (!config::base().getValue("graphics.point_size", _vis.pointSize))
         _vis.pointSize = 6;
 
@@ -6462,6 +6514,7 @@ void MainWindow::saveVisualStyle() const
     config::base().setValue("graphics.colors.point", _vis.pointColor.name(QColor::HexArgb));
     config::base().setValue("graphics.colors.ruler", _vis.rulerColor.name(QColor::HexArgb));
     config::base().setValue("graphics.point.outline_width", _vis.pointOutlineWidth);
+    config::base().setValue("graphics.fill_shape_when_selected", _vis.fillShapeWhenSelected);
     // config::base().setValue("vis.all.label_font_pt", _vis.labelFontPt);
     // config::base().setValue("vis.all.label_font_family", _vis.labelFont);
     if (_vis.labelFontPt > 0)
@@ -6473,11 +6526,13 @@ void MainWindow::saveVisualStyle() const
 
 void MainWindow::applyStyle_AllDocuments()
 {
-
     for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
     {
         auto doc = it.value();
-        if (!doc || !doc->scene) continue;
+        if (!doc || !doc->scene)
+            continue;
+
+        doc->scene->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
 
         apply_LineWidth_ToScene(doc->scene);
         apply_PointSize_ToScene(doc->scene);
@@ -6485,18 +6540,33 @@ void MainWindow::applyStyle_AllDocuments()
         updateLineColorsForScene(doc->scene);
 
         for (QGraphicsItem* item : doc->scene->items())
+        {
             apply_PointStyle_ToItem(item);
-    }
 
+            const QString cls = item ? item->data(0).toString() : QString();
+            if (!cls.isEmpty())
+                applyClassColorToItem(item, cls);
+        }
+        doc->scene->update();
+    }
     if (_scene)
     {
+        _scene->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
+
         apply_LineWidth_ToScene(_scene);
         apply_PointSize_ToScene(_scene);
         apply_NumberSize_ToScene(_scene);
         updateLineColorsForScene(_scene);
 
         for (QGraphicsItem* item : _scene->items())
+        {
             apply_PointStyle_ToItem(item);
+
+            const QString cls = item ? item->data(0).toString() : QString();
+            if (!cls.isEmpty())
+                applyClassColorToItem(item, cls);
+        }
+        _scene->update();
     }
 }
 
@@ -7173,60 +7243,83 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
     if (!item)
         return;
 
-    const QColor c = classColorFor(className);
-    if (!c.isValid())
+    const QColor lineColor = classColorFor(className);
+    if (!lineColor.isValid())
         return;
+
+    QColor fillColor = lineColor;
+    fillColor.setAlpha(60);
+
+    const QBrush fillBrush =
+        _vis.fillShapeWhenSelected ? QBrush(fillColor)
+                                   : QBrush(Qt::transparent);
+
+    const QBrush noBrush(Qt::transparent);
 
     if (auto* r = dynamic_cast<qgraph::Rectangle*>(item))
     {
         QPen p = r->pen();
-        p.setColor(c);
+        p.setColor(lineColor);
+        p.setWidthF(_vis.lineWidth);
         p.setCosmetic(true);
         r->setPen(p);
+
+        r->setBrush(r->isSelected() ? fillBrush : noBrush);
         return;
     }
+
     if (auto* cir = dynamic_cast<qgraph::Circle*>(item))
     {
         QPen p = cir->pen();
-        p.setColor(c);
+        p.setColor(lineColor);
+        p.setWidthF(_vis.lineWidth);
         p.setCosmetic(true);
         cir->setPen(p);
+
+        cir->setBrush(cir->isSelected() ? fillBrush : noBrush);
+
         for (QGraphicsItem* ch : cir->childItems())
         {
             if (auto* li = dynamic_cast<QGraphicsLineItem*>(ch))
             {
                 QPen cp = li->pen();
-                cp.setColor(c);
+                cp.setColor(lineColor);
+                cp.setWidthF(_vis.lineWidth);
                 cp.setCosmetic(true);
                 li->setPen(cp);
             }
         }
         return;
     }
+
     if (auto* pl = dynamic_cast<qgraph::Polyline*>(item))
     {
         QPen p = pl->pen();
-        p.setColor(c);
+        p.setColor(lineColor);
+        p.setWidthF(_vis.lineWidth);
         p.setCosmetic(true);
         pl->setPen(p);
+
+        pl->setBrush(pl->isSelected() ? fillBrush : noBrush);
         return;
     }
+
     if (auto* l = dynamic_cast<qgraph::Line*>(item))
     {
         QPen p = l->pen();
-        p.setColor(c);
+        p.setColor(lineColor);
+        p.setWidthF(_vis.lineWidth);
         p.setCosmetic(true);
         l->setPen(p);
+
+        l->setBrush(l->isSelected() ? fillBrush : noBrush);
         return;
     }
+
     if (auto* pnt = dynamic_cast<qgraph::Point*>(item))
     {
-        const QColor c = classColorFor(className);
-        if (!c.isValid())
-            return;
-
         const qreal diam = std::max(2, _vis.pointSize);
-        pnt->setDotStyle(c, diam, _vis.handleSize);
+        pnt->setDotStyle(lineColor, diam, _vis.handleSize);
         return;
     }
 }
@@ -7404,7 +7497,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
         apply_NumberSize_ToItem(_polyline);
 
         _polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
-        _polyline->setSelected(false);
+        _polyline->setSelected(true);
         _polyline->setFocus();
         _polyline->updatePointNumbers();
 
@@ -7624,7 +7717,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
             pl->addPoint(payload->pt, _scene);
 
             pl->setFlag(QGraphicsItem::ItemIsMovable, false);
-            pl->setSelected(false);
+            pl->setSelected(true);
             pl->setFocus();
             pl->updatePointNumbers();
 
@@ -9287,6 +9380,7 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     {
         _scene->setProperty("classChangeReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
         _scene->setProperty("shapeDeleteReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
+        _scene->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
     }
 
     if (_videoRect && !_videoRect->pixmap().isNull())
@@ -9306,6 +9400,21 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
         connect(currentDoc->scene, &QGraphicsScene::changed,
                 this, &MainWindow::onSceneChanged,
                 Qt::UniqueConnection);
+    }
+    if (_scene)
+    {
+        for (QGraphicsItem* item : _scene->items())
+        {
+            if (!item)
+                continue;
+
+            apply_PointStyle_ToItem(item);
+
+            const QString cls = item->data(0).toString();
+            if (!cls.isEmpty())
+                applyClassColorToItem(item, cls);
+        }
+        _scene->update();
     }
 
     _loadingNow = false;
@@ -10011,6 +10120,7 @@ void MainWindow::on_actSettingsApp_triggered()
     init.numberFontPt      = _vis.numberFontPt;
     init.pointSize         = _vis.pointSize;
     init.showNumbers = _vis.showNumbers;
+    init.fillShapeWhenSelected = _vis.fillShapeWhenSelected;
 
     init.nodeColor         = _vis.handleColor;           // «Цвет узла»
     init.nodeSelectedColor = _vis.selectedHandleColor;   // «Цвет выбранного узла»
@@ -10051,7 +10161,16 @@ void MainWindow::on_actSettingsApp_triggered()
         _edgePickRadius  = v.edgePickRadius;
         _vis.numberFontPt = v.numberFontPt;
         _vis.showNumbers = v.showNumbers;
+        _vis.fillShapeWhenSelected = v.fillShapeWhenSelected;
         _vis.pointSize = v.pointSize;
+
+        forEachScene([this](QGraphicsScene* sc)
+        {
+            if (!sc)
+                return;
+
+            sc->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
+        });
 
         _vis.handleColor = v.nodeColor;
         _vis.selectedHandleColor = v.nodeSelectedColor;
@@ -10085,6 +10204,38 @@ void MainWindow::on_actSettingsApp_triggered()
         saveVisualStyle();
         applyStyle_AllDocuments();
 
+        forEachScene([this](QGraphicsScene* sc)
+        {
+            if (!sc)
+                return;
+
+            for (QGraphicsItem* it : sc->items())
+            {
+                if (!it)
+                    continue;
+
+                if (it == _videoRect ||
+                    it == _tempRectItem ||
+                    it == _tempCircleItem ||
+                    it == _tempPolyline)
+                {
+                    continue;
+                }
+
+                if (it->parentItem() != nullptr)
+                    continue;
+
+                const QString cls = it->data(0).toString();
+                if (!cls.isEmpty())
+                    applyClassColorToItem(it, cls);
+            }
+
+            sc->update();
+        });
+
+        if (_scene)
+            onSceneSelectionChanged();
+
         /*apply_LineWidth_ToScene(nullptr);
         apply_PointSize_ToScene(nullptr);
         apply_NumberSize_ToScene(nullptr)*/;
@@ -10107,6 +10258,14 @@ void MainWindow::on_actSettingsApp_triggered()
         config::base().setValue("ui.keep_menu_visibility", v.keepMenuBarVisibility);
         config::base().saveFile();
         visBackup = _vis;
+
+        forEachScene([this](QGraphicsScene* sc)
+        {
+            if (!sc)
+                return;
+
+            sc->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
+        });
     });
 
     const int rc = dlg.exec();
@@ -10138,6 +10297,37 @@ void MainWindow::on_actSettingsApp_triggered()
         config::base().saveFile();
 
         applyStyle_AllDocuments();
+        forEachScene([this](QGraphicsScene* sc)
+        {
+            if (!sc)
+                return;
+
+            for (QGraphicsItem* it : sc->items())
+            {
+                if (!it)
+                    continue;
+
+                if (it == _videoRect ||
+                    it == _tempRectItem ||
+                    it == _tempCircleItem ||
+                    it == _tempPolyline)
+                {
+                    continue;
+                }
+
+                if (it->parentItem() != nullptr)
+                    continue;
+
+                const QString cls = it->data(0).toString();
+                if (!cls.isEmpty())
+                    applyClassColorToItem(it, cls);
+            }
+
+            sc->update();
+        });
+
+        if (_scene)
+            onSceneSelectionChanged();
     }
 }
 

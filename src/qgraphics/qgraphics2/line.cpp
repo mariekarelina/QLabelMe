@@ -27,6 +27,7 @@ Line::Line(QGraphicsScene* scene, const QPointF& scenePos)
     pen.setWidth(2);
     pen.setCosmetic(true);
     setPen(pen);
+    setBrush(Qt::NoBrush);
 
     setZValue(1);
     scene->addItem(this);
@@ -291,8 +292,28 @@ QVariant Line::itemChange(GraphicsItemChange change, const QVariant& value)
     }
     else if (change == QGraphicsItem::ItemSelectedHasChanged)
     {
-        update();              // Перерисовать заливку/контур
-        updatePointNumbers();  // Чтобы номера/фон у номеров тоже реагировали
+        const bool selectedNow = value.toBool();
+
+        bool fillEnabled = true;
+        if (scene())
+        {
+            const QVariant v = scene()->property("fillShapeWhenSelected");
+            if (v.isValid())
+                fillEnabled = v.toBool();
+        }
+
+        if ((selectedNow || _hovered) && fillEnabled)
+        {
+            QColor fill = pen().color();
+            fill.setAlpha(60);
+            setBrush(QBrush(fill));
+        }
+        else
+        {
+            setBrush(Qt::NoBrush);
+        }
+        update();
+        updatePointNumbers();
         updateSelectionRect();
     }
     return QGraphicsPathItem::itemChange(change, value);
@@ -475,18 +496,56 @@ void Line::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event)
 void Line::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
 {
     Q_UNUSED(event);
-    QColor baseColor = pen().color();
-    QColor highlightColor = baseColor;
-    highlightColor.setAlpha(100);
 
-    setBrush(highlightColor);
+    _hovered = true;
+
+    bool fillEnabled = true;
+    if (scene())
+    {
+        const QVariant v = scene()->property("fillShapeWhenSelected");
+        if (v.isValid())
+            fillEnabled = v.toBool();
+    }
+
+    if (fillEnabled)
+    {
+        QColor fill = pen().color();
+        fill.setAlpha(60);
+        setBrush(QBrush(fill));
+    }
+    else
+    {
+        setBrush(Qt::NoBrush);
+    }
+
     update();
 }
 
 void Line::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
 {
     Q_UNUSED(event);
-    setBrush(Qt::transparent);
+
+    _hovered = false;
+
+    bool fillEnabled = true;
+    if (scene())
+    {
+        const QVariant v = scene()->property("fillShapeWhenSelected");
+        if (v.isValid())
+            fillEnabled = v.toBool();
+    }
+
+    if (isSelected() && fillEnabled)
+    {
+        QColor fill = pen().color();
+        fill.setAlpha(60);
+        setBrush(QBrush(fill));
+    }
+    else
+    {
+        setBrush(Qt::NoBrush);
+    }
+
     update();
 }
 
@@ -641,29 +700,37 @@ void Line::insertPointAtSegment(int segmentIndex, const QPointF& pos)
 }
 
 void Line::paint(QPainter* painter,
-                     const QStyleOptionGraphicsItem* option,
-                     QWidget* widget)
+                 const QStyleOptionGraphicsItem* option,
+                 QWidget* widget)
 {
     Q_UNUSED(option);
     Q_UNUSED(widget);
 
-    const QPainterPath path = this->path();
-
-    if (isSelected() || isUnderMouse())
-    {
-        QColor fill = pen().color();
-        fill.setAlpha(80);
-        painter->save();
-        painter->setBrush(fill);
-        painter->setPen(Qt::NoPen);
-        painter->drawPath(path);
-        painter->restore();
-    }
+    const QPainterPath strokePath = this->path();
 
     painter->save();
-    painter->setBrush(Qt::NoBrush);
+
+    // Внутренняя заливка: только для отрисовки,
+    // саму линию геометрически не замыкаем
+    if (brush().style() != Qt::NoBrush && _circles.size() > 2)
+    {
+        QPainterPath fillPath;
+        fillPath.moveTo(_circles[0]->pos());
+
+        for (int i = 1; i < _circles.size(); ++i)
+            fillPath.lineTo(_circles[i]->pos());
+
+        fillPath.closeSubpath();
+
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(brush());
+        painter->drawPath(fillPath);
+    }
+    // Сам контур линии рисуем как открытую линию
     painter->setPen(pen());
-    painter->drawPath(path);
+    painter->setBrush(Qt::NoBrush);
+    painter->drawPath(strokePath);
+
     painter->restore();
 }
 
@@ -802,7 +869,6 @@ void Line::moveToBack()
             circle->setZValue(10000);
         }
     }
-
     scene()->update();
 }
 

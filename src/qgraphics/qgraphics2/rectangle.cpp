@@ -21,6 +21,7 @@ Rectangle::Rectangle(QGraphicsScene* scene)
     pen.setWidth(2);
     pen.setCosmetic(true);
     setPen(pen);
+    setBrush(Qt::NoBrush);
 
     setZLevel(1);
     scene->addItem(this);
@@ -386,11 +387,26 @@ void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
 void Rectangle::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
 {
     QGraphicsRectItem::hoverEnterEvent(event);
-    QColor baseColor = pen().color();
-    QColor highlightColor = baseColor;
-    highlightColor.setAlpha(100);
-    setBrush(highlightColor);
 
+    _hovered = true;
+
+    bool fillEnabled = true;
+    if (scene())
+    {
+        const QVariant v = scene()->property("fillShapeWhenSelected");
+        if (v.isValid())
+            fillEnabled = v.toBool();
+    }
+    if (fillEnabled)
+    {
+        QColor fill = pen().color();
+        fill.setAlpha(60);
+        setBrush(QBrush(fill));
+    }
+    else
+    {
+        setBrush(Qt::NoBrush);
+    }
     raiseHandlesToTop();
     update();
 }
@@ -398,8 +414,27 @@ void Rectangle::hoverEnterEvent(QGraphicsSceneHoverEvent* event)
 void Rectangle::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
 {
     QGraphicsRectItem::hoverLeaveEvent(event);
-    setBrush(Qt::transparent);
 
+    _hovered = false;
+
+    bool fillEnabled = true;
+    if (scene())
+    {
+        const QVariant v = scene()->property("fillShapeWhenSelected");
+        if (v.isValid())
+            fillEnabled = v.toBool();
+    }
+
+    if (isSelected() && fillEnabled)
+    {
+        QColor fill = pen().color();
+        fill.setAlpha(60);
+        setBrush(QBrush(fill));
+    }
+    else
+    {
+        setBrush(Qt::NoBrush);
+    }
     updateHandlesZValue();
     update();
 }
@@ -415,31 +450,21 @@ void Rectangle::updateHandleVisibility()
 }
 
 void Rectangle::paint(QPainter* painter,
-                     const QStyleOptionGraphicsItem* option,
-                     QWidget* widget)
+                      const QStyleOptionGraphicsItem* option,
+                      QWidget* widget)
 {
     Q_UNUSED(option);
     Q_UNUSED(widget);
 
     const QRectF r = rect();
 
-    if (isSelected() || isUnderMouse())
-    {
-        QColor fill = pen().color();
-        fill.setAlpha(80);
-        painter->save();
-        painter->setBrush(fill);
-        painter->setPen(Qt::NoPen);
-        painter->drawRect(r);
-        painter->restore();
-    }
-
     painter->save();
-    painter->setBrush(Qt::NoBrush);
+    painter->setBrush(brush());
     painter->setPen(pen());
     painter->drawRect(r);
     painter->restore();
 }
+
 void Rectangle::handleHandleHoverEnter()
 {
     // Поднимаем прямоугольник на верхний z-уровень временно
@@ -557,11 +582,31 @@ QVariant Rectangle::itemChange(GraphicsItemChange change, const QVariant& value)
 {
     if (change == QGraphicsItem::ItemPositionHasChanged)
     {
-        // При любом перемещении прямоугольника подтягиваем номера
         updatePointNumbers();
     }
     else if (change == QGraphicsItem::ItemSelectedHasChanged)
     {
+        const bool selectedNow = value.toBool();
+
+        bool fillEnabled = true;
+        if (scene())
+        {
+            const QVariant v = scene()->property("fillShapeWhenSelected");
+            if (v.isValid())
+                fillEnabled = v.toBool();
+        }
+
+        if ((selectedNow || _hovered) && fillEnabled)
+        {
+            QColor fill = pen().color();
+            fill.setAlpha(60);
+            setBrush(QBrush(fill));
+        }
+        else
+        {
+            setBrush(Qt::NoBrush);
+        }
+
         update();
     }
     return QGraphicsRectItem::itemChange(change, value);

@@ -32,7 +32,7 @@
       </sizepolicy>
      </property>
      <property name="currentIndex">
-      <number>2</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="tabGeneral">
       <attribute name="title">
@@ -171,6 +171,13 @@
         <widget class="QCheckBox" name="showNumbers">
          <property name="text">
           <string>Показывать нумерацию точек</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="fillShapeWhenSelected">
+         <property name="text">
+          <string>Заполнять фигуру при выделении</string>
          </property>
         </widget>
        </item>

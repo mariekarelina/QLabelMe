@@ -91,6 +91,7 @@ private:
     QPointF _startPoint;
 
     QColor _highlightColor = Qt::transparent; // Цвет выделения
+    bool _hovered = false;
     QList<QGraphicsSimpleTextItem*> pointNumbers;
     QList<QGraphicsRectItem*> numberBackgrounds;
     int _numberingOffset = 0; // Смещение для нумерации точек

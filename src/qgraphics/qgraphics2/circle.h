@@ -89,6 +89,7 @@ private:
     QGraphicsLineItem* _horizontalLine;
 
     QColor _highlightColor = Qt::transparent;
+    bool _hovered = false;
 
     struct SceneFilter;
     SceneFilter* _sceneFilter = {nullptr};
