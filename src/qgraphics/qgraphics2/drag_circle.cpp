@@ -220,8 +220,8 @@ void DragCircle::setHoverStyle(bool hover)
 
         if (isCircleHandle)
         {
-            setPen(Qt::NoPen);
-            setBrush(Qt::NoBrush);
+            setBrush(QBrush(_selectedHandleColor));
+            setPen(QPen(Qt::black, 1));
         }
         else if (isPointHandle)
         {

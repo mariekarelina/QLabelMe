@@ -6096,13 +6096,19 @@ qreal MainWindow::effectiveViewPickPx(qreal baseValue) const
 
 qreal MainWindow::viewPixelsToSceneRadius(GraphicsView* view, qreal viewPx) const
 {
-    Q_UNUSED(view);
-
-    if (viewPx <= 0.0)
+    if (!view || viewPx <= 0.0)
         return 0.0;
 
-    // Значение уже трактуется как радиус в координатах сцены/изображени
-    return viewPx;
+    const QTransform t = view->viewportTransform();
+
+    const qreal sx = std::hypot(t.m11(), t.m21());
+    const qreal sy = std::hypot(t.m22(), t.m12());
+    const qreal s  = std::max<qreal>(sx, sy);
+
+    if (s <= 0.000001)
+        return viewPx;
+
+    return viewPx / s;
 }
 
 qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
