@@ -1556,6 +1556,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
             if (auto doc = currentDocument())
                 saveCurrentViewState(doc);
+            updateAllPointNumbers();
+            graphView->viewport()->update();
         }
 
         mouseEvent->accept();
@@ -2804,6 +2806,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             m_zoom = nz;
 
             ui->graphView->scale(factor, factor);
+            updateAllPointNumbers();
+            ui->graphView->viewport()->update();
 
             // Сохраняем состояние при изменении масштаба
             if (auto doc = currentDocument())
@@ -3276,6 +3280,8 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             m_zoom = nz;
             ui->graphView->setTransform(base);    // Вернуть базу
             ui->graphView->scale(m_zoom, m_zoom); // Применить абсолютный масштаб
+            updateAllPointNumbers();
+            ui->graphView->viewport()->update();
             event->accept();
             return;
         }
@@ -3288,6 +3294,8 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             m_zoom = nz;
             ui->graphView->setTransform(base);
             ui->graphView->scale(m_zoom, m_zoom);
+            updateAllPointNumbers();
+            ui->graphView->viewport()->update();
             event->accept();
             return;
         }
@@ -5047,6 +5055,8 @@ void MainWindow::restoreViewState(Document::Ptr doc)
     m_zoom = ui->graphView->transform().m11();
     if (m_zoom <= 0.000001)
         m_zoom = 1.0;
+    updateAllPointNumbers();
+    ui->graphView->viewport()->update();
 }
 
 void MainWindow::handleCheckBoxClick(QCheckBox* clickedCheckBox)
@@ -9274,6 +9284,8 @@ void MainWindow::fitImageToView()
         doc->viewState.zoom = zoom;
     }
     m_zoom = ui->graphView->transform().m11();
+    updateAllPointNumbers();
+    ui->graphView->viewport()->update();
 }
 
 void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem *previous)

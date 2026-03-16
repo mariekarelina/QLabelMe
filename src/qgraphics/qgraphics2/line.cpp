@@ -1028,11 +1028,9 @@ void Line::updatePointNumbers()
             font.setPointSizeF(_numberFontSize);
             number->setFont(font);
         }
-
         QRectF textRect = number->boundingRect();
 
-        // Считаем отступ в экранных пикселях, а затем переводим его в координаты сцены
-        qreal offsetDistanceScene = handleRadiusScene + 10.0;
+        QPointF finalNumberPos = circlePos + QPointF(8.0, -8.0);
 
         if (scene() && !scene()->views().isEmpty())
         {
@@ -1040,19 +1038,20 @@ void Line::updatePointNumbers()
             if (view)
             {
                 const QPointF handleCenterScene = _circles[i]->scenePos();
+                const QPointF handleCenterViewF = view->mapFromScene(handleCenterScene);
 
-                const QPoint viewCenter = view->mapFromScene(handleCenterScene);
-                const QPoint viewRight  = view->mapFromScene(handleCenterScene + QPointF(handleRadiusScene, 0.0));
+                Q_UNUSED(handleCenterScene);
+                Q_UNUSED(handleRadiusScene);
 
-                // На больших изображениях из-за округления в QPoint экранный радиус может стать 0n1 px
-                // задаем минимум
-                qreal handleRadiusPx = std::abs(viewRight.x() - viewCenter.x());
-                handleRadiusPx = qMax<qreal>(handleRadiusPx, 6.0);
+                qreal handleRadiusPx = 6.0;
+                if (_circles[i])
+                {
+                    handleRadiusPx = qMax<qreal>(_circles[i]->boundingRect().width() / 2.0, 6.0);
+                }
 
                 const qreal dirX = std::abs(direction.x());
                 const qreal dirY = std::abs(direction.y());
 
-                // Полурасстояние от центра текста до границы прямоугольника
                 const qreal textExtentPx =
                         dirX * (textRect.width()  / 2.0) +
                         dirY * (textRect.height() / 2.0);
@@ -1060,17 +1059,22 @@ void Line::updatePointNumbers()
                 const qreal gapPx = 6.0;
                 const qreal offsetPx = handleRadiusPx + textExtentPx + gapPx;
 
-                const QPointF sceneP0 = view->mapToScene(QPoint(0, 0));
-                const QPointF sceneP1 = view->mapToScene(QPoint(int(std::round(offsetPx)), 0));
-                offsetDistanceScene = QLineF(sceneP0, sceneP1).length();
+                const QPointF numberCenterViewF =
+                        handleCenterViewF + direction * offsetPx;
+
+                const QPointF topLeftViewF(
+                        numberCenterViewF.x() - textRect.width()  / 2.0,
+                        numberCenterViewF.y() - textRect.height() / 2.0);
+
+                const QPointF topLeftScene = view->mapToScene(
+                        QPoint(int(std::round(topLeftViewF.x())),
+                               int(std::round(topLeftViewF.y())))
+                );
+
+                finalNumberPos = mapFromScene(topLeftScene);
             }
         }
 
-        QPointF numberPos = circlePos + direction * offsetDistanceScene;
-
-        // Центрируем номер
-        QPointF finalNumberPos(numberPos.x() - textRect.width() / 2.0,
-                               numberPos.y() - textRect.height() / 2.0);
         number->setPos(finalNumberPos);
 
         // Создаем фон

@@ -3,6 +3,7 @@
 #include <QtGui>
 #include <QMenu>
 #include <QMetaObject>
+#include <QGraphicsView>
 #include <QVariant>
 
 namespace qgraph {
@@ -508,8 +509,7 @@ void Rectangle::updatePointNumbers()
     };
 
     const qreal baseFontSize = (_numberFontSize > 0 ? _numberFontSize : 10.0);
-    const qreal margin       = baseFontSize * 0.25;
-
+    const qreal margin = baseFontSize * 0.25;
     for (int i = 0; i < 4; ++i)
     {
         if (!circles[i])
@@ -523,42 +523,66 @@ void Rectangle::updatePointNumbers()
         num->setZValue(1001);
         num->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
 
-        if (_numberFontSize > 0) {
+        if (_numberFontSize > 0)
+        {
             QFont f = num->font();
             f.setPointSizeF(_numberFontSize);
             num->setFont(f);
         }
 
-        QRectF r = num->boundingRect();
-        qreal halfW = r.width()  / 2.0;
-        qreal halfH = r.height() / 2.0;
+        const QRectF textRect = num->boundingRect();
+        QPointF finalNumberPos = pts[i] + QPointF(8.0, -8.0);
 
-        QPointF center = pts[i];
-
-        // Радиус свой для каждого узла
-        qreal handleR = circles[i]->boundingRect().width() / 2.0;
-
-        switch (i)
+        if (scene() && !scene()->views().isEmpty())
         {
-        case 0:
-            center.setX(center.x() - (handleR + halfW + margin));
-            break;
-        case 1:
-            center.setX(center.x() + (handleR + halfW + margin));
-            break;
-        case 2:
-            center.setX(center.x() + (handleR + halfW + margin));
-            break;
-        case 3:
-            center.setX(center.x() - (handleR + halfW + margin));
-            break;
+            QGraphicsView* view = scene()->views().first();
+            if (view)
+            {
+                const QPointF handleCenterScene = circles[i]->scenePos();
+                const QPointF handleCenterViewF = view->mapFromScene(handleCenterScene);
+
+                qreal handleRadiusPx = qMax<qreal>(circles[i]->boundingRect().width() / 2.0, 6.0);
+
+                QPointF direction;
+                switch (i)
+                {
+                case 0: direction = QPointF(-1.0, 0.0); break;
+                case 1: direction = QPointF( 1.0, 0.0); break;
+                case 2: direction = QPointF( 1.0, 0.0); break;
+                case 3: direction = QPointF(-1.0, 0.0); break;
+                default: direction = QPointF(1.0, 0.0); break;
+                }
+
+                const qreal dirX = std::abs(direction.x());
+                const qreal dirY = std::abs(direction.y());
+
+                const qreal textExtentPx =
+                        dirX * (textRect.width()  / 2.0) +
+                        dirY * (textRect.height() / 2.0);
+
+                const qreal gapPx = qMax<qreal>(margin, 3.0);
+                const qreal offsetPx = handleRadiusPx + textExtentPx + gapPx;
+
+                const QPointF numberCenterViewF =
+                        handleCenterViewF + direction * offsetPx;
+
+                const QPointF topLeftViewF(
+                        numberCenterViewF.x() - textRect.width()  / 2.0,
+                        numberCenterViewF.y() - textRect.height() / 2.0);
+
+                const QPointF topLeftScene = view->mapToScene(
+                        QPoint(int(std::round(topLeftViewF.x())),
+                               int(std::round(topLeftViewF.y())))
+                );
+
+                finalNumberPos = mapFromScene(topLeftScene);
+            }
         }
 
-        num->setPos(center.x() - halfW,
-                    center.y() - halfH);
+        num->setPos(finalNumberPos);
 
-        auto* bg = new QGraphicsRectItem(num->boundingRect(), this);
-        bg->setPos(num->pos());
+        auto* bg = new QGraphicsRectItem(textRect, this);
+        bg->setPos(finalNumberPos);
         bg->setBrush(_numberBgColor);
         bg->setPen(Qt::NoPen);
         bg->setZValue(1000);
