@@ -68,6 +68,7 @@ Product {
             "square.h",
             "user_guide.cpp",
             "user_guide.h",
+            "user_guide.md",
             "user_guide.ui",
         ]
     }
