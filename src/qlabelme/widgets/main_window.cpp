@@ -1763,7 +1763,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         ensureUid(circle);
         // Устанавливаем радиус финального круга
         qreal finalRadius = circleRect.width() / 2;
-        circle->setRealRadius(static_cast<int>(finalRadius));
+        circle->setRealRadius(finalRadius);
         apply_LineWidth_ToItem(circle);
         apply_PointSize_ToItem(circle);
 
@@ -3804,6 +3804,11 @@ QString MainWindow::annotationPathFor(const QString& imagePath)
     return dir.filePath(fileInfo.completeBaseName() + ".yaml");
 }
 
+double MainWindow::round2(double value)
+{
+    return std::round(value * 100.0) / 100.0;
+}
+
 void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 {
     if (!doc || !doc->scene || !doc->videoRect)
@@ -3824,22 +3829,17 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 
                 conf->setValue(ycircle, "label",  className);
 
-                QPoint center = circle->center();
-                int radius = circle->realRadius();
+                QPointF center = circle->realCenter();
+                double radius = circle->realRadius();
 
-                // Математическое округление координат центра
-                int centerX = std::round(center.x());
-                int centerY = std::round(center.y());
-                QPoint roundedCenter(centerX, centerY);
-
-                conf->setValue(ycircle, "center", roundedCenter   );
-                conf->setValue(ycircle, "radius", radius   );
+                ycircle["center"]["x"] = round2(center.x());
+                ycircle["center"]["y"] = round2(center.y());
+                ycircle["radius"] = round2(radius);
 
                 ycircles.push_back(ycircle);
             }
         return true;
     };
-
     YamlConfig::Func savePolylines = [&](YamlConfig* conf, YAML::Node& ypolylines, bool)
     {
         for (QGraphicsItem* item : doc->scene->items())
@@ -3853,21 +3853,20 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 
                 conf->setValue(ypolyline, "label", className);
 
-                QVector<QPointF> points = polyline->points();
-                YamlConfig::Func savePoints = [&points](YamlConfig* conf, YAML::Node& ypoints, bool)
+                const QVector<QPointF> points = polyline->points();
+                YamlConfig::Func savePoints = [&points](YamlConfig*, YAML::Node& ypoints, bool)
                 {
                     for (const QPointF& point : points)
                     {
-                        YAML::Node ypoint;
                         // Математическое округление координат точек
-                        int x = std::round(point.x());
-                        int y = std::round(point.y());
-                        conf->setValue(ypoint, "x", x);
-                        conf->setValue(ypoint, "y", y);
+                        YAML::Node ypoint;
+                        ypoint["x"] = round2(point.x());
+                        ypoint["y"] = round2(point.y());
                         ypoints.push_back(ypoint);
                     }
                     return true;
                 };
+
                 conf->setValue(ypolyline, "points", savePoints);
                 conf->setNodeStyle(ypolyline, "points", YAML::EmitterStyle::Flow);
 
@@ -3879,7 +3878,7 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
     YamlConfig::Func saveRectangles = [&](YamlConfig* conf, YAML::Node& yrectangles, bool)
     {
         for (QGraphicsItem* item : doc->scene->items())
-            if (qgraph::Rectangle* rect= dynamic_cast<qgraph::Rectangle*>(item))
+            if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
             {
                 YAML::Node yrectangle;
 
@@ -3889,16 +3888,13 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 
                 conf->setValue(yrectangle, "label", className);
 
-                QRectF sceneRect = rect->sceneBoundingRect();
+                const QRectF sceneRect = rect->realSceneRect();
 
-                // Математическое округление координат углов
-                QPoint topLeft(std::round(sceneRect.topLeft().x()),
-                               std::round(sceneRect.topLeft().y()));
-                QPoint bottomRight(std::round(sceneRect.bottomRight().x()),
-                                   std::round(sceneRect.bottomRight().y()));
+                yrectangle["point1"]["x"] = round2(sceneRect.topLeft().x());
+                yrectangle["point1"]["y"] = round2(sceneRect.topLeft().y());
+                yrectangle["point2"]["x"] = round2(sceneRect.bottomRight().x());
+                yrectangle["point2"]["y"] = round2(sceneRect.bottomRight().y());
 
-                conf->setValue(yrectangle, "point1", topLeft);
-                conf->setValue(yrectangle, "point2", bottomRight);
                 yrectangles.push_back(yrectangle);
             }
 
@@ -3917,8 +3913,9 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 
                 conf->setValue(ypoint, "label", className);
 
-                QPoint center = p->center();
-                conf->setValue(ypoint, "point", center);
+                const QPointF center = p->center();
+                ypoint["point"]["x"] = round2(center.x());
+                ypoint["point"]["y"] = round2(center.y());
 
                 ypoints.push_back(ypoint);
             }
@@ -3937,21 +3934,19 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 
                 conf->setValue(yline, "label", className);
 
-                QVector<QPointF> points = line->points();
-                YamlConfig::Func savePoints = [&points](YamlConfig* conf, YAML::Node& ypoints, bool)
+                const QVector<QPointF> points = line->points();
+                YamlConfig::Func savePoints = [&points](YamlConfig* /*conf*/, YAML::Node& ypoints, bool)
                 {
                     for (const QPointF& point : points)
                     {
                         YAML::Node ypoint;
-                        // Математическое округление координат точек
-                        int x = std::round(point.x());
-                        int y = std::round(point.y());
-                        conf->setValue(ypoint, "x", x);
-                        conf->setValue(ypoint, "y", y);
+                        ypoint["x"] = round2(point.x());
+                        ypoint["y"] = round2(point.y());
                         ypoints.push_back(ypoint);
                     }
                     return true;
                 };
+
                 conf->setValue(yline, "points", savePoints);
                 conf->setNodeStyle(yline, "points", YAML::EmitterStyle::Flow);
 
@@ -4141,13 +4136,18 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             QString label;
             conf->getValue(ycircle, "label", label);
 
-            QPoint center;
-            conf->getValue(ycircle, "center", center);
+            double centerX = 0.0;
+            double centerY = 0.0;
+            double radius = 0.0;
 
-            int radius = 0;
+            if (ycircle["center"])
+            {
+                conf->getValue(ycircle["center"], "x", centerX);
+                conf->getValue(ycircle["center"], "y", centerY);
+            }
             conf->getValue(ycircle, "radius", radius);
 
-            qgraph::Circle* circle = new qgraph::Circle(doc->scene, QPointF(center) + imageOffset);
+            qgraph::Circle* circle = new qgraph::Circle(doc->scene, QPointF(centerX, centerY) + imageOffset);
             ensureUid(circle);
             circle->setRealRadius(radius);
             circle->setData(0, label);
@@ -4157,7 +4157,6 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
         }
         return true;
     };
-
     YamlConfig::Func loadPolylines = [&](YamlConfig* conf, YAML::Node& ypolylines, bool)
     {
         for (const YAML::Node& ypolyline : ypolylines)
@@ -4170,7 +4169,8 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             {
                 for (const YAML::Node& ypoint : ypoints)
                 {
-                    int x = 0, y = 0;
+                    double x = 0.0;
+                    double y = 0.0;
                     conf->getValue(ypoint, "x", x);
                     conf->getValue(ypoint, "y", y);
                     points.append(QPointF(x, y) + imageOffset);
@@ -4181,7 +4181,6 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
 
             if (points.isEmpty())
                 continue;
-
             // Создаем полилинию на сцене
             qgraph::Polyline* polyline = new qgraph::Polyline(doc->scene, points.first());
             ensureUid(polyline);
@@ -4206,14 +4205,24 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             QString label;
             conf->getValue(yrectangle, "label", label);
 
-            QPoint point1, point2;
-            conf->getValue(yrectangle, "point1", point1);
-            conf->getValue(yrectangle, "point2", point2);
+            double x1 = 0.0, y1 = 0.0;
+            double x2 = 0.0, y2 = 0.0;
 
+            if (yrectangle["point1"])
+            {
+                conf->getValue(yrectangle["point1"], "x", x1);
+                conf->getValue(yrectangle["point1"], "y", y1);
+            }
+            if (yrectangle["point2"])
+            {
+                conf->getValue(yrectangle["point2"], "x", x2);
+                conf->getValue(yrectangle["point2"], "y", y2);
+            }
             // Создаем прямоугольник на сцене
             qgraph::Rectangle* rect = new qgraph::Rectangle(doc->scene);
             ensureUid(rect);
-            rect->setRealSceneRect(QRectF(QPointF(point1) + imageOffset, QPointF(point2) + imageOffset));
+            rect->setRealSceneRect(QRectF(QPointF(x1, y1) + imageOffset,
+                                          QPointF(x2, y2) + imageOffset));
             rect->setData(0, label);
             apply_LineWidth_ToItem(rect);
             apply_PointSize_ToItem(rect);
@@ -4230,12 +4239,18 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             QString label;
             conf->getValue(ypoint, "label", label);
 
-            QPoint center;
-            conf->getValue(ypoint, "point", center);
+            double x = 0.0;
+            double y = 0.0;
+
+            if (ypoint["point"])
+            {
+                conf->getValue(ypoint["point"], "x", x);
+                conf->getValue(ypoint["point"], "y", y);
+            }
 
             qgraph::Point* p = new qgraph::Point(doc->scene);
             ensureUid(p);
-            p->setCenter(center + imageOffset);
+            p->setCenter(QPointF(x, y) + imageOffset);
             p->setData(0, label);
 
             apply_PointSize_ToItem(p);
@@ -4257,7 +4272,8 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             {
                 for (const YAML::Node& ypoint : ypoints)
                 {
-                    int x = 0, y = 0;
+                    double x = 0.0;
+                    double y = 0.0;
                     conf->getValue(ypoint, "x", x);
                     conf->getValue(ypoint, "y", y);
                     points.append(QPointF(x, y) + imageOffset);
@@ -4268,7 +4284,6 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
 
             if (points.isEmpty())
                 continue;
-
             // Создаем линию на сцене
             qgraph::Line* line = new qgraph::Line(doc->scene, points.first());
             ensureUid(line);
@@ -5380,9 +5395,8 @@ void MainWindow::updateCoordinateList()
     };
 
     auto calcBounds = [](const QVector<QPointF>& pts,
-                         QPoint& topLeft,
-                         QPoint& bottomRight,
-                         QPoint& center) -> bool
+                         QPointF& topLeft,
+                         QPointF& bottomRight) -> bool
     {
         if (pts.isEmpty())
             return false;
@@ -5400,12 +5414,8 @@ void MainWindow::updateCoordinateList()
             if (p.y() > maxY) maxY = p.y();
         }
 
-        topLeft = QPoint(static_cast<int>(std::round(minX)),
-                         static_cast<int>(std::round(minY)));
-        bottomRight = QPoint(static_cast<int>(std::round(maxX)),
-                             static_cast<int>(std::round(maxY)));
-        center = QPoint((topLeft.x() + bottomRight.x()) / 2,
-                        (topLeft.y() + bottomRight.y()) / 2);
+        topLeft = QPointF(minX, minY);
+        bottomRight = QPointF(maxX, maxY);
         return true;
     };
 
@@ -5422,12 +5432,12 @@ void MainWindow::updateCoordinateList()
                 addLine(QString());
             firstShape = false;
 
-            QPoint center = point->center();
+            const QPointF center = point->center();
 
             addLine(tr("Точка"));
             addLine(tr("Центр: (%1; %2)")
-                        .arg(center.x())
-                        .arg(center.y()));
+                        .arg(round2(center.x()))
+                        .arg(round2(center.y())));
         }
         else if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
         {
@@ -5435,86 +5445,88 @@ void MainWindow::updateCoordinateList()
                 addLine(QString());
             firstShape = false;
 
-            QRectF r = rect->sceneBoundingRect();
+            const QRectF r = rect->realSceneRect();
 
-            QPoint topLeft(std::round(r.topLeft().x()),
-                           std::round(r.topLeft().y()));
-            QPoint bottomRight(std::round(r.bottomRight().x()),
-                               std::round(r.bottomRight().y()));
-            QPoint center((topLeft.x() + bottomRight.x()) / 2,
-                          (topLeft.y() + bottomRight.y()) / 2);
+            const QPointF topLeft = r.topLeft();
+            const QPointF bottomRight = r.bottomRight();
+            const QPointF center = r.center();
 
-            int width  = bottomRight.x() - topLeft.x();
-            int height = bottomRight.y() - topLeft.y();
+            const qreal width  = r.width();
+            const qreal height = r.height();
 
             addLine(tr("Прямоугольник"));
             addLine(tr("TL точка: (%1; %2)")
-                        .arg(topLeft.x())
-                        .arg(topLeft.y()));
+                        .arg(round2(topLeft.x()))
+                        .arg(round2(topLeft.y())));
             addLine(tr("BR точка: (%1; %2)")
-                        .arg(bottomRight.x())
-                        .arg(bottomRight.y()));
+                        .arg(round2(bottomRight.x()))
+                        .arg(round2(bottomRight.y())));
             addLine(tr("Центр: (%1; %2)")
-                        .arg(center.x())
-                        .arg(center.y()));
-            addLine(tr("Ширина: %1").arg(width));
-            addLine(tr("Высота: %1").arg(height));
+                        .arg(round2(center.x()))
+                        .arg(round2(center.y())));
+            addLine(tr("Ширина: %1").arg(round2(width)));
+            addLine(tr("Высота: %1").arg(round2(height)));
         }
         else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
-            QPoint topLeft;
-            QPoint bottomRight;
-            QPoint center;
-            if (!calcBounds(polyline->points(), topLeft, bottomRight, center))
-                continue;
-
             if (!firstShape)
                 addLine(QString());
             firstShape = false;
 
-            int width  = bottomRight.x() - topLeft.x();
-            int height = bottomRight.y() - topLeft.y();
+            const QVector<QPointF> pts = polyline->points();
+
+            QPointF topLeft, bottomRight;
+            calcBounds(pts, topLeft, bottomRight);
+
+            const QPointF center((topLeft.x() + bottomRight.x()) / 2.0,
+                                 (topLeft.y() + bottomRight.y()) / 2.0);
+
+            const qreal width  = bottomRight.x() - topLeft.x();
+            const qreal height = bottomRight.y() - topLeft.y();
 
             addLine(tr("Полилиния"));
             addLine(tr("TL точка: (%1; %2)")
-                        .arg(topLeft.x())
-                        .arg(topLeft.y()));
+                        .arg(round2(topLeft.x()))
+                        .arg(round2(topLeft.y())));
             addLine(tr("BR точка: (%1; %2)")
-                        .arg(bottomRight.x())
-                        .arg(bottomRight.y()));
+                        .arg(round2(bottomRight.x()))
+                        .arg(round2(bottomRight.y())));
             addLine(tr("Центр: (%1; %2)")
-                        .arg(center.x())
-                        .arg(center.y()));
-            addLine(tr("Ширина: %1").arg(width));
-            addLine(tr("Высота: %1").arg(height));
+                        .arg(round2(center.x()))
+                        .arg(round2(center.y())));
+            addLine(tr("Ширина: %1").arg(round2(width)));
+            addLine(tr("Высота: %1").arg(round2(height)));
         }
         else if (auto* line = dynamic_cast<qgraph::Line*>(item))
         {
-            QPoint topLeft;
-            QPoint bottomRight;
-            QPoint center;
-            if (!calcBounds(line->points(), topLeft, bottomRight, center))
-                continue;
-
             if (!firstShape)
                 addLine(QString());
             firstShape = false;
 
-            int width  = bottomRight.x() - topLeft.x();
-            int height = bottomRight.y() - topLeft.y();
+            const QVector<QPointF> pts = line->points();
+
+            QPointF topLeft, bottomRight;
+            if (!calcBounds(pts, topLeft, bottomRight))
+                continue;
+
+            const QPointF center((topLeft.x() + bottomRight.x()) / 2.0,
+                                 (topLeft.y() + bottomRight.y()) / 2.0);
+
+            const qreal width  = bottomRight.x() - topLeft.x();
+            const qreal height = bottomRight.y() - topLeft.y();
 
             addLine(tr("Линия"));
             addLine(tr("TL точка: (%1; %2)")
-                        .arg(topLeft.x())
-                        .arg(topLeft.y()));
+                        .arg(round2(topLeft.x()))
+                        .arg(round2(topLeft.y())));
             addLine(tr("BR точка: (%1; %2)")
-                        .arg(bottomRight.x())
-                        .arg(bottomRight.y()));
+                        .arg(round2(bottomRight.x()))
+                        .arg(round2(bottomRight.y())));
             addLine(tr("Центр: (%1; %2)")
-                        .arg(center.x())
-                        .arg(center.y()));
-            addLine(tr("Ширина: %1").arg(width));
-            addLine(tr("Высота: %1").arg(height));
+                        .arg(round2(center.x()))
+                        .arg(round2(center.y())));
+            addLine(tr("Ширина: %1").arg(round2(width)));
+            addLine(tr("Высота: %1").arg(round2(height)));
         }
         else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
         {
@@ -5522,29 +5534,29 @@ void MainWindow::updateCoordinateList()
                 addLine(QString());
             firstShape = false;
 
-            QPoint center = circle->center();
-            int radius = circle->realRadius();
+            QPointF center = circle->center();
+            qreal radius = circle->realRadius();
 
-            QPoint topLeft(center.x() - radius,
-                           center.y() - radius);
-            QPoint bottomRight(center.x() + radius,
-                               center.y() + radius);
+            QPointF topLeft(center.x() - radius,
+                            center.y() - radius);
+            QPointF bottomRight(center.x() + radius,
+                                center.y() + radius);
 
-            int width  = bottomRight.x() - topLeft.x();
-            int height = bottomRight.y() - topLeft.y();
+            qreal width  = bottomRight.x() - topLeft.x();
+            qreal height = bottomRight.y() - topLeft.y();
 
             addLine(tr("Круг"));
             addLine(tr("TL точка: (%1; %2)")
-                        .arg(topLeft.x())
-                        .arg(topLeft.y()));
+                        .arg(round2(topLeft.x()))
+                        .arg(round2(topLeft.y())));
             addLine(tr("BR точка: (%1; %2)")
-                        .arg(bottomRight.x())
-                        .arg(bottomRight.y()));
+                        .arg(round2(bottomRight.x()))
+                        .arg(round2(bottomRight.y())));
             addLine(tr("Центр: (%1; %2)")
-                        .arg(center.x())
-                        .arg(center.y()));
-            addLine(tr("Ширина: %1").arg(width));
-            addLine(tr("Высота: %1").arg(height));
+                        .arg(round2(center.x()))
+                        .arg(round2(center.y())));
+            addLine(tr("Ширина: %1").arg(round2(width)));
+            addLine(tr("Высота: %1").arg(round2(height)));
         }
     }
 }
@@ -8571,9 +8583,7 @@ ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* gi) const
     else if (auto* c = dynamic_cast<qgraph::Circle*>(gi))
     {
         b.kind = ShapeKind::Circle;
-        //b.circleCenter = c->center();
-        const QPointF sc = c->sceneBoundingRect().center(); // Центр в координатах сцены
-        b.circleCenter = QPoint(qRound(sc.x()), qRound(sc.y()));
+        b.circleCenter = c->center();
         b.circleRadius = c->realRadius();
     }
     else if (auto* pl = dynamic_cast<qgraph::Polyline*>(gi))
@@ -9306,10 +9316,18 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
 {
     if (!current) return;
 
-    // При смене документа сбрасываем все указатели
+    // Полный сброс состояний ручек/призрака перед сменой сцены
+    clearAllHandleHoverEffects();
+    hideGhost();
+
+    m_isDraggingHandle = false;
+    m_dragHandle = nullptr;
+    _handleDragging = false;
+    _handleEditedItem = nullptr;
+    _handleDragHadChanges = false;
+
     _currentHoveredHandle = nullptr;
     _ghostTarget = nullptr;
-    m_dragHandle = nullptr;
 
     // Сохраняем предыдущее состояние
     if (previous)
@@ -9336,16 +9354,21 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
                 QList<QGraphicsItem*> items = _scene->items();
                 for (QGraphicsItem* item : items)
                 {
-                    if (item != _videoRect)
-                    {
-                        //_scene->removeItem(item);
-                        if (item)
-                        {
-                            if (auto sc = item->scene())
-                                sc->removeItem(item);
-                        }
-                        prevDoc->scene->addItem(item);
-                    }
+                    if (!item)
+                        continue;
+
+                    if (item == _videoRect)
+                        continue;
+
+                    // Переносим только корневые элементы.
+                    // Дочерние (ручки, крестик круга, рамки и т.п.) переедут вместе с родителем автоматически.
+                    if (item->parentItem() != nullptr)
+                        continue;
+
+                    if (auto sc = item->scene())
+                        sc->removeItem(item);
+
+                    prevDoc->scene->addItem(item);
                 }
 
                 // Обновляем указатели

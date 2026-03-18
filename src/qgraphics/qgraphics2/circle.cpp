@@ -41,7 +41,9 @@ Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
     _circle->restoreBaseStyle();
     _circle->setVisible(false);
     _circle->setZValue(this->zValue() + 1);
+    _suspendHandleCallbacks = true;
     _circle->setPos(rect().width() / 2, 0);
+    _suspendHandleCallbacks = false;
     _circle->setHoverSizingEnabled(false);
 
     if (scene)
@@ -106,7 +108,9 @@ void Circle::setFrameScale(float newScale)
     setRect(x, y, w, h);
     setPos(pos().x() * s, pos().y() * s);
 
+    _suspendHandleCallbacks = true;
     _circle->setPos(w / 2, 0);
+    _suspendHandleCallbacks = false;
     _frameScale = newScale;
     updateCrossLines();
     updateSelectionRect();
@@ -115,9 +119,15 @@ void Circle::setFrameScale(float newScale)
 
 void Circle::dragCircleMove(DragCircle* circle)
 {
+    if (_suspendHandleCallbacks)
+        return;
+
+    if (!circle || circle != _circle)
+        return;
+
     QPointF center = rect().center();
-    float deltaX = qAbs(circle->x() - center.x());
-    float deltaY = qAbs(circle->y() - center.y());
+    const qreal deltaX = qAbs(circle->x() - center.x());
+    const qreal deltaY = qAbs(circle->y() - center.y());
 
     _radius = std::sqrt(deltaX * deltaX + deltaY * deltaY);
 
@@ -136,12 +146,19 @@ void Circle::dragCircleMove(DragCircle* circle)
 
 void Circle::dragCircleRelease(DragCircle* circle)
 {
-    if (circle->parentItem() == this)
-    {
-        QRectF r = rect();
-        circle->setPos(r.width() + r.x(), r.width() / 2 + r.y());
-        circleReleaseSignal.emit_(this);
-    }
+    if (_suspendHandleCallbacks)
+        return;
+
+    if (!circle || circle != _circle)
+        return;
+
+    QRectF r = rect();
+
+    _suspendHandleCallbacks = true;
+    circle->setPos(r.width() + r.x(), r.width() / 2 + r.y());
+    _suspendHandleCallbacks = false;
+
+    circleReleaseSignal.emit_(this);
 }
 
 QPointF Circle::realCenter() const
@@ -164,23 +181,24 @@ void Circle::setRealCenter(const QPointF& val)
     prepareGeometryChange();
     setPos(pos.x(), pos.y());
 
+    _suspendHandleCallbacks = true;
     _circle->setPos(rect().width() / 2, 0);
+    _suspendHandleCallbacks = false;
     updateCrossLines();
     updateSelectionRect();
 }
 
-QPoint Circle::center() const
+QPointF Circle::center() const
 {
-    QPointF c = realCenter();
-    return {int(c.x()), int(c.y())};
+    return realCenter();
 }
 
-int Circle::realRadius() const
+qreal Circle::realRadius() const
 {
     return _radius / frameScale();
 }
 
-void Circle::setRealRadius(int val)
+void Circle::setRealRadius(qreal val)
 {
     float s = frameScale();
     _radius = val * s;
@@ -196,7 +214,9 @@ void Circle::setRealRadius(int val)
     prepareGeometryChange();
     setRect(r);
     updateCrossLines();
+    _suspendHandleCallbacks = true;
     _circle->setPos(rect().width() / 2, 0);
+    _suspendHandleCallbacks = false;
     updateSelectionRect();
 }
 
@@ -205,7 +225,9 @@ void Circle::updateHandlePosition()
     // Обновляем положение ручку относительно центра круга
     if (_circle)
     {
+        _suspendHandleCallbacks = true;
         _circle->setPos(rect().width() / 2, 0);
+        _suspendHandleCallbacks = false;
         _circle->setVisible(false);
     }
 }
@@ -234,7 +256,9 @@ void Circle::updateHandlePosition(const QPointF& scenePos)
         }
 
         QPointF handlePos = center + direction;
+        _suspendHandleCallbacks = true;
         _circle->setPos(handlePos);
+        _suspendHandleCallbacks = false;
         _circle->setVisible(true);
         _circle->setHoverStyle(true);
     }
@@ -288,27 +312,26 @@ void Circle::updateHandleZValue()
 void Circle::updateCrossLines()
 {
     if (!_verticalLine || !_horizontalLine)
-    {
         return;
-    }
+
+    if (_verticalLine->scene() == nullptr || _horizontalLine->scene() == nullptr)
+        return;
+
     QRectF r = rect();
     QPointF center = r.center();
-    // // Длина линий крестика
+    // Длина линий крестика
     const qreal baseLenPx = 6.0;
     const qreal maxLenByRadius = qMax<qreal>(1.0, _radius - 1.0);
     const qreal lineLength = qMin(baseLenPx, maxLenByRadius);
-
     // Вертикальная линия
     QLineF verticalLine(center.x(), center.y() - lineLength,
                         center.x(), center.y() + lineLength);
-
     // Горизонтальная линия
     QLineF horizontalLine(center.x() - lineLength, center.y(),
                           center.x() + lineLength, center.y());
 
     _verticalLine->setLine(verticalLine);
     _horizontalLine->setLine(horizontalLine);
-
     // Наследуем стиль пера от круга
     QPen pen = this->pen();
     _verticalLine->setPen(pen);
@@ -739,7 +762,7 @@ void Circle::loadState(const QVariant& v)
 {
     const auto m = v.toMap();
     if (m.contains("center"))  setRealCenter(m["center"].toPointF());
-    if (m.contains("radius"))  setRealRadius(m["radius"].toInt());
+    if (m.contains("radius"))  setRealRadius(m["radius"].toReal());
     if (m.contains("z"))       setZValue(m["z"].toInt());
     if (m.contains("visible")) setVisible(m["visible"].toBool());
 

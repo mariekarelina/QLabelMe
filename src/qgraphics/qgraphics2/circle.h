@@ -31,19 +31,19 @@ public:
     // масштабного коэффициента frameScale()
     QPointF realCenter() const;
     void setRealCenter(const QPointF&);
+    qreal radius() const { return _radius; }
 
-    QPoint center() const;
+    QPointF center() const;
 
     // Возвращает радиус окружности с учетом масштабного коэффициента
-    int realRadius() const;
-    void setRealRadius(int);
+    qreal realRadius() const;
+    void setRealRadius(qreal);
 
     void updateHandlePosition();
     void updateHandlePosition(const QPointF& scenePos);
 
     QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
 
-    int radius() const { return _radius; }
     void updateHandleZValue();
     void updateCrossLines();
     void applyLineStyle(qreal lineWidth);
@@ -83,13 +83,14 @@ private:
     QPointer<DragCircle> _hoverHandle = {nullptr};
     QPointer<DragCircle> _circle = {nullptr};
     QPointF _ghostLocalPos {0, 0};
-    float _radius = {10};
+    qreal _radius = {10};
     // Линии крестика
     QGraphicsLineItem* _verticalLine;
     QGraphicsLineItem* _horizontalLine;
 
     QColor _highlightColor = Qt::transparent;
     bool _hovered = false;
+    bool _suspendHandleCallbacks = false;
 
     struct SceneFilter;
     SceneFilter* _sceneFilter = {nullptr};

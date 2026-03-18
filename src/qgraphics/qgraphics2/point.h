@@ -29,7 +29,7 @@ public:
     void raiseHandlesToTop() override;
 
     // Позиция точки в координатах сцены
-    QPoint center() const { return QPoint(std::round(scenePos().x()), std::round(scenePos().y())); }
+    QPointF center() const { return scenePos(); }
     void setCenter(const QPointF& p);
 
     // Обновление позиций и Z-уровней

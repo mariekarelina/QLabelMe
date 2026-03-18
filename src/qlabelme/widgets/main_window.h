@@ -149,10 +149,10 @@ struct ShapeBackup
 
     // Геометрия по типам
     QRectF rect;
-    QPoint circleCenter;
-    int circleRadius = 0;
+    QPointF circleCenter;
+    qreal circleRadius = 0;
     QVector<QPointF> points;
-    QPoint pointCenter;
+    QPointF pointCenter;
 
     bool closed = false;
     qulonglong uid = 0;
@@ -284,6 +284,7 @@ private:
     void updateFolderPathDisplay();
 
     static QString annotationPathFor(const QString& imagePath);
+    static double round2(double value);
     void saveAnnotationToFile(Document::Ptr doc);
     void updateFileListDisplay(const QString& filePath);
     void loadAnnotationFromFile(Document::Ptr doc);
