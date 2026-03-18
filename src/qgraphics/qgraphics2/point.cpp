@@ -5,6 +5,7 @@
 #include <QGraphicsSceneHoverEvent>
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QPen>
 #include <QBrush>
 #include <QObject>
@@ -26,8 +27,8 @@ Point::Point(QGraphicsScene* scene)
     setBrush(Qt::NoBrush);
 
     // Базовый эллипс диаметром
-    const qreal r = _baseDiameter * 0.5;
-    setRect(QRectF(-r, -r, _baseDiameter, _baseDiameter));
+    const qreal r = dotRadiusLocal();
+    setRect(QRectF(-r, -r, 2 * r, 2 * r));
 
     setZLevel(1);
     scene->addItem(this);
@@ -67,26 +68,17 @@ void Point::setCenter(const QPointF& p)
 
 void Point::setFrameScale(float newScale)
 {
-    float s = newScale / frameScale();
+    const float s = newScale / frameScale();
 
     setPos(pos().x() * s, pos().y() * s);
 
-    _baseDiameter *= s;
-    const qreal r = _baseDiameter * 0.5;
-    prepareGeometryChange();
-    setRect(QRectF(-r, -r, _baseDiameter, _baseDiameter));
-
-    // if (_dotVis)
-    //     _dotVis->setRect(-_dotRadiusPx, -_dotRadiusPx, 2*_dotRadiusPx, 2*_dotRadiusPx);
-    QGraphicsEllipseItem* dv = ensureDotVis();
-    dv->setRect(-_dotRadiusPx, -_dotRadiusPx, 2*_dotRadiusPx, 2*_dotRadiusPx);
+    _frameScale = newScale;
 
     updateHandlePosition();
-    _frameScale = newScale;
     raiseHandlesToTop();
-    showDotIfIdle();
     syncDotGeometry();
     syncDotColors();
+    showDotIfIdle();
 }
 
 void Point::dragCircleMove(DragCircle* circle)
@@ -128,18 +120,20 @@ void Point::updateHandlesZValue()
 
 QPainterPath Point::shape() const
 {
-    // Радиус «попадания» — чтобы по точке было легко кликнуть
-    const qreal r = 8.0;
     QPainterPath p;
-    p.addEllipse(QPointF(0,0), r, r);
+
+    const qreal R = dotRadiusLocal() * _coverScale;
+    p.addEllipse(QPointF(0, 0), R, R);
+
     return p;
 }
 
 QRectF Point::boundingRect() const
 {
-    const qreal r = 8.0;
-    const qreal pad = 1.5;
-    return QRectF(-r - pad, -r - pad, 2*(r + pad), 2*(r + pad));
+    const qreal R = dotRadiusLocal() * _coverScale;
+    const qreal pad = 0.5 * onePixelLocal();
+
+    return QRectF(-R - pad, -R - pad, 2.0 * (R + pad), 2.0 * (R + pad));
 }
 
 void Point::setDotStyle(const QColor& color, qreal dotDiameterPx, qreal handleSizePx)
@@ -294,20 +288,9 @@ void Point::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWi
     painter->setPen(pen);
     painter->setBrush(Qt::NoBrush);
 
-    QRectF rc;
-
-    if (auto* dv = ensureDotVis())
-    {
-        rc = dv->shape().boundingRect();
-
-        const qreal pad = 1.0;
-        rc = rc.adjusted(-pad, -pad, pad, pad);
-    }
-    else
-    {
-        qreal R = std::max<qreal>(_dotRadiusPx, 1.0);
-        rc = QRectF(-R, -R, 2*R, 2*R);
-    }
+    const qreal R = dotRadiusLocal() * _coverScale;
+    const qreal pad = 0.5 * onePixelLocal();
+    const QRectF rc(-R - pad, -R - pad, 2.0 * (R + pad), 2.0 * (R + pad));
 
     painter->drawRect(rc);
 }
@@ -329,12 +312,17 @@ void Point::hideDot()
 
 void Point::syncDotGeometry()
 {
+    const qreal localR = dotRadiusLocal() * _coverScale;
+
+    prepareGeometryChange();
+    setRect(QRectF(-localR, -localR, 2 * localR, 2 * localR));
+
     QGraphicsEllipseItem* dv = ensureDotVis();
     if (!dv)
         return;
 
-    const qreal R = std::max<qreal>(_dotRadiusPx, 0.5);
-    dv->setRect(QRectF(-R, -R, 2*R, 2*R));
+    const qreal pixelR = std::max<qreal>(_dotRadiusPx, 0.5);
+    dv->setRect(QRectF(-pixelR, -pixelR, 2 * pixelR, 2 * pixelR));
 }
 
 void Point::syncDotColors()
@@ -342,6 +330,32 @@ void Point::syncDotColors()
     QGraphicsEllipseItem* dv = ensureDotVis();
     dv->setBrush(QBrush(_dotColor));
     dv->setPen(Qt::NoPen);
+}
+
+qreal Point::dotRadiusLocal() const
+{
+    const qreal px = std::max<qreal>(_dotRadiusPx, 0.5);
+
+    if (scene() && !scene()->views().isEmpty() && scene()->views().first())
+    {
+        QGraphicsView* view = scene()->views().first();
+        const qreal viewScale = std::max<qreal>(view->transform().m11(), 0.000001);
+        return px / viewScale;
+    }
+
+    return px;
+}
+
+qreal Point::onePixelLocal() const
+{
+    if (scene() && !scene()->views().isEmpty() && scene()->views().first())
+    {
+        QGraphicsView* view = scene()->views().first();
+        const qreal viewScale = std::max<qreal>(view->transform().m11(), 0.000001);
+        return 1.0 / viewScale;
+    }
+
+    return 1.0;
 }
 
 }

@@ -20,7 +20,7 @@ namespace qgraph {
 class Line : public ShapeT<QGraphicsPathItem>
 {
 public:
-    enum {Type = toInt(qgraph::UserType::Rectangle)};
+    enum {Type = toInt(qgraph::UserType::Line)};
     int type() const override {return Type;}
 
     Line(QGraphicsScene*, const QPointF&);
@@ -104,6 +104,9 @@ protected:
 
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
               QWidget* widget = nullptr) override;
+
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override;
 
     void updateConnections(); // Для обновления связей между точками
     void updateClosedState();

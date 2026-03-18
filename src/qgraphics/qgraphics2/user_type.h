@@ -11,6 +11,7 @@ enum class UserType
     Rectangle  = QGraphicsItem::UserType + 4,
     VideoRect  = QGraphicsItem::UserType + 5,
     Polyline = QGraphicsItem::UserType + 6,
+    Line = QGraphicsItem::UserType + 7,
 };
 
 constexpr int toInt(UserType ut) {return static_cast<int>(ut);}

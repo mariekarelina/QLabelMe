@@ -5,6 +5,8 @@
 #include <QGraphicsRectItem>
 #include <cmath>
 #include <QApplication>
+#include <QPainterPathStroker>
+#include <QGraphicsView>
 #include <QCursor>
 #include <QMetaObject>
 #include <QVariant>
@@ -657,6 +659,49 @@ void Circle::paint(QPainter* painter,
     painter->setPen(pen());
     painter->drawPath(path);
     painter->restore();
+}
+
+QRectF Circle::boundingRect() const
+{
+    return shape().boundingRect();
+}
+
+QPainterPath Circle::shape() const
+{
+    QPainterPath ellipsePath;
+    ellipsePath.addEllipse(rect());
+
+    qreal viewScale = 1.0;
+    if (scene() && !scene()->views().isEmpty() && scene()->views().first())
+    {
+        QGraphicsView* view = scene()->views().first();
+        viewScale = qMax<qreal>(view->transform().m11(), 0.000001);
+    }
+
+    qreal visualWidthLocal = 1.0;
+    if (pen().isCosmetic())
+    {
+        const qreal px = qMax<qreal>(1.0, pen().widthF() > 0.0 ? pen().widthF() : 1.0);
+        visualWidthLocal = px / viewScale;
+    }
+    else
+    {
+        visualWidthLocal = qMax<qreal>(1.0, pen().widthF());
+    }
+
+    QPainterPathStroker stroker;
+    stroker.setWidth(visualWidthLocal);
+    stroker.setCapStyle(pen().capStyle());
+    stroker.setJoinStyle(pen().joinStyle());
+    stroker.setMiterLimit(pen().miterLimit());
+
+    QPainterPath result = stroker.createStroke(ellipsePath);
+
+    // В отличие от линии, круг должен реагировать не только на контур,
+    // но и на всю свою внутреннюю область.
+    result.addPath(ellipsePath);
+
+    return result;
 }
 
 struct Circle::SceneFilter : public QObject

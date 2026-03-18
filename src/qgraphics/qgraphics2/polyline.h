@@ -20,7 +20,7 @@ namespace qgraph {
 class Polyline : public ShapeT<QGraphicsPathItem> //public QGraphicsPathItem
 {
 public:
-    enum {Type = toInt(qgraph::UserType::Rectangle)};
+    enum {Type = toInt(qgraph::UserType::Polyline)};
     int type() const override {return Type;}
 
     Polyline(QGraphicsScene*, const QPointF&);
@@ -106,6 +106,9 @@ protected:
 
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
                QWidget* widget = nullptr) override;
+
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override;
 
     void updateConnections(); // Для обновления связей между точками
     void updateClosedState();

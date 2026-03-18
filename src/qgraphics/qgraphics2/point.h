@@ -67,6 +67,8 @@ private:
                                 qreal outlineWidthPx);
     void syncDotGeometry();
     void syncDotColors();
+    qreal dotRadiusLocal() const;
+    qreal onePixelLocal() const;
 
 private:
     DragCircle* _handle = {nullptr};
@@ -85,8 +87,7 @@ private:
 
     bool _interacting = false; // true только во время активного взаимодействия
 
-    qreal _coverScale = 1.15;
-
+    qreal _coverScale = 1.0;
 };
 
 }

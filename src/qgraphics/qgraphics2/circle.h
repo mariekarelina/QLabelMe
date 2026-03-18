@@ -73,6 +73,9 @@ protected:
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
                QWidget* widget = nullptr) override;
 
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override;
+
 private:
     void attachSceneFilter(QGraphicsScene* s);
     void detachSceneFilter();
