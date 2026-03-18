@@ -353,8 +353,16 @@ MainWindow::MainWindow(QWidget *parent) :
     // _folderPathLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     // ui->statusBar->addWidget(_folderPathLabel, 1); // Растягиваемый
 
-    QString vers = u8"Версия: %1 (gitrev: %2)";
-    vers = vers.arg(VERSION_PROJECT).arg(GIT_REVISION);
+    QString buildDate =
+            QLocale(QLocale::English)
+            .toDate(QString(__DATE__), "MMM d yyyy")
+            .toString("dd.MM.yyyy");
+
+    QString vers = u8"Версия: %1 | Дата: %2 | git: %3";
+    vers = vers.arg(VERSION_PROJECT)
+               .arg(buildDate)
+               .arg(GIT_REVISION);
+
     ui->statusBar->addPermanentWidget(new QLabel(vers, this));
 
     _imageSizeLabel = new QLabel(this);
