@@ -1,11 +1,16 @@
 #include "user_guide.h"
 #include "ui_user_guide.h"
+#include "shared/config/appl_conf.h"
 #include <QTreeWidgetItem>
 #include <QPushButton>
 #include <QFile>
 #include <QFileInfo>
 #include <QTextStream>
 #include <QMap>
+#include <QCloseEvent>
+#include <QGuiApplication>
+#include <QScreen>
+#include <QSplitter>
 
 
 UserGuide::UserGuide(QWidget *parent)
@@ -15,9 +20,9 @@ UserGuide::UserGuide(QWidget *parent)
     ui->setupUi(this);
 
     setWindowTitle(tr("Руководство пользователя QLabelMe"));
-    resize(900, 600);
     setAttribute(Qt::WA_DeleteOnClose);
 
+    loadGeometry();
     buildContents();
 
     connect(ui->treeContents, &QTreeWidget::itemSelectionChanged, this, [this]()
@@ -37,13 +42,25 @@ UserGuide::UserGuide(QWidget *parent)
     ui->textBrowser->setStyleSheet("QTextBrowser { padding: 8px; }");
 
     connect(ui->buttonBox, &QDialogButtonBox::rejected,
-        this, &QDialog::reject);
+        this, &UserGuide::reject);
     ui->buttonBox->button(QDialogButtonBox::Close)->setText(tr("Закрыть"));
 }
 
 UserGuide::~UserGuide()
 {
     delete ui;
+}
+
+void UserGuide::closeEvent(QCloseEvent* event)
+{
+    saveGeometry();
+    QDialog::closeEvent(event);
+}
+
+void UserGuide::reject()
+{
+    saveGeometry();
+    QDialog::reject();
 }
 
 void UserGuide::buildContents()
@@ -152,4 +169,57 @@ void UserGuide::showPage(const QString& key)
     }
 
     ui->textBrowser->setMarkdown(sectionMarkdown);
+}
+
+void UserGuide::loadGeometry()
+{
+    QVector<int> wg;
+    config::base().getValue("windows.user_guide.geometry", wg);
+
+    if (wg.count() != 4)
+    {
+        wg = {10, 10, 900, 600};
+
+        const QList<QScreen*> screens = QGuiApplication::screens();
+        if (!screens.isEmpty())
+        {
+            const QRect screenGeometry = screens[0]->geometry();
+            QRect windowGeometry {0, 0,
+                                  int(screenGeometry.width() * (2.0 / 3.0)),
+                                  int(screenGeometry.height() * (2.0 / 3.0))};
+
+            wg[0] = screenGeometry.width()  / 2 - windowGeometry.width()  / 2;
+            wg[1] = screenGeometry.height() / 2 - windowGeometry.height() / 2;
+            wg[2] = windowGeometry.width();
+            wg[3] = windowGeometry.height();
+        }
+    }
+
+    setGeometry(wg[0], wg[1], wg[2], wg[3]);
+
+    QList<int> splitterSizes;
+    if (!config::base().getValue("windows.user_guide.splitter_sizes", splitterSizes))
+    {
+        splitterSizes = {100, 100};
+        const QRect windowGeometry = geometry();
+        splitterSizes[0] = int(windowGeometry.width() * (1.0 / 3.0));
+        splitterSizes[1] = int(windowGeometry.width() * (2.0 / 3.0));
+    }
+
+    ui->splitter->setSizes(splitterSizes);
+}
+
+void UserGuide::saveGeometry() const
+{
+    const QRect r = (isMaximized() || isFullScreen())
+                    ? normalGeometry()
+                    : geometry();
+
+    QVector<int> out { r.x(), r.y(), r.width(), r.height() };
+    config::base().setValue("windows.user_guide.geometry", out);
+
+    config::base().setValue("windows.user_guide.splitter_sizes",
+                            ui->splitter->sizes());
+
+    config::base().saveFile();
 }

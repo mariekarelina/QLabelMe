@@ -12,9 +12,18 @@ public:
     explicit UserGuide(QWidget *parent = nullptr);
     ~UserGuide();
 
+protected:
+    void closeEvent(QCloseEvent* event) override;
+
+public slots:
+    void reject() override;
+
 private:
     void buildContents();
     void showPage(const QString& key);
+
+    void loadGeometry();
+    void saveGeometry() const;
 
 private:
     Ui::UserGuide *ui;
