@@ -1303,6 +1303,78 @@ void Polyline::rotatePointsCounterClockwise()
     updatePointNumbers();
 }
 
+void Polyline::renumberFromHandleClockwise(qgraph::DragCircle* start)
+{
+    if (!start || _circles.size() < 2)
+        return;
+
+    int startIdx = _circles.indexOf(start);
+    if (startIdx < 0)
+        return;
+
+    if (_isClosed && _circles.size() >= 3)
+    {
+        const QVector<QPointF> pts = points();
+
+        double area2 = 0.0;
+        for (int i = 0; i < pts.size(); ++i)
+        {
+            const QPointF& a = pts[i];
+            const QPointF& b = pts[(i + 1) % pts.size()];
+            area2 += a.x() * b.y() - b.x() * a.y();
+        }
+
+        const bool isClockwiseNow = (area2 > 0.0);
+
+        if (!isClockwiseNow)
+        {
+            std::reverse(_circles.begin(), _circles.end());
+            startIdx = _circles.indexOf(start);
+        }
+    }
+
+    std::rotate(_circles.begin(), _circles.begin() + startIdx, _circles.end());
+
+    updatePath();
+    updatePointNumbers();
+}
+
+void Polyline::renumberFromHandleCounterClockwise(qgraph::DragCircle* start)
+{
+    if (!start || _circles.size() < 2)
+        return;
+
+    int startIdx = _circles.indexOf(start);
+    if (startIdx < 0)
+        return;
+
+    if (_isClosed && _circles.size() >= 3)
+    {
+        const QVector<QPointF> pts = points();
+
+        double area2 = 0.0;
+        for (int i = 0; i < pts.size(); ++i)
+        {
+            const QPointF& a = pts[i];
+            const QPointF& b = pts[(i + 1) % pts.size()];
+            area2 += a.x() * b.y() - b.x() * a.y();
+        }
+
+        const bool isClockwiseNow = (area2 > 0.0);
+
+        if (isClockwiseNow)
+        {
+            std::reverse(_circles.begin(), _circles.end());
+            startIdx = _circles.indexOf(start);
+        }
+    }
+
+    std::rotate(_circles.begin(), _circles.begin() + startIdx, _circles.end());
+
+    updatePath();
+    updatePointNumbers();
+}
+
 void Polyline::handleKeyPressEvent(QKeyEvent* event)
 {
     keyPressEvent(event);
