@@ -29,7 +29,7 @@
    <item>
     <layout class="QVBoxLayout" name="verticalLayout_2">
      <item>
-      <widget class="QListWidget" name="_listWidget">
+      <widget class="QListWidget" name="listWidget">
        <property name="alternatingRowColors">
         <bool>true</bool>
        </property>

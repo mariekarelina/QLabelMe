@@ -22,61 +22,63 @@
 
 //#include "qgraphics/functions.h"
 //#include "qutils/message_box.h"
-#include <QSlider>
 
 #include "select_class.h"
 #include "settings.h"
 #include "user_guide.h"
 
 #include <QApplication>
-#include <QHostInfo>
-#include <QScreen>
-#include <QLabel>
-#include <QPointF>
-#include <QFileInfo>
-#include <QInputDialog>
-#include <QGraphicsItem>
-#include <QVBoxLayout>
-#include <QPixmap>
-#include <QFrame>
-#include <QMouseEvent>
+#include <QMessageBox>
+#include <QFileDialog>
 #include <QScrollBar>
-#include <QWheelEvent>
-#include <QEvent>
-#include <QKeyEvent>
-#include <unistd.h>
-#include <QPen>
-#include <QSplitter>
 #include <QTextEdit>
-#include <QListWidget>
-#include <QJsonDocument>
-#include <QJsonArray>
-#include <QJsonObject>
-#include <QClipboard>
-#include <QMimeData>
-#include <QGuiApplication>
-#include <algorithm>
-#include <cmath>
-#include <limits>
-#include <QDoubleSpinBox>
-#include <QFormLayout>
-#include <QDialogButtonBox>
-#include <QAbstractButton>
-#include <QAction>
-#include <QMenu>
-#include <QGraphicsSimpleTextItem>
-#include <QGraphicsRectItem>
-#include <QAbstractItemView>
-#include <QMetaType>
-#include <QtGlobal>
-#include <QShortcut>
-#include <QKeySequence>
-#include <QPainterPathStroker>
-#include <QStyleFactory>
 
+// #include <QHostInfo>
+// #include <QScreen>
+// #include <QSlider>
+// #include <QLabel>
+// #include <QPointF>
+// #include <QFileInfo>
+// #include <QInputDialog>
+// #include <QGraphicsItem>
+// #include <QVBoxLayout>
+// #include <QPixmap>
+// #include <QFrame>
+// #include <QMouseEvent>
+// #include <QWheelEvent>
+// #include <QEvent>
+// #include <QKeyEvent>
+// #include <unistd.h>
+// #include <QPen>
+// #include <QSplitter>
+// #include <QListWidget>
+// #include <QJsonDocument>
+// #include <QJsonArray>
+// #include <QJsonObject>
+// #include <QClipboard>
+// #include <QMimeData>
+// #include <QGuiApplication>
+// #include <QDoubleSpinBox>
+// #include <QFormLayout>
+// #include <QDialogButtonBox>
+// #include <QAbstractButton>
+// #include <QAction>
+// #include <QMenu>
+// #include <QGraphicsSimpleTextItem>
+// #include <QGraphicsRectItem>
+// #include <QAbstractItemView>
+// #include <QMetaType>
+// #include <QtGlobal>
+// #include <QShortcut>
+// #include <QKeySequence>
+// #include <QPainterPathStroker>
+// #include <QStyleFactory>
+
+// #include <algorithm>
+// #include <cmath>
+// #include <limits>
 
 using namespace qgraph;
-//#include <view.h>
 
 #define log_error_m   alog::logger().error   (alog_line_location, "MainWin")
 #define log_warn_m    alog::logger().warn    (alog_line_location, "MainWin")

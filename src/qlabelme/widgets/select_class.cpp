@@ -16,20 +16,20 @@ SelectClass::SelectClass(const QStringList &classes, QWidget *parent)
     setFixedSize(400, 500);
 
     // Заполняем список классами
-    ui->_listWidget->clear();
-    ui->_listWidget->addItems(classes);
+    ui->listWidget->clear();
+    ui->listWidget->addItems(classes);
     if (!classes.isEmpty())
-        ui->_listWidget->setCurrentRow(0);
+        ui->listWidget->setCurrentRow(0);
 
     // Выбор по клику сразу закрываем диалог
-    connect(ui->_listWidget, &QListWidget::itemClicked, this,
+    connect(ui->listWidget, &QListWidget::itemClicked, this,
             [this](QListWidgetItem* item) {
                 _selectedClass = item ? item->text() : QString();
                 accept();
             });
 
     // Двойной щелчок тоже подтверждает
-    connect(ui->_listWidget, &QListWidget::itemDoubleClicked, this,
+    connect(ui->listWidget, &QListWidget::itemDoubleClicked, this,
             [this](QListWidgetItem* item) {
                 _selectedClass = item ? item->text() : QString();
                 accept();
