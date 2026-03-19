@@ -2854,6 +2854,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         QAction* actRemove = menu.addAction(tr("Удалить узел"));
                         QAction* actResume = menu.addAction(tr("Возобновить редактирование"));
                         QAction* actRecalc = menu.addAction(tr("Пересчитать нумерацию"));
+                        QAction* actClockwise = menu.addAction(tr("Нумерация по часовой стрелке"));
+                        QAction* actCounterClockwise = menu.addAction(tr("Нумерация против часовой стрелки"));
 
                         QAction* chosen = menu.exec(ce->globalPos());
 
@@ -2936,6 +2938,40 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             ShapeBackup after = makeBackupFromItem(polyline);
                             if (!sameGeometry(before, after))
                                 pushModifyShapeCommand(uid, before, after, tr("Пересчет нумерации"));
+
+                            if (auto doc = currentDocument(); doc && !doc->isModified)
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
+                        }
+                        else if (chosen == actClockwise)
+                        {
+                            ShapeBackup before = makeBackupFromItem(polyline);
+                            qulonglong uid = before.uid;
+
+                            polyline->renumberFromHandleClockwise(circle);
+
+                            ShapeBackup after = makeBackupFromItem(polyline);
+                            if (!sameGeometry(before, after))
+                                pushModifyShapeCommand(uid, before, after, tr("Нумерация по часовой стрелке"));
+
+                            if (auto doc = currentDocument(); doc && !doc->isModified)
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
+                        }
+                        else if (chosen == actCounterClockwise)
+                        {
+                            ShapeBackup before = makeBackupFromItem(polyline);
+                            qulonglong uid = before.uid;
+
+                            polyline->renumberFromHandleCounterClockwise(circle);
+
+                            ShapeBackup after = makeBackupFromItem(polyline);
+                            if (!sameGeometry(before, after))
+                                pushModifyShapeCommand(uid, before, after, tr("Нумерация против часовой стрелки"));
 
                             if (auto doc = currentDocument(); doc && !doc->isModified)
                             {

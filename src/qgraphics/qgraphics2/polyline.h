@@ -63,6 +63,10 @@ public:
     void applyNumberStyle(qreal fontSize, const QColor& textColor, const QColor& bgColor);
     void rotatePointsClockwise();
     void rotatePointsCounterClockwise();
+
+    void renumberFromHandleClockwise(qgraph::DragCircle* start);
+    void renumberFromHandleCounterClockwise(qgraph::DragCircle* start);
+
     void handleKeyPressEvent(QKeyEvent* event);
     void resumeFromHandle(qgraph::DragCircle* h);
 
