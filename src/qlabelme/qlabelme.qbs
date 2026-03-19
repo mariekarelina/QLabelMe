@@ -55,6 +55,8 @@ Product {
             "main_window.cpp",
             "main_window.h",
             "main_window.ui",
+            "message_box.cpp",
+            "message_box.h",
             "project_settings.cpp",
             "project_settings.h",
             "project_settings.ui",

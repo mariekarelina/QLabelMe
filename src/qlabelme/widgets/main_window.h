@@ -21,37 +21,39 @@
 
 #include "lambda_command.h"
 
-#include <QMainWindow>
-#include <QFileDialog>
-#include <QCloseEvent>
-#include <QShowEvent>
-#include <QGraphicsScene>
-#include <QWheelEvent>
-#include <QToolButton>
-#include <QListWidget>
-#include <QMap>
-#include <QColor>
-#include <QList>
-#include <QCheckBox>
-#include <QButtonGroup>
-#include <QHBoxLayout>
-#include <QMessageBox>
-#include <QPushButton>
-#include <QTableWidgetItem>
-#include <QColorDialog>
-#include <QUndoCommand>
-#include <QShortcut>
-#include <optional>
-#include <QRubberBand>
-#include <QPointer>
+#include <QtCore>
+#include <QtGui>
+// #include <QCloseEvent>
+// #include <QShowEvent>
+// #include <QGraphicsScene>
+// #include <QWheelEvent>
+// #include <QToolButton>
+// #include <QListWidget>
+// #include <QMap>
+// #include <QColor>
+// #include <QList>
 
-#include <QUndoStack>
+#include <QCheckBox>
+#include <QShortcut>
+#include <QMainWindow>
+
+// #include <QButtonGroup>
+// #include <QHBoxLayout>
+// #include <QPushButton>
+// #include <QTableWidgetItem>
+// #include <QColorDialog>
+// #include <QUndoCommand>
+// #include <optional>
+// #include <QRubberBand>
+// #include <QPointer>
+
+// #include <QUndoStack>
 #include <QUndoGroup>
 #include <QUndoView>
-#include <QDockWidget>
+// #include <QDockWidget>
 
-#include <QJsonObject>
-#include <QJsonArray>
+// #include <QJsonObject>
+// #include <QJsonArray>
 
 #include <QGraphicsView>
 #include <QGraphicsScene>

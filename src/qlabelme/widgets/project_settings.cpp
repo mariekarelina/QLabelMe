@@ -1,6 +1,9 @@
 #include "project_settings.h"
 #include "ui_project_settings.h"
 
+#include "shared/defmac.h"
+#include "message_box.h"
+
 #include <QListWidgetItem>
 #include <QAbstractItemView>
 #include <QInputDialog>
@@ -55,8 +58,10 @@ ProjectSettings::ProjectSettings(QWidget* parent)
 
     if (auto b = ui->buttonBox->button(QDialogButtonBox::Ok))
         b->setText(tr("ОК"));
+
     if (auto b = ui->buttonBox->button(QDialogButtonBox::Apply))
         b->setText(tr("Применить"));
+
     if (auto b = ui->buttonBox->button(QDialogButtonBox::Cancel))
         b->setText(tr("Отмена"));
 
@@ -80,7 +85,7 @@ ProjectSettings::ProjectSettings(QWidget* parent)
         );
     }
     if (ui->btnSortAZ)
-        connect(ui->btnSortAZ, &QPushButton::clicked, this, &ProjectSettings::onSortAZ);
+        chk_connect_a(ui->btnSortAZ, &QPushButton::clicked, this, &ProjectSettings::onSortAZ);
     if (ui->btnUp)
         connect(ui->btnUp, &QPushButton::clicked, this, &ProjectSettings::onMoveUp);
     if (ui->btnDown)
@@ -108,43 +113,25 @@ ProjectSettings::~ProjectSettings()
 
 void ProjectSettings::setProjectClasses(const QStringList& classes)
 {
-    m_classes = classes;
+    _classes = classes;
     if (ui && ui->listClasses)
     {
         clearClassListWidgets();
-        for (int i = 0; i < m_classes.size(); ++i)
+        for (int i = 0; i < _classes.size(); ++i)
         {
-            const QString& name = m_classes[i];
+            const QString& name = _classes[i];
 
             auto* it = new QListWidgetItem();
             it->setText("");
             it->setData(RoleClassName, name);
 
-            QColor c = m_classColors.value(name, QColor());
+            QColor c = _classColors.value(name, QColor());
             if (!c.isValid())
                 c = defaultColorForIndex(i);
 
             it->setData(Qt::UserRole, c);
 
             ui->listClasses->addItem(it);
-            rebuildClassRowWidget(it);
-        }
-    }
-}
-
-void ProjectSettings::setProjectClassColors(const QMap<QString, QColor>& colors)
-{
-    if (!ui || !ui->listClasses)
-        return;
-
-    for (int i = 0; i < ui->listClasses->count(); ++i)
-    {
-        auto* it = ui->listClasses->item(i);
-        const QString name = it->data(RoleClassName).toString();
-        const QColor c = colors.value(name, QColor());
-        if (c.isValid())
-        {
-            it->setData(Qt::UserRole, c);
             rebuildClassRowWidget(it);
         }
     }
@@ -167,17 +154,35 @@ QMap<QString, QColor> ProjectSettings::projectClassColors() const
     return out;
 }
 
+void ProjectSettings::setProjectClassColors(const QMap<QString, QColor>& colors)
+{
+    if (!ui || !ui->listClasses)
+        return;
+
+    for (int i = 0; i < ui->listClasses->count(); ++i)
+    {
+        auto* it = ui->listClasses->item(i);
+        const QString name = it->data(RoleClassName).toString();
+        const QColor c = colors.value(name, QColor());
+        if (c.isValid())
+        {
+            it->setData(Qt::UserRole, c);
+            rebuildClassRowWidget(it);
+        }
+    }
+}
+
 void ProjectSettings::accept()
 {
     // При нажатии ОК собираем актуальный порядок из виджета
-    m_classes.clear();
+    _classes.clear();
     if (ui && ui->listClasses)
     {
-        m_classes.reserve(ui->listClasses->count());
+        _classes.reserve(ui->listClasses->count());
         for (int i = 0; i < ui->listClasses->count(); ++i)
         {
-            //m_classes << ui->listClasses->item(i)->text();
-            m_classes << ui->listClasses->item(i)->data(RoleClassName).toString();
+            //_classes << ui->listClasses->item(i)->text();
+            _classes << ui->listClasses->item(i)->data(RoleClassName).toString();
         }
     }
     syncColorsFromUi();
@@ -202,21 +207,21 @@ void ProjectSettings::on_buttonBox_clicked(QAbstractButton* btn)
     const auto role = ui->buttonBox->buttonRole(btn);
     if (role == QDialogButtonBox::ApplyRole)
     {
-        m_classes = collectListItems(ui->listClasses);
+        _classes = collectListItems(ui->listClasses);
         syncColorsFromUi();
 
-        emit classesApplied(m_classes);
-        emit classColorsApplied(m_classColors);
+        emit classesApplied(_classes);
+        emit classColorsApplied(_classColors);
     }
 }
 
 void ProjectSettings::on_buttonBox_accepted()
 {
-    m_classes = collectListItems(ui->listClasses);
+    _classes = collectListItems(ui->listClasses);
     syncColorsFromUi();
 
-    emit classesApplied(m_classes);
-    emit classColorsApplied(m_classColors);
+    emit classesApplied(_classes);
+    emit classColorsApplied(_classColors);
 
     accept();
 }
@@ -245,7 +250,7 @@ void ProjectSettings::onSortAZ()
         d.color = it->data(Qt::UserRole).value<QColor>();
         if (!d.color.isValid())
             d.color = defaultColorForIndex(i);
-        items.push_back(d);
+        items.append(d);
     }
 
     std::sort(items.begin(), items.end(), [](const ItemData& a, const ItemData& b){
@@ -492,7 +497,8 @@ void ProjectSettings::onEditClass()
 
     if (newName.isEmpty())
     {
-        QMessageBox::information(this, tr("Редактирование"), tr("Имя класса не должно быть пустым."));
+        //QMessageBox::information(this, tr("Редактирование"), tr("Имя класса не должно быть пустым."));
+        messageBox(this, QMessageBox::Information, u8"Имя класса не должно быть пустым.");
         return;
     }
     if (newName.compare(oldName, Qt::CaseInsensitive) == 0)
@@ -614,7 +620,7 @@ void ProjectSettings::rebuildClassRowWidget(QListWidgetItem* item)
 
 void ProjectSettings::syncColorsFromUi()
 {
-    m_classColors.clear();
+    _classColors.clear();
     if (!ui || !ui->listClasses)
         return;
 
@@ -625,7 +631,7 @@ void ProjectSettings::syncColorsFromUi()
         const QColor  c    = it->data(Qt::UserRole).value<QColor>();
 
         if (!name.isEmpty() && c.isValid())
-            m_classColors[name] = c;
+            _classColors[name] = c;
     }
 }
 
