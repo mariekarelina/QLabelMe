@@ -81,6 +81,7 @@ void UserGuide::buildContents()
     addItem(tr("Создание разметки"), "create");
     addItem(tr("Редактирование"), "edit");
     addItem(tr("Горячие клавиши"), "shortcuts");
+    addItem(tr("Управление мышью"), "mouse");
     addItem(tr("Настройки"), "settings");
 
     ui->treeContents->expandAll();
@@ -147,6 +148,7 @@ void UserGuide::showPage(const QString& key)
         {"create", "Создание разметки"},
         {"edit", "Редактирование разметки"},
         {"shortcuts", "Горячие клавиши"},
+        {"mouse", "Управление мышью"},
         {"settings", "Настройки"}
     };
 
