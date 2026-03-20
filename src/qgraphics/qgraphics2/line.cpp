@@ -1086,15 +1086,13 @@ void Line::updatePointNumbers()
         number->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
         number->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
 
-        // Применяем стиль шрифта
-        if (_numberFontSize > 0)
-        {
-            QFont font = number->font();
-            font.setPointSizeF(_numberFontSize);
-            number->setFont(font);
-        }
-        QRectF textRect = number->boundingRect();
+        const qreal baseFontSize = (_numberFontSize > 0 ? _numberFontSize : 10.0);
 
+        QFont font = number->font();
+        font.setPixelSize(qRound(baseFontSize));
+        number->setFont(font);
+
+        QRectF textRect = number->boundingRect();
         QPointF finalNumberPos = circlePos + QPointF(8.0, -8.0);
 
         if (scene() && !scene()->views().isEmpty())
