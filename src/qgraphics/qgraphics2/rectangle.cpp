@@ -526,7 +526,7 @@ void Rectangle::updatePointNumbers()
         if (_numberFontSize > 0)
         {
             QFont f = num->font();
-            f.setPointSizeF(_numberFontSize);
+            f.setPixelSize(qRound(baseFontSize));
             num->setFont(f);
         }
 
