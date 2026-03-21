@@ -827,10 +827,10 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
 
         // Находим полилинию под курсором (самую верхнюю)
-        Polyline* poly = nullptr;
+        qgraph::Polyline* poly = nullptr;
         const auto itemsAtPos = graphView->scene()->items(scenePos);
         for (QGraphicsItem* it : itemsAtPos) {
-            if (auto* p = dynamic_cast<Polyline*>(it)) { poly = p; break; }
+            if (auto* p = dynamic_cast<qgraph::Polyline*>(it)) { poly = p; break; }
         }
         if (!poly) return;
 
