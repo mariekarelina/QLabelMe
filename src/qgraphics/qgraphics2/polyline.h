@@ -46,15 +46,17 @@ public:
 
     enum class CloseMode
     {
-        DoubleClick,      // 1) По двойному клику ЛКМ
-        SingleClickOnFirstPoint,    // 2) По одинарному клику ЛКМ на нулевой точке
-        CtrlModifier,               // 3) Через Ctrl
-        KeyC                        // 4) Нажатие 'C'
+        DoubleClick,              // 1) По двойному клику ЛКМ
+        SingleClickOnFirstPoint,  // 2) По одинарному клику ЛКМ на нулевой точке
+        CtrlModifier,             // 3) Через Ctrl
+        KeyC                      // 4) Нажатие 'C'
     };
 
-    bool isClosed() const { return _isClosed; }
-    static void setGlobalCloseMode(CloseMode m) { s_closeMode = m; }
-    static CloseMode globalCloseMode() { return s_closeMode; }
+
+    bool isClosed() const {return _isClosed;}
+
+    static CloseMode globalCloseMode() {return _closeMode;}
+    static void setGlobalCloseMode(CloseMode m) {_closeMode = m;}
 
     QVector<QPointF> points() const;
     void updatePointNumbers();
@@ -135,7 +137,7 @@ public:
     float _frameScale = 1.0;
     const qreal _minSegmentLength = 10.0; // Минимальная длина отрезка
 
-    static CloseMode s_closeMode;
+    static CloseMode _closeMode;
 
     QColor _highlightColor = Qt::transparent; // Цвет выделения
     bool _hovered = false;
