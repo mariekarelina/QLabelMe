@@ -1021,74 +1021,126 @@ void Polyline::updatePointNumbers()
     if (!(_globalPointNumbersVisible || _pointNumbersVisible))
         return;
 
+    // Расчет ориентации
+    double area2 = 0.0;
+    const bool closedPolygon = (_isClosed && _circles.size() >= 3);
+    if (closedPolygon)
+    {
+        for (int i = 0; i < _circles.size(); ++i)
+        {
+            const QPointF a = _circles[i]->pos();
+            const QPointF b = _circles[(i + 1) % _circles.size()]->pos();
+            area2 += a.x() * b.y() - b.x() * a.y();
+        }
+    }
+
     for (int i = 0; i < _circles.size(); ++i)
     {
         QPointF circlePos = _circles[i]->pos();
         QPointF direction(0, -1); // Направление по умолчанию (вверх)
 
-        // Вычисляем нормаль к сегменту
         if (_circles.size() > 1)
         {
-            if (i == 0) // Первая точка
+            if (closedPolygon)
             {
-                QPointF nextPos = _circles[1]->pos();
-                QPointF segment = nextPos - circlePos;
+                const int prevIdx = (i - 1 + _circles.size()) % _circles.size();
+                const int nextIdx = (i + 1) % _circles.size();
 
-                if (segment.manhattanLength() > 0)
-                {
-                    // Вычисляем нормаль (перпендикуляр к сегменту)
-                    direction = QPointF(-segment.y(), segment.x());
-                    direction = direction / QLineF(0, 0, direction.x(), direction.y()).length();
-
-                    // Проверяем оба направления и выбираем то, которое не пересекает полилинию
-                    direction = findBestDirection(circlePos, direction, i);
-                }
-            }
-            else if (i == _circles.size() - 1) // Последняя точка
-            {
-                QPointF prevPos = _circles[i-1]->pos();
-                QPointF segment = circlePos - prevPos;
-
-                if (segment.manhattanLength() > 0)
-                {
-                    // Вычисляем нормаль (перпендикуляр к сегменту)
-                    direction = QPointF(-segment.y(), segment.x());
-                    direction = direction / QLineF(0, 0, direction.x(), direction.y()).length();
-
-                    // Проверяем оба направления и выбираем то, которое не пересекает полилинию
-                    direction = findBestDirection(circlePos, direction, i);
-                }
-            }
-            else // Промежуточные точки
-            {
-                QPointF prevPos = _circles[i-1]->pos();
-                QPointF nextPos = _circles[i+1]->pos();
+                QPointF prevPos = _circles[prevIdx]->pos();
+                QPointF nextPos = _circles[nextIdx]->pos();
 
                 QPointF inSegment = circlePos - prevPos;
                 QPointF outSegment = nextPos - circlePos;
 
-                if (inSegment.manhattanLength() > 0 && outSegment.manhattanLength() > 0)
+                auto normalizeVec = [](const QPointF& v) -> QPointF
                 {
-                    // Нормализуем векторы
-                    inSegment = inSegment / QLineF(0, 0, inSegment.x(), inSegment.y()).length();
-                    outSegment = outSegment / QLineF(0, 0, outSegment.x(), outSegment.y()).length();
+                    const qreal len = QLineF(QPointF(0, 0), v).length();
+                    if (len <= 0.000001)
+                        return QPointF(0, 0);
+                    return v / len;
+                };
 
-                    // Вычисляем биссектрису угла
-                    QPointF bisector = inSegment + outSegment;
+                inSegment = normalizeVec(inSegment);
+                outSegment = normalizeVec(outSegment);
 
-                    if (bisector.manhattanLength() > 0)
+                const bool isClockwiseNow = (area2 > 0.0);
+
+                auto outwardNormal = [isClockwiseNow](const QPointF& seg) -> QPointF
+                {
+                    // area2 > 0 -> обход по часовой
+                    // area2 < 0  -> обход против часовой
+                    return isClockwiseNow
+                        ? QPointF(seg.y(), -seg.x())   // правая нормаль
+                        : QPointF(-seg.y(), seg.x());  // левая нормаль
+                };
+
+                QPointF n1 = outwardNormal(inSegment);
+                QPointF n2 = outwardNormal(outSegment);
+
+                direction = n1 + n2;
+
+                if (QLineF(QPointF(0, 0), direction).length() <= 0.000001)
+                {
+                    direction = (QLineF(QPointF(0, 0), n2).length() > 0.000001) ? n2 : n1;
+                }
+
+                const qreal dirLen = QLineF(QPointF(0, 0), direction).length();
+                if (dirLen > 0.000001)
+                    direction /= dirLen;
+                else
+                    direction = QPointF(0, -1);
+            }
+            else
+            {
+                if (i == 0) // Первая точка
+                {
+                    QPointF nextPos = _circles[1]->pos();
+                    QPointF segment = nextPos - circlePos;
+
+                    if (segment.manhattanLength() > 0)
                     {
-                        // Перпендикуляр к биссектрисе
-                        direction = QPointF(-bisector.y(), bisector.x());
+                        direction = QPointF(-segment.y(), segment.x());
                         direction = direction / QLineF(0, 0, direction.x(), direction.y()).length();
-
-                        // Проверяем оба направления и выбираем то, которое не пересекает полилинию
                         direction = findBestDirection(circlePos, direction, i);
+                    }
+                }
+                else if (i == _circles.size() - 1) // Последняя точка
+                {
+                    QPointF prevPos = _circles[i - 1]->pos();
+                    QPointF segment = circlePos - prevPos;
+
+                    if (segment.manhattanLength() > 0)
+                    {
+                        direction = QPointF(-segment.y(), segment.x());
+                        direction = direction / QLineF(0, 0, direction.x(), direction.y()).length();
+                        direction = findBestDirection(circlePos, direction, i);
+                    }
+                }
+                else // Промежуточные точки
+                {
+                    QPointF prevPos = _circles[i - 1]->pos();
+                    QPointF nextPos = _circles[i + 1]->pos();
+
+                    QPointF inSegment = circlePos - prevPos;
+                    QPointF outSegment = nextPos - circlePos;
+
+                    if (inSegment.manhattanLength() > 0 && outSegment.manhattanLength() > 0)
+                    {
+                        inSegment = inSegment / QLineF(0, 0, inSegment.x(), inSegment.y()).length();
+                        outSegment = outSegment / QLineF(0, 0, outSegment.x(), outSegment.y()).length();
+
+                        QPointF bisector = inSegment + outSegment;
+
+                        if (bisector.manhattanLength() > 0)
+                        {
+                            direction = QPointF(-bisector.y(), bisector.x());
+                            direction = direction / QLineF(0, 0, direction.x(), direction.y()).length();
+                            direction = findBestDirection(circlePos, direction, i);
+                        }
                     }
                 }
             }
         }
-
         qreal handleRadiusScene = 5.0;
         if (!_circles.isEmpty() && _circles[i])
         {
