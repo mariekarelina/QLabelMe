@@ -48,6 +48,7 @@ qbs build \
     --command-echo-mode command-line \
     --no-install \
     qbs.buildVariant:$build_mode \
+    project.warnAsError:true \
     config:$build_config \
     profile:qt5win
 
