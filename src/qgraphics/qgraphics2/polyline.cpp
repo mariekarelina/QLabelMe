@@ -51,13 +51,7 @@ Polyline::Polyline(QGraphicsScene* scene, const QPointF& scenePos)
     updatePath(); // Обновляем начальный путь
 }
 
-Polyline::~Polyline()
-{
-    qDeleteAll(pointNumbers);    // Удаляем номера
-    qDeleteAll(numberBackgrounds); // Удаляем фоны
-    pointNumbers.clear();
-    numberBackgrounds.clear();
-}
+Polyline::~Polyline() = default;
 
 void Polyline::setFrameScale(float newScale)
 {
@@ -970,11 +964,6 @@ void Polyline::replaceScenePoints(const QVector<QPointF>& scenePts, bool closed)
     }
     _circles.clear();
 
-    qDeleteAll(pointNumbers);
-    qDeleteAll(numberBackgrounds);
-    pointNumbers.clear();
-    numberBackgrounds.clear();
-
     if (QGraphicsScene* sc = scene())
     {
         for (const QPointF& p : scenePts)
@@ -999,26 +988,25 @@ void Polyline::updateClosedState()
 
 void Polyline::updatePointNumbersAfterReorder()
 {
-    // Удаляем старые номера и фоны
-    qDeleteAll(pointNumbers);
-    qDeleteAll(numberBackgrounds);
-    pointNumbers.clear();
-    numberBackgrounds.clear();
-
-    // Создаем новые номера с обновленными индексами
+    // Обновляем номера с обновленными индексами
     updatePointNumbers();
 }
 
 void Polyline::updatePointNumbers()
 {
-    // Удаляем старые номера и фоны
-    qDeleteAll(pointNumbers);
-    qDeleteAll(numberBackgrounds);
-    pointNumbers.clear();
-    numberBackgrounds.clear();
+    const bool visibleNumbers = (_globalPointNumbersVisible || _pointNumbersVisible);
 
-    if (!(_globalPointNumbersVisible || _pointNumbersVisible))
+    // Если нумерация выключена - ничего не удаляем, просто скрываем
+    if (!visibleNumbers)
+    {
+        for (auto* n : pointNumbers)
+            if (n) n->setVisible(false);
+
+        for (auto* bg : numberBackgrounds)
+            if (bg) bg->setVisible(false);
+
         return;
+    }
 
     // Расчет ориентации
     double area2 = 0.0;
@@ -1033,10 +1021,46 @@ void Polyline::updatePointNumbers()
         }
     }
 
+    // Доращиваем массивы до нужного размера, но не пересоздаем все заново
+    while (pointNumbers.size() < _circles.size())
+    {
+        auto* number = new QGraphicsSimpleTextItem(this);
+        number->setZValue(1001);
+        number->setPen(Qt::NoPen);
+        number->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
+        number->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+        number->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
+        number->setFlag(QGraphicsItem::ItemIsSelectable, false);
+        number->setFlag(QGraphicsItem::ItemIsMovable, false);
+        number->setFlag(QGraphicsItem::ItemIsFocusable, false);
+        pointNumbers.append(number);
+
+        auto* bg = new QGraphicsRectItem(this);
+        bg->setPen(Qt::NoPen);
+        bg->setZValue(1000);
+        bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
+        bg->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+        bg->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
+        bg->setFlag(QGraphicsItem::ItemIsSelectable, false);
+        bg->setFlag(QGraphicsItem::ItemIsMovable, false);
+        bg->setFlag(QGraphicsItem::ItemIsFocusable, false);
+        numberBackgrounds.append(bg);
+    }
+
+    // Лишние элементы не удаляем, а просто скрываем
+    for (int i = _circles.size(); i < pointNumbers.size(); ++i)
+    {
+        if (pointNumbers[i]) pointNumbers[i]->setVisible(false);
+    }
+    for (int i = _circles.size(); i < numberBackgrounds.size(); ++i)
+    {
+        if (numberBackgrounds[i]) numberBackgrounds[i]->setVisible(false);
+    }
+
     for (int i = 0; i < _circles.size(); ++i)
     {
         QPointF circlePos = _circles[i]->pos();
-        QPointF direction(0, -1); // Направление по умолчанию (вверх)
+        QPointF direction(0, -1);
 
         if (_circles.size() > 1)
         {
@@ -1066,11 +1090,9 @@ void Polyline::updatePointNumbers()
 
                 auto outwardNormal = [isClockwiseNow](const QPointF& seg) -> QPointF
                 {
-                    // area2 > 0 -> обход по часовой
-                    // area2 < 0  -> обход против часовой
                     return isClockwiseNow
-                        ? QPointF(seg.y(), -seg.x())   // правая нормаль
-                        : QPointF(-seg.y(), seg.x());  // левая нормаль
+                        ? QPointF(seg.y(), -seg.x())
+                        : QPointF(-seg.y(), seg.x());
                 };
 
                 QPointF n1 = outwardNormal(inSegment);
@@ -1079,9 +1101,7 @@ void Polyline::updatePointNumbers()
                 direction = n1 + n2;
 
                 if (QLineF(QPointF(0, 0), direction).length() <= 0.000001)
-                {
                     direction = (QLineF(QPointF(0, 0), n2).length() > 0.000001) ? n2 : n1;
-                }
 
                 const qreal dirLen = QLineF(QPointF(0, 0), direction).length();
                 if (dirLen > 0.000001)
@@ -1091,7 +1111,7 @@ void Polyline::updatePointNumbers()
             }
             else
             {
-                if (i == 0) // Первая точка
+                if (i == 0)
                 {
                     QPointF nextPos = _circles[1]->pos();
                     QPointF segment = nextPos - circlePos;
@@ -1103,7 +1123,7 @@ void Polyline::updatePointNumbers()
                         direction = findBestDirection(circlePos, direction, i);
                     }
                 }
-                else if (i == _circles.size() - 1) // Последняя точка
+                else if (i == _circles.size() - 1)
                 {
                     QPointF prevPos = _circles[i - 1]->pos();
                     QPointF segment = circlePos - prevPos;
@@ -1115,7 +1135,7 @@ void Polyline::updatePointNumbers()
                         direction = findBestDirection(circlePos, direction, i);
                     }
                 }
-                else // Промежуточные точки
+                else
                 {
                     QPointF prevPos = _circles[i - 1]->pos();
                     QPointF nextPos = _circles[i + 1]->pos();
@@ -1140,25 +1160,20 @@ void Polyline::updatePointNumbers()
                 }
             }
         }
-        qreal handleRadiusScene = 5.0;
-        if (!_circles.isEmpty() && _circles[i])
-        {
-            handleRadiusScene = _circles[i]->rect().width() / 2.0;
-        }
 
-        // Создаем номер
-        QGraphicsSimpleTextItem* number = new QGraphicsSimpleTextItem(QString::number(i), this);
+        auto* number = pointNumbers[i];
+        auto* bg = numberBackgrounds[i];
+        if (!number || !bg)
+            continue;
+
+        number->setVisible(true);
+        bg->setVisible(true);
+
+        number->setText(QString::number(i));
         number->setBrush(_numberColor);
-        number->setZValue(1001);
-        number->setPen(Qt::NoPen);
-        number->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
-        number->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
-        number->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
-
-        const qreal baseFontSize = (_numberFontSize > 0 ? _numberFontSize : 10.0);
 
         QFont font = number->font();
-        font.setPixelSize(qRound(baseFontSize));
+        font.setPixelSize(qRound(_numberFontSize > 0 ? _numberFontSize : 10.0));
         number->setFont(font);
 
         QRectF textRect = number->boundingRect();
@@ -1172,14 +1187,9 @@ void Polyline::updatePointNumbers()
                 const QPointF handleCenterScene = _circles[i]->scenePos();
                 const QPointF handleCenterViewF = view->mapFromScene(handleCenterScene);
 
-                Q_UNUSED(handleCenterScene);
-                Q_UNUSED(handleRadiusScene);
-
                 qreal handleRadiusPx = 6.0;
                 if (_circles[i])
-                {
                     handleRadiusPx = qMax<qreal>(_circles[i]->boundingRect().width() / 2.0, 6.0);
-                }
 
                 const qreal dirX = std::abs(direction.x());
                 const qreal dirY = std::abs(direction.y());
@@ -1191,8 +1201,7 @@ void Polyline::updatePointNumbers()
                 const qreal gapPx = 6.0;
                 const qreal offsetPx = handleRadiusPx + textExtentPx + gapPx;
 
-                const QPointF numberCenterViewF =
-                        handleCenterViewF + direction * offsetPx;
+                const QPointF numberCenterViewF = handleCenterViewF + direction * offsetPx;
 
                 const QPointF topLeftViewF(
                         numberCenterViewF.x() - textRect.width()  / 2.0,
@@ -1206,28 +1215,12 @@ void Polyline::updatePointNumbers()
                 finalNumberPos = mapFromScene(topLeftScene);
             }
         }
+
         number->setPos(finalNumberPos);
 
-        // Создаем фон
-        QGraphicsRectItem* bg = new QGraphicsRectItem(textRect, this);
+        bg->setRect(textRect);
         bg->setPos(finalNumberPos);
         bg->setBrush(_numberBgColor);
-        bg->setPen(Qt::NoPen);
-        bg->setZValue(1000);
-        bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
-        bg->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
-        bg->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
-
-        // Запрещаем взаимодействие
-        number->setFlag(QGraphicsItem::ItemIsSelectable, false);
-        number->setFlag(QGraphicsItem::ItemIsMovable, false);
-        number->setFlag(QGraphicsItem::ItemIsFocusable, false);
-        bg->setFlag(QGraphicsItem::ItemIsSelectable, false);
-        bg->setFlag(QGraphicsItem::ItemIsMovable, false);
-        bg->setFlag(QGraphicsItem::ItemIsFocusable, false);
-
-        pointNumbers.append(number);
-        numberBackgrounds.append(bg);
     }
 }
 
