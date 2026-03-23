@@ -67,12 +67,6 @@ Rectangle::~Rectangle()
     delete _circleTR;
     delete _circleBR;
     delete _circleBL;
-
-
-    qDeleteAll(pointNumbers); // Удаляем номера
-    qDeleteAll(numberBackgrounds); // Удаляем фоны
-    pointNumbers.clear();
-    numberBackgrounds.clear();
 }
 
 void Rectangle::setFrameScale(float newScale)
@@ -485,15 +479,47 @@ void Rectangle::updatePointNumbers()
     if (!scene())
         return;
 
-    qDeleteAll(pointNumbers);
-    qDeleteAll(numberBackgrounds);
-    pointNumbers.clear();
-    numberBackgrounds.clear();
+    const bool visibleNumbers = (_globalPointNumbersVisible || _pointNumbersVisible);
 
-    if (!(_globalPointNumbersVisible || _pointNumbersVisible))
+    if (!visibleNumbers)
+    {
+        for (auto* n : pointNumbers)
+            if (n) n->setVisible(false);
+
+        for (auto* bg : numberBackgrounds)
+            if (bg) bg->setVisible(false);
+
         return;
+    }
 
-    // Массив узлов
+    while (pointNumbers.size() < 4)
+    {
+        auto* num = new QGraphicsSimpleTextItem(this);
+        num->setZValue(1001);
+        num->setPen(Qt::NoPen);
+        num->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+        num->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
+        num->setFlag(QGraphicsItem::ItemIsSelectable, false);
+        num->setFlag(QGraphicsItem::ItemIsMovable, false);
+        num->setFlag(QGraphicsItem::ItemIsFocusable, false);
+        pointNumbers.append(num);
+
+        auto* bg = new QGraphicsRectItem(this);
+        bg->setPen(Qt::NoPen);
+        bg->setZValue(1000);
+        bg->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+        bg->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
+        bg->setFlag(QGraphicsItem::ItemIsSelectable, false);
+        bg->setFlag(QGraphicsItem::ItemIsMovable, false);
+        bg->setFlag(QGraphicsItem::ItemIsFocusable, false);
+        numberBackgrounds.append(bg);
+    }
+
+    for (auto* n : pointNumbers)
+        if (n) n->setVisible(true);
+    for (auto* bg : numberBackgrounds)
+        if (bg) bg->setVisible(true);
+
     DragCircle* circles[4] = { _circleTL, _circleTR, _circleBR, _circleBL };
 
     auto centerOf = [](DragCircle* c) -> QPointF {
@@ -510,6 +536,7 @@ void Rectangle::updatePointNumbers()
 
     const qreal baseFontSize = (_numberFontSize > 0 ? _numberFontSize : 10.0);
     const qreal margin = baseFontSize * 0.25;
+
     for (int i = 0; i < 4; ++i)
     {
         if (!circles[i])
@@ -517,18 +544,19 @@ void Rectangle::updatePointNumbers()
 
         int idx = (i + _numberingOffset) % 4;
 
-        auto* num = new QGraphicsSimpleTextItem(QString::number(idx), this);
-        num->setBrush(_numberColor);
-        num->setPen(Qt::NoPen);
-        num->setZValue(1001);
-        num->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+        auto* num = pointNumbers[i];
+        auto* bg = numberBackgrounds[i];
+        if (!num || !bg)
+            continue;
 
-        if (_numberFontSize > 0)
-        {
-            QFont f = num->font();
-            f.setPixelSize(qRound(baseFontSize));
-            num->setFont(f);
-        }
+        num->setText(QString::number(idx));
+        num->setBrush(_numberColor);
+        num->setVisible(true);
+        bg->setVisible(true);
+
+        QFont f = num->font();
+        f.setPixelSize(qRound(baseFontSize));
+        num->setFont(f);
 
         const QRectF textRect = num->boundingRect();
         QPointF finalNumberPos = pts[i] + QPointF(8.0, -8.0);
@@ -546,11 +574,11 @@ void Rectangle::updatePointNumbers()
                 QPointF direction;
                 switch (i)
                 {
-                case 0: direction = QPointF(-1.0, 0.0); break;
-                case 1: direction = QPointF( 1.0, 0.0); break;
-                case 2: direction = QPointF( 1.0, 0.0); break;
-                case 3: direction = QPointF(-1.0, 0.0); break;
-                default: direction = QPointF(1.0, 0.0); break;
+                    case 0: direction = QPointF(-1.0, 0.0); break;
+                    case 1: direction = QPointF( 1.0, 0.0); break;
+                    case 2: direction = QPointF( 1.0, 0.0); break;
+                    case 3: direction = QPointF(-1.0, 0.0); break;
+                    default: direction = QPointF(1.0, 0.0); break;
                 }
 
                 const qreal dirX = std::abs(direction.x());
@@ -563,8 +591,7 @@ void Rectangle::updatePointNumbers()
                 const qreal gapPx = qMax<qreal>(margin, 3.0);
                 const qreal offsetPx = handleRadiusPx + textExtentPx + gapPx;
 
-                const QPointF numberCenterViewF =
-                        handleCenterViewF + direction * offsetPx;
+                const QPointF numberCenterViewF = handleCenterViewF + direction * offsetPx;
 
                 const QPointF topLeftViewF(
                         numberCenterViewF.x() - textRect.width()  / 2.0,
@@ -581,15 +608,9 @@ void Rectangle::updatePointNumbers()
 
         num->setPos(finalNumberPos);
 
-        auto* bg = new QGraphicsRectItem(textRect, this);
+        bg->setRect(textRect);
         bg->setPos(finalNumberPos);
         bg->setBrush(_numberBgColor);
-        bg->setPen(Qt::NoPen);
-        bg->setZValue(1000);
-        bg->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
-
-        pointNumbers.append(num);
-        numberBackgrounds.append(bg);
     }
 }
 

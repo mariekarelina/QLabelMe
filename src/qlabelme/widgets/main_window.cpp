@@ -174,8 +174,10 @@ MainWindow::MainWindow(QWidget *parent) :
 
     //ui->menuBar->setAttribute(Qt::WA_TransparentForMouseEvents, false);
 
-    ui->graphView->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
-    ui->graphView->setCacheMode(QGraphicsView::CacheNone);
+    // ui->graphView->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+    // ui->graphView->setCacheMode(QGraphicsView::CacheNone);
+    ui->graphView->setViewportUpdateMode(QGraphicsView::MinimalViewportUpdate);
+    ui->graphView->setCacheMode(QGraphicsView::CacheBackground);
 
     // ui->toolBar->setAllowedAreas(Qt::TopToolBarArea);
     // ui->toolBar->setMovable(false);
@@ -1283,11 +1285,11 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
 void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
 {
-    auto isAnyDrawingNow = [&]() -> bool {
-        return _isInDrawingMode
-            || _isDrawingPolyline || _isDrawingLine || _isDrawingRectangle || _isDrawingCircle || _isDrawingPoint
-            || _drawingPolyline  || _drawingLine  || _drawingRectangle  || _drawingCircle  || _drawingPoint;
-    };
+    // auto isAnyDrawingNow = [&]() -> bool {
+    //     return _isInDrawingMode
+    //         || _isDrawingPolyline || _isDrawingLine || _isDrawingRectangle || _isDrawingCircle || _isDrawingPoint
+    //         || _drawingPolyline  || _drawingLine  || _drawingRectangle  || _drawingCircle  || _drawingPoint;
+    // };
 
     // Если в рисовании Line/Polyline ЛКМ уехала дальше порога
     if (_pendingDrawTool != PendingDrawTool::None
@@ -1418,71 +1420,40 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
 
     if (mouseEvent->buttons() & Qt::LeftButton)
     {
-        QPointF delta = graphView->mapToScene(mouseEvent->pos()) -
-                        graphView->mapToScene(_lastMousePos);
+        // QPointF delta = graphView->mapToScene(mouseEvent->pos()) -
+        //                 graphView->mapToScene(_lastMousePos);
 
-        // Shift-перетаскивание только фото
-        if (_shiftImageDragging)
+        // // Shift-перетаскивание только фото
+        // if (_shiftImageDragging)
+        // {
+        //     if (_videoRect)
+        //         _videoRect->moveBy(delta.x(), delta.y());
+
+        //     updateAllPointNumbers();
+        //     _scene->update();
+        //     ui->graphView->viewport()->update();
+
+        //     _lastMousePos = mouseEvent->pos();
+        //     mouseEvent->accept();
+        //     return; // чтобы не сработал _isDraggingImage ниже
+        // }
+        if (_isDraggingImage)
         {
-            if (_videoRect)
-                _videoRect->moveBy(delta.x(), delta.y());
+            const QPoint deltaView = mouseEvent->pos() - _lastMousePos;
 
-            updateAllPointNumbers();
-            _scene->update();
-            ui->graphView->viewport()->update();
+            qreal sx = graphView->transform().m11();
+            qreal sy = graphView->transform().m22();
+
+            if (std::abs(sx) < 0.000001) sx = 1.0;
+            if (std::abs(sy) < 0.000001) sy = 1.0;
+
+            graphView->setTransformationAnchor(QGraphicsView::NoAnchor);
+            graphView->translate(deltaView.x() / sx, deltaView.y() / sy);
+            graphView->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
 
             _lastMousePos = mouseEvent->pos();
             mouseEvent->accept();
-            return; // чтобы не сработал _isDraggingImage ниже
-        }
-
-        if (_isDraggingImage)
-        {
-            if (_videoRect)
-                _videoRect->moveBy(delta.x(), delta.y());
-
-            // Перемещаем все фигуры вместе с фото
-            for (QGraphicsItem* item : _scene->items())
-            {
-                if (!item)
-                    continue;
-
-                if (item == _videoRect)
-                    continue;
-
-                if (dynamic_cast<qgraph::DragCircle*>(item))
-                    continue;
-
-                if (item->parentItem() != nullptr)
-                    continue;
-
-                item->moveBy(delta.x(), delta.y());
-
-                if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
-                    circle->updateHandlePosition();
-                else if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
-                    rect->updateHandlePosition();
-                else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-                    polyline->updateHandlePosition();
-                else if (auto* line = dynamic_cast<qgraph::Line*>(item))
-                    line->updateHandlePosition();
-            }
-            updateAllPointNumbers();
-            _scene->update();
-            ui->graphView->viewport()->update();
-            if (isAnyDrawingNow())
-            {
-                if (_isAllMoved)
-                {
-                    _isAllMoved = false;
-                    updateModeLabel();
-                }
-            }
-            else
-            {
-                _isAllMoved = true;
-                updateModeLabel();
-            }
+            return;
         }
         else if (_draggingItem && (mouseEvent->modifiers() & Qt::ShiftModifier))
         {
@@ -1509,7 +1480,6 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
         _lastMousePos = mouseEvent->pos();
     }
     _lastMousePos = mouseEvent->pos();
-    updateAllPointNumbers();
 }
 
 void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
@@ -1574,20 +1544,20 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         return;
     }
 
-    if (_shiftImageDragging && mouseEvent->button() == Qt::LeftButton)
-    {
-        _shiftImageDragging = false;
-        updateModeLabel();
-        if (_videoRect)
-        {
-            QPointF after = _videoRect->pos();
-            pushMoveImageCommand(_shiftImageBeforePos,
-                                 after,
-                                 tr("Перемещение изображения"));
-        }
-        updateModeLabel();
-        mouseEvent->accept();
-    }
+    // if (_shiftImageDragging && mouseEvent->button() == Qt::LeftButton)
+    // {
+    //     _shiftImageDragging = false;
+    //     updateModeLabel();
+    //     if (_videoRect)
+    //     {
+    //         QPointF after = _videoRect->pos();
+    //         pushMoveImageCommand(_shiftImageBeforePos,
+    //                              after,
+    //                              tr("Перемещение изображения"));
+    //     }
+    //     updateModeLabel();
+    //     mouseEvent->accept();
+    // }
 
     if (mouseEvent->button() == Qt::LeftButton)
     {
@@ -2632,6 +2602,16 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         }
         case QEvent::MouseMove:
         {
+            if (_movingItem || _moveIsGroup || _isDraggingImage)
+            {
+                if (_currentHoveredHandle && _currentHoveredHandle->isValid())
+                    _currentHoveredHandle->setHoverStyle(false);
+
+                _currentHoveredHandle = nullptr;
+                hideGhost();
+                break;
+            }
+
             auto* me = static_cast<QMouseEvent*>(event);
             const QPointF sp = ui->graphView->mapToScene(me->pos());
 
@@ -7524,11 +7504,11 @@ void MainWindow::updateModeLabel()
         _modeLabel->setText(tr("Режим: соединение линий"));
         return;
     }
-    if (_shiftImageDragging)
-    {
-        _modeLabel->setText(tr("Режим: сдвиг изображения"));
-        return;
-    }
+    // if (_shiftImageDragging)
+    // {
+    //     _modeLabel->setText(tr("Режим: сдвиг изображения"));
+    //     return;
+    // }
     if (_isDraggingImage)
     {
         _modeLabel->setText(_isAllMoved

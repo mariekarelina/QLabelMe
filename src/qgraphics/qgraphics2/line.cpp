@@ -49,13 +49,7 @@ Line::Line(QGraphicsScene* scene, const QPointF& scenePos)
     updatePath(); // Обновляем начальный путь
 }
 
-Line::~Line()
-{
-    qDeleteAll(pointNumbers); // Удаляем номера
-    qDeleteAll(numberBackgrounds); // Удаляем фоны
-    pointNumbers.clear();
-    numberBackgrounds.clear();
-}
+Line::~Line() = default;
 
 void Line::setFrameScale(float newScale)
 {
@@ -953,11 +947,6 @@ void Line::replaceScenePoints(const QVector<QPointF>& scenePts, bool closed)
     }
     _circles.clear();
 
-    qDeleteAll(pointNumbers);
-    qDeleteAll(numberBackgrounds);
-    pointNumbers.clear();
-    numberBackgrounds.clear();
-
     if (QGraphicsScene* sc = scene())
     {
         for (const QPointF& p : scenePts)
@@ -982,26 +971,60 @@ void Line::updateClosedState()
 
 void Line::updatePointNumbersAfterReorder()
 {
-    // Удаляем старые номера и фоны
-    qDeleteAll(pointNumbers);
-    qDeleteAll(numberBackgrounds);
-    pointNumbers.clear();
-    numberBackgrounds.clear();
-
-    // Создаем новые номера с обновленными индексами
+    // Обновляем номера с обновленными индексами
     updatePointNumbers();
 }
 
 void Line::updatePointNumbers()
 {
-    // Удаляем старые номера и фоны
-    qDeleteAll(pointNumbers);
-    qDeleteAll(numberBackgrounds);
-    pointNumbers.clear();
-    numberBackgrounds.clear();
+    const bool visibleNumbers = (_globalPointNumbersVisible || _pointNumbersVisible);
 
-    if (!(_globalPointNumbersVisible || _pointNumbersVisible))
+    if (!visibleNumbers)
+    {
+        for (auto* n : pointNumbers)
+            if (n) n->setVisible(false);
+
+        for (auto* bg : numberBackgrounds)
+            if (bg) bg->setVisible(false);
+
         return;
+    }
+
+    while (pointNumbers.size() < _circles.size())
+    {
+        auto* number = new QGraphicsSimpleTextItem(this);
+        number->setZValue(1001);
+        number->setPen(Qt::NoPen);
+        number->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
+        number->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+        number->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
+        number->setFlag(QGraphicsItem::ItemIsSelectable, false);
+        number->setFlag(QGraphicsItem::ItemIsMovable, false);
+        number->setFlag(QGraphicsItem::ItemIsFocusable, false);
+        pointNumbers.append(number);
+
+        auto* bg = new QGraphicsRectItem(this);
+        bg->setPen(Qt::NoPen);
+        bg->setZValue(1000);
+        bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
+        bg->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+        bg->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
+        bg->setFlag(QGraphicsItem::ItemIsSelectable, false);
+        bg->setFlag(QGraphicsItem::ItemIsMovable, false);
+        bg->setFlag(QGraphicsItem::ItemIsFocusable, false);
+        numberBackgrounds.append(bg);
+    }
+
+    for (int i = _circles.size(); i < pointNumbers.size(); ++i)
+    {
+        if (pointNumbers[i])
+            pointNumbers[i]->setVisible(false);
+    }
+    for (int i = _circles.size(); i < numberBackgrounds.size(); ++i)
+    {
+        if (numberBackgrounds[i])
+            numberBackgrounds[i]->setVisible(false);
+    }
 
     for (int i = 0; i < _circles.size(); ++i)
     {
@@ -1021,14 +1044,13 @@ void Line::updatePointNumbers()
                     // Вычисляем нормаль (перпендикуляр к сегменту)
                     direction = QPointF(-segment.y(), segment.x());
                     direction = direction / QLineF(0, 0, direction.x(), direction.y()).length();
-
                     // Проверяем оба направления и выбираем то, которое не пересекает полилинию
                     direction = findBestDirection(circlePos, direction, i);
                 }
             }
             else if (i == _circles.size() - 1) // Последняя точка
             {
-                QPointF prevPos = _circles[i-1]->pos();
+                QPointF prevPos = _circles[i - 1]->pos();
                 QPointF segment = circlePos - prevPos;
 
                 if (segment.manhattanLength() > 0)
@@ -1036,60 +1058,49 @@ void Line::updatePointNumbers()
                     // Вычисляем нормаль (перпендикуляр к сегменту)
                     direction = QPointF(-segment.y(), segment.x());
                     direction = direction / QLineF(0, 0, direction.x(), direction.y()).length();
-
                     // Проверяем оба направления и выбираем то, которое не пересекает полилинию
                     direction = findBestDirection(circlePos, direction, i);
                 }
             }
             else // Промежуточные точки
             {
-                QPointF prevPos = _circles[i-1]->pos();
-                QPointF nextPos = _circles[i+1]->pos();
+                QPointF prevPos = _circles[i - 1]->pos();
+                QPointF nextPos = _circles[i + 1]->pos();
 
                 QPointF inSegment = circlePos - prevPos;
                 QPointF outSegment = nextPos - circlePos;
 
                 if (inSegment.manhattanLength() > 0 && outSegment.manhattanLength() > 0)
                 {
-                    // Нормализуем векторы
                     inSegment = inSegment / QLineF(0, 0, inSegment.x(), inSegment.y()).length();
                     outSegment = outSegment / QLineF(0, 0, outSegment.x(), outSegment.y()).length();
 
-                    // Вычисляем биссектрису угла
                     QPointF bisector = inSegment + outSegment;
 
                     if (bisector.manhattanLength() > 0)
                     {
-                        // Перпендикуляр к биссектрисе
                         direction = QPointF(-bisector.y(), bisector.x());
                         direction = direction / QLineF(0, 0, direction.x(), direction.y()).length();
-
-                        // Проверяем оба направления и выбираем то, которое не пересекает полилинию
                         direction = findBestDirection(circlePos, direction, i);
                     }
                 }
             }
         }
-        qreal handleRadiusScene = 5.0;
-        if (!_circles.isEmpty() && _circles[i])
-        {
-            handleRadiusScene = _circles[i]->rect().width() / 2.0;
-        }
 
-        // Создаем номер
+        auto* number = pointNumbers[i];
+        auto* bg = numberBackgrounds[i];
+        if (!number || !bg)
+            continue;
+
+        number->setVisible(true);
+        bg->setVisible(true);
+
         const int labelIndex = _numberingFromLast ? (_circles.size() - 1 - i) : i;
-        QGraphicsSimpleTextItem* number = new QGraphicsSimpleTextItem(QString::number(labelIndex), this);
+        number->setText(QString::number(labelIndex));
         number->setBrush(_numberColor);
-        number->setZValue(1001);
-        number->setPen(Qt::NoPen);
-        number->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
-        number->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
-        number->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
-
-        const qreal baseFontSize = (_numberFontSize > 0 ? _numberFontSize : 10.0);
 
         QFont font = number->font();
-        font.setPixelSize(qRound(baseFontSize));
+        font.setPixelSize(qRound(_numberFontSize > 0 ? _numberFontSize : 10.0));
         number->setFont(font);
 
         QRectF textRect = number->boundingRect();
@@ -1103,14 +1114,9 @@ void Line::updatePointNumbers()
                 const QPointF handleCenterScene = _circles[i]->scenePos();
                 const QPointF handleCenterViewF = view->mapFromScene(handleCenterScene);
 
-                Q_UNUSED(handleCenterScene);
-                Q_UNUSED(handleRadiusScene);
-
                 qreal handleRadiusPx = 6.0;
                 if (_circles[i])
-                {
                     handleRadiusPx = qMax<qreal>(_circles[i]->boundingRect().width() / 2.0, 6.0);
-                }
 
                 const qreal dirX = std::abs(direction.x());
                 const qreal dirY = std::abs(direction.y());
@@ -1122,8 +1128,7 @@ void Line::updatePointNumbers()
                 const qreal gapPx = 6.0;
                 const qreal offsetPx = handleRadiusPx + textExtentPx + gapPx;
 
-                const QPointF numberCenterViewF =
-                        handleCenterViewF + direction * offsetPx;
+                const QPointF numberCenterViewF = handleCenterViewF + direction * offsetPx;
 
                 const QPointF topLeftViewF(
                         numberCenterViewF.x() - textRect.width()  / 2.0,
@@ -1140,26 +1145,9 @@ void Line::updatePointNumbers()
 
         number->setPos(finalNumberPos);
 
-        // Создаем фон
-        QGraphicsRectItem* bg = new QGraphicsRectItem(textRect, this);
+        bg->setRect(textRect);
         bg->setPos(finalNumberPos);
         bg->setBrush(_numberBgColor);
-        bg->setPen(Qt::NoPen);
-        bg->setZValue(1000);
-        bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
-        bg->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
-        bg->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
-
-        // Запрещаем взаимодействие
-        number->setFlag(QGraphicsItem::ItemIsSelectable, false);
-        number->setFlag(QGraphicsItem::ItemIsMovable, false);
-        number->setFlag(QGraphicsItem::ItemIsFocusable, false);
-        bg->setFlag(QGraphicsItem::ItemIsSelectable, false);
-        bg->setFlag(QGraphicsItem::ItemIsMovable, false);
-        bg->setFlag(QGraphicsItem::ItemIsFocusable, false);
-
-        pointNumbers.append(number);
-        numberBackgrounds.append(bg);
     }
 }
 
@@ -1238,24 +1226,14 @@ int Line::countIntersections(const QLineF& testLine, int excludePointIndex)
             }
         }
     }
-
     return intersectionCount;
 }
 
 void Line::applyNumberStyle(qreal fontSize, const QColor& textColor, const QColor& bgColor)
 {
-    _numberFontSize = fontSize; // Сохраняем размер шрифта
-    _numberColor = textColor;   // Сохраняем цвет текста
-    _numberBgColor = bgColor;   // Сохраняем цвет фона
-
-    // Сохраняем текущие позиции кругов
-    QVector<QPointF> circlePositions;
-    for (DragCircle* circle : _circles)
-    {
-        circlePositions.append(circle->pos());
-    }
-
-    // Полностью пересоздаем номера с новыми цветами
+    _numberFontSize = fontSize;
+    _numberColor = textColor;
+    _numberBgColor = bgColor;
     updatePointNumbers();
 }
 
