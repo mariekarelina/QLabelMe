@@ -4394,6 +4394,8 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
             if (pointsArray.isEmpty())
                 continue;
 
+            const bool closed = shapeObj["closed"].toBool(false);
+
             QPointF firstPoint(pointsArray[0].toObject()["x"].toDouble(),
                                pointsArray[0].toObject()["y"].toDouble());
 
@@ -4405,6 +4407,10 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
                               pointsArray[i].toObject()["y"].toDouble());
                 polyline->addPoint(point, scene);
             }
+
+            if (closed)
+                polyline->closePolyline();
+
             polyline->setData(0, className);
             apply_LineWidth_ToItem(polyline);
             apply_PointSize_ToItem(polyline);
@@ -4813,6 +4819,7 @@ QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
         else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             shapeObj["type"] = "polyline";
+            shapeObj["closed"] = polyline->isClosed();
             QJsonArray pointsArray;
 
             // Получаем точки полилинии через метод points()
@@ -4915,6 +4922,7 @@ QJsonObject MainWindow::serializeSelectedItemsToJson(QGraphicsScene* scene)
         else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             shapeObj["type"] = "polyline";
+            shapeObj["closed"] = polyline->isClosed();
             QJsonArray pointsArray;
 
             for (const QPointF& point : polyline->points())
@@ -4999,6 +5007,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     QList<QGraphicsItem*> beforeItems = scene->items();
 
     deserializeJsonToScene(scene, _shapesClipboard);
+    //deserializeJsonToScene(scene, json);
     updatePolygonListForCurrentScene();
 
     // Собираем список новых фигур (тех, которых не было в beforeItems)
