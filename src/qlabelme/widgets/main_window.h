@@ -324,6 +324,7 @@ private:
     void linkSceneItemToList(QGraphicsItem* sceneItem);
     void linkSceneItemToList(QGraphicsItem* sceneItem, int row);
     void renumberPolygonList();
+    void renumberPolygonListTextOnly();
 
     void showPolygonListContextMenu(const QPoint &pos);
 
