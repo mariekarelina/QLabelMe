@@ -265,19 +265,18 @@ void Rectangle::keyPressEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Delete)
     {
-        auto scene = this->scene();
-        if (scene)
+        auto sc = this->scene();
+        if (!sc)
+            return;
+
+        if (QObject* receiver = sc->property("shapeDeleteReceiver").value<QObject*>())
         {
-            if (QObject* receiver = scene->property("shapeDeleteReceiver").value<QObject*>())
-            {
-                QMetaObject::invokeMethod(receiver,
-                                          "onSceneItemRemoved",
-                                          Qt::DirectConnection,
-                                          Q_ARG(QGraphicsItem*, static_cast<QGraphicsItem*>(this)));
-            }
-            scene->removeItem(this);
-            delete this; // Удаляем объект
+            QMetaObject::invokeMethod(receiver,
+                                      "on_actDelete_triggered",
+                                      Qt::DirectConnection);
         }
+        event->accept();
+        return;
     }
     else if (event->key() == Qt::Key_E)
     {
@@ -307,6 +306,21 @@ void Rectangle::keyPressEvent(QKeyEvent* event)
 
 void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
 {
+    if (!isSelected())
+    {
+        if (scene())
+        {
+            const auto selected = scene()->selectedItems();
+            for (QGraphicsItem* it : selected)
+            {
+                if (it && it != this)
+                    it->setSelected(false);
+            }
+        }
+        setSelected(true);
+    }
+    setFocus();
+
     QMenu menu;
 
     QAction* cwAction = menu.addAction("Сдвиг по часовой (R)");
@@ -341,18 +355,14 @@ void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
 
     QObject::connect(deleteAction, &QAction::triggered, [this]() {
         auto sc = this->scene();
-        if (sc)
-        {
-            if (QObject* receiver = sc->property("shapeDeleteReceiver").value<QObject*>())
-            {
-                QMetaObject::invokeMethod(receiver,
-                                          "onSceneItemRemoved",
-                                          Qt::DirectConnection,
-                                          Q_ARG(QGraphicsItem*, static_cast<QGraphicsItem*>(this)));
-            }
+        if (!sc)
+            return;
 
-            sc->removeItem(this);
-            delete this;
+        if (QObject* receiver = sc->property("shapeDeleteReceiver").value<QObject*>())
+        {
+            QMetaObject::invokeMethod(receiver,
+                                      "on_actDelete_triggered",
+                                      Qt::DirectConnection);
         }
     });
 

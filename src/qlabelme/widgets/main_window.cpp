@@ -137,28 +137,28 @@ static bool sameGeometry(const ShapeBackup& a, const ShapeBackup& b)
 
     switch (a.kind)
     {
-    case ShapeKind::Rectangle:
-        return a.rect == b.rect && a.z == b.z && a.visible == b.visible && a.className == b.className;
+        case ShapeKind::Rectangle:
+            return a.rect == b.rect && a.visible == b.visible && a.className == b.className;
 
-    case ShapeKind::Circle:
-        return a.circleCenter == b.circleCenter
-            && a.circleRadius == b.circleRadius
-            && a.z == b.z && a.visible == b.visible && a.className == b.className;
+        case ShapeKind::Circle:
+            return a.circleCenter == b.circleCenter
+                && a.circleRadius == b.circleRadius
+                && a.visible == b.visible && a.className == b.className;
 
-    case ShapeKind::Polyline:
-        return a.points == b.points
-            && a.closed == b.closed
-            && a.z == b.z && a.visible == b.visible && a.className == b.className;
+        case ShapeKind::Polyline:
+            return a.points == b.points
+                && a.closed == b.closed
+                && a.visible == b.visible && a.className == b.className;
 
-    case ShapeKind::Line:
-        return a.points == b.points
-            && a.numberingFromLast == b.numberingFromLast
-            && a.z == b.z && a.visible == b.visible && a.className == b.className;
+        case ShapeKind::Line:
+            return a.points == b.points
+                && a.numberingFromLast == b.numberingFromLast
+                && a.visible == b.visible && a.className == b.className;
 
 
-    case ShapeKind::Point:
-        return a.pointCenter == b.pointCenter
-            && a.z == b.z && a.visible == b.visible && a.className == b.className;
+        case ShapeKind::Point:
+            return a.pointCenter == b.pointCenter
+                && a.visible == b.visible && a.className == b.className;
     }
     return false;
 }
@@ -174,8 +174,6 @@ MainWindow::MainWindow(QWidget *parent) :
 
     //ui->menuBar->setAttribute(Qt::WA_TransparentForMouseEvents, false);
 
-    // ui->graphView->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
-    // ui->graphView->setCacheMode(QGraphicsView::CacheNone);
     ui->graphView->setViewportUpdateMode(QGraphicsView::MinimalViewportUpdate);
     ui->graphView->setCacheMode(QGraphicsView::CacheBackground);
 
@@ -2223,36 +2221,6 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         return;
     }
 
-
-   /* Document::Ptr doc = currentDocument();
-    if (doc && mouseEvent->button() == Qt::LeftButton)
-    {
-        if (_isAllMoved)
-        {
-            _isAllMoved = false;
-            updateModeLabel();
-            return;
-        }
-        // Проверяем, были ли перемещены какие-либо фигуры
-        bool anyItemMoved = false;
-        for (QGraphicsItem* item : _scene->items())
-        {
-            if (item != _videoRect &&
-                !dynamic_cast<DragCircle*>(item) &&
-                item->flags() & QGraphicsItem::ItemIsMovable &&
-                item->pos() != QPointF(0, 0))
-            {
-                anyItemMoved = true;
-                break;
-            }
-        }
-
-        if (anyItemMoved && !doc->isModified)
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-    }*/
     if (mouseEvent->button() == Qt::LeftButton && _isAllMoved)
     {
         _isAllMoved = false;
@@ -3737,25 +3705,41 @@ void MainWindow::updatePolygonListForCurrentScene()
     ui->polygonList->clear();
 
     if (ui->coordinateList)
-            ui->coordinateList->clear();
+        ui->coordinateList->clear();
 
     if (!_scene)
         return;
 
+    QList<QGraphicsItem*> roots;
     for (QGraphicsItem* item : _scene->items())
     {
-        if (item != _videoRect &&
-            item != _tempRectItem &&
-            item != _tempCircleItem &&
-            item != _tempPolyline)
+        if (!item)
+            continue;
+
+        if (item == _videoRect ||
+            item == _tempRectItem ||
+            item == _tempCircleItem ||
+            item == _tempPolyline)
         {
-            QString className = item->data(0).toString();
-            if (!className.isEmpty())
-            {
-                linkSceneItemToList(item);
-            }
+            continue;
         }
+
+        if (item->parentItem() != nullptr)
+            continue;
+
+        const QString className = item->data(0).toString();
+        if (!className.isEmpty())
+            roots.append(item);
     }
+
+    std::sort(roots.begin(), roots.end(),
+              [](QGraphicsItem* a, QGraphicsItem* b)
+    {
+        return a->zValue() > b->zValue();
+    });
+
+    for (QGraphicsItem* item : roots)
+        linkSceneItemToList(item);
 }
 
 void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
@@ -3791,13 +3775,14 @@ void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
 
         if (li->data(Qt::UserRole).value<QGraphicsItem*>() == item)
         {
-            li->setText(newClass);
             foundInList = true;
             break;
         }
     }
     if (!foundInList)
         linkSceneItemToList(item);
+    else
+        renumberPolygonList();
 
     ShapeBackup after = makeBackupFromItem(item);
     if (!sameGeometry(before, after))
@@ -5706,12 +5691,55 @@ QListWidgetItem* MainWindow::findFileListItem(const QString& filePath)
 
 void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem)
 {
-    QString className = sceneItem->data(0).toString();
-    if (className.isEmpty()) return;
+    linkSceneItemToList(sceneItem, -1);
+}
 
-    QListWidgetItem* listItem = new QListWidgetItem(className);
+void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem, int row)
+{
+    if (!sceneItem)
+        return;
+
+    QString className = sceneItem->data(0).toString();
+    if (className.isEmpty())
+        return;
+
+    QListWidgetItem* listItem = new QListWidgetItem;
     listItem->setData(Qt::UserRole, QVariant::fromValue(sceneItem));
-    ui->polygonList->addItem(listItem);
+
+    if (row < 0 || row > ui->polygonList->count())
+        ui->polygonList->addItem(listItem);
+    else
+        ui->polygonList->insertItem(row, listItem);
+
+    renumberPolygonList();
+}
+
+void MainWindow::renumberPolygonList()
+{
+    if (!ui || !ui->polygonList)
+        return;
+
+    const int count = ui->polygonList->count();
+
+    for (int i = 0; i < count; ++i)
+    {
+        QListWidgetItem* item = ui->polygonList->item(i);
+        if (!item)
+            continue;
+
+        QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
+        if (!sceneItem)
+            continue;
+
+        const QString className = sceneItem->data(0).toString();
+        item->setText(QString("%1: %2").arg(i).arg(className));
+
+        // Порядок списка = порядок фигур
+        sceneItem->setZValue(count - i);
+    }
+
+    if (_scene)
+        _scene->update();
 }
 
 void MainWindow::showPolygonListContextMenu(const QPoint &pos)
@@ -5779,6 +5807,7 @@ void MainWindow::removePolygonItem(QGraphicsItem* item)
         if (listItem && listItem->data(Qt::UserRole).value<QGraphicsItem*>() == item)
         {
             delete ui->polygonList->takeItem(i);
+            renumberPolygonList();
             break;
         }
     }
@@ -6196,7 +6225,8 @@ void MainWindow::showGhostPreview(qgraph::DragCircle* target, const QPointF& sce
 
 void MainWindow::startGhostDrag(const QPointF& scenePos)
 {
-    if (!_ghostTarget || !_ghostHandle) return;
+    if (!_ghostTarget || !_ghostHandle)
+        return;
 
     _ghostActive = true;
     _ghostActive = true;
@@ -7173,56 +7203,13 @@ QVector<ShapeBackup> MainWindow::collectBackupsForItems(const QList<QListWidgetI
     {
         if (!li)
             continue;
+
         QGraphicsItem* gi = sceneItemFromListItem(li);
         if (!gi)
             continue;
 
-        ShapeBackup b{};
-
-        b.uid = gi->data(RoleUid).toULongLong();
-        if (b.uid == 0)
-            b.uid = ensureUid(gi);
-
-        b.className = gi->data(0).toString();
-        b.z = gi->zValue();
-        b.visible = gi->isVisible();
-
-        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(gi))
-        {
-            b.kind = ShapeKind::Rectangle;
-            b.rect = rect->sceneBoundingRect();
-        }
-        else if (auto* c = dynamic_cast<qgraph::Circle*>(gi))
-        {
-            b.kind = ShapeKind::Circle;
-            b.circleCenter = c->center();
-            b.circleRadius = c->realRadius();
-        }
-        else if (auto* pl = dynamic_cast<qgraph::Polyline*>(gi))
-        {
-            b.kind  = ShapeKind::Polyline;
-            b.points = pl->points();
-            b.closed = pl->isClosed();
-        }
-        else if (auto* ln = dynamic_cast<qgraph::Line*>(gi))
-        {
-            b.kind  = ShapeKind::Line;
-            b.points = ln->points();
-            b.closed = ln->isClosed();
-        }
-        else if (auto* p = dynamic_cast<qgraph::Point*>(gi))
-        {
-            b.kind = ShapeKind::Point;
-            b.pointCenter = p->center();
-        }
-        else
-        {
-            continue;
-        }
-
-        out.push_back(std::move(b));
+        out.push_back(makeBackupFromItem(gi));
     }
-
     return out;
 }
 
@@ -7239,6 +7226,7 @@ void MainWindow::removeListEntryBySceneItem(QGraphicsItem* sceneItem)
         if (linked == sceneItem)
         {
             delete ui->polygonList->takeItem(row);
+            renumberPolygonList();
             return;
         }
     }
@@ -8184,14 +8172,19 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, int bIdx)
 {
     auto doc = currentDocument();
-    if (!doc || !doc->_undoStack || !a || !b) return false;
-    if (a == b) return false;
+    if (!doc || !doc->_undoStack || !a || !b)
+        return false;
+    if (a == b)
+        return false;
 
     // Только концы
     const int aLast = a->circles().size() - 1;
     const int bLast = b->circles().size() - 1;
-    if (!((aIdx == 0) || (aIdx == aLast))) return false;
-    if (!((bIdx == 0) || (bIdx == bLast))) return false;
+
+    if (!((aIdx == 0) || (aIdx == aLast)))
+        return false;
+    if (!((bIdx == 0) || (bIdx == bLast)))
+        return false;
 
     // Класс должен совпадать
     const QString la = a->data(0).toString();
@@ -8708,6 +8701,38 @@ ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* gi) const
         b.pointCenter = p->center();
     }
 
+    b.listRow = -1;
+    if (ui && ui->polygonList && gi)
+    {
+        for (int i = 0; i < ui->polygonList->count(); ++i)
+        {
+            QListWidgetItem* li = ui->polygonList->item(i);
+            if (!li)
+                continue;
+
+            if (li->data(Qt::UserRole).value<QGraphicsItem*>() == gi)
+            {
+                b.listRow = i;
+                break;
+            }
+        }
+    }
+    b.sceneRow = -1;
+    if (ui && ui->polygonList && gi)
+    {
+        for (int i = 0; i < ui->polygonList->count(); ++i)
+        {
+            QListWidgetItem* li = ui->polygonList->item(i);
+            if (!li)
+                continue;
+
+            if (li->data(Qt::UserRole).value<QGraphicsItem*>() == gi)
+            {
+                b.sceneRow = i;
+                break;
+            }
+        }
+    }
     return b;
 }
 
@@ -9141,9 +9166,9 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
             apply_NumberSize_ToItem(rect);
             rect->setData(0, b.className);
             applyClassColorToItem(rect, b.className);
-            rect->setZValue(b.z);
+            //rect->setZValue(b.z);
             rect->setVisible(b.visible);
-            linkSceneItemToList(rect);
+            linkSceneItemToList(rect, b.listRow);
             created = rect;
             break;
         }
@@ -9157,10 +9182,10 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
             apply_PointSize_ToItem(c);
             c->setData(0, b.className);
             applyClassColorToItem(c, b.className);
-            c->setZValue(b.z);
+            //c->setZValue(b.z);
             c->setVisible(b.visible);
             c->updateHandlePosition();
-            linkSceneItemToList(c);
+            linkSceneItemToList(c, b.listRow);
             created = c;
             break;
         }
@@ -9182,10 +9207,10 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
 
             pl->setData(0, b.className);
             applyClassColorToItem(pl, b.className);
-            pl->setZValue(b.z);
+            //pl->setZValue(b.z);
             pl->setVisible(b.visible);
             pl->updateHandlePosition();
-            linkSceneItemToList(pl);
+            linkSceneItemToList(pl, b.listRow);
             created = pl;
             break;
         }
@@ -9207,10 +9232,10 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
 
             ln->setData(0, b.className);
             applyClassColorToItem(ln, b.className);
-            ln->setZValue(b.z);
+            //ln->setZValue(b.z);
             ln->setVisible(b.visible);
             ln->updateHandlePosition();
-            linkSceneItemToList(ln);
+            linkSceneItemToList(ln, b.listRow);
             created = ln;
             break;
         }
@@ -9225,9 +9250,9 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
             pt->setCenter(b.pointCenter);
             pt->setData(0, b.className);
             applyClassColorToItem(pt, b.className);
-            pt->setZValue(b.z);
+            //pt->setZValue(b.z);
             pt->setVisible(b.visible);
-            linkSceneItemToList(pt);
+            linkSceneItemToList(pt, b.listRow);
             created = pt;
             break;
         }
@@ -9339,23 +9364,39 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
     }
     if (ui && ui->polygonList)
     {
-        bool found = false;
+        int currentRow = -1;
+        QListWidgetItem* currentItem = nullptr;
+
         for (int i = 0; i < ui->polygonList->count(); ++i)
         {
             QListWidgetItem* li = ui->polygonList->item(i);
-            if (!li) continue;
+            if (!li)
+                continue;
 
             if (li->data(Qt::UserRole).value<QGraphicsItem*>() == it)
             {
-                li->setText(b.className);
-                found = true;
+                currentRow = i;
+                currentItem = li;
                 break;
             }
         }
 
-        // На всякий случай: если фигура есть, а пункта в списке нет
-        if (!found && !b.className.isEmpty())
-            linkSceneItemToList(it);
+        if (!currentItem && !b.className.isEmpty())
+        {
+            linkSceneItemToList(it, b.listRow);
+        }
+        else if (currentItem)
+        {
+            const int targetRow = (b.listRow < 0) ? currentRow : b.listRow;
+            if (targetRow != currentRow &&
+                targetRow >= 0 &&
+                targetRow < ui->polygonList->count())
+            {
+                QListWidgetItem* moved = ui->polygonList->takeItem(currentRow);
+                ui->polygonList->insertItem(targetRow, moved);
+            }
+            renumberPolygonList();
+        }
     }
 }
 
@@ -9373,6 +9414,7 @@ void MainWindow::removePolygonListItem(QListWidgetItem* item)
     }
     // Удаляем из списка
     delete ui->polygonList->takeItem(ui->polygonList->row(item));
+    renumberPolygonList();
     // Помечаем документ как измененный
     if (auto doc = currentDocument())
     {
@@ -10112,6 +10154,7 @@ void MainWindow::onSceneItemRemoved(QGraphicsItem* item)
         if (itemData.isValid() && itemData.value<QGraphicsItem*>() == item)
         {
             delete ui->polygonList->takeItem(i);
+            renumberPolygonList();
             break;
         }
     }
@@ -10173,7 +10216,15 @@ void MainWindow::on_actDelete_triggered()
     // undo: восстановить по снапшотам
     auto undoFn = [this, payload]()
     {
-        for (const ShapeBackup& b : std::as_const(payload->backups))
+        QVector<ShapeBackup> backups = payload->backups;
+
+        std::sort(backups.begin(), backups.end(),
+                  [](const ShapeBackup& a, const ShapeBackup& b)
+        {
+            return a.listRow < b.listRow;
+        });
+
+        for (const ShapeBackup& b : backups)
         {
             QGraphicsItem* created = recreateFromBackup(b);
             Q_UNUSED(created);

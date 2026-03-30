@@ -170,20 +170,16 @@ QGraphicsEllipseItem* Point::ensureDotVis()
 
 void Point::deleteItem()
 {
-    auto scene = this->scene();
-    if (scene)
-    {
-        if (QObject* receiver = scene->property("shapeDeleteReceiver").value<QObject*>())
-        {
-            QMetaObject::invokeMethod(receiver,
-                                      "onSceneItemRemoved",
-                                      Qt::DirectConnection,
-                                      Q_ARG(QGraphicsItem*, static_cast<QGraphicsItem*>(this)));
-        }
+    auto sc = this->scene();
+    if (!sc)
+        return;
 
-        scene->removeItem(this);
+    if (QObject* receiver = sc->property("shapeDeleteReceiver").value<QObject*>())
+    {
+        QMetaObject::invokeMethod(receiver,
+                                  "on_actDelete_triggered",
+                                  Qt::DirectConnection);
     }
-    delete this;
 }
 
 QVariant Point::itemChange(GraphicsItemChange change, const QVariant& value)
@@ -242,6 +238,21 @@ void Point::mouseReleaseEvent(QGraphicsSceneMouseEvent* ev)
 
 void Point::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
 {
+    if (!isSelected())
+    {
+        if (scene())
+        {
+            const auto selected = scene()->selectedItems();
+            for (QGraphicsItem* it : selected)
+            {
+                if (it && it != this)
+                    it->setSelected(false);
+            }
+        }
+        setSelected(true);
+    }
+    setFocus();
+
     QMenu menu;
 
     QAction* changeClassAction = menu.addAction("Изменить класс");
