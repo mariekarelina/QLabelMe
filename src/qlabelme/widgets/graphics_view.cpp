@@ -13,23 +13,37 @@ bool GraphicsView::init(MainWindow* mw)
 
 void GraphicsView::mouseMoveEvent(QMouseEvent* mouseEvent)
 {
-    _mw->graphicsView_mouseMoveEvent(mouseEvent, this);
-
+    // _mw->graphicsView_mouseMoveEvent(mouseEvent, this);
+    if (_mw)
+    {
+        _mw->graphicsView_mouseMoveEvent(mouseEvent, this);
+        if (mouseEvent->isAccepted())
+            return;
+    }
     QGraphicsView::mouseMoveEvent(mouseEvent);
-
 }
 
 void GraphicsView::mousePressEvent(QMouseEvent* mouseEvent)
 {
-    _mw->graphicsView_mousePressEvent(mouseEvent, this);
-
+    // _mw->graphicsView_mousePressEvent(mouseEvent, this);
+    if (_mw)
+    {
+        _mw->graphicsView_mousePressEvent(mouseEvent, this);
+        if (mouseEvent->isAccepted())
+            return;
+    }
     QGraphicsView::mousePressEvent(mouseEvent);
 }
 
 void GraphicsView::mouseReleaseEvent(QMouseEvent* mouseEvent)
 {
-    _mw->graphicsView_mouseReleaseEvent(mouseEvent, this);
-
+    // _mw->graphicsView_mouseReleaseEvent(mouseEvent, this);
+    if (_mw)
+    {
+        _mw->graphicsView_mouseReleaseEvent(mouseEvent, this);
+        if (mouseEvent->isAccepted())
+            return;
+    }
     QGraphicsView::mouseReleaseEvent(mouseEvent);
 }
 
