@@ -160,6 +160,8 @@ struct ShapeBackup
     qulonglong uid = 0;
 
     bool numberingFromLast = false;
+    int listRow = -1;   // Номер в правой панели
+    int sceneRow = -1;  // Порядок на сцене
 };
 
 class MainWindow : public QMainWindow
@@ -320,6 +322,8 @@ private:
 
     // Связывание элементов сцены и списка
     void linkSceneItemToList(QGraphicsItem* sceneItem);
+    void linkSceneItemToList(QGraphicsItem* sceneItem, int row);
+    void renumberPolygonList();
 
     void showPolygonListContextMenu(const QPoint &pos);
 
