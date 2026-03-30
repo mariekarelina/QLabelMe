@@ -35,4 +35,7 @@
         <file>resources/redo.svg</file>
         <file>resources/polyline.svg</file>
     </qresource>
+    <qresource prefix="/">
+        <file>widgets/user_guide.md</file>
+    </qresource>
 </RCC>
