@@ -2224,7 +2224,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     }
 
 
-    Document::Ptr doc = currentDocument();
+   /* Document::Ptr doc = currentDocument();
     if (doc && mouseEvent->button() == Qt::LeftButton)
     {
         if (_isAllMoved)
@@ -2252,6 +2252,12 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
+    }*/
+    if (mouseEvent->button() == Qt::LeftButton && _isAllMoved)
+    {
+        _isAllMoved = false;
+        updateModeLabel();
+        return;
     }
     //graphView->mouseReleaseEvent(mouseEvent);
 }
