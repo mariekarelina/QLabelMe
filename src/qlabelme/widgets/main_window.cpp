@@ -3735,7 +3735,7 @@ void MainWindow::updatePolygonListForCurrentScene()
     std::sort(roots.begin(), roots.end(),
               [](QGraphicsItem* a, QGraphicsItem* b)
     {
-        return a->zValue() > b->zValue();
+        return a->zValue() < b->zValue();
     });
 
     for (QGraphicsItem* item : roots)
@@ -5045,10 +5045,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     if (!doc || !doc->scene)
         return;
 
-    // Пытаемся прочитать JSON из системного буфера обмена
     QJsonObject json = readShapesJsonFromClipboard();
-
-    // Если в системном буфере нет наших данных - используем старый локальный буфер
     if (json.isEmpty())
         json = _shapesClipboard;
 
@@ -5059,10 +5056,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     // Запоминаем, что было на сцене ДО вставки
     QList<QGraphicsItem*> beforeItems = scene->items();
-
-    deserializeJsonToScene(scene, _shapesClipboard);
-    //deserializeJsonToScene(scene, json);
-    updatePolygonListForCurrentScene();
+    deserializeJsonToScene(scene, json);
 
     // Собираем список новых фигур (тех, которых не было в beforeItems)
     QList<QGraphicsItem*> afterItems = scene->items();
@@ -5070,7 +5064,9 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     for (QGraphicsItem* item : afterItems)
     {
-        // Пропускаем служебные элементы
+        if (!item)
+            continue;
+
         if (item == _videoRect ||
             item == _tempRectItem ||
             item == _tempCircleItem ||
@@ -5079,15 +5075,16 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
             continue;
         }
 
-        // Нас интересуют только элементы, которых не было "до"
+        if (item->parentItem() != nullptr)
+            continue;
+
         if (beforeItems.contains(item))
             continue;
 
-        // И только наши примитивы
         if (dynamic_cast<qgraph::Rectangle*>(item) ||
-            dynamic_cast<qgraph::Circle*>(item)    ||
-            dynamic_cast<qgraph::Polyline*>(item)  ||
-            dynamic_cast<qgraph::Line*>(item)      ||
+            dynamic_cast<qgraph::Circle*>(item) ||
+            dynamic_cast<qgraph::Polyline*>(item) ||
+            dynamic_cast<qgraph::Line*>(item) ||
             dynamic_cast<qgraph::Point*>(item))
         {
             newItems.append(item);
@@ -5097,11 +5094,143 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     if (newItems.isEmpty())
         return;
 
-    QString descr;
-    if (newItems.size() == 1)
-        descr = tr("Вставка примитива");
-    else
-        descr = tr("Вставка примитивов");
+    // Небольшое смещение вставки, чтобы копия не лежала строго поверх исходной
+    const QPointF pasteOffset(10.0, 10.0);
+
+    for (QGraphicsItem* item : newItems)
+    {
+        if (!item)
+            continue;
+
+        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            QRectF r = rect->realSceneRect();
+            r.translate(pasteOffset);
+            rect->setRealSceneRect(r);
+            rect->updatePointNumbers();
+            rect->updateHandlePosition();
+        }
+        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        {
+            circle->moveBy(pasteOffset.x(), pasteOffset.y());
+            circle->updateHandlePosition();
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            QVector<QPointF> pts = polyline->points();
+            for (QPointF& p : pts)
+                p += pasteOffset;
+
+            polyline->replaceScenePoints(pts, polyline->isClosed());
+            polyline->updateHandlePosition();
+        }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            QVector<QPointF> pts = line->points();
+            for (QPointF& p : pts)
+                p += pasteOffset;
+
+            line->replaceScenePoints(pts, line->isClosed());
+            line->updateHandlePosition();
+        }
+        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
+        {
+            point->setCenter(point->center() + pasteOffset);
+        }
+    }
+
+    // После вставки активными должны стать именно новые фигуры
+    const QList<QGraphicsItem*> selectedBeforePaste = scene->selectedItems();
+    for (QGraphicsItem* it : selectedBeforePaste)
+    {
+        if (it)
+            it->setSelected(false);
+    }
+
+    for (QGraphicsItem* item : newItems)
+    {
+        if (item)
+            item->setSelected(true);
+    }
+
+    if (!newItems.isEmpty() && newItems.last())
+        newItems.last()->setFocus();
+
+    raiseAllHandlesToTop();
+
+    // Новые фигуры должны быть выше уже существующих на сцене
+    qreal maxZ = 0.0;
+    bool hasExisting = false;
+
+    for (QGraphicsItem* item : beforeItems)
+    {
+        if (!item)
+            continue;
+
+        if (item == _videoRect ||
+            item == _tempRectItem ||
+            item == _tempCircleItem ||
+            item == _tempPolyline)
+        {
+            continue;
+        }
+
+        if (item->parentItem() != nullptr)
+            continue;
+
+        maxZ = hasExisting ? qMax(maxZ, item->zValue()) : item->zValue();
+        hasExisting = true;
+    }
+
+    if (!hasExisting)
+        maxZ = 0.0;
+
+    for (int i = 0; i < newItems.size(); ++i)
+    {
+        if (newItems[i])
+            newItems[i]->setZValue(maxZ + 1.0 + i);
+    }
+
+    // Добавляем новые фигуры в конец списка справа
+    QList<QListWidgetItem*> pastedListItems;
+    pastedListItems.reserve(newItems.size());
+
+    for (QGraphicsItem* item : newItems)
+    {
+        if (!item)
+            continue;
+
+        const QString className = item->data(0).toString();
+        if (className.isEmpty())
+            continue;
+
+        QListWidgetItem* listItem = new QListWidgetItem;
+        listItem->setData(Qt::UserRole, QVariant::fromValue(item));
+        ui->polygonList->addItem(listItem);
+        pastedListItems.append(listItem);
+    }
+
+    renumberPolygonListTextOnly();
+
+    {
+        QSignalBlocker blocker(ui->polygonList);
+        ui->polygonList->clearSelection();
+
+        for (QListWidgetItem* listItem : pastedListItems)
+        {
+            if (listItem)
+                listItem->setSelected(true);
+        }
+
+        if (!pastedListItems.isEmpty() && pastedListItems.last())
+            ui->polygonList->setCurrentItem(pastedListItems.last());
+    }
+
+    ui->polygonList->setFocus();
+
+    QString descr = (newItems.size() == 1)
+                        ? tr("Вставка примитива")
+                        : tr("Вставка примитивов");
 
     if (QUndoStack* st = activeUndoStack())
         st->beginMacro(descr);
@@ -5735,11 +5864,31 @@ void MainWindow::renumberPolygonList()
         item->setText(QString("%1: %2").arg(i).arg(className));
 
         // Порядок списка = порядок фигур
-        sceneItem->setZValue(count - i);
+        sceneItem->setZValue(i);
     }
 
     if (_scene)
         _scene->update();
+}
+
+void MainWindow::renumberPolygonListTextOnly()
+{
+    if (!ui || !ui->polygonList)
+        return;
+
+    for (int i = 0; i < ui->polygonList->count(); ++i)
+    {
+        QListWidgetItem* item = ui->polygonList->item(i);
+        if (!item)
+            continue;
+
+        QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
+        if (!sceneItem)
+            continue;
+
+        const QString className = sceneItem->data(0).toString();
+        item->setText(QString("%1: %2").arg(i).arg(className));
+    }
 }
 
 void MainWindow::showPolygonListContextMenu(const QPoint &pos)
