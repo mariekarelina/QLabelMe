@@ -124,11 +124,14 @@ static QString extractSectionByTitle(const QString& markdown, const QString& tit
 
 void UserGuide::showPage(const QString& key)
 {
-    const QString sourceDir =
-        QFileInfo(QString::fromUtf8(__FILE__)).absolutePath();
-    const QString mdPath = sourceDir + "/user_guide.md";
+    // const QString sourceDir =
+    //     QFileInfo(QString::fromUtf8(__FILE__)).absolutePath();
+    // const QString mdPath = sourceDir + "/user_guide.md";
 
+    // QFile file(mdPath);
+    const QString mdPath = ":/widgets/user_guide.md";
     QFile file(mdPath);
+
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         ui->textBrowser->setHtml(
