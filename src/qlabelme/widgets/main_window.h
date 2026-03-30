@@ -641,6 +641,7 @@ private:
     QPointF _dragCircleMouseOffset;
 
     bool _loadingNow = false;
+    bool _syncingSelection = false;
     bool _editInProgress = false;
     bool _handleDragging = false; // Флаг для отслеживания перетаскивания ручек
 

@@ -790,7 +790,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             }
         }
     }
-    // Зум прямоугольной области Ctrl + ЛКМ
+    // Зум прямоугольной области Ctrl + ЛКМ только по пустому месту / изображению,
+    // чтобы Ctrl + клик по фигуре можно было использовать для мультивыделения
     if (graphView &&
         mouseEvent->button() == Qt::LeftButton &&
         (mouseEvent->modifiers() & Qt::ControlModifier) &&
@@ -802,24 +803,32 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         !_drawingPoint &&
         !_drawingRuler)
     {
-        _zoomRectActive = true;
-        updateModeLabel();
-        // Чтобы фигуры/сцена не начали двигались во время зума
-        _leftMouseButtonDown = false;
+        QGraphicsItem* underCursor = graphView->itemAt(mouseEvent->pos());
+        if (!underCursor)
+            underCursor = pickItemByEdgeAt(graphView, mouseEvent->pos());
 
-        _zoomRectView = graphView;
-        _zoomRectWasInteractive = graphView->isInteractive();
-        graphView->setInteractive(false);
-        _zoomRectOrigin = mouseEvent->pos();
+        if (!underCursor || underCursor == _videoRect)
+        {
+            _zoomRectActive = true;
+            updateModeLabel();
 
-        if (!_zoomRubberBand)
-            _zoomRubberBand = new QRubberBand(QRubberBand::Rectangle, graphView->viewport());
+            // Чтобы фигуры/сцена не начали двигаться во время зума
+            _leftMouseButtonDown = false;
 
-        _zoomRubberBand->setGeometry(QRect(_zoomRectOrigin, QSize()));
-        _zoomRubberBand->show();
+            _zoomRectView = graphView;
+            _zoomRectWasInteractive = graphView->isInteractive();
+            graphView->setInteractive(false);
+            _zoomRectOrigin = mouseEvent->pos();
 
-        mouseEvent->accept();
-        return;
+            if (!_zoomRubberBand)
+                _zoomRubberBand = new QRubberBand(QRubberBand::Rectangle, graphView->viewport());
+
+            _zoomRubberBand->setGeometry(QRect(_zoomRectOrigin, QSize()));
+            _zoomRubberBand->show();
+
+            mouseEvent->accept();
+            return;
+        }
     }
     // Было написано для создания иконки
     if ((mouseEvent->modifiers() & Qt::ControlModifier) &&
@@ -912,6 +921,60 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         QGraphicsItem* clickedItem = graphView->itemAt(mouseEvent->pos());
         if (!clickedItem)
             clickedItem = pickItemByEdgeAt(graphView, mouseEvent->pos());
+
+        QGraphicsItem* selectionItem = clickedItem;
+
+        if (auto* h = qgraphicsitem_cast<qgraph::DragCircle*>(selectionItem))
+            selectionItem = h->parentItem();
+
+        if (selectionItem && selectionItem != _videoRect)
+            selectionItem = findMovableAncestor(selectionItem);
+
+        // Выделение через сцену, включая мультивыделение по Ctrl
+        if (selectionItem && selectionItem != _videoRect)
+        {
+            const bool ctrlPressed = mouseEvent->modifiers() & Qt::ControlModifier;
+
+            if (ctrlPressed)
+            {
+                selectionItem->setSelected(!selectionItem->isSelected());
+
+                _movingItem = nullptr;
+                _movingItems.clear();
+                _moveGroupBefore.clear();
+                _moveGroupInitialPos.clear();
+                _moveIsGroup = false;
+                _moveHadChanges = false;
+
+                _draggingItem = nullptr;
+                _isDraggingImage = false;
+                _shiftImageDragging = false;
+                _isAllMoved = false;
+
+                _lastMousePos = mouseEvent->pos();
+                mouseEvent->accept();
+                return;
+            }
+            else
+            {
+                const QList<QGraphicsItem*> selectedNow = _scene->selectedItems();
+                for (QGraphicsItem* it : selectedNow)
+                {
+                    if (it && it != selectionItem)
+                        it->setSelected(false);
+                }
+                selectionItem->setSelected(true);
+            }
+        }
+        else if (!(mouseEvent->modifiers() & Qt::ControlModifier))
+        {
+            const QList<QGraphicsItem*> selectedNow = _scene->selectedItems();
+            for (QGraphicsItem* it : selectedNow)
+            {
+                if (it)
+                    it->setSelected(false);
+            }
+        }
 
         // Сбрасываем состояния перемещения
         _movingItem = nullptr;
@@ -5342,6 +5405,11 @@ void MainWindow::onSceneSelectionChanged()
     if (!_scene || !ui || !ui->polygonList)
         return;
 
+    if (_syncingSelection)
+        return;
+
+    _syncingSelection = true;
+
     // Обновляем цвета/заливку всех фигур с учетом текущего выделения
     for (QGraphicsItem* it : _scene->items())
     {
@@ -5356,7 +5424,6 @@ void MainWindow::onSceneSelectionChanged()
             continue;
         }
 
-        // Дочерние элементы отдельно не трогаем
         if (it->parentItem() != nullptr)
             continue;
 
@@ -5365,41 +5432,44 @@ void MainWindow::onSceneSelectionChanged()
             applyClassColorToItem(it, cls);
     }
 
-    // Синхронизация списка фигур со сценой
-    QSignalBlocker blocker(ui->polygonList);
-    ui->polygonList->clearSelection();
-
-    const QList<QGraphicsItem*> selected = _scene->selectedItems();
-    for (QGraphicsItem* sceneItem : selected)
     {
-        if (!sceneItem)
-            continue;
+        QSignalBlocker blocker(ui->polygonList);
+        ui->polygonList->clearSelection();
 
-        // Если вдруг выбрана ручка, берем владельца
-        if (auto* h = dynamic_cast<qgraph::DragCircle*>(sceneItem))
+        const QList<QGraphicsItem*> selected = _scene->selectedItems();
+        for (QGraphicsItem* sceneItem : selected)
         {
-            if (h->parentItem())
-                sceneItem = h->parentItem();
-        }
-
-        for (int i = 0; i < ui->polygonList->count(); ++i)
-        {
-            QListWidgetItem* listItem = ui->polygonList->item(i);
-            if (!listItem)
+            if (!sceneItem)
                 continue;
 
-            QGraphicsItem* boundItem =
-                listItem->data(Qt::UserRole).value<QGraphicsItem*>();
-
-            if (boundItem == sceneItem)
+            if (auto* h = dynamic_cast<qgraph::DragCircle*>(sceneItem))
             {
-                listItem->setSelected(true);
-                break;
+                if (h->parentItem())
+                    sceneItem = h->parentItem();
+            }
+
+            for (int i = 0; i < ui->polygonList->count(); ++i)
+            {
+                QListWidgetItem* listItem = ui->polygonList->item(i);
+                if (!listItem)
+                    continue;
+
+                QGraphicsItem* boundItem =
+                    listItem->data(Qt::UserRole).value<QGraphicsItem*>();
+
+                if (boundItem == sceneItem)
+                {
+                    listItem->setSelected(true);
+                    break;
+                }
             }
         }
     }
+
     updateCoordinateList();
     _scene->update();
+
+    _syncingSelection = false;
 }
 
 void MainWindow::updateCoordinateList()
@@ -9552,24 +9622,45 @@ void MainWindow::onPolygonListSelectionChanged()
 {
     if (!_scene)
         return;
+
+    if (_syncingSelection)
+        return;
+
+    _syncingSelection = true;
+
     QList<QListWidgetItem*> selected = ui->polygonList->selectedItems();
 
-    _scene->blockSignals(true);
-    for (QGraphicsItem* it : _scene->items())
     {
-        if (it == _videoRect || it == _tempRectItem || it == _tempCircleItem || it == _tempPolyline)
-            continue;
-        if (it->isSelected())
+        QSignalBlocker blockScene(_scene);
+
+        for (QGraphicsItem* it : _scene->items())
+        {
+            if (!it)
+                continue;
+
+            if (it == _videoRect ||
+                it == _tempRectItem ||
+                it == _tempCircleItem ||
+                it == _tempPolyline)
+            {
+                continue;
+            }
+
+            if (it->parentItem() != nullptr)
+                continue;
+
             it->setSelected(false);
+        }
+
+        for (auto* li : selected)
+        {
+            if (!li)
+                continue;
+
+            if (QGraphicsItem* scItem = li->data(Qt::UserRole).value<QGraphicsItem*>())
+                scItem->setSelected(true);
+        }
     }
-    for (auto* li : selected)
-    {
-        if (!li)
-            continue;
-        if (QGraphicsItem* scItem = li->data(Qt::UserRole).value<QGraphicsItem*>())
-            scItem->setSelected(true);
-    }
-    _scene->blockSignals(false);
 
     updateCoordinateList();
 
@@ -9578,40 +9669,57 @@ void MainWindow::onPolygonListSelectionChanged()
         if (QGraphicsItem* scItem = selected.first()->data(Qt::UserRole).value<QGraphicsItem*>())
             ui->graphView->ensureVisible(scItem);
     }
+
     raiseAllHandlesToTop();
+
+    _syncingSelection = false;
 }
 
 void MainWindow::selectAllShapes()
 {
-    if (!_scene)
+    if (!_scene || !ui || !ui->polygonList)
         return;
 
-    const QSignalBlocker blockList(ui->polygonList);
-    const QSignalBlocker blockScene(_scene);
+    _syncingSelection = true;
 
-    // Выделяем все в списке и на сцене
-    for (int i = 0; i < ui->polygonList->count(); ++i)
     {
-        if (auto* li = ui->polygonList->item(i))
+        QSignalBlocker blockScene(_scene);
+        QSignalBlocker blockList(ui->polygonList);
+
+        ui->polygonList->clearSelection();
+
+        for (QGraphicsItem* it : _scene->items())
         {
-            li->setSelected(true);
-            if (QGraphicsItem* scItem = li->data(Qt::UserRole).value<QGraphicsItem*>())
-                scItem->setSelected(true);
+            if (!it)
+                continue;
+
+            if (it == _videoRect ||
+                it == _tempRectItem ||
+                it == _tempCircleItem ||
+                it == _tempPolyline)
+            {
+                continue;
+            }
+
+            if (it->parentItem() != nullptr)
+                continue;
+
+            it->setSelected(true);
+        }
+
+        for (int i = 0; i < ui->polygonList->count(); ++i)
+        {
+            QListWidgetItem* li = ui->polygonList->item(i);
+            if (li)
+                li->setSelected(true);
         }
     }
+
+    _syncingSelection = false;
 
     updateCoordinateList();
-
-    if (ui->polygonList->count() > 0)
-    {
-        if (auto* li0 = ui->polygonList->item(0))
-        {
-            if (QGraphicsItem* sc0 = li0->data(Qt::UserRole).value<QGraphicsItem*>())
-                ui->graphView->ensureVisible(sc0);
-        }
-    }
-
     raiseAllHandlesToTop();
+    _scene->update();
 }
 
 void MainWindow::on_actRect_triggered()
