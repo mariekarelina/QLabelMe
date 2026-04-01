@@ -3495,6 +3495,30 @@ void MainWindow::togglePointerMode()
 
 void MainWindow::on_actOpen_triggered(bool)
 {
+    // Сначала проверяем несохраненные изменения,
+    // и только потом даем выбирать новую папку
+    if (!_currentFolderPath.isEmpty() && hasUnsavedChanges())
+    {
+        QList<Document::Ptr> unsavedDocs = getUnsavedDocuments();
+        int result = showUnsavedChangesDialog(unsavedDocs);
+
+        switch (result)
+        {
+            case QDialogButtonBox::SaveAll:
+                saveAllDocuments();
+                break;
+
+            case QDialogButtonBox::Discard:
+                break;
+
+            case QDialogButtonBox::Cancel:
+                return;
+
+            default:
+                return;
+        }
+    }
+
     QString initialDir = _lastUsedFolder.isEmpty()
                              ? QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
                              : _lastUsedFolder;
@@ -10237,10 +10261,6 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
         QMessageBox::warning(this, tr("Ошибка"), tr("Выбранная папка не существует!"));
         return;
     }
-
-    _currentFolderPath = folderPath;
-    _lastUsedFolder = folderPath;
-    saveLastUsedFolder();
 
     updateWindowTitle();
     updateFolderPathDisplay();
