@@ -31,6 +31,10 @@ public:
     void updateHandlePosition();
 
     void addPoint(const QPointF&, QGraphicsScene*);
+
+    void beginBulkLoad() { _loadingMode = true; }
+    void endBulkLoad();
+
     void removePoint(QPointF position);
     void insertPoint(QPointF position);
     void closeLine();
@@ -125,6 +129,8 @@ private:
 public:
     QVector<DragCircle*> _circles;
     bool _isClosed;
+
+    bool _loadingMode = false;
 
     float _frameScale = 1.0;
     const qreal _minSegmentLength = 10.0; // Минимальная длина отрезка

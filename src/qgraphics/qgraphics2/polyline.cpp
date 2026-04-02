@@ -113,9 +113,18 @@ void Polyline::addPoint(const QPointF& position, QGraphicsScene* scene)
     DragCircle::rememberCurrentAsBase(newCircle);
     _circles.append(newCircle);
 
+    if (!_loadingMode)
+    {
+        updateConnections();
+        updatePath();
+    }
+}
+
+void Polyline::endBulkLoad()
+{
+    _loadingMode = false;
     updateConnections();
     updatePath();
-    updatePointNumbers();
 }
 
 void Polyline::removePoint(QPointF position)
@@ -290,7 +299,7 @@ QVariant Polyline::itemChange(GraphicsItemChange change, const QVariant& value)
 {
     if (change == QGraphicsItem::ItemPositionHasChanged)
     {
-        updatePointNumbers();
+        //updatePointNumbers();
     }
     else if (change == QGraphicsItem::ItemSelectedHasChanged)
     {
@@ -811,7 +820,8 @@ QPainterPath Polyline::shape() const
     if (_isClosed && _circles.size() > 2)
         result.addPath(basePath);
 
-    return result.simplified();
+    //return result.simplified();
+    return result;
 }
 
 void Polyline::dragCircleMove(DragCircle* circle)
