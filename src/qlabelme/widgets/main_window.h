@@ -71,6 +71,10 @@
 #include "qgraphics2/point.h"
 #include "qgraphics2/line.h"
 
+#include "shared/steady_timer.h"
+#include "shared/logger/logger.h"
+#define log_debug2_m  alog::logger().debug2  (alog_line_location, "MainWin")
+
 // using namespace std;
 // using namespace pproto;
 // using namespace pproto::transport;
@@ -112,6 +116,8 @@ struct Document
 
     bool loadImage()
     {
+        steady_timer timer2;
+        log_debug2_m <<  "m5 " << timer2.elapsed();
         pixmap = QPixmap(filePath);
         if (pixmap.isNull())
         {
@@ -129,6 +135,7 @@ struct Document
 
         videoRect->setPos(0, 0);
         scene->setSceneRect(QRectF(QPointF(0, 0), QSizeF(pixmap.size())));
+        log_debug2_m <<  "m6 " << timer2.elapsed();
         return true;
     }
 };

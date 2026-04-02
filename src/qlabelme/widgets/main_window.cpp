@@ -4,6 +4,7 @@
 
 #include "shared/defmac.h"
 #include "shared/break_point.h"
+#include "shared/steady_timer.h"
 #include "shared/logger/logger.h"
 #include "shared/logger/format.h"
 #include "shared/config/appl_conf.h"
@@ -956,12 +957,18 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             else
             {
                 const QList<QGraphicsItem*> selectedNow = _scene->selectedItems();
-                for (QGraphicsItem* it : selectedNow)
+
+                // Если кликнули по уже выделенной фигуре, и выделено несколько фигур,
+                // то сохраняем групповое выделение для последующего перетаскивания
+                if (!(selectedNow.size() > 1 && selectionItem->isSelected()))
                 {
-                    if (it && it != selectionItem)
-                        it->setSelected(false);
+                    for (QGraphicsItem* it : selectedNow)
+                    {
+                        if (it && it != selectionItem)
+                            it->setSelected(false);
+                    }
+                    selectionItem->setSelected(true);
                 }
-                selectionItem->setSelected(true);
             }
         }
         else if (!(mouseEvent->modifiers() & Qt::ControlModifier))
@@ -3518,7 +3525,6 @@ void MainWindow::on_actOpen_triggered(bool)
                 return;
         }
     }
-
     QString initialDir = _lastUsedFolder.isEmpty()
                              ? QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
                              : _lastUsedFolder;
@@ -3588,6 +3594,13 @@ void MainWindow::on_btnTest_clicked(bool)
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
+    // Всегда запоминаем текущую открытую папку как последнюю
+    if (!_currentFolderPath.isEmpty())
+    {
+        _lastUsedFolder = _currentFolderPath;
+        saveLastUsedFolder();
+    }
+
     // Проверяем есть ли несохраненные изменения
     if (hasUnsavedChanges())
     {
@@ -3726,6 +3739,9 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
 
 void MainWindow::updatePolygonListForCurrentScene()
 {
+    steady_timer timer3;
+    log_debug2_m <<  "m20 " << timer3.elapsed();
+
     ui->polygonList->clear();
 
     if (ui->coordinateList)
@@ -3764,6 +3780,8 @@ void MainWindow::updatePolygonListForCurrentScene()
 
     for (QGraphicsItem* item : roots)
         linkSceneItemToList(item);
+
+    log_debug2_m <<  "m21 " << timer3.elapsed();
 }
 
 void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
@@ -4168,6 +4186,9 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
         return;
     }
 
+    steady_timer timer2;
+    log_debug2_m <<  "m8 " << timer2.elapsed();
+
     // Временно блокируем обработку изменений
     _loadingNow = true;
     QSignalBlocker blocker(doc->scene); // временно глушим QGraphicsScene::changed
@@ -4197,6 +4218,8 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
         return;
     }
 
+    log_debug2_m <<  "m9 " << timer2.elapsed();
+
     //if (yconfig.readFile("/tmp/1.yaml"))
     //if (!yconfig.readFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml"))
 
@@ -4224,6 +4247,8 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             delete item; // Удалит и всех детей автоматически
         }
     }
+
+    log_debug2_m <<  "m10 " << timer2.elapsed();
 
     YamlConfig::Func loadCircles = [&](YamlConfig* conf, YAML::Node& ycircles, bool)
     {
@@ -4410,6 +4435,8 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
         return true;
     };
 
+    log_debug2_m <<  "m11 " << timer2.elapsed();
+
     // Загружаем данные из YAML
     if (!yconfig.getValue("shapes", loadFunc, false))
     {
@@ -4417,9 +4444,11 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
         _loadingNow = false;
         return;
     }
+    log_debug2_m <<  "m12 " << timer2.elapsed();
     _loadingNow = false;
     // После загрузки всех элементов обновляем список
     updatePolygonListForCurrentScene();
+    log_debug2_m <<  "m13 " << timer2.elapsed();
 }
 
 void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json)
@@ -9601,6 +9630,9 @@ void MainWindow::fitImageToView()
     if (!_scene || !_videoRect || !ui->graphView)
         return;
 
+    steady_timer timer2;
+    log_debug2_m <<  "m7 " << timer2.elapsed();
+
     _scene->setSceneRect(_videoRect->boundingRect().translated(_videoRect->pos()));
 
     ui->graphView->resetTransform();
@@ -9628,6 +9660,7 @@ void MainWindow::fitImageToView()
     m_zoom = ui->graphView->transform().m11();
     updateAllPointNumbers();
     ui->graphView->viewport()->update();
+    log_debug2_m <<  "m8 " << timer2.elapsed();
 }
 
 void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem *previous)
@@ -10262,18 +10295,65 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
         return;
     }
 
+    // Если выбрали ту же самую папку - ничего не делаем
+    if (!_currentFolderPath.isEmpty() &&
+        QDir::cleanPath(_currentFolderPath) == QDir::cleanPath(folderPath))
+    {
+        return;
+    }
+
+    steady_timer timer1;
+    log_debug2_m << "Begin func setWorkingFolder";
+
+    // Полностью забываем предыдущее состояние проекта,
+    // чтобы старые документы не участвовали в последующих проверках
+    if (_undoGroup)
+    {
+        for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
+        {
+            if (it.value() && it.value()->_undoStack)
+                _undoGroup->removeStack(it.value()->_undoStack.get());
+        }
+    }
+
+    _documentsMap.clear();
+    _currentImagePath.clear();
+    _scrollStates.clear();
+    _imageDataMap.clear();
+
+    ui->fileList->clear();
+    ui->polygonList->clear();
+    ui->coordinateList->clear();
+
+    if (_undoView)
+        _undoView->setStack(nullptr);
+
+    _scene = nullptr;
+    _videoRect = nullptr;
+
     updateWindowTitle();
     updateFolderPathDisplay();
     loadFilesFromFolder(folderPath);
     //loadClassesFromFile(folderPath + "/classes.yaml");
+
+    log_debug2_m << "m1 " << timer1.elapsed();
+
     QDir dir(folderPath);
     loadClassesFromFile(dir.filePath("classes.yaml"));
+
+    log_debug2_m << "m2 " << timer1.elapsed();
+
     // Открыть первое изображение из папки
     if (ui->fileList->count() > 0)
     {
         ui->fileList->setCurrentRow(0);
+
+        log_debug2_m <<  "m3 " << timer1.elapsed();
+
         ui->fileList->scrollToItem(ui->fileList->currentItem());
     }
+    log_debug2_m <<  "m4 " << timer1.elapsed();
+    log_debug2_m << "End func setWorkingFolder";
 }
 
 void MainWindow::onSceneItemRemoved(QGraphicsItem* item)

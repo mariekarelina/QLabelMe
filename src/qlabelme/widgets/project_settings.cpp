@@ -87,19 +87,19 @@ ProjectSettings::ProjectSettings(QWidget* parent)
     if (ui->btnSortAZ)
         chk_connect_a(ui->btnSortAZ, &QPushButton::clicked, this, &ProjectSettings::onSortAZ);
     if (ui->btnUp)
-        connect(ui->btnUp, &QPushButton::clicked, this, &ProjectSettings::onMoveUp);
+        chk_connect_a(ui->btnUp, &QPushButton::clicked, this, &ProjectSettings::onMoveUp);
     if (ui->btnDown)
-        connect(ui->btnDown, &QPushButton::clicked, this, &ProjectSettings::onMoveDown);
+        chk_connect_a(ui->btnDown, &QPushButton::clicked, this, &ProjectSettings::onMoveDown);
     if (ui->btnAdd)
-        connect(ui->btnAdd, &QPushButton::clicked, this, &ProjectSettings::onAddClass);
+        chk_connect_a(ui->btnAdd, &QPushButton::clicked, this, &ProjectSettings::onAddClass);
     if (ui->btnRemove)
-        connect(ui->btnRemove, &QPushButton::clicked, this, &ProjectSettings::onRemoveClass);
+        chk_connect_a(ui->btnRemove, &QPushButton::clicked, this, &ProjectSettings::onRemoveClass);
 
     if (ui->btnEdit)
-        connect(ui->btnEdit,    &QPushButton::clicked, this, &ProjectSettings::onEditClass);
+        chk_connect_a(ui->btnEdit,    &QPushButton::clicked, this, &ProjectSettings::onEditClass);
     // Двойной клик по элементу списка тоже редактировать
     if (ui->listClasses)
-        connect(ui->listClasses, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem*) { onEditClass(); });
+        chk_connect_a(ui->listClasses, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem*) { onEditClass(); });
     // Иконки выбора цвета класса
     ui->listClasses->setSelectionMode(QAbstractItemView::SingleSelection);
     ui->listClasses->setSelectionBehavior(QAbstractItemView::SelectRows);
