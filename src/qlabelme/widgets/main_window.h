@@ -280,7 +280,9 @@ private:
     QJsonObject readShapesJsonFromClipboard() const;
 
     QJsonObject serializeSceneToJson(QGraphicsScene* scene);
-    void deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json);
+    void deserializeJsonToScene(QGraphicsScene* scene,
+                                const QJsonObject& json,
+                                const QPointF& offset = QPointF());
 
     // Только выделенных элементов
     QJsonObject serializeSelectedItemsToJson(QGraphicsScene* scene);
@@ -298,7 +300,7 @@ private:
     static double round2(double value);
     void saveAnnotationToFile(Document::Ptr doc);
     void updateFileListDisplay(const QString& filePath);
-    void loadAnnotationFromFile(Document::Ptr doc);
+    void loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi = true);
     void saveCurrentViewState(Document::Ptr doc);
     void restoreViewState(Document::Ptr doc);
 
@@ -702,6 +704,7 @@ private:
     QGraphicsItem* _movingItem = nullptr;
     ShapeBackup    _moveBeforeSnap;
     bool           _moveHadChanges = false;
+    bool           _moveInProgress = false;
 
     QPointF        _moveGrabOffsetScene; // Смещение узла относительно item->scenePos()
     QGraphicsItem::GraphicsItemFlags  _moveSavedFlags{}; // Чтобы вернуть флаги

@@ -111,13 +111,21 @@ void Line::addPoint(const QPointF& position, QGraphicsScene* scene)
     DragCircle::rememberCurrentAsBase(newCircle);
     _circles.append(newCircle);
 
+    if (!_loadingMode)
+    {
+        updateConnections();
+        updatePath();
+
+        if (_modificationCallback)
+            _modificationCallback();
+    }
+}
+
+void Line::endBulkLoad()
+{
+    _loadingMode = false;
     updateConnections();
     updatePath();
-    updatePointNumbers();
-    if (_modificationCallback)
-    {
-        _modificationCallback();
-    }
 }
 
 void Line::removePoint(QPointF position)
@@ -283,7 +291,7 @@ QVariant Line::itemChange(GraphicsItemChange change, const QVariant& value)
 {
     if (change == QGraphicsItem::ItemPositionHasChanged)
     {
-        updatePointNumbers();
+        //updatePointNumbers();
     }
     else if (change == QGraphicsItem::ItemSelectedHasChanged)
     {
@@ -800,7 +808,8 @@ QPainterPath Line::shape() const
         result.addPath(fillPath);
     }
 
-    return result.simplified();
+    //return result.simplified();
+    return result;
 }
 
 void Line::dragCircleMove(DragCircle* circle)

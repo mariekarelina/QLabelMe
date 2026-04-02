@@ -1042,6 +1042,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                     _movingItem = mov;
                     _moveBeforeSnap = makeBackupFromItem(_movingItem);
                     _moveHadChanges = false;
+                    _moveInProgress = true;
 
                     const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
                     _moveGrabOffsetScene = scenePos - _movingItem->scenePos();
@@ -1701,12 +1702,35 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 }
             }
 
+            if (_moveHadChanges)
+            {
+                if (_moveIsGroup && !_movingItems.isEmpty())
+                {
+                    for (QGraphicsItem* item : _movingItems)
+                    {
+                        if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+                            polyline->updatePointNumbers();
+                        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+                            line->updatePointNumbers();
+                    }
+                }
+                else
+                {
+                    if (auto* polyline = dynamic_cast<qgraph::Polyline*>(_movingItem))
+                        polyline->updatePointNumbers();
+                    else if (auto* line = dynamic_cast<qgraph::Line*>(_movingItem))
+                        line->updatePointNumbers();
+                }
+            }
+
             _movingItem = nullptr;
             _movingItems.clear();
             _moveGroupBefore.clear();
             _moveGroupInitialPos.clear();
             _moveIsGroup = false;
             _moveHadChanges = false;
+            _moveInProgress = false;
+            updateCoordinateList();
         }
     }
 
@@ -2234,6 +2258,10 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         updateModeLabel();
         return;
     }
+
+    if (mouseEvent->button() == Qt::LeftButton)
+        _moveInProgress = false;
+
     //graphView->mouseReleaseEvent(mouseEvent);
 }
 
@@ -3734,6 +3762,10 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
         //item->setFlags(item->flags() & ~Qt::ItemIsUserCheckable);
 
         ui->fileList->addItem(item);
+        if (doc->loadImage())
+        {
+            loadAnnotationFromFile(doc, false);
+        }
     }
 }
 
@@ -3780,6 +3812,8 @@ void MainWindow::updatePolygonListForCurrentScene()
 
     for (QGraphicsItem* item : roots)
         linkSceneItemToList(item);
+
+    renumberPolygonList();
 
     log_debug2_m <<  "m21 " << timer3.elapsed();
 }
@@ -4179,7 +4213,7 @@ void MainWindow::updateFileListDisplay(const QString& filePath)
     }
 }
 
-void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
+void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
 {
     if (!doc || !doc->scene)
     {
@@ -4280,10 +4314,14 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
     };
     YamlConfig::Func loadPolylines = [&](YamlConfig* conf, YAML::Node& ypolylines, bool)
     {
+        steady_timer timer5;
+        log_debug2_m << "m5: load polylines" << timer5.elapsed();
+
         for (const YAML::Node& ypolyline : ypolylines)
         {
             QString label;
             conf->getValue(ypolyline, "label", label);
+            log_debug2_m << "m5: load polylines label " << timer5.elapsed();
 
             QVector<QPointF> points;
             YamlConfig::Func loadPoints = [&points, &imageOffset](YamlConfig* conf, YAML::Node& ypoints, bool)
@@ -4298,6 +4336,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
                 }
                 return true;
             };
+            log_debug2_m << "m5: load polylines points " << timer5.elapsed();
             conf->getValue(ypolyline, "points", loadPoints);
 
             if (points.isEmpty())
@@ -4305,10 +4344,18 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             // Создаем полилинию на сцене
             qgraph::Polyline* polyline = new qgraph::Polyline(doc->scene, points.first());
             ensureUid(polyline);
+
+            log_debug2_m << "m5: load polylines addPoint " << timer5.elapsed();
+
+            polyline->beginBulkLoad();
             for (int i = 1; i < points.size(); ++i)
             {
                 polyline->addPoint(points[i], doc->scene);
             }
+            polyline->endBulkLoad();
+
+            log_debug2_m << "m5: load polylines create " << timer5.elapsed();
+
             polyline->closePolyline();
             polyline->updatePath();
             polyline->setData(0, label);
@@ -4316,6 +4363,8 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             apply_PointSize_ToItem(polyline);
             apply_NumberSize_ToItem(polyline);
             applyClassColorToItem(polyline, label);
+
+            log_debug2_m << "m5: load polylines total " << timer5.elapsed();
         }
         return true;
     };
@@ -4408,10 +4457,14 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
             // Создаем линию на сцене
             qgraph::Line* line = new qgraph::Line(doc->scene, points.first());
             ensureUid(line);
+
+            line->beginBulkLoad();
             for (int i = 1; i < points.size(); ++i)
             {
                 line->addPoint(points[i], doc->scene);
             }
+            line->endBulkLoad();
+
             line->closeLine();
             line->updatePath();
             line->setData(0, label);
@@ -4425,12 +4478,22 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
 
     YamlConfig::Func loadFunc = [&](YamlConfig* conf, YAML::Node& shapes, bool /*logWarn*/)
     {
+        steady_timer timer4;
 
         conf->getValue(shapes, "circles", loadCircles);
+        log_debug2_m << "load circles" << timer4.elapsed();
+
         conf->getValue(shapes, "polylines", loadPolylines);
+        log_debug2_m << "load polylines" << timer4.elapsed();
+
         conf->getValue(shapes, "rectangles", loadRectangles);
+        log_debug2_m << "load rectangles" << timer4.elapsed();
+
         conf->getValue(shapes, "points", loadPoints);
+        log_debug2_m << "load points" << timer4.elapsed();
+
         conf->getValue(shapes, "lines", loadLines);
+        log_debug2_m << "load lines" << timer4.elapsed();
 
         return true;
     };
@@ -4442,16 +4505,24 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc)
     {
         log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
         _loadingNow = false;
+
         return;
     }
     log_debug2_m <<  "m12 " << timer2.elapsed();
     _loadingNow = false;
     // После загрузки всех элементов обновляем список
-    updatePolygonListForCurrentScene();
-    log_debug2_m <<  "m13 " << timer2.elapsed();
+    // updatePolygonListForCurrentScene();
+    // log_debug2_m <<  "m13 " << timer2.elapsed();
+    if (rebuildUi && doc == currentDocument())
+    {
+        updatePolygonListForCurrentScene();
+        log_debug2_m <<  "m13 " << timer2.elapsed();
+    }
 }
 
-void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject& json)
+void MainWindow::deserializeJsonToScene(QGraphicsScene* scene,
+                                        const QJsonObject& json,
+                                        const QPointF& offset)
 {
     if (!scene)
     {
@@ -4472,10 +4543,14 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
             qreal width = shapeObj["width"].toDouble();
             qreal height = shapeObj["height"].toDouble();
 
+            QPointF topLeft(x, y);
+            topLeft += offset;
+
             qgraph::Rectangle* rect = new qgraph::Rectangle(scene);
+
             ensureUid(rect);
             //rect->setRect(QRectF(x, y, width, height));
-            rect->setRealSceneRect(QRectF(QPointF(x, y), QSizeF(width, height)));
+            rect->setRealSceneRect(QRectF(topLeft, QSizeF(width, height)));
             rect->setData(0, className);
             apply_LineWidth_ToItem(rect);
             apply_PointSize_ToItem(rect);
@@ -4487,7 +4562,11 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
             qreal y = shapeObj["y"].toDouble();
             qreal radius = shapeObj["radius"].toDouble();
 
-            qgraph::Circle* circle = new qgraph::Circle(scene, QPointF(x, y));
+            QPointF center(x, y);
+            center += offset;
+
+            qgraph::Circle* circle = new qgraph::Circle(scene, center);
+
             ensureUid(circle);
             circle->setRealRadius(radius);
             circle->setData(0, className);
@@ -4506,14 +4585,20 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
             QPointF firstPoint(pointsArray[0].toObject()["x"].toDouble(),
                                pointsArray[0].toObject()["y"].toDouble());
 
+            firstPoint += offset;
+
             qgraph::Polyline* polyline = new qgraph::Polyline(scene, firstPoint);
             ensureUid(polyline);
+
+            polyline->beginBulkLoad();
             for (int i = 1; i < pointsArray.size(); ++i)
             {
                 QPointF point(pointsArray[i].toObject()["x"].toDouble(),
                               pointsArray[i].toObject()["y"].toDouble());
+                point += offset;
                 polyline->addPoint(point, scene);
             }
+            polyline->endBulkLoad();
 
             if (closed)
                 polyline->closePolyline();
@@ -4531,15 +4616,21 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
 
             QPointF firstPoint(pointsArray[0].toObject()["x"].toDouble(),
                                pointsArray[0].toObject()["y"].toDouble());
+            firstPoint += offset;
 
             qgraph::Line* line = new qgraph::Line(scene, firstPoint);
             ensureUid(line);
+
+            line->beginBulkLoad();
             for (int i = 1; i < pointsArray.size(); ++i)
             {
                 QJsonObject ptObj = pointsArray[i].toObject();
                 QPointF p(ptObj["x"].toDouble(), ptObj["y"].toDouble());
+                p += offset;
                 line->addPoint(p, scene);
             }
+            line->endBulkLoad();
+
             line->setData(0, className);
 
             apply_LineWidth_ToItem(line);
@@ -4551,9 +4642,13 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene, const QJsonObject
             qreal x = shapeObj["x"].toDouble();
             qreal y = shapeObj["y"].toDouble();
 
+            QPointF center(x, y);
+            center += offset;
+
             qgraph::Point* p = new qgraph::Point(scene);
+
             ensureUid(p);
-            p->setCenter(QPointF(x, y));
+            p->setCenter(center);
             p->setData(0, className);
 
             apply_PointSize_ToItem(p);
@@ -5109,7 +5204,9 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     // Запоминаем, что было на сцене ДО вставки
     QList<QGraphicsItem*> beforeItems = scene->items();
-    deserializeJsonToScene(scene, json);
+    const QPointF pasteOffset(10.0, 10.0);
+    deserializeJsonToScene(scene, json, pasteOffset);
+    //deserializeJsonToScene(scene, json);
 
     // Собираем список новых фигур (тех, которых не было в beforeItems)
     QList<QGraphicsItem*> afterItems = scene->items();
@@ -5146,51 +5243,6 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     if (newItems.isEmpty())
         return;
-
-    // Небольшое смещение вставки, чтобы копия не лежала строго поверх исходной
-    const QPointF pasteOffset(10.0, 10.0);
-
-    for (QGraphicsItem* item : newItems)
-    {
-        if (!item)
-            continue;
-
-        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
-        {
-            QRectF r = rect->realSceneRect();
-            r.translate(pasteOffset);
-            rect->setRealSceneRect(r);
-            rect->updatePointNumbers();
-            rect->updateHandlePosition();
-        }
-        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
-        {
-            circle->moveBy(pasteOffset.x(), pasteOffset.y());
-            circle->updateHandlePosition();
-        }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-        {
-            QVector<QPointF> pts = polyline->points();
-            for (QPointF& p : pts)
-                p += pasteOffset;
-
-            polyline->replaceScenePoints(pts, polyline->isClosed());
-            polyline->updateHandlePosition();
-        }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
-        {
-            QVector<QPointF> pts = line->points();
-            for (QPointF& p : pts)
-                p += pasteOffset;
-
-            line->replaceScenePoints(pts, line->isClosed());
-            line->updateHandlePosition();
-        }
-        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
-        {
-            point->setCenter(point->center() + pasteOffset);
-        }
-    }
 
     // После вставки активными должны стать именно новые фигуры
     const QList<QGraphicsItem*> selectedBeforePaste = scene->selectedItems();
@@ -5893,7 +5945,7 @@ void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem, int row)
     else
         ui->polygonList->insertItem(row, listItem);
 
-    renumberPolygonList();
+    //renumberPolygonList();
 }
 
 void MainWindow::renumberPolygonList()
@@ -8944,8 +8996,9 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
 {
     struct Payload
     {
-        ShapeBackup  b;
-        qulonglong   uid = 0;
+        ShapeBackup b;
+        qulonglong  uid = 0;
+        bool skipFirstRedo = false;
     };
 
     auto payload = std::make_shared<Payload>();
@@ -8958,11 +9011,27 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
     if (uid == 0 && createdNow)
         uid = ensureUid(createdNow);
     payload->uid = uid;
+    payload->skipFirstRedo = (createdNow != nullptr);
 
     auto redoFn = [this, payload]()
     {
         if (payload->uid == 0)
             return;
+
+        // После QUndoStack::push() redo вызывается сразу.
+        // Фигура уже существует и уже в нужном состоянии,
+        // поэтому первый redo пропускаем.
+        if (payload->skipFirstRedo)
+        {
+            payload->skipFirstRedo = false;
+
+            if (auto d = currentDocument())
+            {
+                d->isModified = true;
+                updateFileListDisplay(d->filePath);
+            }
+            return;
+        }
 
         // Пытаемся найти уже существующий объект по uid
         QGraphicsItem* item = findItemByUid(payload->uid);
@@ -9014,7 +9083,6 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
         st->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
-
 void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
                                       const ShapeBackup& before,
                                       const ShapeBackup& after,
@@ -9025,6 +9093,7 @@ void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
         ShapeBackup before;
         ShapeBackup after;
         qulonglong uid = 0;
+        bool skipFirstRedo = false;
     };
 
     auto p = std::make_shared<Payload>();
@@ -9398,8 +9467,12 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
             auto* pl = new qgraph::Polyline(_scene, b.points.front());
             //ensureUid(pl);
             applyBackupUid(pl, b.uid);
+
+            pl->beginBulkLoad();
             for (int i = 1; i < b.points.size(); ++i)
                 pl->addPoint(b.points[i], _scene);
+            pl->endBulkLoad();
+
             if (b.closed)
                 pl->closePolyline();
 
@@ -9423,8 +9496,12 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
             auto* ln = new qgraph::Line(_scene, b.points.front());
             //ensureUid(ln);
             applyBackupUid(ln, b.uid);
+
+            ln->beginBulkLoad();
             for (int i = 1; i < b.points.size(); ++i)
                 ln->addPoint(b.points[i], _scene);
+            ln->endBulkLoad();
+
             if (b.closed)
                 ln->closeLine();
 
@@ -9518,15 +9595,13 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
             {
                 // Полная замена узлов из снапшота
                 pl->replaceScenePoints(b.points, b.closed);
-
+                pl->setData(0, b.className);
+                pl->setVisible(b.visible);
+                pl->setZValue(b.z);
                 apply_LineWidth_ToItem(pl);
                 apply_PointSize_ToItem(pl);
                 apply_NumberSize_ToItem(pl);
-                pl->setData(0, b.className);
                 applyClassColorToItem(pl, b.className);
-                pl->setZValue(b.z);
-                pl->setVisible(b.visible);
-                pl->updateHandlePosition();
             }
             break;
         }
@@ -9538,14 +9613,13 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
 
                 ln->replaceScenePoints(b.points, b.closed);
                 ln->setNumberingFromLast(b.numberingFromLast);
+                ln->setData(0, b.className);
+                ln->setVisible(b.visible);
+                ln->setZValue(b.z);
                 apply_LineWidth_ToItem(ln);
                 apply_PointSize_ToItem(ln);
                 apply_NumberSize_ToItem(ln);
-                ln->setData(0, b.className);
                 applyClassColorToItem(ln, b.className);
-                ln->setZValue(b.z);
-                ln->setVisible(b.visible);
-                ln->updateHandlePosition();
             }
             break;
         }
@@ -9801,21 +9875,21 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
                 this, &MainWindow::onSceneChanged,
                 Qt::UniqueConnection);
     }
-    if (_scene)
-    {
-        for (QGraphicsItem* item : _scene->items())
-        {
-            if (!item)
-                continue;
+    // if (_scene)
+    // {
+    //     for (QGraphicsItem* item : _scene->items())
+    //     {
+    //         if (!item)
+    //             continue;
 
-            apply_PointStyle_ToItem(item);
+    //         apply_PointStyle_ToItem(item);
 
-            const QString cls = item->data(0).toString();
-            if (!cls.isEmpty())
-                applyClassColorToItem(item, cls);
-        }
-        _scene->update();
-    }
+    //         const QString cls = item->data(0).toString();
+    //         if (!cls.isEmpty())
+    //             applyClassColorToItem(item, cls);
+    //     }
+    //     _scene->update();
+    // }
 
     _loadingNow = false;
 
@@ -9833,7 +9907,7 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
         else
             fitImageToView();
     }
-    updateAllPointNumbers();
+    //updateAllPointNumbers();
     updatePolygonListForCurrentScene();
     clearAllHandleHoverEffects();
     // Обновляем отображение звездочки (файл изменен)
@@ -9856,6 +9930,10 @@ void MainWindow::onSceneChanged()
 {
     // Игнорируем изменения во время загрузки
     if (_loadingNow)
+        return;
+
+    // Во время перетаскивания фигур не пересчитываем координаты
+    if (_moveInProgress)
         return;
 
     // Обновляем координаты для выделенной фигуры
