@@ -329,6 +329,8 @@ void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     QAction* moveToBackAction = menu.addAction("Переместить на задний план (B)");
     QAction* toggleNumbersAction = menu.addAction(numbersText);
     QAction* changeClassAction = menu.addAction("Изменить класс");
+    QAction* toggleVisibleAction =
+        menu.addAction(isVisible() ? "Скрыть разметку" : "Показать разметку");
 
     // Добавляем разделитель
     menu.addSeparator();
@@ -383,6 +385,21 @@ void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
                                   "changeClassByUid",
                                   Qt::DirectConnection,
                                   Q_ARG(qulonglong, uid));
+    });
+
+    QObject::connect(toggleVisibleAction, &QAction::triggered, [this]() {
+        auto sc = this->scene();
+        if (!sc)
+            return;
+
+        QObject* receiver = sc->property("shapeDeleteReceiver").value<QObject*>();
+        if (!receiver)
+            return;
+
+        QMetaObject::invokeMethod(receiver,
+                                  "toggleSceneItemVisibility",
+                                  Qt::DirectConnection,
+                                  Q_ARG(QGraphicsItem*, static_cast<QGraphicsItem*>(this)));
     });
 
     menu.exec(event->screenPos());
