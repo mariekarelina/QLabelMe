@@ -190,6 +190,7 @@ public:
 
 public slots:
     void changeClassByUid(qulonglong uid);
+    void toggleSceneItemVisibility(QGraphicsItem* item);
 
 protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
@@ -336,6 +337,9 @@ private:
     void renumberPolygonListTextOnly();
 
     void showPolygonListContextMenu(const QPoint &pos);
+
+    void updatePolygonListItemText(QListWidgetItem* item);
+    void updatePolygonListTexts();
 
     bool isYamlFileEmpty(const QString& yamlPath) const;
     QString getAnnotationFilePath(const QString& imagePath) const;

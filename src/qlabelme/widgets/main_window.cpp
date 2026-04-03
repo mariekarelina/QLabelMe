@@ -5966,7 +5966,11 @@ void MainWindow::renumberPolygonList()
             continue;
 
         const QString className = sceneItem->data(0).toString();
-        item->setText(QString("%1: %2").arg(i).arg(className));
+        //item->setText(QString("%1: %2").arg(i).arg(className));
+        QString text = QString("%1: %2").arg(i).arg(className);
+        if (!sceneItem->isVisible())
+            text += " [скрыто]";
+        item->setText(text);
 
         // Порядок списка = порядок фигур
         sceneItem->setZValue(i);
@@ -5992,7 +5996,11 @@ void MainWindow::renumberPolygonListTextOnly()
             continue;
 
         const QString className = sceneItem->data(0).toString();
-        item->setText(QString("%1: %2").arg(i).arg(className));
+        //item->setText(QString("%1: %2").arg(i).arg(className));
+        QString text = QString("%1: %2").arg(i).arg(className);
+        if (!sceneItem->isVisible())
+            text += " [скрыто]";
+        item->setText(text);
     }
 }
 
@@ -6001,13 +6009,150 @@ void MainWindow::showPolygonListContextMenu(const QPoint &pos)
     QListWidgetItem* item = ui->polygonList->itemAt(pos);
     if (!item) return;
 
+    QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
+    if (!sceneItem)
+        return;
+
     QMenu menu;
+    QAction* toggleVisibleAction =
+        menu.addAction(sceneItem->isVisible() ? "Скрыть разметку" : "Показать разметку");
     QAction* deleteAction = menu.addAction("Удалить");
 
-    if (menu.exec(ui->polygonList->viewport()->mapToGlobal(pos)) == deleteAction)
-    {
+    QAction* chosen = menu.exec(ui->polygonList->viewport()->mapToGlobal(pos));
+    if (chosen == toggleVisibleAction)
+        toggleSceneItemVisibility(sceneItem);
+    else if (chosen == deleteAction)
         removePolygonListItem(item);
+}
+
+void MainWindow::updatePolygonListItemText(QListWidgetItem* item)
+{
+    if (!item)
+        return;
+
+    QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
+    if (!sceneItem)
+        return;
+
+    const QString className = sceneItem->data(0).toString();
+    const int row = ui->polygonList->row(item);
+
+    QString text = QString("%1: %2").arg(row).arg(className);
+    if (!sceneItem->isVisible())
+        text += " [скрыто]";
+
+    item->setText(text);
+}
+
+void MainWindow::updatePolygonListTexts()
+{
+    if (!ui || !ui->polygonList)
+        return;
+
+    for (int i = 0; i < ui->polygonList->count(); ++i)
+        updatePolygonListItemText(ui->polygonList->item(i));
+}
+
+void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
+{
+    if (!item)
+        return;
+
+    if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(item))
+        item = handle->parentItem();
+
+    if (!item || item == _videoRect)
+        return;
+
+    item = findMovableAncestor(item);
+    if (!item)
+        return;
+
+    QList<QGraphicsItem*> targets;
+
+    const QList<QGraphicsItem*> selectedItems =
+        (_scene ? _scene->selectedItems() : QList<QGraphicsItem*>());
+
+    const bool clickedItemIsInSelection = selectedItems.contains(item);
+
+    if (clickedItemIsInSelection)
+    {
+        for (QGraphicsItem* sel : selectedItems)
+        {
+            if (!sel)
+                continue;
+
+            if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(sel))
+                sel = handle->parentItem();
+
+            sel = findMovableAncestor(sel);
+
+            if (!sel || sel == _videoRect)
+                continue;
+
+            if (!targets.contains(sel))
+                targets.append(sel);
+        }
     }
+    else
+    {
+        targets.append(item);
+    }
+
+    if (targets.isEmpty())
+        return;
+
+    bool hideMode = false;
+    for (QGraphicsItem* target : targets)
+    {
+        if (target && target->isVisible())
+        {
+            hideMode = true;
+            break;
+        }
+    }
+
+    const QString description =
+        hideMode
+            ? (targets.size() == 1 ? tr("Скрытие фигуры") : tr("Скрытие фигур"))
+            : (targets.size() == 1 ? tr("Показ фигуры")   : tr("Показ фигур"));
+
+    if (QUndoStack* st = activeUndoStack())
+        st->beginMacro(description);
+
+    for (QGraphicsItem* target : targets)
+    {
+        if (!target)
+            continue;
+
+        ShapeBackup before = makeBackupFromItem(target);
+        const qulonglong uid = before.uid;
+
+        target->setVisible(!hideMode);
+
+        if (hideMode)
+            target->setSelected(false);
+
+        ShapeBackup after = makeBackupFromItem(target);
+        if (!sameGeometry(before, after))
+            pushModifyShapeCommand(uid, before, after, description);
+    }
+
+    if (QUndoStack* st = activeUndoStack())
+        st->endMacro();
+
+    updatePolygonListTexts();
+
+    if (auto doc = currentDocument())
+    {
+        doc->isModified = true;
+        updateFileListDisplay(doc->filePath);
+    }
+
+    updateCoordinateList();
+
+    if (_scene)
+        _scene->update();
 }
 
 bool MainWindow::isYamlFileEmpty(const QString& yamlPath) const
