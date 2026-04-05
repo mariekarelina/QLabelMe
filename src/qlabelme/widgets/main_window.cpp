@@ -2899,15 +2899,38 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             if (nz < kZoomMin) nz = kZoomMin;
             if (nz > kZoomMax) nz = kZoomMax;
 
-            // Применяем как относительный множитель
+            if (qFuzzyCompare(nz, oldZoom))
+            {
+                we->accept();
+                return true;
+            }
+
             const double factor = nz / oldZoom;
+            const QPointF viewPos = ui->graphView->viewport()->mapFromGlobal(QCursor::pos());
+
+            // Точка сцены под курсором до зума
+            QTransform invBefore = ui->graphView->viewportTransform().inverted();
+            const QPointF scenePosBefore = invBefore.map(viewPos);
+
+            ui->graphView->setTransformationAnchor(QGraphicsView::NoAnchor);
+            ui->graphView->scale(factor, factor);
+
+            // Точка сцены под курсором после зума
+            QTransform invAfter = ui->graphView->viewportTransform().inverted();
+            const QPointF scenePosAfter = invAfter.map(viewPos);
+
+            // Компенсируем разницу
+            const QPointF sceneDelta = scenePosAfter - scenePosBefore;
+            ui->graphView->translate(sceneDelta.x(), sceneDelta.y());
+
+            // Возвращаем обычное поведение
+            ui->graphView->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
+
             m_zoom = nz;
 
-            ui->graphView->scale(factor, factor);
             updateAllPointNumbers();
             ui->graphView->viewport()->update();
 
-            // Сохраняем состояние при изменении масштаба
             if (auto doc = currentDocument())
                 saveCurrentViewState(doc);
 
