@@ -789,8 +789,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             }
         }
     }
-    // Зум прямоугольной области Ctrl + ЛКМ только по пустому месту / изображению,
-    // чтобы Ctrl + клик по фигуре можно было использовать для мультивыделения
+
+    // Зум прямоугольной области Ctrl + ЛКМ
     if (graphView &&
         mouseEvent->button() == Qt::LeftButton &&
         (mouseEvent->modifiers() & Qt::ControlModifier) &&
@@ -802,32 +802,21 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         !_drawingPoint &&
         !_drawingRuler)
     {
-        QGraphicsItem* underCursor = graphView->itemAt(mouseEvent->pos());
-        if (!underCursor)
-            underCursor = pickItemByEdgeAt(graphView, mouseEvent->pos());
+        _zoomRectActive = true;
+        updateModeLabel();
 
-        if (!underCursor || underCursor == _videoRect)
-        {
-            _zoomRectActive = true;
-            updateModeLabel();
+        // Чтобы фигуры/сцена не начали двигаться во время возможного зума
+        _leftMouseButtonDown = false;
 
-            // Чтобы фигуры/сцена не начали двигаться во время зума
-            _leftMouseButtonDown = false;
+        _zoomRectView = graphView;
+        _zoomRectWasInteractive = graphView->isInteractive();
+        _zoomRectOrigin = mouseEvent->pos();
 
-            _zoomRectView = graphView;
-            _zoomRectWasInteractive = graphView->isInteractive();
-            graphView->setInteractive(false);
-            _zoomRectOrigin = mouseEvent->pos();
+        if (_zoomRubberBand)
+            _zoomRubberBand->hide();
 
-            if (!_zoomRubberBand)
-                _zoomRubberBand = new QRubberBand(QRubberBand::Rectangle, graphView->viewport());
-
-            _zoomRubberBand->setGeometry(QRect(_zoomRectOrigin, QSize()));
-            _zoomRubberBand->show();
-
-            mouseEvent->accept();
-            return;
-        }
+        mouseEvent->accept();
+        return;
     }
     // Было написано для создания иконки
     if ((mouseEvent->modifiers() & Qt::ControlModifier) &&
@@ -1389,11 +1378,26 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
     }
 
     // Зум прямоугольной области Ctrl + ЛКМ
-    if (_zoomRectActive && _zoomRubberBand)
+    if (_zoomRectActive && graphView && (mouseEvent->buttons() & Qt::LeftButton))
     {
-        _zoomRubberBand->setGeometry(QRect(_zoomRectOrigin, mouseEvent->pos()).normalized());
-        mouseEvent->accept();
-        return;
+        const int dragDist = QApplication::startDragDistance();
+        const bool dragged =
+            (mouseEvent->pos() - _zoomRectOrigin).manhattanLength() >= dragDist;
+
+        if (dragged)
+        {
+            if (!_zoomRubberBand)
+                _zoomRubberBand = new QRubberBand(QRubberBand::Rectangle, graphView->viewport());
+
+            if (_zoomRectView)
+                _zoomRectView->setInteractive(false);
+
+            _zoomRubberBand->setGeometry(QRect(_zoomRectOrigin, mouseEvent->pos()).normalized());
+            _zoomRubberBand->show();
+
+            mouseEvent->accept();
+            return;
+        }
     }
     if (_isDrawingRuler && _rulerLine)
     {
@@ -1580,19 +1584,23 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     {
         _zoomRectActive = false;
         updateModeLabel();
+
+        QRect viewRect;
+        const bool hadRubberBand = (_zoomRubberBand && _zoomRubberBand->isVisible());
+
+        if (_zoomRubberBand)
+        {
+            viewRect = _zoomRubberBand->geometry().normalized();
+            _zoomRubberBand->hide();
+        }
+
         if (_zoomRectView)
         {
             _zoomRectView->setInteractive(_zoomRectWasInteractive);
             _zoomRectView.clear();
         }
 
-        QRect viewRect;
-        if (_zoomRubberBand)
-        {
-            viewRect = _zoomRubberBand->geometry().normalized();
-            _zoomRubberBand->hide();
-        }
-        if (viewRect.width() >= 10 && viewRect.height() >= 10)
+        if (hadRubberBand && viewRect.width() >= 10 && viewRect.height() >= 10)
         {
             const QRectF sceneRect = graphView->mapToScene(viewRect).boundingRect();
 
@@ -1605,8 +1613,36 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
             if (auto doc = currentDocument())
                 saveCurrentViewState(doc);
+
             updateAllPointNumbers();
             graphView->viewport()->update();
+
+            mouseEvent->accept();
+            return;
+        }
+
+        // Если протяжки не было, это обычный Ctrl+клик по фигуре для мультивыделения
+        if ((mouseEvent->modifiers() & Qt::ControlModifier) &&
+            !(mouseEvent->modifiers() & Qt::ShiftModifier))
+        {
+            QGraphicsItem* clickedItem = graphView->itemAt(_zoomRectOrigin);
+            if (!clickedItem)
+                clickedItem = pickItemByEdgeAt(graphView, _zoomRectOrigin);
+
+            QGraphicsItem* selectionItem = clickedItem;
+
+            if (auto* h = qgraphicsitem_cast<qgraph::DragCircle*>(selectionItem))
+                selectionItem = h->parentItem();
+
+            if (selectionItem && selectionItem != _videoRect)
+                selectionItem = findMovableAncestor(selectionItem);
+
+            if (selectionItem && selectionItem != _videoRect)
+            {
+                selectionItem->setSelected(!selectionItem->isSelected());
+                mouseEvent->accept();
+                return;
+            }
         }
 
         mouseEvent->accept();
