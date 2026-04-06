@@ -4039,9 +4039,15 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
                 QPointF center = circle->realCenter();
                 double radius = circle->realRadius();
 
-                ycircle["center"]["x"] = round2(center.x());
-                ycircle["center"]["y"] = round2(center.y());
-                ycircle["radius"] = round2(radius);
+                YamlConfig::Func saveCenter = [center](YamlConfig* conf, YAML::Node& ycenter, bool)
+                {
+                    conf->setValue(ycenter, "x", static_cast<double>(center.x()));
+                    conf->setValue(ycenter, "y", static_cast<double>(center.y()));
+                    return true;
+                };
+
+                conf->setValue(ycircle, "center", saveCenter);
+                conf->setValue(ycircle, "radius", static_cast<double>(radius));
 
                 ycircles.push_back(ycircle);
             }
@@ -4061,19 +4067,23 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
                 conf->setValue(ypolyline, "label", className);
 
                 const QVector<QPointF> points = polyline->points();
-                YamlConfig::Func savePoints = [&points](YamlConfig*, YAML::Node& ypoints, bool)
+                YamlConfig::Func savePoints = [points](YamlConfig* conf, YAML::Node& ypoints, bool)
                 {
                     for (const QPointF& point : points)
                     {
-                        // Математическое округление координат точек
+                        YamlConfig::Func savePoint = [point](YamlConfig* conf, YAML::Node& ypoint, bool)
+                        {
+                            conf->setValue(ypoint, "x", static_cast<double>(point.x()));
+                            conf->setValue(ypoint, "y", static_cast<double>(point.y()));
+                            return true;
+                        };
+
                         YAML::Node ypoint;
-                        ypoint["x"] = round2(point.x());
-                        ypoint["y"] = round2(point.y());
+                        savePoint(conf, ypoint, false);
                         ypoints.push_back(ypoint);
                     }
                     return true;
                 };
-
                 conf->setValue(ypolyline, "points", savePoints);
                 conf->setNodeStyle(ypolyline, "points", YAML::EmitterStyle::Flow);
 
@@ -4097,10 +4107,25 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 
                 const QRectF sceneRect = rect->realSceneRect();
 
-                yrectangle["point1"]["x"] = round2(sceneRect.topLeft().x());
-                yrectangle["point1"]["y"] = round2(sceneRect.topLeft().y());
-                yrectangle["point2"]["x"] = round2(sceneRect.bottomRight().x());
-                yrectangle["point2"]["y"] = round2(sceneRect.bottomRight().y());
+                const QPointF p1 = sceneRect.topLeft();
+                const QPointF p2 = sceneRect.bottomRight();
+
+                YamlConfig::Func savePoint1 = [p1](YamlConfig* conf, YAML::Node& ypoint1, bool)
+                {
+                    conf->setValue(ypoint1, "x", static_cast<double>(p1.x()));
+                    conf->setValue(ypoint1, "y", static_cast<double>(p1.y()));
+                    return true;
+                };
+
+                YamlConfig::Func savePoint2 = [p2](YamlConfig* conf, YAML::Node& ypoint2, bool)
+                {
+                    conf->setValue(ypoint2, "x", static_cast<double>(p2.x()));
+                    conf->setValue(ypoint2, "y", static_cast<double>(p2.y()));
+                    return true;
+                };
+
+                conf->setValue(yrectangle, "point1", savePoint1);
+                conf->setValue(yrectangle, "point2", savePoint2);
 
                 yrectangles.push_back(yrectangle);
             }
@@ -4121,8 +4146,15 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
                 conf->setValue(ypoint, "label", className);
 
                 const QPointF center = p->center();
-                ypoint["point"]["x"] = round2(center.x());
-                ypoint["point"]["y"] = round2(center.y());
+
+                YamlConfig::Func savePoint = [center](YamlConfig* conf, YAML::Node& ypointNode, bool)
+                {
+                    conf->setValue(ypointNode, "x", static_cast<double>(center.x()));
+                    conf->setValue(ypointNode, "y", static_cast<double>(center.y()));
+                    return true;
+                };
+
+                conf->setValue(ypoint, "point", savePoint);
 
                 ypoints.push_back(ypoint);
             }
@@ -4142,13 +4174,19 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
                 conf->setValue(yline, "label", className);
 
                 const QVector<QPointF> points = line->points();
-                YamlConfig::Func savePoints = [&points](YamlConfig* /*conf*/, YAML::Node& ypoints, bool)
+                YamlConfig::Func savePoints = [points](YamlConfig* conf, YAML::Node& ypoints, bool)
                 {
                     for (const QPointF& point : points)
                     {
+                        YamlConfig::Func savePoint = [point](YamlConfig* conf, YAML::Node& ypoint, bool)
+                        {
+                            conf->setValue(ypoint, "x", static_cast<double>(point.x()));
+                            conf->setValue(ypoint, "y", static_cast<double>(point.y()));
+                            return true;
+                        };
+
                         YAML::Node ypoint;
-                        ypoint["x"] = round2(point.x());
-                        ypoint["y"] = round2(point.y());
+                        savePoint(conf, ypoint, false);
                         ypoints.push_back(ypoint);
                     }
                     return true;
@@ -4175,6 +4213,7 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
     };
 
     YamlConfig yconfig;
+    yconfig.setRounding(2);
     yconfig.setValue("shapes", saveFunc);
     //yconfig.saveFile("/tmp/1.yaml");
     //yconfig.saveFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml");
