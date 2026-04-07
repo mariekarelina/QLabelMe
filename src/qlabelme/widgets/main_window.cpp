@@ -3526,6 +3526,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     }
     else if (event->key() == Qt::Key_B)
     {
+        on_actBack_triggered();
         event->accept();
         return;
     }
@@ -3830,9 +3831,6 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
 
 void MainWindow::updatePolygonListForCurrentScene()
 {
-    steady_timer timer3;
-    log_debug2_m <<  "m20 " << timer3.elapsed();
-
     ui->polygonList->clear();
 
     if (ui->coordinateList)
@@ -3873,8 +3871,6 @@ void MainWindow::updatePolygonListForCurrentScene()
         linkSceneItemToList(item);
 
     renumberPolygonList();
-
-    log_debug2_m <<  "m21 " << timer3.elapsed();
 }
 
 void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
@@ -4318,9 +4314,6 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
         return;
     }
 
-    steady_timer timer2;
-    log_debug2_m <<  "m8 " << timer2.elapsed();
-
     // Временно блокируем обработку изменений
     _loadingNow = true;
     QSignalBlocker blocker(doc->scene); // временно глушим QGraphicsScene::changed
@@ -4350,8 +4343,6 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
         return;
     }
 
-    log_debug2_m <<  "m9 " << timer2.elapsed();
-
     //if (yconfig.readFile("/tmp/1.yaml"))
     //if (!yconfig.readFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml"))
 
@@ -4379,9 +4370,6 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
             delete item; // Удалит и всех детей автоматически
         }
     }
-
-    log_debug2_m <<  "m10 " << timer2.elapsed();
-
     YamlConfig::Func loadCircles = [&](YamlConfig* conf, YAML::Node& ycircles, bool)
     {
         for (const YAML::Node& ycircle : ycircles)
@@ -4412,14 +4400,10 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
     };
     YamlConfig::Func loadPolylines = [&](YamlConfig* conf, YAML::Node& ypolylines, bool)
     {
-        steady_timer timer5;
-        log_debug2_m << "m5: load polylines" << timer5.elapsed();
-
         for (const YAML::Node& ypolyline : ypolylines)
         {
             QString label;
             conf->getValue(ypolyline, "label", label);
-            log_debug2_m << "m5: load polylines label " << timer5.elapsed();
 
             QVector<QPointF> points;
             YamlConfig::Func loadPoints = [&points, &imageOffset](YamlConfig* conf, YAML::Node& ypoints, bool)
@@ -4434,7 +4418,6 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
                 }
                 return true;
             };
-            log_debug2_m << "m5: load polylines points " << timer5.elapsed();
             conf->getValue(ypolyline, "points", loadPoints);
 
             if (points.isEmpty())
@@ -4443,16 +4426,12 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
             qgraph::Polyline* polyline = new qgraph::Polyline(doc->scene, points.first());
             ensureUid(polyline);
 
-            log_debug2_m << "m5: load polylines addPoint " << timer5.elapsed();
-
             polyline->beginBulkLoad();
             for (int i = 1; i < points.size(); ++i)
             {
                 polyline->addPoint(points[i], doc->scene);
             }
             polyline->endBulkLoad();
-
-            log_debug2_m << "m5: load polylines create " << timer5.elapsed();
 
             polyline->closePolyline();
             polyline->updatePath();
@@ -4461,8 +4440,6 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
             apply_PointSize_ToItem(polyline);
             apply_NumberSize_ToItem(polyline);
             applyClassColorToItem(polyline, label);
-
-            log_debug2_m << "m5: load polylines total " << timer5.elapsed();
         }
         return true;
     };
@@ -4576,27 +4553,13 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
 
     YamlConfig::Func loadFunc = [&](YamlConfig* conf, YAML::Node& shapes, bool /*logWarn*/)
     {
-        steady_timer timer4;
-
         conf->getValue(shapes, "circles", loadCircles);
-        log_debug2_m << "load circles" << timer4.elapsed();
-
         conf->getValue(shapes, "polylines", loadPolylines);
-        log_debug2_m << "load polylines" << timer4.elapsed();
-
         conf->getValue(shapes, "rectangles", loadRectangles);
-        log_debug2_m << "load rectangles" << timer4.elapsed();
-
         conf->getValue(shapes, "points", loadPoints);
-        log_debug2_m << "load points" << timer4.elapsed();
-
         conf->getValue(shapes, "lines", loadLines);
-        log_debug2_m << "load lines" << timer4.elapsed();
-
         return true;
     };
-
-    log_debug2_m <<  "m11 " << timer2.elapsed();
 
     // Загружаем данные из YAML
     if (!yconfig.getValue("shapes", loadFunc, false))
@@ -4606,15 +4569,10 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
 
         return;
     }
-    log_debug2_m <<  "m12 " << timer2.elapsed();
     _loadingNow = false;
-    // После загрузки всех элементов обновляем список
-    // updatePolygonListForCurrentScene();
-    // log_debug2_m <<  "m13 " << timer2.elapsed();
     if (rebuildUi && doc == currentDocument())
     {
         updatePolygonListForCurrentScene();
-        log_debug2_m <<  "m13 " << timer2.elapsed();
     }
 }
 
@@ -6350,24 +6308,99 @@ void MainWindow::raiseAllHandlesToTop()
 
 void MainWindow::moveSelectedItemsToBack()
 {
-    QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
-    for (QGraphicsItem* item : selectedItems)
+    if (!_scene)
+        return;
+
+    QList<QGraphicsItem*> selectedRoots;
+    QList<QGraphicsItem*> allRoots;
+
+    for (QGraphicsItem* item : _scene->items())
     {
-        if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+        if (!item)
+            continue;
+
+        if (item == _videoRect ||
+            item == _tempRectItem ||
+            item == _tempCircleItem ||
+            item == _tempPolyline)
         {
-            rectangle->moveToBack();
+            continue;
         }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+
+        if (item->parentItem() != nullptr)
+            continue;
+
+        const bool isShape =
+                dynamic_cast<qgraph::Rectangle*>(item) ||
+                dynamic_cast<qgraph::Circle*>(item) ||
+                dynamic_cast<qgraph::Polyline*>(item) ||
+                dynamic_cast<qgraph::Line*>(item) ||
+                dynamic_cast<qgraph::Point*>(item);
+
+        if (!isShape)
+            continue;
+
+        allRoots.append(item);
+
+        if (item->isSelected())
+            selectedRoots.append(item);
+    }
+
+    if (selectedRoots.isEmpty())
+        return;
+
+    // Сохраняем относительный порядок выделенных фигур
+    std::sort(selectedRoots.begin(), selectedRoots.end(),
+              [](QGraphicsItem* a, QGraphicsItem* b)
+    {
+        return a->zValue() < b->zValue();
+    });
+
+    qreal minNonSelectedZ = 0.0;
+    bool hasNonSelected = false;
+
+    for (QGraphicsItem* item : allRoots)
+    {
+        if (!item || selectedRoots.contains(item))
+            continue;
+
+        if (!hasNonSelected)
         {
-            polyline->moveToBack();
+            minNonSelectedZ = item->zValue();
+            hasNonSelected = true;
         }
-        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        else
         {
-            circle->moveToBack();
+            minNonSelectedZ = qMin(minNonSelectedZ, item->zValue());
         }
     }
-    // Обновляем ручки после перемещения
+
+    // Базовый нижний слой для фигур: сразу над изображением
+    const qreal imageZ = (_videoRect ? _videoRect->zValue() : 0.0);
+    const qreal shapesFloorZ = imageZ + 1.0;
+
+    qreal startZ = shapesFloorZ;
+
+    // Если есть другие невыделенные фигуры выше нижнего слоя,
+    // ставим выделенные перед ними, но не ниже изображения
+    if (hasNonSelected)
+        startZ = qMax(shapesFloorZ, minNonSelectedZ - selectedRoots.size());
+
+    qreal z = startZ;
+    for (QGraphicsItem* item : selectedRoots)
+    {
+        item->setZValue(z);
+        z += 1.0;
+    }
+    for (QGraphicsItem* item : selectedRoots)
+    {
+        if (item)
+            item->setSelected(false);
+    }
+
     raiseAllHandlesToTop();
+    updateCoordinateList();
+    _scene->update();
 }
 
 bool MainWindow::hasUnsavedChanges() const
@@ -9947,9 +9980,6 @@ void MainWindow::fitImageToView()
     if (!_scene || !_videoRect || !ui->graphView)
         return;
 
-    steady_timer timer2;
-    log_debug2_m <<  "m7 " << timer2.elapsed();
-
     _scene->setSceneRect(_videoRect->boundingRect().translated(_videoRect->pos()));
 
     ui->graphView->resetTransform();
@@ -9977,7 +10007,6 @@ void MainWindow::fitImageToView()
     m_zoom = ui->graphView->transform().m11();
     updateAllPointNumbers();
     ui->graphView->viewport()->update();
-    log_debug2_m <<  "m8 " << timer2.elapsed();
 }
 
 void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem *previous)
@@ -10622,10 +10651,6 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
     {
         return;
     }
-
-    steady_timer timer1;
-    log_debug2_m << "Begin func setWorkingFolder";
-
     // Полностью забываем предыдущее состояние проекта,
     // чтобы старые документы не участвовали в последующих проверках
     if (_undoGroup)
@@ -10657,24 +10682,15 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
     loadFilesFromFolder(folderPath);
     //loadClassesFromFile(folderPath + "/classes.yaml");
 
-    log_debug2_m << "m1 " << timer1.elapsed();
-
     QDir dir(folderPath);
     loadClassesFromFile(dir.filePath("classes.yaml"));
-
-    log_debug2_m << "m2 " << timer1.elapsed();
 
     // Открыть первое изображение из папки
     if (ui->fileList->count() > 0)
     {
         ui->fileList->setCurrentRow(0);
-
-        log_debug2_m <<  "m3 " << timer1.elapsed();
-
         ui->fileList->scrollToItem(ui->fileList->currentItem());
     }
-    log_debug2_m <<  "m4 " << timer1.elapsed();
-    log_debug2_m << "End func setWorkingFolder";
 }
 
 void MainWindow::onSceneItemRemoved(QGraphicsItem* item)
