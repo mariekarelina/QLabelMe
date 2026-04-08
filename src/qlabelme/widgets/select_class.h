@@ -2,7 +2,7 @@
 
 #include <QDialog>
 
-namespace Ui { class SelectClass; }
+namespace Ui {class SelectClass;}
 
 class SelectClass : public QDialog
 {

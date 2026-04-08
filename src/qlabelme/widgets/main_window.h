@@ -527,20 +527,20 @@ private:
 
 
     //QToolButton* _selectModeButton;
-    bool _btnRectFlag = {false};
-    bool _btnPolylineFlag = {false};
-    bool _btnCircleFlag = {false};
-    bool _btnPointFlag = {false};
-    bool _btnLineFlag = {false};
+    bool _btnRectFlag = false;
+    bool _btnPolylineFlag = false;
+    bool _btnCircleFlag = false;
+    bool _btnPointFlag = false;
+    bool _btnLineFlag = false;
 
 
     QGraphicsItem* _draggingItem = {nullptr}; // Указатель на перетаскиваемый объект
 
-    bool _drawingCircle = {false};    // Флаг, рисуется ли круг
-    bool _drawingLine = {false};      // Флаг, рисуется ли линия
-    bool _drawingPolyline = {false};  // Флаг, рисуется ли полилиния
-    bool _drawingRectangle = {false}; // Флаг, рисуется ли прямоугольник
-    bool _drawingPoint = {false};
+    bool _drawingCircle = false;    // Флаг, рисуется ли круг
+    bool _drawingLine = false;      // Флаг, рисуется ли линия
+    bool _drawingPolyline = false;  // Флаг, рисуется ли полилиния
+    bool _drawingRectangle = false; // Флаг, рисуется ли прямоугольник
+    bool _drawingPoint = false;
     bool _isInDrawingMode = false; // Флаг, указывающий что мы в режиме рисования новой фигуры
     bool _isDraggingImage = false; // Флаг для перетаскивания изображения
     bool _isAllMoved = false; // Флаг для перетаскивания изображения вместе с разметкой
@@ -548,7 +548,7 @@ private:
     SquareDrawingItem* _currentSquare = {nullptr}; // Текущий квадрат
     QList<QPointF> _polylinePoints; // Точки текущей полилинии
 
-    enum class PendingDrawTool { None, Polyline, Line };
+    enum class PendingDrawTool {None, Polyline, Line};
     PendingDrawTool _pendingDrawTool = PendingDrawTool::None;
     QPoint _pendingDrawPressViewPos;
     QPointF _pendingDrawPressScenePos;
@@ -569,13 +569,13 @@ private:
 
     bool _isDrawingPoint = false;
 
-    qgraph::Line* _currLine = nullptr;
+    qgraph::Line* _currLine = {nullptr};
     bool _isDrawingLine = false;
     QPointF _lineFirstPoint;
 
     // Линейка
-    QGraphicsLineItem* _rulerLine = nullptr; // Временная линия измерения
-    QGraphicsTextItem* _rulerText = nullptr; // Подпись с расстоянием
+    QGraphicsLineItem* _rulerLine = {nullptr}; // Временная линия измерения
+    QGraphicsTextItem* _rulerText = {nullptr}; // Подпись с расстоянием
     bool _drawingRuler = false; // Выбран ли инструмент "Линейка"
     bool _isDrawingRuler = false; // Тянем вторую точку
     QPointF _rulerStartPoint; // Первая точка измерения
@@ -619,10 +619,10 @@ private:
     QMap<QString, ScrollState> _scrollStates; // Ключ - путь к файлу
     // double currentScale = 1.0;
     // const double scaleStep = 1.1;
-    qreal m_zoom = 1.0;
-    static constexpr qreal kZoomStep = 1.1;
-    static constexpr qreal kMinZoom  = 0.10;
-    static constexpr qreal kMaxZoom  = 100.0;
+    qreal _m_zoom = 1.0;
+    static constexpr qreal _kZoomStep = 1.1;
+    static constexpr qreal _kMinZoom  = 0.10;
+    static constexpr qreal _kMaxZoom  = 100.0;
 
     QList<int> _savedSplitterSizes; // Хранит нормальные размеры сплиттера
     bool _isRightSplitterCollapsed = false;
@@ -633,8 +633,8 @@ private:
     QCheckBox* _lastCheckedPolygonLabel = {nullptr};
 
     // Механика призрачной ручки
-    QGraphicsRectItem* _ghostHandle = nullptr; // Рисуемая сверху копия
-    qgraph::DragCircle* _ghostTarget = nullptr; // Реальная ручка
+    QGraphicsRectItem* _ghostHandle = {nullptr}; // Рисуемая сверху копия
+    qgraph::DragCircle* _ghostTarget = {nullptr}; // Реальная ручка
     bool _ghostActive = false;
     bool _ghostHover  = false;
     QPointF _ghostGrabOffset; // Смещение точки хвата
@@ -642,19 +642,19 @@ private:
     qreal _edgePickRadius  = 8.0; // Радиус захвата ребер
     qreal _drawHandleCommitRadius = 0.01; // Точное попадание в узел именно во время рисования line/polyline
 
-    QVector<qgraph::DragCircle*> m_circles;
-    qgraph::DragCircle* m_selectedCircle = nullptr;
-    QPointF m_dragOffset;
+    QVector<qgraph::DragCircle*> _m_circles;
+    qgraph::DragCircle* _m_selectedCircle = {nullptr};
+    QPointF _m_dragOffset;
 
     // Состояние перетаскивания
-    bool m_isDraggingHandle = false;
-    QPointer<qgraph::DragCircle> m_dragHandle; // Какую ручку тащим
-    QPointF m_pressLocalOffset;                // Смещение от центра ручки при захвате
+    bool _m_isDraggingHandle = false;
+    QPointer<qgraph::DragCircle> _m_dragHandle; // Какую ручку тащим
+    QPointF _m_pressLocalOffset;                // Смещение от центра ручки при захвате
 
     // Состояние левой кнопки мыши над графическим видом
     bool _leftMouseButtonDown = false;
 
-    qgraph::DragCircle* _currentDraggedCircle = nullptr;
+    qgraph::DragCircle* _currentDraggedCircle = {nullptr};
     QPointF _dragCircleStartPosition;
     QPointF _dragCircleMouseOffset;
 
@@ -663,9 +663,8 @@ private:
     bool _editInProgress = false;
     bool _handleDragging = false; // Флаг для отслеживания перетаскивания ручек
 
-    qgraph::DragCircle* _currentHoveredHandle = nullptr;
-
-    qgraph::DragCircle* _lastHoverHandle = nullptr; // Кто сейчас в hover-стиле
+    qgraph::DragCircle* _currentHoveredHandle = {nullptr};
+    qgraph::DragCircle* _lastHoverHandle = {nullptr}; // Кто сейчас в hover-стиле
 
     struct VisualStyle
     {
@@ -696,16 +695,16 @@ private:
     VisualStyle _vis; // Глобально для всех фигур
 
     //std::unique_ptr<QUndoStack> _undoStack;
-    QUndoGroup* _undoGroup = nullptr;
-    QUndoView* _undoView = nullptr; // Ссылка на вид из .ui
+    QUndoGroup* _undoGroup = {nullptr};
+    QUndoView* _undoView = {nullptr}; // Ссылка на вид из .ui
     QStringList _projectClasses;    // Единый список классов проекта
-    ProjectSettings* _projPropsDialog = nullptr;
+    ProjectSettings* _projPropsDialog = {nullptr};
 
     QAction* _actUndo = {nullptr};
     QAction* _actRedo = {nullptr};
 
     // Перемещение фигур
-    QGraphicsItem* _movingItem = nullptr;
+    QGraphicsItem* _movingItem = {nullptr};
     ShapeBackup    _moveBeforeSnap;
     bool           _moveHadChanges = false;
     bool           _moveInProgress = false;
@@ -721,7 +720,7 @@ private:
     QPointF _movePressScenePos; // Позиция курсора в сцене в момент захвата
 
     // Для узлов
-    QGraphicsItem* _handleEditedItem = nullptr; // Владелец перетаскиваемой ручки
+    QGraphicsItem* _handleEditedItem = {nullptr}; // Владелец перетаскиваемой ручки
     ShapeBackup    _handleBeforeSnap;           // Снимок "до"
     bool           _handleDragHadChanges = false;
 
@@ -733,7 +732,7 @@ private:
     QPointF _shiftImageBeforePos;
     bool _shiftImageDragging = false;
 
-    bool keepImageScale = false;
+    bool _keepImageScale = false;
 
     // Продолжение рисования
     bool _resumeEditing = false;
@@ -748,7 +747,7 @@ private:
     bool _zoomRectWasInteractive = true;
 
     // Стабильный ключ в QGraphicsItem::data(...)
-    static constexpr int RoleUid = 0x1337ABCD;
+    static constexpr int _roleUid = 0x1337ABCD;
 
     // Счетчик уникальных id на время жизни документа
     mutable qulonglong _uidCounter = 1;

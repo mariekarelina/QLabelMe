@@ -70,7 +70,7 @@ public:
     ~Settings();
 
     void   setValues(const Values& v);
-    Values values() const { return _values; }
+    Values values() const {return _values;}
 
 protected:
     void showEvent(QShowEvent* e) override;
