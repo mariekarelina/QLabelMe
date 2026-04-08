@@ -1607,9 +1607,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             graphView->fitInView(sceneRect, Qt::KeepAspectRatio);
             graphView->centerOn(sceneRect.center());
 
-            m_zoom = graphView->transform().m11();
-            if (m_zoom <= 0.000001)
-                m_zoom = 1.0;
+            _m_zoom = graphView->transform().m11();
+            if (_m_zoom <= 0.000001)
+                _m_zoom = 1.0;
 
             if (auto doc = currentDocument())
                 saveCurrentViewState(doc);
@@ -2362,7 +2362,7 @@ void MainWindow::changeClassByUid(qulonglong uid)
             continue;
         }
 
-        if (it->data(RoleUid).toULongLong() == uid)
+        if (it->data(_roleUid).toULongLong() == uid)
         {
             target = it;
             break;
@@ -2729,10 +2729,10 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 hideGhost();
                 break;
             }
-            if (m_isDraggingHandle && m_dragHandle)
+            if (_m_isDraggingHandle && _m_dragHandle)
             {
                 // Проверяем валидность указателя перед обновлением
-                if (m_dragHandle && m_dragHandle->scene())
+                if (_m_dragHandle && _m_dragHandle->scene())
                 {
                     updateHandleDrag(sp);
                     return true;
@@ -2790,7 +2790,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             if (me->button() != Qt::LeftButton)
                 break;
 
-            if (m_isDraggingHandle && m_dragHandle)
+            if (_m_isDraggingHandle && _m_dragHandle)
             {
                 finishHandleDrag();
                 return true;
@@ -2884,11 +2884,11 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             // Переводим в "шаги колеса": 120 = один щелчок
             const double steps = dy / 120.0;
 
-            const double kZoomStep = MainWindow::kZoomStep;
-            const double kZoomMin = MainWindow::kMinZoom;
-            const double kZoomMax = MainWindow::kMaxZoom;
+            const double kZoomStep = MainWindow::_kZoomStep;
+            const double kZoomMin = MainWindow::_kMinZoom;
+            const double kZoomMax = MainWindow::_kMaxZoom;
 
-            double oldZoom = m_zoom;
+            double oldZoom = _m_zoom;
             if (oldZoom <= 0.000001)
                 oldZoom = ui->graphView->transform().m11();
             if (oldZoom <= 0.000001)
@@ -2926,7 +2926,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             // Возвращаем обычное поведение
             ui->graphView->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
 
-            m_zoom = nz;
+            _m_zoom = nz;
 
             updateAllPointNumbers();
             ui->graphView->viewport()->update();
@@ -3416,27 +3416,27 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     if (event->modifiers() & Qt::ControlModifier)
     {
         QTransform base = ui->graphView->transform();
-        if (m_zoom != 0.0)
+        if (_m_zoom != 0.0)
         {
-            QTransform inv; inv.scale(1.0 / m_zoom, 1.0 / m_zoom);
+            QTransform inv; inv.scale(1.0 / _m_zoom, 1.0 / _m_zoom);
             base = base * inv;
         }
 
-        const double kZoomStep = MainWindow::kZoomStep;
-        const double kZoomMin = MainWindow::kMinZoom;
-        const double kZoomMax = MainWindow::kMaxZoom;
+        const double kZoomStep = MainWindow::_kZoomStep;
+        const double kZoomMin = MainWindow::_kMinZoom;
+        const double kZoomMax = MainWindow::_kMaxZoom;
 
         const int key = event->key();
 
         if (key == Qt::Key_Plus || key == Qt::Key_Equal)
         {
-            double nz = m_zoom * kZoomStep;
+            double nz = _m_zoom * kZoomStep;
             if (nz < kZoomMin) nz = kZoomMin;
             if (nz > kZoomMax) nz = kZoomMax;
 
-            m_zoom = nz;
+            _m_zoom = nz;
             ui->graphView->setTransform(base);    // Вернуть базу
-            ui->graphView->scale(m_zoom, m_zoom); // Применить абсолютный масштаб
+            ui->graphView->scale(_m_zoom, _m_zoom); // Применить абсолютный масштаб
             updateAllPointNumbers();
             ui->graphView->viewport()->update();
             event->accept();
@@ -3444,13 +3444,13 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         }
         else if (key == Qt::Key_Minus)
         {
-            double nz = m_zoom / kZoomStep;
+            double nz = _m_zoom / kZoomStep;
             if (nz < kZoomMin) nz = kZoomMin;
             if (nz > kZoomMax) nz = kZoomMax;
 
-            m_zoom = nz;
+            _m_zoom = nz;
             ui->graphView->setTransform(base);
-            ui->graphView->scale(m_zoom, m_zoom);
+            ui->graphView->scale(_m_zoom, _m_zoom);
             updateAllPointNumbers();
             ui->graphView->viewport()->update();
             event->accept();
@@ -5446,9 +5446,9 @@ void MainWindow::restoreViewState(Document::Ptr doc)
     ui->graphView->horizontalScrollBar()->setValue(doc->viewState.hScroll);
     ui->graphView->verticalScrollBar()->setValue(doc->viewState.vScroll);
     ui->graphView->centerOn(doc->viewState.center);
-    m_zoom = ui->graphView->transform().m11();
-    if (m_zoom <= 0.000001)
-        m_zoom = 1.0;
+    _m_zoom = ui->graphView->transform().m11();
+    if (_m_zoom <= 0.000001)
+        _m_zoom = 1.0;
     updateAllPointNumbers();
     ui->graphView->viewport()->update();
 }
@@ -6922,8 +6922,8 @@ QGraphicsItem* MainWindow::pickItemByEdgeAt(GraphicsView* view, const QPoint& vi
 
 void MainWindow::startHandleDrag(qgraph::DragCircle* h, const QPointF& scenePos)
 {    
-    m_isDraggingHandle = true;
-    m_dragHandle = h;
+    _m_isDraggingHandle = true;
+    _m_dragHandle = h;
     _handleDragging = true; // Начало перетаскивания ручки
     updateModeLabel();
 
@@ -6936,23 +6936,23 @@ void MainWindow::startHandleDrag(qgraph::DragCircle* h, const QPointF& scenePos)
     }
 
     const QPointF handleCenter = h->sceneBoundingRect().center();
-    m_pressLocalOffset = scenePos - handleCenter;
+    _m_pressLocalOffset = scenePos - handleCenter;
     h->setHoverStyle(true);
 }
 
 void MainWindow::updateHandleDrag(const QPointF& scenePos)
 {
-    if (!m_dragHandle) return;
+    if (!_m_dragHandle) return;
 
-    QGraphicsItem* parent = m_dragHandle->parentItem();
+    QGraphicsItem* parent = _m_dragHandle->parentItem();
     QPointF parentPos = parent
-                            ? parent->mapFromScene(scenePos - m_pressLocalOffset)
-                            : (scenePos - m_pressLocalOffset);
+                            ? parent->mapFromScene(scenePos - _m_pressLocalOffset)
+                            : (scenePos - _m_pressLocalOffset);
 
-    m_dragHandle->setPos(parentPos);
+    _m_dragHandle->setPos(parentPos);
 
-    emit m_dragHandle->dragCircleMove(m_dragHandle->index(),
-                                      m_dragHandle->scenePos());
+    emit _m_dragHandle->dragCircleMove(_m_dragHandle->index(),
+                                       _m_dragHandle->scenePos());
     updateAllPointNumbers();
     _handleDragHadChanges = true;
     updateCoordinateList();
@@ -6960,10 +6960,10 @@ void MainWindow::updateHandleDrag(const QPointF& scenePos)
 
 void MainWindow::finishHandleDrag()
 {
-    if (m_dragHandle)
+    if (_m_dragHandle)
     {
-        emit m_dragHandle->dragCircleRelease(m_dragHandle->index(),
-                                             m_dragHandle->scenePos());
+        emit _m_dragHandle->dragCircleRelease(_m_dragHandle->index(),
+                                             _m_dragHandle->scenePos());
 
         // Помечаем документ как измененный после завершения перетаскивания
         Document::Ptr doc = currentDocument();
@@ -6972,7 +6972,7 @@ void MainWindow::finishHandleDrag()
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
-        m_dragHandle->restoreBaseStyle();
+        _m_dragHandle->restoreBaseStyle();
     }
     // UNDO: если что-то реально поменяли - пушим команду
     if (_handleEditedItem && _handleDragHadChanges)
@@ -6988,8 +6988,8 @@ void MainWindow::finishHandleDrag()
     _handleEditedItem = nullptr;
     _handleDragHadChanges = false;
 
-    m_isDraggingHandle = false;
-    m_dragHandle = nullptr;
+    _m_isDraggingHandle = false;
+    _m_dragHandle = nullptr;
     _handleDragging = false; // Завершение перетаскивания ручки
     updateAllPointNumbers();
     updateModeLabel();
@@ -7659,8 +7659,10 @@ void MainWindow::applyZoom(qreal z)
     if (!ui->graphView) return;
 
     // Ограничим диапазон
-    if (z < kMinZoom) z = kMinZoom;
-    if (z > kMaxZoom) z = kMaxZoom;
+    if (z < _kMinZoom)
+        z = _kMinZoom;
+    if (z > _kMaxZoom)
+        z = _kMaxZoom;
 
     // Сохраним текущий центр сцены, чтобы картинка не «уезжала»
     const QPointF centerScene =
@@ -7673,14 +7675,14 @@ void MainWindow::applyZoom(qreal z)
     // Вернем центр
     ui->graphView->centerOn(centerScene);
 
-    m_zoom = z;
+    _m_zoom = z;
 
     if (auto doc = currentDocument())
     {
         doc->viewState = {
             ui->graphView->horizontalScrollBar()->value(),
             ui->graphView->verticalScrollBar()->value(),
-            m_zoom,
+            _m_zoom,
             centerScene
         };
     }
@@ -7780,7 +7782,7 @@ QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
         if (!it)
             continue;
 
-        if (it->data(RoleUid).toULongLong() == uid)
+        if (it->data(_roleUid).toULongLong() == uid)
             return it;
     }
     return nullptr;
@@ -7790,11 +7792,11 @@ qulonglong MainWindow::ensureUid(QGraphicsItem* it) const
 {
     if (!it)
         return 0;
-    QVariant v = it->data(RoleUid);
+    QVariant v = it->data(_roleUid);
     if (!v.isNull())
         return v.toULongLong();
     qulonglong uid = _uidCounter++;
-    it->setData(RoleUid, QVariant::fromValue<qulonglong>(uid));
+    it->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
     return uid;
 }
 
@@ -7803,7 +7805,7 @@ void MainWindow::clearLinePolylineStateForDeletedItem(QGraphicsItem* item)
     if (!item)
         return;
 
-    const qulonglong uid = item->data(RoleUid).toULongLong();
+    const qulonglong uid = item->data(_roleUid).toULongLong();
 
     const bool isLine = (dynamic_cast<qgraph::Line*>(item) != nullptr);
     const bool isPolyline = (dynamic_cast<qgraph::Polyline*>(item) != nullptr);
@@ -8119,7 +8121,7 @@ void MainWindow::updateModeLabel()
             : tr("Режим: перемещение (изображение)"));
         return;
     }
-    if (_editInProgress || _handleDragging || m_isDraggingHandle || _ghostActive)
+    if (_editInProgress || _handleDragging || _m_isDraggingHandle || _ghostActive)
     {
         _modeLabel->setText(tr("Режим: редактирование"));
         return;
@@ -8821,7 +8823,7 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
     auto backupForSceneItem = [this](QGraphicsItem* gi) -> ShapeBackup
     {
         ShapeBackup b{};
-        b.uid = gi->data(RoleUid).toULongLong();
+        b.uid = gi->data(_roleUid).toULongLong();
         if (b.uid == 0) b.uid = ensureUid(gi);
         b.className = gi->data(0).toString();
         b.z = gi->zValue();
@@ -8864,7 +8866,7 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
             return;
 
         auto* ln = new qgraph::Line(_scene, payload->mergedPts.front());
-        ln->setData(RoleUid, QVariant::fromValue<qulonglong>(payload->mergedUid));
+        ln->setData(_roleUid, QVariant::fromValue<qulonglong>(payload->mergedUid));
 
         for (int i = 1; i < payload->mergedPts.size(); ++i)
             ln->addPoint(payload->mergedPts[i], _scene);
@@ -9024,7 +9026,7 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePo
             if (pts.size() < 2) return;
 
             auto* ln = new qgraph::Line(_scene, pts.front());
-            ln->setData(RoleUid, QVariant::fromValue<qulonglong>(uid));
+            ln->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
             for (int i = 1; i < pts.size(); ++i)
                 ln->addPoint(pts[i], _scene);
 
@@ -9139,7 +9141,7 @@ void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString
             it = recreateFromBackup(payload->b);
             if (it && payload->uid != 0)
             {
-                it->setData(RoleUid, QVariant::fromValue<qulonglong>(payload->uid));
+                it->setData(_roleUid, QVariant::fromValue<qulonglong>(payload->uid));
             }
         }
 
@@ -9192,7 +9194,7 @@ ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* gi) const
     if (!gi)
         return b;
 
-    b.uid = gi->data(RoleUid).toULongLong();
+    b.uid = gi->data(_roleUid).toULongLong();
     if (b.uid == 0)
         b.uid = ensureUid(gi);
 
@@ -9283,7 +9285,7 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
     // Берем uid из снапшота или с самого объекта
     qulonglong uid = backup.uid;
     if (uid == 0 && createdNow)
-        uid = createdNow->data(RoleUid).toULongLong();
+        uid = createdNow->data(_roleUid).toULongLong();
     if (uid == 0 && createdNow)
         uid = ensureUid(createdNow);
     payload->uid = uid;
@@ -9322,7 +9324,7 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
             QGraphicsItem* created = recreateFromBackup(payload->b);
             if (created && payload->uid != 0)
             {
-                created->setData(RoleUid,
+                created->setData(_roleUid,
                                  QVariant::fromValue<qulonglong>(payload->uid));
             }
         }
@@ -9378,7 +9380,7 @@ void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
 
     qulonglong uid = 0;
     if (item)
-        uid = item->data(RoleUid).toULongLong();
+        uid = item->data(_roleUid).toULongLong();
     if (uid == 0 && item)
         uid = ensureUid(item);
     p->uid = uid;
@@ -9394,7 +9396,7 @@ void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
         QGraphicsItem* created = recreateFromBackup(snap);
         if (created)
         {
-            created->setData(RoleUid, QVariant::fromValue<qulonglong>(snap.uid ? snap.uid : uid));
+            created->setData(_roleUid, QVariant::fromValue<qulonglong>(snap.uid ? snap.uid : uid));
             return true;
         }
         return false;
@@ -9443,7 +9445,7 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
     // Сохраняем uid
     qulonglong uid = 0;
     if (item)
-        uid = item->data(RoleUid).toULongLong();
+        uid = item->data(_roleUid).toULongLong();
     if (uid == 0 && item)
         uid = ensureUid(item);
     p->uid = uid;
@@ -9461,7 +9463,7 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
         QGraphicsItem* created = recreateFromBackup(snap);
         if (created)
         {
-            created->setData(RoleUid, QVariant::fromValue<qulonglong>(snap.uid ? snap.uid : uid));
+            created->setData(_roleUid, QVariant::fromValue<qulonglong>(snap.uid ? snap.uid : uid));
             return true;
         }
         return false;
@@ -9635,7 +9637,7 @@ void MainWindow::pushReplaceShapeCommand(qulonglong uid,
 
         QGraphicsItem* created = recreateFromBackup(snap);
         if (created)
-            created->setData(RoleUid, QVariant::fromValue<qulonglong>(uid));
+            created->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
     };
 
     auto redoFn = [this, p, replaceBySnap]()
@@ -9689,7 +9691,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
         if (!it) return;
         if (uid != 0)
         {
-            it->setData(RoleUid, QVariant::fromValue<qulonglong>(uid));
+            it->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
             if (uid >= _uidCounter)
                 _uidCounter = uid + 1;
         }
@@ -9817,7 +9819,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
         created->setFocus();
 
     if (created)
-        created->setData(RoleUid, QVariant::fromValue<qulonglong>(b.uid));
+        created->setData(_roleUid, QVariant::fromValue<qulonglong>(b.uid));
 
     return created;
 }
@@ -9990,8 +9992,8 @@ void MainWindow::fitImageToView()
     ui->graphView->horizontalScrollBar()->setValue(0);
     ui->graphView->verticalScrollBar()->setValue(0);
 
-    if (m_zoom <= 0.000001)
-        m_zoom = 1.0;
+    if (_m_zoom <= 0.000001)
+        _m_zoom = 1.0;
 
     if (auto doc = currentDocument())
     {
@@ -10004,7 +10006,7 @@ void MainWindow::fitImageToView()
         };
         doc->viewState.zoom = zoom;
     }
-    m_zoom = ui->graphView->transform().m11();
+    _m_zoom = ui->graphView->transform().m11();
     updateAllPointNumbers();
     ui->graphView->viewport()->update();
 }
@@ -10017,8 +10019,8 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     clearAllHandleHoverEffects();
     hideGhost();
 
-    m_isDraggingHandle = false;
-    m_dragHandle = nullptr;
+    _m_isDraggingHandle = false;
+    _m_dragHandle = nullptr;
     _handleDragging = false;
     _handleEditedItem = nullptr;
     _handleDragHadChanges = false;
@@ -10704,7 +10706,7 @@ void MainWindow::onSceneItemRemoved(QGraphicsItem* item)
     clearLinePolylineStateForDeletedItem(item);
     if (_resumeEditing)
     {
-        const qulonglong uid = item ? item->data(RoleUid).toULongLong() : 0;
+        const qulonglong uid = item ? item->data(_roleUid).toULongLong() : 0;
         if (uid && uid == _resumeUid)
         {
             _resumeEditing = false;

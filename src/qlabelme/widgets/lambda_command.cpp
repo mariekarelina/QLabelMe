@@ -2,20 +2,16 @@
 
 void LambdaCommand::redo()
 {
-    //qDebug() << "[CMD] redo:" << text();
-
-    if (_redoFn)
-        _redoFn();
+    if (_redoFunc)
+        _redoFunc();
 
     _applied = true;
 }
 
 void LambdaCommand::undo()
 {
-    //qDebug() << "[CMD] undo:" << text();
-
-    if (_undoFn)
-        _undoFn();
+    if (_undoFunc)
+        _undoFunc();
 
    _applied = false;
 }

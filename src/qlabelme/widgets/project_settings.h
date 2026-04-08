@@ -15,11 +15,10 @@ public:
     explicit ProjectSettings(QWidget* parent = nullptr);
     ~ProjectSettings();
 
-    // Передаем актуальные классы проекта в диалог
-    void setProjectClasses(const QStringList& classes);
-
     // Если позже появится редактирование - можно будет забирать список обратно
     QStringList projectClasses() const {return _classes;}
+    // Передаем актуальные классы проекта в диалог
+    void setProjectClasses(const QStringList& classes);
 
     QMap<QString, QColor> projectClassColors() const;
     void setProjectClassColors(const QMap<QString, QColor>& colors);
