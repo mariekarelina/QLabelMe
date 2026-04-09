@@ -211,7 +211,6 @@ private slots:
     void on_btnCircle_clicked(bool);
     void on_btnTest_clicked(bool);
 
-
     void fitImageToView();
     void fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem* previous);
     void onPolylineModified();

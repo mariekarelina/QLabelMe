@@ -2374,6 +2374,108 @@ void MainWindow::changeClassByUid(qulonglong uid)
     changeClassForSceneItem(target);
 }
 
+void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
+{
+    if (!item)
+        return;
+
+    if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(item))
+        item = handle->parentItem();
+
+    if (!item || item == _videoRect)
+        return;
+
+    item = findMovableAncestor(item);
+    if (!item)
+        return;
+
+    QList<QGraphicsItem*> targets;
+
+    const QList<QGraphicsItem*> selectedItems =
+        (_scene ? _scene->selectedItems() : QList<QGraphicsItem*>());
+
+    const bool clickedItemIsInSelection = selectedItems.contains(item);
+
+    if (clickedItemIsInSelection)
+    {
+        for (QGraphicsItem* sel : selectedItems)
+        {
+            if (!sel)
+                continue;
+
+            if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(sel))
+                sel = handle->parentItem();
+
+            sel = findMovableAncestor(sel);
+
+            if (!sel || sel == _videoRect)
+                continue;
+
+            if (!targets.contains(sel))
+                targets.append(sel);
+        }
+    }
+    else
+    {
+        targets.append(item);
+    }
+
+    if (targets.isEmpty())
+        return;
+
+    bool hideMode = false;
+    for (QGraphicsItem* target : targets)
+    {
+        if (target && target->isVisible())
+        {
+            hideMode = true;
+            break;
+        }
+    }
+
+    const QString description =
+        hideMode
+            ? (targets.size() == 1 ? tr("Скрытие фигуры") : tr("Скрытие фигур"))
+            : (targets.size() == 1 ? tr("Показ фигуры")   : tr("Показ фигур"));
+
+    if (QUndoStack* st = activeUndoStack())
+        st->beginMacro(description);
+
+    for (QGraphicsItem* target : targets)
+    {
+        if (!target)
+            continue;
+
+        ShapeBackup before = makeBackupFromItem(target);
+        const qulonglong uid = before.uid;
+
+        target->setVisible(!hideMode);
+
+        if (hideMode)
+            target->setSelected(false);
+
+        ShapeBackup after = makeBackupFromItem(target);
+        if (!sameGeometry(before, after))
+            pushModifyShapeCommand(uid, before, after, description);
+    }
+
+    if (QUndoStack* st = activeUndoStack())
+        st->endMacro();
+
+    updatePolygonListTexts();
+
+    if (auto doc = currentDocument())
+    {
+        doc->isModified = true;
+        updateFileListDisplay(doc->filePath);
+    }
+
+    updateCoordinateList();
+
+    if (_scene)
+        _scene->update();
+}
+
 bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 {
     if (obj != ui->graphView->viewport())
@@ -3578,6 +3680,69 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     QMainWindow::keyPressEvent(event);
 }
 
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    // Всегда запоминаем текущую открытую папку как последнюю
+    if (!_currentFolderPath.isEmpty())
+    {
+        _lastUsedFolder = _currentFolderPath;
+        saveLastUsedFolder();
+    }
+
+    // Проверяем есть ли несохраненные изменения
+    if (hasUnsavedChanges())
+    {
+        QList<Document::Ptr> unsavedDocs = getUnsavedDocuments();
+
+        int result = showUnsavedChangesDialog(unsavedDocs);
+
+        switch (result)
+        {
+            case QDialogButtonBox::SaveAll:
+                // Сохранить все
+                saveAllDocuments();
+                saveGeometry();
+                event->accept();
+                break;
+            case QDialogButtonBox::Discard:
+                // Не сохранять
+                saveGeometry();
+                event->accept();
+                break;
+
+            case QDialogButtonBox::Cancel:
+                // Отмена
+                event->ignore();
+                break;
+
+            default:
+                event->ignore();
+                break;
+        }
+    }
+    else
+    {
+        // Нет несохраненных изменений - просто сохраняем геометрию и закрываем
+        saveGeometry();
+        event->accept();
+    }
+}
+
+void MainWindow::showEvent(QShowEvent* event)
+{
+    QMainWindow::showEvent(event);
+
+    if (!_openLastFolderOnFirstShow)
+        return;
+
+    _openLastFolderOnFirstShow = false;
+
+    if (!_lastUsedFolder.isEmpty() && QDir(_lastUsedFolder).exists())
+    {
+        setWorkingFolder(_lastUsedFolder);
+    }
+}
+
 void MainWindow::togglePointerMode()
 {
 //    ui->graphView->setDragMode(_selectModeButton->isChecked()
@@ -3678,6303 +3843,6 @@ void MainWindow::on_btnCircle_clicked(bool)
 void MainWindow::on_btnTest_clicked(bool)
 {
 
-}
-
-void MainWindow::closeEvent(QCloseEvent* event)
-{
-    // Всегда запоминаем текущую открытую папку как последнюю
-    if (!_currentFolderPath.isEmpty())
-    {
-        _lastUsedFolder = _currentFolderPath;
-        saveLastUsedFolder();
-    }
-
-    // Проверяем есть ли несохраненные изменения
-    if (hasUnsavedChanges())
-    {
-        QList<Document::Ptr> unsavedDocs = getUnsavedDocuments();
-
-        int result = showUnsavedChangesDialog(unsavedDocs);
-
-        switch (result)
-        {
-            case QDialogButtonBox::SaveAll:
-                // Сохранить все
-                saveAllDocuments();
-                saveGeometry();
-                event->accept();
-                break;
-            case QDialogButtonBox::Discard:
-                // Не сохранять
-                saveGeometry();
-                event->accept();
-                break;
-
-            case QDialogButtonBox::Cancel:
-                // Отмена
-                event->ignore();
-                break;
-
-            default:
-                event->ignore();
-                break;
-        }
-    }
-    else
-    {
-        // Нет несохраненных изменений - просто сохраняем геометрию и закрываем
-        saveGeometry();
-        event->accept();
-    }
-}
-
-void MainWindow::showEvent(QShowEvent* event)
-{
-    QMainWindow::showEvent(event);
-
-    if (!_openLastFolderOnFirstShow)
-        return;
-
-    _openLastFolderOnFirstShow = false;
-
-    if (!_lastUsedFolder.isEmpty() && QDir(_lastUsedFolder).exists())
-    {
-        setWorkingFolder(_lastUsedFolder);
-    }
-}
-
-void MainWindow::loadFilesFromFolder(const QString& folderPath)
-{
-    QDir directory(folderPath);
-    _currentFolderPath = folderPath; // Сохраняем путь
-
-    // Путь к папке в заголовке окна
-    updateWindowTitle();
-    //Путь к папке внизу окна
-    updateFolderPathDisplay();
-
-    ui->fileList->clear(); // Очищаем список перед добавлением
-    // Путь к папке над полем FileList
-    ui->listPath->setText(QDir::toNativeSeparators(folderPath));
-
-
-    QStringList filters;
-    filters << "*.jpg";
-    filters << "*.jpeg";
-    filters << "*.png";
-    QStringList files = directory.entryList(filters, QDir::Files);
-
-    // Загружаем иконки из ресурсов
-    QIcon modifiedIcon(":/images/resources/ok.svg");
-    QIcon defaultIcon(":/images/resources/not_ok.svg");
-
-    // Добавляем файлы
-    for (auto filename : files)
-    {
-        QString filePath = directory.filePath(filename);
-        QListWidgetItem* item = new QListWidgetItem(filename);
-        bool hasValidAnnotation = false;
-        if (hasAnnotationFile(filePath))
-        {
-            // Проверяем, не пустой ли YAML файл
-            QString yamlPath = getAnnotationFilePath(filePath);
-            if (!isYamlFileEmpty(yamlPath))
-            {
-                hasValidAnnotation = true;
-            }
-        }
-
-        if (hasValidAnnotation)
-        {
-            item->setIcon(modifiedIcon);
-        }
-        else
-        {
-            item->setIcon(defaultIcon);
-            //item->setText("* " + filename);
-        }
-        // Создаем документ и сохраняем его в данных элемента
-        Document::Ptr doc = Document::create(filePath);
-        item->setData(Qt::UserRole, QVariant::fromValue(doc));
-        _documentsMap.insert(doc->filePath, doc);
-
-        // Инициализируем индивидуальный стек для документа и регистрируем его в группе
-        doc->_undoStack = std::make_unique<QUndoStack>();      // без родителя, владеем unique_ptr
-        _undoGroup->addStack(doc->_undoStack.get());           // группа будет переключать активный
-
-        QUndoStack* st = doc->_undoStack.get();
-        QObject::connect(st, &QUndoStack::indexChanged, this, [this, st](int){
-            if (_loadingNow) return;
-
-            // реагируем только если этот стек активен у группы
-            if (_undoGroup && _undoGroup->activeStack() != st) return;
-
-            if (auto d = currentDocument())
-            {
-                // Если стек в состоянии <пусто>, считаем файл неизмененным
-                const bool clean = st->isClean();
-                d->isModified = !clean;
-                updateFileListDisplay(d->filePath);
-            }
-        });
-
-        // Убираем чекбоксы
-        //item->setFlags(item->flags() & ~Qt::ItemIsUserCheckable);
-
-        ui->fileList->addItem(item);
-        if (doc->loadImage())
-        {
-            loadAnnotationFromFile(doc, false);
-        }
-    }
-}
-
-void MainWindow::updatePolygonListForCurrentScene()
-{
-    ui->polygonList->clear();
-
-    if (ui->coordinateList)
-        ui->coordinateList->clear();
-
-    if (!_scene)
-        return;
-
-    QList<QGraphicsItem*> roots;
-    for (QGraphicsItem* item : _scene->items())
-    {
-        if (!item)
-            continue;
-
-        if (item == _videoRect ||
-            item == _tempRectItem ||
-            item == _tempCircleItem ||
-            item == _tempPolyline)
-        {
-            continue;
-        }
-
-        if (item->parentItem() != nullptr)
-            continue;
-
-        const QString className = item->data(0).toString();
-        if (!className.isEmpty())
-            roots.append(item);
-    }
-
-    std::sort(roots.begin(), roots.end(),
-              [](QGraphicsItem* a, QGraphicsItem* b)
-    {
-        return a->zValue() < b->zValue();
-    });
-
-    for (QGraphicsItem* item : roots)
-        linkSceneItemToList(item);
-
-    renumberPolygonList();
-}
-
-void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
-{
-    if (!item)
-        return;
-
-    const QString oldClass = item->data(0).toString();
-
-    if (_projectClasses.isEmpty())
-        return;
-
-    SelectClass dialog(_projectClasses, this);
-    if (dialog.exec() != QDialog::Accepted)
-        return;
-
-    const QString newClass = dialog.selectedClass();
-    if (newClass.isEmpty() || newClass == oldClass)
-        return;
-
-    ShapeBackup before = makeBackupFromItem(item);
-    const qulonglong uid = before.uid;
-
-    item->setData(0, newClass);
-    applyClassColorToItem(item, newClass);
-
-    bool foundInList = false;
-    for (int i = 0; i < ui->polygonList->count(); ++i)
-    {
-        QListWidgetItem* li = ui->polygonList->item(i);
-        if (!li)
-            continue;
-
-        if (li->data(Qt::UserRole).value<QGraphicsItem*>() == item)
-        {
-            foundInList = true;
-            break;
-        }
-    }
-    if (!foundInList)
-        linkSceneItemToList(item);
-    else
-        renumberPolygonList();
-
-    ShapeBackup after = makeBackupFromItem(item);
-    if (!sameGeometry(before, after))
-        pushModifyShapeCommand(uid, before, after, tr("Смена класса"));
-
-    if (auto doc = currentDocument(); doc && !doc->isModified)
-    {
-        doc->isModified = true;
-        updateFileListDisplay(doc->filePath);
-    }
-}
-
-void MainWindow::loadGeometry()
-{
-    // QVector<int> v {100, 100, 800, 600};
-    // config::base().getValue("windows.main_window.geometry", v);
-    // setGeometry(v[0], v[1], v[2], v[3]);
-
-    QVector<int> wg;
-    config::base().getValue("windows.main_window.geometry", wg);
-    if (wg.count() != 4)
-    {
-        //wg.resize(4);
-        wg = {10, 10, 1400, 800};
-        //setGeometry(wg[0], wg[1], wg[2], wg[3]);
-
-        QList<QScreen*> screens = QGuiApplication::screens();
-        if (!screens.isEmpty())
-        {
-            QRect screenGeometry = screens[0]->geometry();
-            //QRect windowGeometry = this->geometry();
-            QRect windowGeometry {0, 0, int(screenGeometry.width()  * (2./3)),
-                                        int(screenGeometry.height() * (2./3))};
-            wg[0] = screenGeometry.width()  / 2 - windowGeometry.width()  / 2;
-            wg[1] = screenGeometry.height() / 2 - windowGeometry.height() / 2;
-            wg[2] = windowGeometry.width();
-            wg[3] = windowGeometry.height();
-        }
-    }
-    setGeometry(wg[0], wg[1], wg[2], wg[3]);
-
-    QList<int> splitterSizes;
-    if (config::base().getValue("windows.main_window.splitter_sizes", splitterSizes))
-        ui->splitter->setSizes(splitterSizes);
-
-    splitterSizes.clear();
-    if (!config::base().getValue("windows.main_window.splitter2_sizes", splitterSizes))
-    {
-        splitterSizes = {100, 100};
-        QRect windowGeometry = this->geometry();
-        splitterSizes[0] = windowGeometry.width() * (2./3);
-    }
-    ui->splitter2->setSizes(splitterSizes);
-
-//    int tabIndex = 0;
-//    config::base().getValue("windows.main_window.tab_index", tabIndex);
-//    ui->tabWidget->setCurrentIndex(tabIndex);
-
-//    QString sval;
-//    config::base().getValue("windows.main_window.event_journal_header", sval);
-//    if (!sval.isEmpty())
-//    {
-//        QByteArray ba = QByteArray::fromBase64(sval.toLatin1());
-//        ui->tableJournal->horizontalHeader()->restoreState(ba);
-//    }
-}
-
-void MainWindow::saveGeometry()
-{
-    QRect g = geometry();
-    QVector<int> v {g.x(), g.y(), g.width(), g.height()};
-    config::base().setValue("windows.main_window.geometry", v);
-
-    QList<int> splitterSizes = ui->splitter->sizes();
-    config::base().setValue("windows.main_window.splitter_sizes", splitterSizes);
-
-    splitterSizes = ui->splitter2->sizes();
-    config::base().setValue("windows.main_window.splitter2_sizes", splitterSizes);
-
-//    config::base().setValue("windows.main_window.tab_index", ui->tabWidget->currentIndex());
-
-//    QByteArray ba = ui->tableJournal->horizontalHeader()->saveState().toBase64();
-//    config::base().setValue("windows.main_window.event_journal_header", QString::fromLatin1(ba));
-    saveVisualStyle();
-}
-
-QString MainWindow::annotationPathFor(const QString& imagePath)
-{
-    QFileInfo fileInfo(imagePath);
-    QDir dir(fileInfo.absolutePath());
-    return dir.filePath(fileInfo.completeBaseName() + ".yaml");
-}
-
-double MainWindow::round2(double value)
-{
-    return std::round(value * 100.0) / 100.0;
-}
-
-void MainWindow::saveAnnotationToFile(Document::Ptr doc)
-{
-    if (!doc || !doc->scene || !doc->videoRect)
-    {
-        return;
-    }
-
-    YamlConfig::Func saveCircles = [&](YamlConfig* conf, YAML::Node& ycircles, bool)
-    {
-        for (QGraphicsItem* item : doc->scene->items())
-            if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
-            {
-                YAML::Node ycircle;
-
-                QString className = circle->data(0).toString();
-                if (className.isEmpty())
-                    className = "none";
-
-                conf->setValue(ycircle, "label",  className);
-
-                QPointF center = circle->realCenter();
-                double radius = circle->realRadius();
-
-                YamlConfig::Func saveCenter = [center](YamlConfig* conf, YAML::Node& ycenter, bool)
-                {
-                    conf->setValue(ycenter, "x", static_cast<double>(center.x()));
-                    conf->setValue(ycenter, "y", static_cast<double>(center.y()));
-                    return true;
-                };
-
-                conf->setValue(ycircle, "center", saveCenter);
-                conf->setValue(ycircle, "radius", static_cast<double>(radius));
-
-                ycircles.push_back(ycircle);
-            }
-        return true;
-    };
-    YamlConfig::Func savePolylines = [&](YamlConfig* conf, YAML::Node& ypolylines, bool)
-    {
-        for (QGraphicsItem* item : doc->scene->items())
-            if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
-            {
-                YAML::Node ypolyline;
-
-                QString className = polyline->data(0).toString();
-                if (className.isEmpty())
-                    className = "none";
-
-                conf->setValue(ypolyline, "label", className);
-
-                const QVector<QPointF> points = polyline->points();
-                YamlConfig::Func savePoints = [points](YamlConfig* conf, YAML::Node& ypoints, bool)
-                {
-                    for (const QPointF& point : points)
-                    {
-                        YamlConfig::Func savePoint = [point](YamlConfig* conf, YAML::Node& ypoint, bool)
-                        {
-                            conf->setValue(ypoint, "x", static_cast<double>(point.x()));
-                            conf->setValue(ypoint, "y", static_cast<double>(point.y()));
-                            return true;
-                        };
-
-                        YAML::Node ypoint;
-                        savePoint(conf, ypoint, false);
-                        ypoints.push_back(ypoint);
-                    }
-                    return true;
-                };
-                conf->setValue(ypolyline, "points", savePoints);
-                conf->setNodeStyle(ypolyline, "points", YAML::EmitterStyle::Flow);
-
-                ypolylines.push_back(ypolyline);
-            }
-
-        return true;
-    };
-    YamlConfig::Func saveRectangles = [&](YamlConfig* conf, YAML::Node& yrectangles, bool)
-    {
-        for (QGraphicsItem* item : doc->scene->items())
-            if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
-            {
-                YAML::Node yrectangle;
-
-                QString className = rect->data(0).toString();
-                if (className.isEmpty())
-                    className = "none";
-
-                conf->setValue(yrectangle, "label", className);
-
-                const QRectF sceneRect = rect->realSceneRect();
-
-                const QPointF p1 = sceneRect.topLeft();
-                const QPointF p2 = sceneRect.bottomRight();
-
-                YamlConfig::Func savePoint1 = [p1](YamlConfig* conf, YAML::Node& ypoint1, bool)
-                {
-                    conf->setValue(ypoint1, "x", static_cast<double>(p1.x()));
-                    conf->setValue(ypoint1, "y", static_cast<double>(p1.y()));
-                    return true;
-                };
-
-                YamlConfig::Func savePoint2 = [p2](YamlConfig* conf, YAML::Node& ypoint2, bool)
-                {
-                    conf->setValue(ypoint2, "x", static_cast<double>(p2.x()));
-                    conf->setValue(ypoint2, "y", static_cast<double>(p2.y()));
-                    return true;
-                };
-
-                conf->setValue(yrectangle, "point1", savePoint1);
-                conf->setValue(yrectangle, "point2", savePoint2);
-
-                yrectangles.push_back(yrectangle);
-            }
-
-        return true;
-    };
-    YamlConfig::Func savePoints = [&](YamlConfig* conf, YAML::Node& ypoints, bool)
-    {
-        for (QGraphicsItem* item : doc->scene->items())
-            if (qgraph::Point* p = dynamic_cast<qgraph::Point*>(item))
-            {
-                YAML::Node ypoint;
-
-                QString className = p->data(0).toString();
-                if (className.isEmpty())
-                    className = "none";
-
-                conf->setValue(ypoint, "label", className);
-
-                const QPointF center = p->center();
-
-                YamlConfig::Func savePoint = [center](YamlConfig* conf, YAML::Node& ypointNode, bool)
-                {
-                    conf->setValue(ypointNode, "x", static_cast<double>(center.x()));
-                    conf->setValue(ypointNode, "y", static_cast<double>(center.y()));
-                    return true;
-                };
-
-                conf->setValue(ypoint, "point", savePoint);
-
-                ypoints.push_back(ypoint);
-            }
-        return true;
-    };
-    YamlConfig::Func saveLines = [&](YamlConfig* conf, YAML::Node& ylines, bool)
-    {
-        for (QGraphicsItem* item : doc->scene->items())
-            if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
-            {
-                YAML::Node yline;
-
-                QString className = line->data(0).toString();
-                if (className.isEmpty())
-                    className = "none";
-
-                conf->setValue(yline, "label", className);
-
-                const QVector<QPointF> points = line->points();
-                YamlConfig::Func savePoints = [points](YamlConfig* conf, YAML::Node& ypoints, bool)
-                {
-                    for (const QPointF& point : points)
-                    {
-                        YamlConfig::Func savePoint = [point](YamlConfig* conf, YAML::Node& ypoint, bool)
-                        {
-                            conf->setValue(ypoint, "x", static_cast<double>(point.x()));
-                            conf->setValue(ypoint, "y", static_cast<double>(point.y()));
-                            return true;
-                        };
-
-                        YAML::Node ypoint;
-                        savePoint(conf, ypoint, false);
-                        ypoints.push_back(ypoint);
-                    }
-                    return true;
-                };
-
-                conf->setValue(yline, "points", savePoints);
-                conf->setNodeStyle(yline, "points", YAML::EmitterStyle::Flow);
-
-                ylines.push_back(yline);
-            }
-        return true;
-    };
-
-    YamlConfig::Func saveFunc = [&](YamlConfig* conf, YAML::Node& shapes, bool /*logWarn*/)
-    {
-
-        conf->setValue(shapes, "circles", saveCircles);
-        conf->setValue(shapes, "polylines", savePolylines);
-        conf->setValue(shapes, "rectangles", saveRectangles);
-        conf->setValue(shapes, "points", savePoints);
-        conf->setValue(shapes, "lines", saveLines);
-
-        return true;
-    };
-
-    YamlConfig yconfig;
-    yconfig.setRounding(2);
-    yconfig.setValue("shapes", saveFunc);
-    //yconfig.saveFile("/tmp/1.yaml");
-    //yconfig.saveFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml");
-
-    // QFileInfo fileInfo(doc->filePath);
-    // QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
-    // yconfig.saveFile(yamlPath.toStdString());
-
-    const QString yamlPath = annotationPathFor(doc->filePath);
-    // Для внешних C/STD API на Windows используем нативную кодировку ОС
-    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(yamlPath));
-    yconfig.saveFile(std::string(encoded.constData(), encoded.size()));
-
-    // После успешного сохранения обновляем отображение в списке файлов
-    if (QFile::exists(yamlPath))
-    {
-        // Находим соответствующий элемент в списке и убираем звездочку
-        for (int i = 0; i < ui->fileList->count(); ++i)
-        {
-            QListWidgetItem* item = ui->fileList->item(i);
-            QVariant data = item->data(Qt::UserRole);
-            if (data.canConvert<Document::Ptr>())
-            {
-                Document::Ptr itemDoc = data.value<Document::Ptr>();
-                if (itemDoc->filePath == doc->filePath)
-                {
-                    // Убираем звездочку из названия
-                    QString fileName = QFileInfo(doc->filePath).fileName();
-                    item->setText(fileName);
-                    break;
-                }
-            }
-        }
-        QListWidgetItem* item = findFileListItem(doc->filePath);
-        if (item)
-        {
-            updateFileListItemIcon(item, true);
-        }
-    }
-    if (doc->_undoStack)
-        doc->_undoStack->setClean();
-
-    // После успешного сохранения
-    doc->isModified = false;
-    updateFileListDisplay(doc->filePath);
-}
-
-void MainWindow::updateFileListDisplay(const QString& filePath)
-{
-    QIcon modifiedIcon(":/images/resources/not_ok.svg");     // Красная иконка - есть изменения
-    QIcon savedIcon(":/images/resources/ok.svg");            // Зеленая иконка - сохранено
-    QIcon noAnnotationIcon(":/images/resources/not_ok.svg"); // Красная иконка - нет аннотаций
-
-    for (int i = 0; i < ui->fileList->count(); ++i)
-    {
-        QListWidgetItem* item = ui->fileList->item(i);
-        QVariant data = item->data(Qt::UserRole);
-        if (data.canConvert<Document::Ptr>())
-        {
-            Document::Ptr itemDoc = data.value<Document::Ptr>();
-            if (itemDoc->filePath == filePath)
-            {
-                QString fileName = QFileInfo(filePath).fileName();
-
-                if (itemDoc->isModified)
-                {
-                    // Документ изменен, но не сохранен
-                    item->setText("* " + fileName);
-                    item->setIcon(modifiedIcon);
-                }
-                else if (hasAnnotationFile(filePath))
-                {
-                    // Документ сохранен, проверяем не пустой ли YAML
-                    QString yamlPath = getAnnotationFilePath(filePath);
-                    if (!isYamlFileEmpty(yamlPath))
-                    {
-                        item->setText(fileName);
-                        item->setIcon(savedIcon);
-                    }
-                    else
-                    {
-                        item->setText(fileName);
-                        item->setIcon(noAnnotationIcon);
-                    }
-                }
-                else
-                {
-                    // Нет файла аннотаций
-                    item->setText(fileName);
-                    item->setIcon(noAnnotationIcon);
-                }
-                break;
-            }
-        }
-    }
-}
-
-void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
-{
-    if (!doc || !doc->scene)
-    {
-        return;
-    }
-
-    // Временно блокируем обработку изменений
-    _loadingNow = true;
-    QSignalBlocker blocker(doc->scene); // временно глушим QGraphicsScene::changed
-    // Сдвиг изображения, если восстанавливаем разметку
-    const QPointF imageOffset = (doc->videoRect ? doc->videoRect->pos() : QPointF(0.0, 0.0));
-
-    // Получаем путь к файлу аннотаций (заменяем расширение изображения на .yaml)
-    // QFileInfo fileInfo(doc->filePath);
-    // QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
-
-    // YamlConfig yconfig;
-    // if (!yconfig.readFile(yamlPath.toStdString()))
-    // {
-    //     log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
-    //     _loadingNow = false;
-    //     return;
-    // }
-
-    const QString yamlPath = annotationPathFor(doc->filePath);
-    YamlConfig yconfig;
-
-    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(yamlPath));
-    if (!yconfig.readFile(std::string(encoded.constData(), encoded.size())))
-    {
-        log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
-        _loadingNow = false;
-        return;
-    }
-
-    //if (yconfig.readFile("/tmp/1.yaml"))
-    //if (!yconfig.readFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml"))
-
-
-    // Очищаем сцену только если нет несохраненных изменений
-    if (!doc->isModified)
-    {
-        const QList<QGraphicsItem*> items = doc->scene->items();
-        for (QGraphicsItem* item : items)
-        {
-            if (!item)
-                continue;
-
-            if (item == doc->videoRect || item == doc->pixmapItem)
-                continue;
-
-            if (item == _ghostHandle)
-                continue;
-
-            // Не удаляем дочерние элементы
-            if (item->parentItem() != nullptr)
-                continue;
-
-            doc->scene->removeItem(item);
-            delete item; // Удалит и всех детей автоматически
-        }
-    }
-    YamlConfig::Func loadCircles = [&](YamlConfig* conf, YAML::Node& ycircles, bool)
-    {
-        for (const YAML::Node& ycircle : ycircles)
-        {
-            QString label;
-            conf->getValue(ycircle, "label", label);
-
-            double centerX = 0.0;
-            double centerY = 0.0;
-            double radius = 0.0;
-
-            if (ycircle["center"])
-            {
-                conf->getValue(ycircle["center"], "x", centerX);
-                conf->getValue(ycircle["center"], "y", centerY);
-            }
-            conf->getValue(ycircle, "radius", radius);
-
-            qgraph::Circle* circle = new qgraph::Circle(doc->scene, QPointF(centerX, centerY) + imageOffset);
-            ensureUid(circle);
-            circle->setRealRadius(radius);
-            circle->setData(0, label);
-            apply_LineWidth_ToItem(circle);
-            apply_PointSize_ToItem(circle);
-            applyClassColorToItem(circle, label);
-        }
-        return true;
-    };
-    YamlConfig::Func loadPolylines = [&](YamlConfig* conf, YAML::Node& ypolylines, bool)
-    {
-        for (const YAML::Node& ypolyline : ypolylines)
-        {
-            QString label;
-            conf->getValue(ypolyline, "label", label);
-
-            QVector<QPointF> points;
-            YamlConfig::Func loadPoints = [&points, &imageOffset](YamlConfig* conf, YAML::Node& ypoints, bool)
-            {
-                for (const YAML::Node& ypoint : ypoints)
-                {
-                    double x = 0.0;
-                    double y = 0.0;
-                    conf->getValue(ypoint, "x", x);
-                    conf->getValue(ypoint, "y", y);
-                    points.append(QPointF(x, y) + imageOffset);
-                }
-                return true;
-            };
-            conf->getValue(ypolyline, "points", loadPoints);
-
-            if (points.isEmpty())
-                continue;
-            // Создаем полилинию на сцене
-            qgraph::Polyline* polyline = new qgraph::Polyline(doc->scene, points.first());
-            ensureUid(polyline);
-
-            polyline->beginBulkLoad();
-            for (int i = 1; i < points.size(); ++i)
-            {
-                polyline->addPoint(points[i], doc->scene);
-            }
-            polyline->endBulkLoad();
-
-            polyline->closePolyline();
-            polyline->updatePath();
-            polyline->setData(0, label);
-            apply_LineWidth_ToItem(polyline);
-            apply_PointSize_ToItem(polyline);
-            apply_NumberSize_ToItem(polyline);
-            applyClassColorToItem(polyline, label);
-        }
-        return true;
-    };
-    YamlConfig::Func loadRectangles = [&](YamlConfig* conf, YAML::Node& yrectangles, bool)
-    {
-        for (const YAML::Node& yrectangle : yrectangles)
-        {
-            QString label;
-            conf->getValue(yrectangle, "label", label);
-
-            double x1 = 0.0, y1 = 0.0;
-            double x2 = 0.0, y2 = 0.0;
-
-            if (yrectangle["point1"])
-            {
-                conf->getValue(yrectangle["point1"], "x", x1);
-                conf->getValue(yrectangle["point1"], "y", y1);
-            }
-            if (yrectangle["point2"])
-            {
-                conf->getValue(yrectangle["point2"], "x", x2);
-                conf->getValue(yrectangle["point2"], "y", y2);
-            }
-            // Создаем прямоугольник на сцене
-            qgraph::Rectangle* rect = new qgraph::Rectangle(doc->scene);
-            ensureUid(rect);
-            rect->setRealSceneRect(QRectF(QPointF(x1, y1) + imageOffset,
-                                          QPointF(x2, y2) + imageOffset));
-            rect->setData(0, label);
-            apply_LineWidth_ToItem(rect);
-            apply_PointSize_ToItem(rect);
-            apply_NumberSize_ToItem(rect);
-            applyClassColorToItem(rect, label);
-        }
-
-        return true;
-    };
-    YamlConfig::Func loadPoints = [&](YamlConfig* conf, YAML::Node& ypoints, bool)
-    {
-        for (const YAML::Node& ypoint : ypoints)
-        {
-            QString label;
-            conf->getValue(ypoint, "label", label);
-
-            double x = 0.0;
-            double y = 0.0;
-
-            if (ypoint["point"])
-            {
-                conf->getValue(ypoint["point"], "x", x);
-                conf->getValue(ypoint["point"], "y", y);
-            }
-
-            qgraph::Point* p = new qgraph::Point(doc->scene);
-            ensureUid(p);
-            p->setCenter(QPointF(x, y) + imageOffset);
-            p->setData(0, label);
-
-            apply_PointSize_ToItem(p);
-            apply_NumberSize_ToItem(p);
-            apply_PointStyle_ToItem(p);
-            applyClassColorToItem(p, label);
-        }
-        return true;
-    };
-    YamlConfig::Func loadLines = [&](YamlConfig* conf, YAML::Node& ylines, bool)
-    {
-        for (const YAML::Node& yline : ylines)
-        {
-            QString label;
-            conf->getValue(yline, "label", label);
-
-            QVector<QPointF> points;
-            YamlConfig::Func loadPoints = [&points, &imageOffset](YamlConfig* conf, YAML::Node& ypoints, bool)
-            {
-                for (const YAML::Node& ypoint : ypoints)
-                {
-                    double x = 0.0;
-                    double y = 0.0;
-                    conf->getValue(ypoint, "x", x);
-                    conf->getValue(ypoint, "y", y);
-                    points.append(QPointF(x, y) + imageOffset);
-                }
-                return true;
-            };
-            conf->getValue(yline, "points", loadPoints);
-
-            if (points.isEmpty())
-                continue;
-            // Создаем линию на сцене
-            qgraph::Line* line = new qgraph::Line(doc->scene, points.first());
-            ensureUid(line);
-
-            line->beginBulkLoad();
-            for (int i = 1; i < points.size(); ++i)
-            {
-                line->addPoint(points[i], doc->scene);
-            }
-            line->endBulkLoad();
-
-            line->closeLine();
-            line->updatePath();
-            line->setData(0, label);
-            apply_LineWidth_ToItem(line);
-            apply_PointSize_ToItem(line);
-            apply_NumberSize_ToItem(line);
-            applyClassColorToItem(line, label);
-        }
-        return true;
-    };
-
-    YamlConfig::Func loadFunc = [&](YamlConfig* conf, YAML::Node& shapes, bool /*logWarn*/)
-    {
-        conf->getValue(shapes, "circles", loadCircles);
-        conf->getValue(shapes, "polylines", loadPolylines);
-        conf->getValue(shapes, "rectangles", loadRectangles);
-        conf->getValue(shapes, "points", loadPoints);
-        conf->getValue(shapes, "lines", loadLines);
-        return true;
-    };
-
-    // Загружаем данные из YAML
-    if (!yconfig.getValue("shapes", loadFunc, false))
-    {
-        log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
-        _loadingNow = false;
-
-        return;
-    }
-    _loadingNow = false;
-    if (rebuildUi && doc == currentDocument())
-    {
-        updatePolygonListForCurrentScene();
-    }
-}
-
-void MainWindow::deserializeJsonToScene(QGraphicsScene* scene,
-                                        const QJsonObject& json,
-                                        const QPointF& offset)
-{
-    if (!scene)
-    {
-        return;
-    }
-
-    QJsonArray shapesArray = json["shapes"].toArray();
-    for (const QJsonValue& shapeValue : shapesArray)
-    {
-        QJsonObject shapeObj = shapeValue.toObject();
-        QString className = shapeObj["class"].toString();
-        QString type = shapeObj["type"].toString();
-
-        if (type == "rectangle")
-        {
-            qreal x = shapeObj["x"].toDouble();
-            qreal y = shapeObj["y"].toDouble();
-            qreal width = shapeObj["width"].toDouble();
-            qreal height = shapeObj["height"].toDouble();
-
-            QPointF topLeft(x, y);
-            topLeft += offset;
-
-            qgraph::Rectangle* rect = new qgraph::Rectangle(scene);
-
-            ensureUid(rect);
-            //rect->setRect(QRectF(x, y, width, height));
-            rect->setRealSceneRect(QRectF(topLeft, QSizeF(width, height)));
-            rect->setData(0, className);
-            apply_LineWidth_ToItem(rect);
-            apply_PointSize_ToItem(rect);
-            apply_NumberSize_ToItem(rect);
-        }
-        else if (type == "circle")
-        {
-            qreal x = shapeObj["x"].toDouble();
-            qreal y = shapeObj["y"].toDouble();
-            qreal radius = shapeObj["radius"].toDouble();
-
-            QPointF center(x, y);
-            center += offset;
-
-            qgraph::Circle* circle = new qgraph::Circle(scene, center);
-
-            ensureUid(circle);
-            circle->setRealRadius(radius);
-            circle->setData(0, className);
-            apply_LineWidth_ToItem(circle);
-            apply_PointSize_ToItem(circle);
-            apply_NumberSize_ToItem(circle);
-        }
-        else if (type == "polyline")
-        {
-            QJsonArray pointsArray = shapeObj["points"].toArray();
-            if (pointsArray.isEmpty())
-                continue;
-
-            const bool closed = shapeObj["closed"].toBool(false);
-
-            QPointF firstPoint(pointsArray[0].toObject()["x"].toDouble(),
-                               pointsArray[0].toObject()["y"].toDouble());
-
-            firstPoint += offset;
-
-            qgraph::Polyline* polyline = new qgraph::Polyline(scene, firstPoint);
-            ensureUid(polyline);
-
-            polyline->beginBulkLoad();
-            for (int i = 1; i < pointsArray.size(); ++i)
-            {
-                QPointF point(pointsArray[i].toObject()["x"].toDouble(),
-                              pointsArray[i].toObject()["y"].toDouble());
-                point += offset;
-                polyline->addPoint(point, scene);
-            }
-            polyline->endBulkLoad();
-
-            if (closed)
-                polyline->closePolyline();
-
-            polyline->setData(0, className);
-            apply_LineWidth_ToItem(polyline);
-            apply_PointSize_ToItem(polyline);
-            apply_NumberSize_ToItem(polyline);
-        }
-        else if (type == "line")
-        {
-            QJsonArray pointsArray = shapeObj["points"].toArray();
-            if (pointsArray.size() < 2)
-                continue;
-
-            QPointF firstPoint(pointsArray[0].toObject()["x"].toDouble(),
-                               pointsArray[0].toObject()["y"].toDouble());
-            firstPoint += offset;
-
-            qgraph::Line* line = new qgraph::Line(scene, firstPoint);
-            ensureUid(line);
-
-            line->beginBulkLoad();
-            for (int i = 1; i < pointsArray.size(); ++i)
-            {
-                QJsonObject ptObj = pointsArray[i].toObject();
-                QPointF p(ptObj["x"].toDouble(), ptObj["y"].toDouble());
-                p += offset;
-                line->addPoint(p, scene);
-            }
-            line->endBulkLoad();
-
-            line->setData(0, className);
-
-            apply_LineWidth_ToItem(line);
-            apply_PointSize_ToItem(line);
-            apply_NumberSize_ToItem(line);
-        }
-        else if (type == "point")
-        {
-            qreal x = shapeObj["x"].toDouble();
-            qreal y = shapeObj["y"].toDouble();
-
-            QPointF center(x, y);
-            center += offset;
-
-            qgraph::Point* p = new qgraph::Point(scene);
-
-            ensureUid(p);
-            p->setCenter(center);
-            p->setData(0, className);
-
-            apply_PointSize_ToItem(p);
-            apply_NumberSize_ToItem(p);
-            apply_PointStyle_ToItem(p);
-        }
-        else
-        {
-            continue;
-        }
-    }
-}
-
-qgraph::VideoRect* MainWindow::findVideoRect(QGraphicsScene* scene)
-{
-    if (!scene)
-    {
-        return nullptr;
-    }
-
-    foreach(QGraphicsItem* item, scene->items())
-    {
-        if (auto* videoRect = dynamic_cast<qgraph::VideoRect*>(item))
-        {
-            return videoRect;
-        }
-    }
-    return nullptr;
-}
-
-void MainWindow::toggleRightSplitter()
-{
-    QSplitter* rightSplitter = ui->splitter;
-
-    if (_isRightSplitterCollapsed)
-    {
-        // Восстанавливаем предыдущие размеры
-        rightSplitter->setSizes(_savedSplitterSizes);
-        rightSplitter->setVisible(true);
-    }
-    else
-    {
-        // Сохраняем текущие размеры перед схлопыванием
-        _savedSplitterSizes = rightSplitter->sizes();
-
-        // Схлопываем сплиттер (устанавливаем все размеры в 0)
-        QList<int> newSizes;
-        for (int i = 0; i < rightSplitter->count(); ++i)
-            newSizes << 0;
-        rightSplitter->setSizes(newSizes);
-    }
-
-    _isRightSplitterCollapsed = !_isRightSplitterCollapsed;
-}
-
-void MainWindow::updateWindowTitle()
-{
-    QString title;
-
-    if (!_currentFolderPath.isEmpty())
-    {
-        // Форматируем путь для отображения
-        QString displayPath = QDir::toNativeSeparators(_currentFolderPath);
-
-        // Если путь длинный, можно сократить его
-        if (displayPath.length() > 50)
-        {
-            displayPath = "..." + displayPath.right(47);
-        }
-
-        title = QString("%1 ― QLabelMe").arg(displayPath);
-    }
-    else
-    {
-        title = "QLabelMe";
-    }
-
-    setWindowTitle(title);
-}
-
-void MainWindow::updateFolderPathDisplay()
-{
-    // if (_currentFolderPath.isEmpty())
-    // {
-    //     _folderPathLabel->clear();
-    //     _folderPathLabel->setToolTip("");
-    // }
-    // else
-    // {
-    //     QString displayPath = QDir::toNativeSeparators(_currentFolderPath);
-    //     _folderPathLabel->setText(displayPath);
-    //     _folderPathLabel->setToolTip(displayPath); // Полный путь в подсказке
-
-    //     // Можно добавить иконку папки
-    //     //QIcon folderIcon = style()->standardIcon(QStyle::SP_DirIcon);
-    //     //_folderPathLabel->setPixmap(folderIcon.pixmap(16, 16));
-    // }
-}
-
-void MainWindow::writeShapesJsonToClipboard(const QJsonObject& json) const
-{
-    if (json.isEmpty())
-        return;
-
-    // JSON-данные - для внутренней вставки
-    QJsonDocument doc(json);
-    QByteArray raw = doc.toJson(QJsonDocument::Compact);
-
-    QJsonArray shapesArray = json["shapes"].toArray();
-
-    struct Circle { QString label; double x, y, radius; };
-    struct Polyline { QString label; QVector<QPointF> points; };
-    struct Rectangle{ QString label; double x1, y1, x2, y2; };
-    struct Point { QString label; double x, y; };
-    struct Line { QString label; QVector<QPointF> points; };
-
-    QVector<Circle> circles;
-    QVector<Polyline> polylines;
-    QVector<Rectangle> rectangles;
-    QVector<Point> points;
-    QVector<Line> lines;
-
-    for (const QJsonValue& v : shapesArray)
-    {
-        QJsonObject o = v.toObject();
-        QString type  = o["type"].toString();
-        QString label = o["class"].toString();
-        if (label.isEmpty())
-            label = "none";
-
-        if (type == "circle")
-        {
-            Circle c;
-            c.label  = label;
-            c.x  = o["x"].toDouble();
-            c.y = o["y"].toDouble();
-            c.radius = o["radius"].toDouble();
-            circles.append(c);
-        }
-        else if (type == "rectangle")
-        {
-            Rectangle r;
-            r.label = label;
-            double x = o["x"].toDouble();
-            double y = o["y"].toDouble();
-            double w = o["width"].toDouble();
-            double h = o["height"].toDouble();
-            r.x1 = x;
-            r.y1 = y;
-            r.x2 = x + w;
-            r.y2 = y + h;
-            rectangles.append(r);
-        }
-        else if (type == "polyline")
-        {
-            Polyline pl;
-            pl.label = label;
-            QJsonArray pts = o["points"].toArray();
-            for (const QJsonValue& pv : pts)
-            {
-                QJsonObject po = pv.toObject();
-                pl.points.append(QPointF(po["x"].toDouble(),
-                                         po["y"].toDouble()));
-            }
-            polylines.append(pl);
-        }
-        else if (type == "line")
-        {
-            Line ln;
-            ln.label = label;
-            QJsonArray pts = o["points"].toArray();
-            for (const QJsonValue& pv : pts)
-            {
-                QJsonObject po = pv.toObject();
-                ln.points.append(QPointF(po["x"].toDouble(),
-                                         po["y"].toDouble()));
-            }
-            lines.append(ln);
-        }
-        else if (type == "point")
-        {
-            Point p;
-            p.label = label;
-            p.x     = o["x"].toDouble();
-            p.y     = o["y"].toDouble();
-            points.append(p);
-        }
-    }
-
-    QString yaml;
-    {
-        QTextStream out(&yaml);
-        out << "shapes:\n";
-
-        if (!circles.isEmpty())
-        {
-            out << "  circles:\n";
-            for (const Circle& c : circles)
-            {
-                int cx = static_cast<int>(std::round(c.x));
-                int cy = static_cast<int>(std::round(c.y));
-                int r  = static_cast<int>(std::round(c.radius));
-
-                out << "    - label: " << c.label << "\n";
-                out << "      center: {x: " << cx << ", y: " << cy << "}\n";
-                out << "      radius: " << r << "\n";
-            }
-        }
-
-        if (!polylines.isEmpty())
-        {
-            out << "  polylines:\n";
-            for (const Polyline& pl : polylines)
-            {
-                out << "    - label: " << pl.label << "\n";
-                out << "      points: [";
-                for (int i = 0; i < pl.points.size(); ++i)
-                {
-                    const QPointF& p = pl.points[i];
-                    int px = static_cast<int>(std::round(p.x()));
-                    int py = static_cast<int>(std::round(p.y()));
-                    if (i > 0)
-                        out << ", ";
-                    out << "{x: " << px << ", y: " << py << "}";
-                }
-                out << "]\n";
-            }
-        }
-
-        if (!rectangles.isEmpty())
-        {
-            out << "  rectangles:\n";
-            for (const Rectangle& r : rectangles)
-            {
-                int x1 = static_cast<int>(std::round(r.x1));
-                int y1 = static_cast<int>(std::round(r.y1));
-                int x2 = static_cast<int>(std::round(r.x2));
-                int y2 = static_cast<int>(std::round(r.y2));
-
-                out << "    - label: " << r.label << "\n";
-                out << "      point1: {x: " << x1 << ", y: " << y1 << "}\n";
-                out << "      point2: {x: " << x2 << ", y: " << y2 << "}\n";
-            }
-        }
-
-        if (!points.isEmpty())
-        {
-            out << "  points:\n";
-            for (const Point& p : points)
-            {
-                int px = static_cast<int>(std::round(p.x));
-                int py = static_cast<int>(std::round(p.y));
-
-                out << "    - label: " << p.label << "\n";
-                out << "      point: {x: " << px << ", y: " << py << "}\n";
-            }
-        }
-
-        if (!lines.isEmpty())
-        {
-            out << "  lines:\n";
-            for (const Line& ln : lines)
-            {
-                out << "    - label: " << ln.label << "\n";
-                out << "      points: [";
-                for (int i = 0; i < ln.points.size(); ++i)
-                {
-                    const QPointF& p = ln.points[i];
-                    int px = static_cast<int>(std::round(p.x()));
-                    int py = static_cast<int>(std::round(p.y()));
-                    if (i > 0)
-                        out << ", ";
-                    out << "{x: " << px << ", y: " << py << "}";
-                }
-                out << "]\n";
-            }
-        }
-    }
-
-    // Пишем и JSON, и YAML в буфер обмена
-    auto* mime = new QMimeData;
-    mime->setData(kShapesMimeType, raw);
-    mime->setText(yaml);
-
-    QClipboard* cb = QGuiApplication::clipboard();
-    cb->setMimeData(mime);
-}
-
-QJsonObject MainWindow::readShapesJsonFromClipboard() const
-{
-    QClipboard* cb = QGuiApplication::clipboard();
-    const QMimeData* mime = cb->mimeData();
-    if (!mime)
-        return {};
-
-    QByteArray raw;
-
-    // Сначала пробуем наш MIME-тип
-    if (mime->hasFormat(kShapesMimeType))
-    {
-        raw = mime->data(kShapesMimeType);
-    }
-    else if (mime->hasText())
-    {
-        // fallback: вдруг пользователь сам сохранил JSON в виде текста
-        raw = mime->text().toUtf8();
-    }
-    else
-    {
-        return {};
-    }
-
-    QJsonParseError err{};
-    QJsonDocument doc = QJsonDocument::fromJson(raw, &err);
-    if (err.error != QJsonParseError::NoError || !doc.isObject())
-        return {};
-
-    return doc.object();
-}
-
-QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
-{
-    QJsonObject root;
-    QJsonArray shapesArray;
-
-
-    if (!scene)
-    {
-        root["shapes"] = shapesArray;
-        return root;
-    }
-
-    for (QGraphicsItem* item : scene->items())
-    {
-        // Пропускаем само изображение и временные элементы
-        if (item == _videoRect || item == _tempRectItem ||
-            item == _tempCircleItem || item == _tempPolyline)
-        {
-            continue;
-        }        
-
-        QJsonObject shapeObj;
-        QString className = item->data(0).toString();
-        shapeObj["class"] = className;
-        // Пропускаем элементы без класса
-        if (className.isEmpty() || className == "--")
-        {
-            continue;
-        }
-
-        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
-        {
-            shapeObj["type"] = "rectangle";
-            // QRectF r = rect->rect();
-            QRectF r = rect->sceneBoundingRect();
-            shapeObj["x"] = r.x();
-            shapeObj["y"] = r.y();
-            shapeObj["width"] = r.width();
-            shapeObj["height"] = r.height();
-        }
-        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
-        {
-            shapeObj["type"] = "circle";
-            //QPointF center = circle->realCenter();
-            QPointF center = circle->center();
-            shapeObj["x"] = center.x();
-            shapeObj["y"] = center.y();
-            shapeObj["radius"] = circle->realRadius();
-        }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-        {
-            shapeObj["type"] = "polyline";
-            shapeObj["closed"] = polyline->isClosed();
-            QJsonArray pointsArray;
-
-            // Получаем точки полилинии через метод points()
-            for (const QPointF& point : polyline->points())
-            {
-                QJsonObject pointObj;
-                pointObj["x"] = point.x();
-                pointObj["y"] = point.y();
-                pointsArray.append(pointObj);
-            }
-            shapeObj["points"] = pointsArray;
-        }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
-        {
-            shapeObj["type"] = "line";
-            QJsonArray pointsArray;
-
-            for (const QPointF& point : line->points())
-            {
-                QJsonObject pointObj;
-                pointObj["x"] = point.x();
-                pointObj["y"] = point.y();
-                pointsArray.append(pointObj);
-            }
-
-            shapeObj["points"] = pointsArray;
-        }
-        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
-        {
-            shapeObj["type"] = "point";
-            QPointF center = point->center();
-            shapeObj["x"] = center.x();
-            shapeObj["y"] = center.y();
-        }
-        else
-        {
-            continue;
-        }
-
-        shapesArray.append(shapeObj);
-    }
-
-    root["shapes"] = shapesArray;
-    return root;
-}
-
-QJsonObject MainWindow::serializeSelectedItemsToJson(QGraphicsScene* scene)
-{
-    QJsonObject root;
-    QJsonArray shapesArray;
-
-    if (!scene)
-    {
-        root["shapes"] = shapesArray;
-        return root;
-    }
-
-    // Берем именно выделенные элементы
-    const QList<QGraphicsItem*> items = scene->selectedItems();
-
-    for (QGraphicsItem* item : items)
-    {
-        // Пропускаем само изображение и временные элементы
-        if (item == _videoRect || item == _tempRectItem ||
-            item == _tempCircleItem || item == _tempPolyline)
-        {
-            continue;
-        }
-
-        QJsonObject shapeObj;
-        QString className = item->data(0).toString();
-
-        // Пропускаем элементы без класса
-        if (className.isEmpty() || className == "--")
-        {
-            continue;
-        }
-
-        shapeObj["class"] = className;
-
-        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
-        {
-            shapeObj["type"] = "rectangle";
-            //QRectF r = rect->rect();
-            QRectF r = rect->sceneBoundingRect();
-            shapeObj["x"] = r.x();
-            shapeObj["y"] = r.y();
-            shapeObj["width"] = r.width();
-            shapeObj["height"] = r.height();
-        }
-        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
-        {
-            shapeObj["type"] = "circle";
-            //QPointF center = circle->realCenter();
-            QPointF center = circle->center();
-            shapeObj["x"] = center.x();
-            shapeObj["y"] = center.y();
-            shapeObj["radius"] = circle->realRadius();
-        }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-        {
-            shapeObj["type"] = "polyline";
-            shapeObj["closed"] = polyline->isClosed();
-            QJsonArray pointsArray;
-
-            for (const QPointF& point : polyline->points())
-            {
-                QJsonObject pt;
-                pt["x"] = point.x();
-                pt["y"] = point.y();
-                pointsArray.append(pt);
-            }
-
-            shapeObj["points"] = pointsArray;
-        }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
-        {
-            shapeObj["type"] = "line";
-            QJsonArray pointsArray;
-
-            for (const QPointF& point : line->points())
-            {
-                QJsonObject pt;
-                pt["x"] = point.x();
-                pt["y"] = point.y();
-                pointsArray.append(pt);
-            }
-
-            shapeObj["points"] = pointsArray;
-        }
-        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
-        {
-            shapeObj["type"] = "point";
-            QPointF center = point->center();
-            shapeObj["x"] = center.x();
-            shapeObj["y"] = center.y();
-        }
-        else
-        {
-            continue;
-        }
-
-        shapesArray.append(shapeObj);
-    }
-
-    root["shapes"] = shapesArray;
-    return root;
-}
-
-void MainWindow::copySelectedShapes()
-{
-    auto doc = currentDocument();
-    if (!doc || !doc->scene)
-        return;
-
-    // Собираем JSON только по выделенным фигурам на текущей сцене
-    QJsonObject json = serializeSelectedItemsToJson(doc->scene);
-
-    // Локальный буфер
-    _shapesClipboard = json;
-
-    // Отправляем JSON в системный буфер обмена
-    writeShapesJsonToClipboard(json);
-}
-
-void MainWindow::pasteCopiedShapesToCurrentScene()
-{
-    Document::Ptr doc = currentDocument();
-    if (!doc || !doc->scene)
-        return;
-
-    QJsonObject json = readShapesJsonFromClipboard();
-    if (json.isEmpty())
-        json = _shapesClipboard;
-
-    if (json.isEmpty())
-        return;
-
-    QGraphicsScene* scene = doc->scene;
-
-    // Запоминаем, что было на сцене ДО вставки
-    QList<QGraphicsItem*> beforeItems = scene->items();
-    const QPointF pasteOffset(10.0, 10.0);
-    deserializeJsonToScene(scene, json, pasteOffset);
-    //deserializeJsonToScene(scene, json);
-
-    // Собираем список новых фигур (тех, которых не было в beforeItems)
-    QList<QGraphicsItem*> afterItems = scene->items();
-    QList<QGraphicsItem*> newItems;
-
-    for (QGraphicsItem* item : afterItems)
-    {
-        if (!item)
-            continue;
-
-        if (item == _videoRect ||
-            item == _tempRectItem ||
-            item == _tempCircleItem ||
-            item == _tempPolyline)
-        {
-            continue;
-        }
-
-        if (item->parentItem() != nullptr)
-            continue;
-
-        if (beforeItems.contains(item))
-            continue;
-
-        if (dynamic_cast<qgraph::Rectangle*>(item) ||
-            dynamic_cast<qgraph::Circle*>(item) ||
-            dynamic_cast<qgraph::Polyline*>(item) ||
-            dynamic_cast<qgraph::Line*>(item) ||
-            dynamic_cast<qgraph::Point*>(item))
-        {
-            newItems.append(item);
-        }
-    }
-
-    if (newItems.isEmpty())
-        return;
-
-    // После вставки активными должны стать именно новые фигуры
-    const QList<QGraphicsItem*> selectedBeforePaste = scene->selectedItems();
-    for (QGraphicsItem* it : selectedBeforePaste)
-    {
-        if (it)
-            it->setSelected(false);
-    }
-
-    for (QGraphicsItem* item : newItems)
-    {
-        if (item)
-            item->setSelected(true);
-    }
-
-    if (!newItems.isEmpty() && newItems.last())
-        newItems.last()->setFocus();
-
-    raiseAllHandlesToTop();
-
-    // Новые фигуры должны быть выше уже существующих на сцене
-    qreal maxZ = 0.0;
-    bool hasExisting = false;
-
-    for (QGraphicsItem* item : beforeItems)
-    {
-        if (!item)
-            continue;
-
-        if (item == _videoRect ||
-            item == _tempRectItem ||
-            item == _tempCircleItem ||
-            item == _tempPolyline)
-        {
-            continue;
-        }
-
-        if (item->parentItem() != nullptr)
-            continue;
-
-        maxZ = hasExisting ? qMax(maxZ, item->zValue()) : item->zValue();
-        hasExisting = true;
-    }
-
-    if (!hasExisting)
-        maxZ = 0.0;
-
-    for (int i = 0; i < newItems.size(); ++i)
-    {
-        if (newItems[i])
-            newItems[i]->setZValue(maxZ + 1.0 + i);
-    }
-
-    // Добавляем новые фигуры в конец списка справа
-    QList<QListWidgetItem*> pastedListItems;
-    pastedListItems.reserve(newItems.size());
-
-    for (QGraphicsItem* item : newItems)
-    {
-        if (!item)
-            continue;
-
-        const QString className = item->data(0).toString();
-        if (className.isEmpty())
-            continue;
-
-        QListWidgetItem* listItem = new QListWidgetItem;
-        listItem->setData(Qt::UserRole, QVariant::fromValue(item));
-        ui->polygonList->addItem(listItem);
-        pastedListItems.append(listItem);
-    }
-
-    renumberPolygonListTextOnly();
-
-    {
-        QSignalBlocker blocker(ui->polygonList);
-        ui->polygonList->clearSelection();
-
-        for (QListWidgetItem* listItem : pastedListItems)
-        {
-            if (listItem)
-                listItem->setSelected(true);
-        }
-
-        if (!pastedListItems.isEmpty() && pastedListItems.last())
-            ui->polygonList->setCurrentItem(pastedListItems.last());
-    }
-
-    ui->polygonList->setFocus();
-
-    QString descr = (newItems.size() == 1)
-                        ? tr("Вставка примитива")
-                        : tr("Вставка примитивов");
-
-    if (QUndoStack* st = activeUndoStack())
-        st->beginMacro(descr);
-
-    for (QGraphicsItem* item : newItems)
-    {
-        ShapeBackup backup = makeBackupFromItem(item);
-        pushAdoptExistingShapeCommand(item, backup, descr);
-    }
-
-    if (QUndoStack* st = activeUndoStack())
-        st->endMacro();
-
-    doc->isModified = true;
-    updateFileListDisplay(doc->filePath);
-}
-
-void MainWindow::saveCurrentViewState(Document::Ptr doc)
-{
-    if (!doc || !ui->graphView)
-    {
-        return;
-    }
-
-    doc->viewState = {
-        ui->graphView->horizontalScrollBar()->value(),
-        ui->graphView->verticalScrollBar()->value(),
-        ui->graphView->transform().m11(),
-        ui->graphView->mapToScene(ui->graphView->viewport()->rect().center())
-    };
-}
-
-void MainWindow::restoreViewState(Document::Ptr doc)
-{
-    if (!doc || !ui->graphView || !_scene || !_videoRect)
-    {
-        fitImageToView();
-        return;
-    }
-
-    _scene->setSceneRect(_videoRect->boundingRect().translated(_videoRect->pos()));
-
-    // Если viewState еще не был сохранен
-    if (doc->viewState.zoom <= 0.000001)
-    {
-        fitImageToView();
-        return;
-    }
-
-    ui->graphView->resetTransform();
-    ui->graphView->scale(doc->viewState.zoom, doc->viewState.zoom);
-    ui->graphView->horizontalScrollBar()->setValue(doc->viewState.hScroll);
-    ui->graphView->verticalScrollBar()->setValue(doc->viewState.vScroll);
-    ui->graphView->centerOn(doc->viewState.center);
-    _m_zoom = ui->graphView->transform().m11();
-    if (_m_zoom <= 0.000001)
-        _m_zoom = 1.0;
-    updateAllPointNumbers();
-    ui->graphView->viewport()->update();
-}
-
-void MainWindow::handleCheckBoxClick(QCheckBox* clickedCheckBox)
-{
-    if (_lastCheckedPolygonLabel == clickedCheckBox)
-    {
-        clickedCheckBox->setChecked(false);
-        _lastCheckedPolygonLabel = nullptr;
-    }
-    else
-    {
-        if (_lastCheckedPolygonLabel)
-        {
-            _lastCheckedPolygonLabel->setChecked(false);
-        }
-        clickedCheckBox->setChecked(true);
-        _lastCheckedPolygonLabel = clickedCheckBox;
-    }
-}
-
-void MainWindow::loadLastUsedFolder()
-{
-    if (!config::base().getValue("application.last_used_folder", _lastUsedFolder, false))
-    {
-        _lastUsedFolder = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
-    }
-    log_verbose_m << "Loaded last used folder: " << _lastUsedFolder;
-}
-
-void MainWindow::saveLastUsedFolder()
-{
-    config::base().setValue("application.last_used_folder", _lastUsedFolder);
-    config::base().saveFile();
-    log_verbose_m << "Saved last used folder: " << _lastUsedFolder;
-}
-
-bool MainWindow::hasAnnotationFile(const QString& imagePath) const
-{
-    // QFileInfo fileInfo(imagePath);
-    // QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
-    // return QFile::exists(yamlPath);
-    QFileInfo fileInfo(imagePath);
-    QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
-
-    if (!QFile::exists(yamlPath)) {
-        return false;
-    }
-
-    // Проверяем, что файл не пустой
-    QFile file(yamlPath);
-    if (file.open(QIODevice::ReadOnly))
-    {
-        return file.size() > 0;
-    }
-    return false;
-}
-
-QString MainWindow::classesYamlPath() const
-{
-    QDir dir(_currentFolderPath);
-    return dir.filePath("classes.yaml");
-}
-
-bool MainWindow::loadClassesFromFile(const QString& filePath)
-{
-    YamlConfig yconfig;
-    //config::dirExpansion(configFile);
-    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(filePath));
-    if (!QFile::exists(filePath))
-    {
-        QFile file;
-        QByteArray conf;
-
-        file.setFileName(":/config/resources/classes.base.yaml");
-        file.open(QIODevice::ReadOnly);
-        conf = file.readAll();
-
-        if (!yconfig.readString(conf.toStdString()))
-        {
-            QMessageBox::warning(this, tr("Ошибка"),
-                                 tr("Ошибка при чтении базового файла с классами!"));
-            //alog::stop();
-            return false;
-        }
-        if (!yconfig.saveFile(std::string(encoded.constData(), encoded.size())))
-        {
-            QMessageBox::warning(this, tr("Ошибка"),
-                                 tr("Ошибка при сохранении в базовый файл с классами! "
-                                    "Более подробную информацию смотри в .log файле"));
-            //alog::stop();
-            return false;
-        }
-    }
-    else
-    {
-        if (!yconfig.readFile(std::string(encoded.constData(), encoded.size())))
-        {
-            QMessageBox::warning(this, tr("Ошибка"),
-                                 tr("Ошибка при чтении файла с классами!"
-                                    "Более подробную информацию смотри в .log файле"));
-            return false;
-        }
-    }
-
-    QList<QString> classes;
-
-    if (!yconfig.getValue("classes", classes, false))
-    {
-        QMessageBox::warning(this, tr("Ошибка"),
-                             tr("Нет секции классов"));
-        return false;
-    }
-    QMap<QString, QColor> colors;
-    QList<QString> colorLines;
-
-    if (yconfig.getValue("class_colors", colorLines, true))
-    {
-        for (const QString& s : colorLines)
-        {
-            // ожидаем "name=#AARRGGBB"
-            const int eq = s.indexOf('=');
-            if (eq <= 0) continue;
-
-            const QString name = s.left(eq).trimmed();
-            const QString hex  = s.mid(eq + 1).trimmed();
-
-            const QColor c(hex);
-            if (!name.isEmpty() && c.isValid())
-                colors[name] = c;
-        }
-    }
-
-    _projectClasses = classes;
-    _projectClassColors = colors;
-
-    // Cинхронизируем диалог
-    if (_projPropsDialog)
-    {
-        _projPropsDialog->setProjectClasses(_projectClasses);
-        _projPropsDialog->setProjectClassColors(_projectClassColors);
-    }
-
-    return true;
-}
-
-bool MainWindow::saveProjectClasses(const QStringList& classes,
-                                    const QMap<QString, QColor>& colors)
-{
-    const QString path = classesYamlPath();
-    if (path.isEmpty())
-        return false;
-
-    QList<QString> cls;
-    cls.reserve(classes.size());
-    for (const QString& s : classes)
-        cls.push_back(s);
-
-    // class_colors как список строк "name=#AARRGGBB"
-    QList<QString> colorLines;
-    colorLines.reserve(classes.size());
-    for (const QString& name : classes)
-    {
-        const QColor c = colors.value(name, QColor());
-        if (c.isValid())
-            colorLines.push_back(name + "=" + c.name(QColor::HexArgb));
-    }
-
-    YamlConfig yconfig;
-    yconfig.setValue("classes", cls);
-    yconfig.setValue("class_colors", colorLines);
-
-    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(path));
-    return yconfig.saveFile(std::string(encoded.constData(), encoded.size()));
-
-    // std::string str;
-    // yconfig.saveString(str);
-
-    // // YAML::Emitter seq;
-    // // seq.SetIndent(2);
-    // // seq << YAML::Flow << YAML::BeginSeq;
-    // // for (const QString& s : classes)
-    // //     seq << s.toUtf8().constData();
-    // // seq << YAML::EndSeq;
-    // // if (!seq.good())
-    // //     return false;
-
-    // // защита от "пустой записи"
-    // if (str.empty())
-    //     return false;
-
-
-    // QByteArray body;
-    // body += "---\n";
-    // body += "### QLabelMe YAML syntax ###\n\n";
-    // body += str.c_str();
-    // body += "\n\n...\n";
-
-    // QSaveFile sf {path};
-    // if (!sf.open(QIODevice::WriteOnly))
-    //     return false;
-
-    // if (sf.write(body) != body.size())
-    //     return false;
-
-    // return sf.commit();
-}
-
-void MainWindow::onPolygonListItemClicked(QListWidgetItem* item)
-{
-    if (!item) return;
-
-    QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
-    if (sceneItem)
-    {
-       ui->graphView->centerOn(sceneItem);
-    }
-}
-
-void MainWindow::onPolygonListItemDoubleClicked(QListWidgetItem* item)
-{
-    if (!item) return;
-
-    QGraphicsItem* graphicsItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
-    if (!graphicsItem) return;
-
-    // Фокусируемся на элементе и увеличиваем масштаб
-    ui->graphView->centerOn(graphicsItem);
-    ui->graphView->scale(1.2, 1.2);
-}
-
-void MainWindow::onSceneSelectionChanged()
-{
-    if (!_scene || !ui || !ui->polygonList)
-        return;
-
-    if (_syncingSelection)
-        return;
-
-    _syncingSelection = true;
-
-    // Обновляем цвета/заливку всех фигур с учетом текущего выделения
-    for (QGraphicsItem* it : _scene->items())
-    {
-        if (!it)
-            continue;
-
-        if (it == _videoRect ||
-            it == _tempRectItem ||
-            it == _tempCircleItem ||
-            it == _tempPolyline)
-        {
-            continue;
-        }
-
-        if (it->parentItem() != nullptr)
-            continue;
-
-        const QString cls = it->data(0).toString();
-        if (!cls.isEmpty())
-            applyClassColorToItem(it, cls);
-    }
-
-    {
-        QSignalBlocker blocker(ui->polygonList);
-        ui->polygonList->clearSelection();
-
-        const QList<QGraphicsItem*> selected = _scene->selectedItems();
-        for (QGraphicsItem* sceneItem : selected)
-        {
-            if (!sceneItem)
-                continue;
-
-            if (auto* h = dynamic_cast<qgraph::DragCircle*>(sceneItem))
-            {
-                if (h->parentItem())
-                    sceneItem = h->parentItem();
-            }
-
-            for (int i = 0; i < ui->polygonList->count(); ++i)
-            {
-                QListWidgetItem* listItem = ui->polygonList->item(i);
-                if (!listItem)
-                    continue;
-
-                QGraphicsItem* boundItem =
-                    listItem->data(Qt::UserRole).value<QGraphicsItem*>();
-
-                if (boundItem == sceneItem)
-                {
-                    listItem->setSelected(true);
-                    break;
-                }
-            }
-        }
-    }
-
-    updateCoordinateList();
-    _scene->update();
-
-    _syncingSelection = false;
-}
-
-void MainWindow::updateCoordinateList()
-{
-    if (!ui || !ui->coordinateList)
-        return;
-
-    ui->coordinateList->clear();
-
-    if (!_scene)
-        return;
-
-    QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
-    if (selectedItems.isEmpty())
-        return;
-
-    auto addLine = [this](const QString& text)
-    {
-        ui->coordinateList->addItem(text);
-    };
-
-    auto calcBounds = [](const QVector<QPointF>& pts,
-                         QPointF& topLeft,
-                         QPointF& bottomRight) -> bool
-    {
-        if (pts.isEmpty())
-            return false;
-
-        qreal minX = pts[0].x();
-        qreal maxX = pts[0].x();
-        qreal minY = pts[0].y();
-        qreal maxY = pts[0].y();
-
-        for (const QPointF& p : pts)
-        {
-            if (p.x() < minX) minX = p.x();
-            if (p.x() > maxX) maxX = p.x();
-            if (p.y() < minY) minY = p.y();
-            if (p.y() > maxY) maxY = p.y();
-        }
-
-        topLeft = QPointF(minX, minY);
-        bottomRight = QPointF(maxX, maxY);
-        return true;
-    };
-
-    bool firstShape = true;
-
-    for (QGraphicsItem* item : selectedItems)
-    {
-        if (!item)
-            continue;
-
-        if (auto* point = dynamic_cast<qgraph::Point*>(item))
-        {
-            if (!firstShape)
-                addLine(QString());
-            firstShape = false;
-
-            const QPointF center = point->center();
-
-            addLine(tr("Точка"));
-            addLine(tr("Центр: (%1; %2)")
-                        .arg(round2(center.x()))
-                        .arg(round2(center.y())));
-        }
-        else if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
-        {
-            if (!firstShape)
-                addLine(QString());
-            firstShape = false;
-
-            const QRectF r = rect->realSceneRect();
-
-            const QPointF topLeft = r.topLeft();
-            const QPointF bottomRight = r.bottomRight();
-            const QPointF center = r.center();
-
-            const qreal width  = r.width();
-            const qreal height = r.height();
-
-            addLine(tr("Прямоугольник"));
-            addLine(tr("TL точка: (%1; %2)")
-                        .arg(round2(topLeft.x()))
-                        .arg(round2(topLeft.y())));
-            addLine(tr("BR точка: (%1; %2)")
-                        .arg(round2(bottomRight.x()))
-                        .arg(round2(bottomRight.y())));
-            addLine(tr("Центр: (%1; %2)")
-                        .arg(round2(center.x()))
-                        .arg(round2(center.y())));
-            addLine(tr("Ширина: %1").arg(round2(width)));
-            addLine(tr("Высота: %1").arg(round2(height)));
-        }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-        {
-            if (!firstShape)
-                addLine(QString());
-            firstShape = false;
-
-            const QVector<QPointF> pts = polyline->points();
-
-            QPointF topLeft, bottomRight;
-            calcBounds(pts, topLeft, bottomRight);
-
-            const QPointF center((topLeft.x() + bottomRight.x()) / 2.0,
-                                 (topLeft.y() + bottomRight.y()) / 2.0);
-
-            const qreal width  = bottomRight.x() - topLeft.x();
-            const qreal height = bottomRight.y() - topLeft.y();
-
-            addLine(tr("Полилиния"));
-            addLine(tr("TL точка: (%1; %2)")
-                        .arg(round2(topLeft.x()))
-                        .arg(round2(topLeft.y())));
-            addLine(tr("BR точка: (%1; %2)")
-                        .arg(round2(bottomRight.x()))
-                        .arg(round2(bottomRight.y())));
-            addLine(tr("Центр: (%1; %2)")
-                        .arg(round2(center.x()))
-                        .arg(round2(center.y())));
-            addLine(tr("Ширина: %1").arg(round2(width)));
-            addLine(tr("Высота: %1").arg(round2(height)));
-        }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
-        {
-            if (!firstShape)
-                addLine(QString());
-            firstShape = false;
-
-            const QVector<QPointF> pts = line->points();
-
-            QPointF topLeft, bottomRight;
-            if (!calcBounds(pts, topLeft, bottomRight))
-                continue;
-
-            const QPointF center((topLeft.x() + bottomRight.x()) / 2.0,
-                                 (topLeft.y() + bottomRight.y()) / 2.0);
-
-            const qreal width  = bottomRight.x() - topLeft.x();
-            const qreal height = bottomRight.y() - topLeft.y();
-
-            addLine(tr("Линия"));
-            addLine(tr("TL точка: (%1; %2)")
-                        .arg(round2(topLeft.x()))
-                        .arg(round2(topLeft.y())));
-            addLine(tr("BR точка: (%1; %2)")
-                        .arg(round2(bottomRight.x()))
-                        .arg(round2(bottomRight.y())));
-            addLine(tr("Центр: (%1; %2)")
-                        .arg(round2(center.x()))
-                        .arg(round2(center.y())));
-            addLine(tr("Ширина: %1").arg(round2(width)));
-            addLine(tr("Высота: %1").arg(round2(height)));
-        }
-        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
-        {
-            if (!firstShape)
-                addLine(QString());
-            firstShape = false;
-
-            QPointF center = circle->center();
-            qreal radius = circle->realRadius();
-
-            QPointF topLeft(center.x() - radius,
-                            center.y() - radius);
-            QPointF bottomRight(center.x() + radius,
-                                center.y() + radius);
-
-            qreal width  = bottomRight.x() - topLeft.x();
-            qreal height = bottomRight.y() - topLeft.y();
-
-            addLine(tr("Круг"));
-            addLine(tr("TL точка: (%1; %2)")
-                        .arg(round2(topLeft.x()))
-                        .arg(round2(topLeft.y())));
-            addLine(tr("BR точка: (%1; %2)")
-                        .arg(round2(bottomRight.x()))
-                        .arg(round2(bottomRight.y())));
-            addLine(tr("Центр: (%1; %2)")
-                        .arg(round2(center.x()))
-                        .arg(round2(center.y())));
-            addLine(tr("Ширина: %1").arg(round2(width)));
-            addLine(tr("Высота: %1").arg(round2(height)));
-        }
-    }
-}
-
-void MainWindow::updateFileListItemIcon(QListWidgetItem* item, bool hasAnnotations)
-{
-    if (!item) return;
-
-    Document::Ptr doc = item->data(Qt::UserRole).value<Document::Ptr>();
-    if (!doc) return;
-
-    // Получаем превью изображения
-    QPixmap preview(doc->filePath);
-    preview = preview.scaled(50, 50, Qt::KeepAspectRatio);
-
-    // Создаем композитное изображение
-    QPixmap result(70, 70);
-    result.fill(Qt::transparent);
-
-    QPainter painter(&result);
-    painter.drawPixmap(10, 10, preview);
-
-    // Добавляем иконку статуса
-    QPixmap statusIcon(hasAnnotations ? "/images/resources/ok.svg" : "/images/resources/not_ok.svg");
-    statusIcon = statusIcon.scaled(20, 20, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    painter.drawPixmap(0, 0, statusIcon);
-
-    item->setIcon(QIcon(result));
-}
-
-QListWidgetItem* MainWindow::findFileListItem(const QString& filePath)
-{
-    for (int i = 0; i < ui->fileList->count(); ++i)
-    {
-        QListWidgetItem* item = ui->fileList->item(i);
-        Document::Ptr doc = item->data(Qt::UserRole).value<Document::Ptr>();
-        if (doc && doc->filePath == filePath)
-        {
-            return item;
-        }
-    }
-    return nullptr;
-}
-
-void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem)
-{
-    linkSceneItemToList(sceneItem, -1);
-}
-
-void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem, int row)
-{
-    if (!sceneItem)
-        return;
-
-    QString className = sceneItem->data(0).toString();
-    if (className.isEmpty())
-        return;
-
-    QListWidgetItem* listItem = new QListWidgetItem;
-    listItem->setData(Qt::UserRole, QVariant::fromValue(sceneItem));
-
-    if (row < 0 || row > ui->polygonList->count())
-        ui->polygonList->addItem(listItem);
-    else
-        ui->polygonList->insertItem(row, listItem);
-
-    //renumberPolygonList();
-}
-
-void MainWindow::renumberPolygonList()
-{
-    if (!ui || !ui->polygonList)
-        return;
-
-    const int count = ui->polygonList->count();
-
-    for (int i = 0; i < count; ++i)
-    {
-        QListWidgetItem* item = ui->polygonList->item(i);
-        if (!item)
-            continue;
-
-        QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
-        if (!sceneItem)
-            continue;
-
-        const QString className = sceneItem->data(0).toString();
-        //item->setText(QString("%1: %2").arg(i).arg(className));
-        QString text = QString("%1: %2").arg(i).arg(className);
-        if (!sceneItem->isVisible())
-            text += " [скрыто]";
-        item->setText(text);
-
-        // Порядок списка = порядок фигур
-        sceneItem->setZValue(i);
-    }
-
-    if (_scene)
-        _scene->update();
-}
-
-void MainWindow::renumberPolygonListTextOnly()
-{
-    if (!ui || !ui->polygonList)
-        return;
-
-    for (int i = 0; i < ui->polygonList->count(); ++i)
-    {
-        QListWidgetItem* item = ui->polygonList->item(i);
-        if (!item)
-            continue;
-
-        QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
-        if (!sceneItem)
-            continue;
-
-        const QString className = sceneItem->data(0).toString();
-        //item->setText(QString("%1: %2").arg(i).arg(className));
-        QString text = QString("%1: %2").arg(i).arg(className);
-        if (!sceneItem->isVisible())
-            text += " [скрыто]";
-        item->setText(text);
-    }
-}
-
-void MainWindow::showPolygonListContextMenu(const QPoint &pos)
-{
-    QListWidgetItem* item = ui->polygonList->itemAt(pos);
-    if (!item) return;
-
-    QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
-    if (!sceneItem)
-        return;
-
-    QMenu menu;
-    QAction* toggleVisibleAction =
-        menu.addAction(sceneItem->isVisible() ? "Скрыть разметку" : "Показать разметку");
-    QAction* deleteAction = menu.addAction("Удалить");
-
-    QAction* chosen = menu.exec(ui->polygonList->viewport()->mapToGlobal(pos));
-    if (chosen == toggleVisibleAction)
-        toggleSceneItemVisibility(sceneItem);
-    else if (chosen == deleteAction)
-        removePolygonListItem(item);
-}
-
-void MainWindow::updatePolygonListItemText(QListWidgetItem* item)
-{
-    if (!item)
-        return;
-
-    QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
-    if (!sceneItem)
-        return;
-
-    const QString className = sceneItem->data(0).toString();
-    const int row = ui->polygonList->row(item);
-
-    QString text = QString("%1: %2").arg(row).arg(className);
-    if (!sceneItem->isVisible())
-        text += " [скрыто]";
-
-    item->setText(text);
-}
-
-void MainWindow::updatePolygonListTexts()
-{
-    if (!ui || !ui->polygonList)
-        return;
-
-    for (int i = 0; i < ui->polygonList->count(); ++i)
-        updatePolygonListItemText(ui->polygonList->item(i));
-}
-
-void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
-{
-    if (!item)
-        return;
-
-    if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(item))
-        item = handle->parentItem();
-
-    if (!item || item == _videoRect)
-        return;
-
-    item = findMovableAncestor(item);
-    if (!item)
-        return;
-
-    QList<QGraphicsItem*> targets;
-
-    const QList<QGraphicsItem*> selectedItems =
-        (_scene ? _scene->selectedItems() : QList<QGraphicsItem*>());
-
-    const bool clickedItemIsInSelection = selectedItems.contains(item);
-
-    if (clickedItemIsInSelection)
-    {
-        for (QGraphicsItem* sel : selectedItems)
-        {
-            if (!sel)
-                continue;
-
-            if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(sel))
-                sel = handle->parentItem();
-
-            sel = findMovableAncestor(sel);
-
-            if (!sel || sel == _videoRect)
-                continue;
-
-            if (!targets.contains(sel))
-                targets.append(sel);
-        }
-    }
-    else
-    {
-        targets.append(item);
-    }
-
-    if (targets.isEmpty())
-        return;
-
-    bool hideMode = false;
-    for (QGraphicsItem* target : targets)
-    {
-        if (target && target->isVisible())
-        {
-            hideMode = true;
-            break;
-        }
-    }
-
-    const QString description =
-        hideMode
-            ? (targets.size() == 1 ? tr("Скрытие фигуры") : tr("Скрытие фигур"))
-            : (targets.size() == 1 ? tr("Показ фигуры")   : tr("Показ фигур"));
-
-    if (QUndoStack* st = activeUndoStack())
-        st->beginMacro(description);
-
-    for (QGraphicsItem* target : targets)
-    {
-        if (!target)
-            continue;
-
-        ShapeBackup before = makeBackupFromItem(target);
-        const qulonglong uid = before.uid;
-
-        target->setVisible(!hideMode);
-
-        if (hideMode)
-            target->setSelected(false);
-
-        ShapeBackup after = makeBackupFromItem(target);
-        if (!sameGeometry(before, after))
-            pushModifyShapeCommand(uid, before, after, description);
-    }
-
-    if (QUndoStack* st = activeUndoStack())
-        st->endMacro();
-
-    updatePolygonListTexts();
-
-    if (auto doc = currentDocument())
-    {
-        doc->isModified = true;
-        updateFileListDisplay(doc->filePath);
-    }
-
-    updateCoordinateList();
-
-    if (_scene)
-        _scene->update();
-}
-
-bool MainWindow::isYamlFileEmpty(const QString& yamlPath) const
-{
-    QFile file(yamlPath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        return true; // Если не можем открыть, считаем пустым
-    }
-
-    QTextStream in(&file);
-    QString content = in.readAll();
-    file.close();
-
-    // Убираем комментарии и пустые строки для проверки
-    QStringList lines = content.split('\n');
-    for (const QString& line : lines)
-    {
-        QString trimmed = line.trimmed();
-        // Пропускаем пустые строки и комментарии
-        if (!trimmed.isEmpty() && !trimmed.startsWith('#'))
-        {
-            // Проверяем наличие ключа shapes (основная структура аннотаций)
-            if (trimmed.contains("shapes:") || trimmed.contains("circles:") ||
-                trimmed.contains("rectangles:") || trimmed.contains("polylines:") ||
-                trimmed.contains("points:") || trimmed.contains("lines:"))
-            {
-                return false; // Файл не пустой
-            }
-        }
-    }
-    return true; // Файл пустой
-}
-
-QString MainWindow::getAnnotationFilePath(const QString& imagePath) const
-{
-    // Преобразуем путь к изображению в путь к YAML файлу
-    QFileInfo imageInfo(imagePath);
-    QString yamlPath = imageInfo.path() + "/" + imageInfo.completeBaseName() + ".yaml";
-    return yamlPath;
-}
-
-void MainWindow::removePolygonItem(QGraphicsItem* item)
-{
-    if (!item) return;
-
-    // Удаляем из списка
-    for (int i = 0; i < ui->polygonList->count(); ++i)
-    {
-        QListWidgetItem* listItem = ui->polygonList->item(i);
-        if (listItem && listItem->data(Qt::UserRole).value<QGraphicsItem*>() == item)
-        {
-            delete ui->polygonList->takeItem(i);
-            renumberPolygonList();
-            break;
-        }
-    }
-
-    // Удаляем со сцены
-    if (item->scene())
-    {
-        item->scene()->removeItem(item);
-    }
-    delete item;
-
-    // Помечаем документ как измененный
-    if (auto doc = currentDocument())
-    {
-        doc->isModified = true;
-        updateFileListDisplay(doc->filePath);
-    }
-}
-
-void MainWindow::raiseAllHandlesToTop()
-{
-    if (!_scene) return;
-
-    // Проходим по всем элементам и поднимаем их ручки
-    for (QGraphicsItem* item : _scene->items())
-    {
-        if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
-        {
-            rectangle->raiseHandlesToTop();
-        }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-        {
-            polyline->raiseHandlesToTop();
-        }
-        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
-        {
-            circle->raiseHandlesToTop();
-        }
-        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
-            point->raiseHandlesToTop();
-    }
-}
-
-void MainWindow::moveSelectedItemsToBack()
-{
-    if (!_scene)
-        return;
-
-    QList<QGraphicsItem*> selectedRoots;
-    QList<QGraphicsItem*> allRoots;
-
-    for (QGraphicsItem* item : _scene->items())
-    {
-        if (!item)
-            continue;
-
-        if (item == _videoRect ||
-            item == _tempRectItem ||
-            item == _tempCircleItem ||
-            item == _tempPolyline)
-        {
-            continue;
-        }
-
-        if (item->parentItem() != nullptr)
-            continue;
-
-        const bool isShape =
-                dynamic_cast<qgraph::Rectangle*>(item) ||
-                dynamic_cast<qgraph::Circle*>(item) ||
-                dynamic_cast<qgraph::Polyline*>(item) ||
-                dynamic_cast<qgraph::Line*>(item) ||
-                dynamic_cast<qgraph::Point*>(item);
-
-        if (!isShape)
-            continue;
-
-        allRoots.append(item);
-
-        if (item->isSelected())
-            selectedRoots.append(item);
-    }
-
-    if (selectedRoots.isEmpty())
-        return;
-
-    // Сохраняем относительный порядок выделенных фигур
-    std::sort(selectedRoots.begin(), selectedRoots.end(),
-              [](QGraphicsItem* a, QGraphicsItem* b)
-    {
-        return a->zValue() < b->zValue();
-    });
-
-    qreal minNonSelectedZ = 0.0;
-    bool hasNonSelected = false;
-
-    for (QGraphicsItem* item : allRoots)
-    {
-        if (!item || selectedRoots.contains(item))
-            continue;
-
-        if (!hasNonSelected)
-        {
-            minNonSelectedZ = item->zValue();
-            hasNonSelected = true;
-        }
-        else
-        {
-            minNonSelectedZ = qMin(minNonSelectedZ, item->zValue());
-        }
-    }
-
-    // Базовый нижний слой для фигур: сразу над изображением
-    const qreal imageZ = (_videoRect ? _videoRect->zValue() : 0.0);
-    const qreal shapesFloorZ = imageZ + 1.0;
-
-    qreal startZ = shapesFloorZ;
-
-    // Если есть другие невыделенные фигуры выше нижнего слоя,
-    // ставим выделенные перед ними, но не ниже изображения
-    if (hasNonSelected)
-        startZ = qMax(shapesFloorZ, minNonSelectedZ - selectedRoots.size());
-
-    qreal z = startZ;
-    for (QGraphicsItem* item : selectedRoots)
-    {
-        item->setZValue(z);
-        z += 1.0;
-    }
-    for (QGraphicsItem* item : selectedRoots)
-    {
-        if (item)
-            item->setSelected(false);
-    }
-
-    raiseAllHandlesToTop();
-    updateCoordinateList();
-    _scene->update();
-}
-
-bool MainWindow::hasUnsavedChanges() const
-{
-    for (const auto& doc : _documentsMap.values())
-    {
-        if (doc && doc->isModified)
-            return true;
-    }
-    return false;
-}
-
-QList<Document::Ptr> MainWindow::getUnsavedDocuments() const
-{
-    QList<Document::Ptr> unsavedDocs;
-    for (auto it = _documentsMap.constBegin(); it != _documentsMap.constEnd(); ++it)
-    {
-        if (it.value()->isModified)
-        {
-            unsavedDocs.append(it.value());
-        }
-    }
-    return unsavedDocs;
-}
-
-int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr> &unsavedDocs)
-{
-    //QDialog dialog(this);
-    QDialog dialog(
-        this,
-        Qt::Dialog |
-            Qt::CustomizeWindowHint |
-            Qt::WindowTitleHint |
-            Qt::WindowCloseButtonHint
-        );
-
-    dialog.setWindowTitle(tr("Несохраненные изменения"));
-    dialog.setModal(true);
-    //dialog.setMinimumWidth(500);
-
-
-    dialog.setWindowFlag(Qt::WindowMaximizeButtonHint, false);
-    dialog.setWindowFlag(Qt::WindowMinMaxButtonsHint, false);
-    dialog.setWindowFlag(Qt::WindowFullscreenButtonHint, false);
-    dialog.setWindowState(Qt::WindowNoState);
-
-    //dialog.setWindowState(Qt::WindowNoState);
-
-    QVector<int> dlgGeom {100, 100, 600, 400};
-    config::base().getValue("windows.unsaved_changes_dialog.geometry", dlgGeom);
-    dialog.setGeometry(dlgGeom[0], dlgGeom[1], dlgGeom[2], dlgGeom[3]);
-    //dialog.setFixedSize(dialog.size());
-
-    QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
-
-    QLabel *messageLabel = new QLabel(
-        tr("Следующие файлы имеют несохраненные изменения:\nХотите сохранить изменения?"));
-    mainLayout->addWidget(messageLabel);
-
-    // Список файлов
-    QListWidget *fileList = new QListWidget();
-    for (const Document::Ptr &doc : unsavedDocs)
-    {
-        QFileInfo fileInfo(doc->filePath);
-        QListWidgetItem *item = new QListWidgetItem(fileInfo.fileName());
-        //item->setData(Qt::UserRole, QVariant::fromValue(doc));
-        item->setData(Qt::UserRole, doc->filePath);
-        fileList->addItem(item);
-        item->setSelected(true);
-    }
-    mainLayout->addWidget(fileList);
-
-    // Кнопки
-    QDialogButtonBox *buttonBox = new QDialogButtonBox();
-
-    QPushButton *saveAllButton = new QPushButton(tr("Сохранить все"));
-    QPushButton *discardAllButton = new QPushButton(tr("Не сохранять"));
-    QPushButton *cancelButton = new QPushButton(tr("Отмена"));
-
-    buttonBox->addButton(saveAllButton, QDialogButtonBox::AcceptRole);
-    buttonBox->addButton(discardAllButton, QDialogButtonBox::DestructiveRole);
-    buttonBox->addButton(cancelButton, QDialogButtonBox::RejectRole);
-
-    mainLayout->addWidget(buttonBox);
-
-    int result = QDialog::Rejected;
-
-    connect(saveAllButton, &QPushButton::clicked, [&]() {
-        result = QDialogButtonBox::SaveAll;
-        dialog.accept();
-    });
-
-    connect(discardAllButton, &QPushButton::clicked, [&]() {
-        result = QDialogButtonBox::Discard;
-        dialog.accept();
-    });
-
-    connect(cancelButton, &QPushButton::clicked, [&]() {
-        result = QDialogButtonBox::Cancel;
-        dialog.reject();
-    });
-
-    dialog.exec();
-    // Сохраняем геометрию только если окно не было развернуто на весь экран
-    if (!dialog.isMaximized() && !dialog.isFullScreen())
-    {
-        QRect g = dialog.geometry();
-        QVector<int> v {g.x(), g.y(), g.width(), g.height()};
-        config::base().setValue("windows.unsaved_changes_dialog.geometry", v);
-    }
-    return result;
-}
-
-void MainWindow::saveAllDocuments()
-{
-    for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
-    {
-        if (it.value()->isModified)
-        {
-            saveAnnotationToFile(it.value());
-        }
-    }
-}
-
-qgraph::DragCircle* MainWindow::pickHiddenHandle(const QPointF& scenePos, bool& topIsHandle) const
-{
-    topIsHandle = false;
-    if (!_scene) return nullptr;
-
-    GraphicsView* view = ui ? ui->graphView : nullptr;
-    const qreal radiusScene = viewPixelsToSceneRadius(view, effectiveViewPickPx(_ghostPickRadius));
-    if (radiusScene <= 0.0)
-      return nullptr;
-
-    const QRectF pickRect(scenePos - QPointF(radiusScene, radiusScene),
-                        QSizeF(2 * radiusScene, 2 * radiusScene));
-
-    const auto items = _scene->items(pickRect, Qt::IntersectsItemShape, Qt::DescendingOrder);
-
-    // Если верхний элемент уже ручка - «обманка» не нужна, пусть работает стандартный drag
-    if (!items.isEmpty())
-        if (auto* dc = dynamic_cast<qgraph::DragCircle*>(items.front()))
-        {
-            topIsHandle = true;
-            return dc;
-        }
-
-    // Ищем ближайшую ручку в глубине стека
-    qgraph::DragCircle* best = nullptr;
-    qreal bestD2 = std::numeric_limits<qreal>::max();
-
-    for (auto* it : items)
-    {
-        if (auto* circle = dynamic_cast<qgraph::Circle*>(it))
-        {
-            QPointF localCursorPos = circle->mapFromScene(scenePos);
-            if (circle->isCursorNearCircle(localCursorPos))
-            {
-                auto* handle = circle->getDragCircle();
-                if (handle && handle->isValid())
-                {
-                    const QPointF c = handle->mapToScene(handle->rect().center());
-                    const qreal dx = c.x() - scenePos.x();
-                    const qreal dy = c.y() - scenePos.y();
-                    const qreal d2 = dx*dx + dy*dy;
-                    if (d2 <= bestD2)
-                    {
-                        bestD2 = d2;
-                        best = handle;
-                    }
-                }
-            }
-            continue;
-        }
-        if (auto* dc = dynamic_cast<qgraph::DragCircle*>(it))
-        {
-            const QPointF c = dc->mapToScene(dc->rect().center());
-            const qreal dx = c.x() - scenePos.x();
-            const qreal dy = c.y() - scenePos.y();
-            const qreal d2 = dx*dx + dy*dy;
-            if (d2 <= bestD2)
-            {
-                bestD2 = d2;
-                best = dc;
-            }
-        }
-    }
-    return best;
-}
-
-void MainWindow::ensureGhostAllocated()
-{
-    if (!_ghostHandle)
-    {
-        _ghostHandle = new QGraphicsRectItem();
-    }
-    if (_ghostHandle->scene() != _scene)
-    {
-        if (_ghostHandle->scene())
-            _ghostHandle->scene()->removeItem(_ghostHandle);
-        if (_scene)
-            _scene->addItem(_ghostHandle);
-    }
-
-    // Всегда (пере)настраиваем, чтобы гарантировать корректный Z и поведение
-    _ghostHandle->setAcceptHoverEvents(true);
-    _ghostHandle->setAcceptedMouseButtons(Qt::NoButton);
-    _ghostHandle->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
-
-    // Держим «призрака» поверх всего
-    _ghostHandle->setZValue(1e9);
-    _ghostHandle->hide();
-}
-
-void MainWindow::showGhostOver(qgraph::DragCircle* target, const QPointF& scenePos)
-{
-    ensureGhostAllocated();
-    _ghostTarget = target;
-    _ghostActive = true;
-
-    QColor ghostColor = _vis.selectedHandleColor;
-    _ghostHandle->setRect(target->baseRect());
-    _ghostHandle->setPen (target->basePen());
-    _ghostHandle->setBrush(QBrush(ghostColor));
-    DragCircle::rememberCurrentAsBase(_ghostHandle);
-
-    // Поставим «призрака» поверх позиции настоящей ручки
-    const QPointF sceneHandlePos = target->scenePos();
-    _ghostHandle->setPos(sceneHandlePos);
-    setGhostStyleHover(), _ghostHover = true;
-    _ghostHandle->show();
-
-    _ghostGrabOffset = QPointF(0,0);
-    _ghostTarget->setGhostDriven(true);
-}
-
-void MainWindow::moveGhostTo(const QPointF& scenePos)
-{
-    if (!_ghostActive || !_ghostTarget) return;
-
-    // Двигаем «призрака» центром под курсор
-    _ghostHandle->setPos(scenePos - _ghostHandle->rect().center());
-
-    QGraphicsItem* parent = _ghostTarget->parentItem();
-    const QPointF sceneTopLeft = scenePos - _ghostTarget->rect().center();
-    const QPointF newLocalTopLeft = parent ? parent->mapFromScene(sceneTopLeft) : sceneTopLeft;
-
-    if (_ghostHandle && _ghostHandle->isVisible())
-    {
-        //_ghostHandle->setPos(scenePos);
-        if (_ghostActive)
-            setGhostStyleHover();
-    }
-    _ghostTarget->setPos(newLocalTopLeft); // это триггерит itemChange() -> dragCircleMove()
-}
-
-void MainWindow::endGhost()
-{
-    if (_ghostTarget)
-    {
-        _ghostTarget->setHoverStyle(false);
-    }
-    if (_lastHoverHandle)
-    {
-        _ghostTarget->setHoverStyle(false);
-        _lastHoverHandle = nullptr;
-    }
-
-    if (_ghostTarget)
-    {
-        if (auto* shape = dynamic_cast<qgraph::Shape*>(_ghostTarget->parentItem()))
-            shape->dragCircleRelease(_ghostTarget);
-        _ghostTarget->setHoverStyle(false);
-        _ghostTarget->setGhostDriven(false);
-
-        // Помечаем документ как измененный после завершения перетаскивания
-        Document::Ptr doc = currentDocument();
-        if (doc && !doc->isModified)
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-    }
-
-    _ghostActive = false;
-    _ghostHover  = false;
-    _ghostTarget = nullptr;
-    _handleDragging = false; // Завершение перетаскивания
-    updateModeLabel();
-    if (_ghostHandle)
-    {
-        _ghostHandle->hide();
-        setGhostStyleIdle();
-    }
-    updateAllPointNumbers();
-}
-
-void MainWindow::setGhostStyleHover()
-{
-    if (!_ghostHandle || !_ghostTarget)
-        return;
-
-    const QPointF centerScene = _ghostHandle->mapToScene(QPointF(0,0));
-
-    // Увеличим на 1.5x относительно базового размера реальной ручки
-    const QRectF base = _ghostTarget->baseRect();
-    const qreal scale = 1.5;
-    //const qreal scale = 1;
-    const QSizeF newSize(base.size() * scale);
-    const QRectF newRect(QPointF(-newSize.width()/2.0, -newSize.height()/2.0), newSize);
-
-    QColor ghostColor = _vis.selectedHandleColor;
-    _ghostHandle->setRect(newRect);
-    _ghostHandle->setPen(QPen(Qt::black, 1));
-    _ghostHandle->setBrush(QBrush(ghostColor));
-    _ghostHandle->update();
-
-    _ghostHandle->setPos(centerScene - newRect.center());
-}
-
-void MainWindow::setGhostStyleIdle()
-{
-    if (!_ghostHandle || !_ghostTarget) return;
-
-    const QPointF centerScene = _ghostHandle->mapToScene(_ghostHandle->rect().center());
-
-    qreal _smallSize = 8.0;
-    _ghostHandle->setRect(-_smallSize/2, -_smallSize/2, _smallSize, _smallSize);
-    QColor color(255, 255, 255, 200);
-    _ghostHandle->setBrush(QBrush(color));
-    _ghostHandle->setPen(QPen(Qt::black, 1));
-    _ghostHandle->setPen(QPen(color.darker(200)));
-
-    _ghostHandle->setPos(centerScene - _ghostHandle->rect().center());
-    _ghostHandle->update();
-}
-
-void MainWindow::showGhostPreview(qgraph::DragCircle* target, const QPointF& scenePos)
-{
-    ensureGhostAllocated();
-    _ghostTarget = target;
-
-    _ghostHandle->setRect(target->baseRect());
-    _ghostHandle->setPen(target->basePen());
-    _ghostHandle->setBrush(target->baseBrush());
-    DragCircle::rememberCurrentAsBase(_ghostHandle);
-    _ghostHandle->setPos(target->scenePos());
-    setGhostStyleHover(), _ghostHover = true;
-
-    _ghostHandle->show();
-}
-
-void MainWindow::startGhostDrag(const QPointF& scenePos)
-{
-    if (!_ghostTarget || !_ghostHandle)
-        return;
-
-    _ghostActive = true;
-    _ghostActive = true;
-    _ghostHover  = false;
-
-    _ghostGrabOffset = scenePos - _ghostHandle->pos();
-    _ghostTarget->setGhostDriven(true);
-    setGhostStyleHover();
-}
-
-qreal MainWindow::imagePickScale() const
-{
-    return 1.0;
-}
-
-qreal MainWindow::effectiveViewPickPx(qreal baseValue) const
-{
-    return baseValue * imagePickScale();
-}
-
-qreal MainWindow::viewPixelsToSceneRadius(GraphicsView* view, qreal viewPx) const
-{
-    if (!view || viewPx <= 0.0)
-        return 0.0;
-
-    const QTransform t = view->viewportTransform();
-
-    const qreal sx = std::hypot(t.m11(), t.m21());
-    const qreal sy = std::hypot(t.m22(), t.m12());
-    const qreal s  = std::max<qreal>(sx, sy);
-
-    if (s <= 0.000001)
-        return viewPx;
-
-    return viewPx / s;
-}
-
-qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
-{
-    return pickHandleAt(scenePos, _ghostPickRadius);
-}
-
-qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos, qreal customRadius) const
-{
-    if (!_scene)
-        return nullptr;
-
-    GraphicsView* view = ui ? ui->graphView : nullptr;
-    const qreal pickRadius = viewPixelsToSceneRadius(view, effectiveViewPickPx(customRadius));
-    if (pickRadius <= 0.0)
-        return nullptr;
-
-    const QRectF probe(scenePos - QPointF(pickRadius, pickRadius),
-                       QSizeF(pickRadius * 2, pickRadius * 2));
-
-    qgraph::DragCircle* best = nullptr;
-    qreal bestD2 = std::numeric_limits<qreal>::max();
-
-    for (QGraphicsItem* item : _scene->items(probe, Qt::IntersectsItemShape))
-    {
-        if (!item || !item->scene())
-            continue;
-
-        if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
-        {
-            if (circle->isCursorNearCircle(circle->mapFromScene(scenePos)))
-            {
-                auto* handle = circle->getDragCircle();
-                if (handle && handle->isValid())
-                {
-                    circle->updateHandlePosition(scenePos);
-                    return handle;
-                }
-            }
-            continue;
-        }
-
-        if (auto* handle = dynamic_cast<qgraph::DragCircle*>(item))
-        {
-            if (!handle->isValid())
-                continue;
-
-            const QPointF c = handle->mapToScene(handle->rect().center());
-            const qreal dx = c.x() - scenePos.x();
-            const qreal dy = c.y() - scenePos.y();
-            const qreal d2 = dx * dx + dy * dy;
-            const qreal r2 = pickRadius * pickRadius;
-
-            if (d2 > r2)
-                continue;
-
-            if (d2 < bestD2)
-            {
-                bestD2 = d2;
-                best = handle;
-            }
-        }
-    }
-    return best;
-}
-
-QGraphicsItem* MainWindow::pickItemByEdgeAt(GraphicsView* view, const QPoint& viewPos) const
-{
-    if (!view)
-        return nullptr;
-
-    QGraphicsScene* sc = view->scene();
-    if (!sc)
-        return nullptr;
-
-    const QPointF scenePos = view->mapToScene(viewPos);
-
-    const qreal radiusScene = viewPixelsToSceneRadius(view, effectiveViewPickPx(_edgePickRadius));
-
-    if (radiusScene <= 0.0)
-        return nullptr;
-
-    const QRectF probe(scenePos - QPointF(radiusScene, radiusScene),
-                       QSizeF(radiusScene * 2.0, radiusScene * 2.0));
-
-    const QList<QGraphicsItem*> items =
-        _scene->items(probe, Qt::IntersectsItemBoundingRect, Qt::DescendingOrder);
-
-    for (QGraphicsItem* it : items)
-    {
-        if (!it || !it->isVisible() || !it->scene())
-            continue;
-
-        if (it == _videoRect)
-            continue;
-
-        if (qgraphicsitem_cast<qgraph::DragCircle*>(it))
-            continue;
-
-        // Берем только фигуры
-        const bool isShape =
-                (dynamic_cast<qgraph::Polyline*>(it)  != nullptr) ||
-                (dynamic_cast<qgraph::Line*>(it)      != nullptr) ||
-                (dynamic_cast<qgraph::Rectangle*>(it) != nullptr) ||
-                (dynamic_cast<qgraph::Circle*>(it)    != nullptr);
-
-        if (!isShape)
-            continue;
-
-        const QPointF pLocal  = it->mapFromScene(scenePos);
-        const QPointF pLocal2 = it->mapFromScene(scenePos + QPointF(radiusScene, 0));
-        const qreal radiusLocal = QLineF(pLocal, pLocal2).length();
-        if (radiusLocal <= 0.0)
-            continue;
-
-        QPainterPathStroker stroker;
-        stroker.setWidth(2.0 * radiusLocal);
-        stroker.setCapStyle(Qt::RoundCap);
-        stroker.setJoinStyle(Qt::RoundJoin);
-
-        const QPainterPath hit = stroker.createStroke(it->shape());
-        if (hit.contains(pLocal))
-            return it;
-    }
-
-    return nullptr;
-}
-
-void MainWindow::startHandleDrag(qgraph::DragCircle* h, const QPointF& scenePos)
-{    
-    _m_isDraggingHandle = true;
-    _m_dragHandle = h;
-    _handleDragging = true; // Начало перетаскивания ручки
-    updateModeLabel();
-
-    // UNDO: запомним владельца и снимок "до"
-    _handleEditedItem = h ? h->parentItem() : nullptr;
-    _handleDragHadChanges = false;
-    if (_handleEditedItem)
-    {
-        _handleBeforeSnap = makeBackupFromItem(_handleEditedItem);
-    }
-
-    const QPointF handleCenter = h->sceneBoundingRect().center();
-    _m_pressLocalOffset = scenePos - handleCenter;
-    h->setHoverStyle(true);
-}
-
-void MainWindow::updateHandleDrag(const QPointF& scenePos)
-{
-    if (!_m_dragHandle) return;
-
-    QGraphicsItem* parent = _m_dragHandle->parentItem();
-    QPointF parentPos = parent
-                            ? parent->mapFromScene(scenePos - _m_pressLocalOffset)
-                            : (scenePos - _m_pressLocalOffset);
-
-    _m_dragHandle->setPos(parentPos);
-
-    emit _m_dragHandle->dragCircleMove(_m_dragHandle->index(),
-                                       _m_dragHandle->scenePos());
-    updateAllPointNumbers();
-    _handleDragHadChanges = true;
-    updateCoordinateList();
-}
-
-void MainWindow::finishHandleDrag()
-{
-    if (_m_dragHandle)
-    {
-        emit _m_dragHandle->dragCircleRelease(_m_dragHandle->index(),
-                                             _m_dragHandle->scenePos());
-
-        // Помечаем документ как измененный после завершения перетаскивания
-        Document::Ptr doc = currentDocument();
-        if (doc && !doc->isModified)
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-        _m_dragHandle->restoreBaseStyle();
-    }
-    // UNDO: если что-то реально поменяли - пушим команду
-    if (_handleEditedItem && _handleDragHadChanges)
-    {
-        ShapeBackup after = makeBackupFromItem(_handleEditedItem);
-        if (!sameGeometry(_handleBeforeSnap, after))
-        {
-            // красивое имя действия
-            QString what = tr("Перемещение узла");
-            pushHandleEditCommand(_handleEditedItem, _handleBeforeSnap, after, what);
-        }
-    }
-    _handleEditedItem = nullptr;
-    _handleDragHadChanges = false;
-
-    _m_isDraggingHandle = false;
-    _m_dragHandle = nullptr;
-    _handleDragging = false; // Завершение перетаскивания ручки
-    updateAllPointNumbers();
-    updateModeLabel();
-}
-
-void MainWindow::clearAllHandleHoverEffects()
-{
-    if (_currentHoveredHandle && _currentHoveredHandle->isValid())
-    {
-         _currentHoveredHandle->setHoverStyle(false);
-    }
-    _currentHoveredHandle = nullptr;
-    hideGhost();
-}
-
-void MainWindow::showGhostFor(qgraph::DragCircle* h)
-{
-    if (!h) return;
-    ensureGhostAllocated();
-
-    _ghostTarget = h;
-    _ghostHover  = true;
-    _ghostActive = false;
-
-    // Для круга используем специальную логику позиционирования
-    if (auto* circle = dynamic_cast<qgraph::Circle*>(h->parentItem()))
-    {
-        // Получаем позицию курсора в сцене
-        QPointF cursorPos = ui->graphView->mapToScene(ui->graphView->mapFromGlobal(QCursor::pos()));
-
-        // Проверяем, что курсор действительно рядом с окружностью
-        QPointF localCursorPos = circle->mapFromScene(cursorPos);
-        if (circle->isCursorNearCircle(localCursorPos))
-        {
-            // Обновляем позицию реальной ручки
-            circle->updateHandlePosition(cursorPos);
-
-            const QPointF sceneHandlePos = h->scenePos();
-            _ghostHandle->setPos(sceneHandlePos);
-            _ghostHandle->setVisible(true);
-        }
-        else
-        {
-            // Курсор не рядом с окружностью - не показываем призрак
-            hideGhost();
-            return;
-        }
-    }
-    else
-    {
-        // Для других фигур используем старую логику
-        const QPointF centerScene = h->sceneBoundingRect().center();
-        _ghostHandle->setPos(centerScene - _ghostHandle->rect().center());
-    }
-
-    const QPointF centerScene = h->sceneBoundingRect().center();
-    const QRectF base = _ghostTarget->baseRect();
-    const qreal scale = 1.5;
-    //const qreal scale = 1;
-    const QSizeF newSize(base.size() * scale);
-    const QRectF newRect(QPointF(-newSize.width()/2.0, -newSize.height()/2.0), newSize);
-
-    QColor ghostColor = _vis.selectedHandleColor;
-    _ghostHandle->setRect(newRect);
-    _ghostHandle->setPen(QPen(Qt::black, 1));
-    _ghostHandle->setBrush(QBrush(ghostColor));
-    _ghostHandle->setPos(centerScene - newRect.center());
-    _ghostHandle->setVisible(true);
-    _ghostHandle->update();
-}
-
-void MainWindow::hideGhost()
-{
-    // Восстанавливаем оригинальный стиль реальной ручки, если она была подсвечена
-    if (_ghostTarget)
-    {
-        _ghostTarget->setHoverStyle(false);
-    }
-    _ghostTarget = nullptr;
-    if (_ghostHandle)
-    {
-        _ghostHandle->setVisible(false);
-    }
-}
-
-void MainWindow::updateAllPointNumbers()
-{
-    if (!_scene) return;
-
-    for (QGraphicsItem* item : _scene->items())
-    {
-        if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
-        {
-            rectangle->updatePointNumbers();
-        }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-        {
-            polyline->updatePointNumbers();
-        }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
-        {
-            line->updatePointNumbers();
-        }
-    }
-}
-
-void MainWindow::loadVisualStyle()
-{
-    // Устанавливаем значения по умолчанию, если они не найдены в конфиге
-    if (!config::base().getValue("graphics.line_width", _vis.lineWidth))
-        _vis.lineWidth = 2.0;
-
-    if (!config::base().getValue("graphics.handle_size", _vis.handleSize))
-        _vis.handleSize = 10.0;
-
-    if (!config::base().getValue("graphics.handle_pick_radius", _ghostPickRadius))
-        _ghostPickRadius = 6.0;
-
-    if (!config::base().getValue("graphics.edge_pick_radius", _edgePickRadius))
-        _edgePickRadius = 8.0;
-
-    if (!config::base().getValue("graphics.number_font_pt", _vis.numberFontPt))
-        _vis.numberFontPt = 10.0;
-
-    if (!config::base().getValue("graphics.show_numbers", _vis.showNumbers))
-        _vis.showNumbers = false;
-
-    if (!config::base().getValue("graphics.fill_shape_when_selected", _vis.fillShapeWhenSelected))
-        _vis.fillShapeWhenSelected = true;
-
-    if (!config::base().getValue("graphics.point_size", _vis.pointSize))
-        _vis.pointSize = 6;
-
-    // Загружаем цвета
-    QString colorStr;
-    if (config::base().getValue("graphics.handle_color", colorStr))
-        _vis.handleColor = QColor(colorStr);
-    else
-        _vis.handleColor = Qt::red;
-
-    if (config::base().getValue("graphics.number_color", colorStr))
-        _vis.numberColor = QColor(colorStr);
-    else
-        _vis.numberColor = Qt::white;
-
-    if (config::base().getValue("graphics.number_bg_color", colorStr))
-        _vis.numberBgColor = QColor(colorStr);
-    else
-        _vis.numberBgColor = QColor(0, 0, 0, 180);
-
-    // Загружаем цвета линий
-    if (config::base().getValue("graphics.colors.rectangle", colorStr))
-        _vis.rectangleLineColor = QColor(colorStr);
-    else
-        _vis.rectangleLineColor = Qt::green;
-
-    if (config::base().getValue("graphics.colors.circle", colorStr))
-        _vis.circleLineColor = QColor(colorStr);
-    else
-        _vis.circleLineColor = Qt::red;
-
-    if (config::base().getValue("graphics.colors.polyline", colorStr))
-        _vis.polylineLineColor = QColor(colorStr);
-    else
-        _vis.polylineLineColor = Qt::blue;
-
-    if (config::base().getValue("graphics.all.selected_handle_color", colorStr))
-        _vis.selectedHandleColor = QColor(colorStr);
-    else
-        _vis.selectedHandleColor = Qt::yellow;
-
-    if (config::base().getValue("graphics.colors.line", colorStr))
-        _vis.lineLineColor = QColor(colorStr);
-
-    if (config::base().getValue("graphics.colors.point", colorStr))
-        _vis.pointColor = QColor(colorStr);
-
-    if (config::base().getValue("graphics.colors.ruler", colorStr))
-        _vis.rulerColor = QColor(colorStr);
-    else
-        _vis.rulerColor = QColor(200, 200, 200);
-
-    int ow = 1;
-    if (config::base().getValue("graphics.point.outline_width", ow))
-        _vis.pointOutlineWidth = ow;
-    else
-        _vis.pointOutlineWidth = 1;
-
-    //config::base().getValue("vis.all.label_font_pt", _vis.labelFontPt);
-    if (!config::base().getValue("graphics.label_font_pt", _vis.labelFontPt))
-        _vis.labelFontPt = 0;
-
-    QString font;
-    if (config::base().getValue("graphics.label_font_family", font))
-        _vis.labelFont = font;
-    else
-        _vis.labelFont.clear();
-
-
-    applyStyle_AllDocuments();
-}
-
-
-void MainWindow::saveVisualStyle() const
-{
-    config::base().setValue("graphics.line_width", _vis.lineWidth);
-    config::base().setValue("graphics.handle_size", _vis.handleSize);
-    config::base().setValue("graphics.handle_pick_radius", _ghostPickRadius);
-    config::base().setValue("graphics.edge_pick_radius", _edgePickRadius);
-    config::base().setValue("graphics.number_font_pt", _vis.numberFontPt);
-    config::base().setValue("graphics.show_numbers", _vis.showNumbers);
-    config::base().setValue("graphics.point_size", _vis.pointSize);
-    config::base().setValue("graphics.handle_color", _vis.handleColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.selected_handle_color", _vis.selectedHandleColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.number_color", _vis.numberColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.number_bg_color", _vis.numberBgColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.rectangle", _vis.rectangleLineColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.circle", _vis.circleLineColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.polyline", _vis.polylineLineColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.line",  _vis.lineLineColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.point", _vis.pointColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.ruler", _vis.rulerColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.point.outline_width", _vis.pointOutlineWidth);
-    config::base().setValue("graphics.fill_shape_when_selected", _vis.fillShapeWhenSelected);
-    // config::base().setValue("vis.all.label_font_pt", _vis.labelFontPt);
-    // config::base().setValue("vis.all.label_font_family", _vis.labelFont);
-    if (_vis.labelFontPt > 0)
-        config::base().setValue("graphics.label_font_pt", _vis.labelFontPt);
-
-    if (!_vis.labelFont.isEmpty())
-        config::base().setValue("graphics.label_font_family", _vis.labelFont);
-}
-
-void MainWindow::applyStyle_AllDocuments()
-{
-    for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
-    {
-        auto doc = it.value();
-        if (!doc || !doc->scene)
-            continue;
-
-        doc->scene->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
-
-        apply_LineWidth_ToScene(doc->scene);
-        apply_PointSize_ToScene(doc->scene);
-        apply_NumberSize_ToScene(doc->scene);
-        updateLineColorsForScene(doc->scene);
-
-        for (QGraphicsItem* item : doc->scene->items())
-        {
-            apply_PointStyle_ToItem(item);
-
-            const QString cls = item ? item->data(0).toString() : QString();
-            if (!cls.isEmpty())
-                applyClassColorToItem(item, cls);
-        }
-        doc->scene->update();
-    }
-    if (_scene)
-    {
-        _scene->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
-
-        apply_LineWidth_ToScene(_scene);
-        apply_PointSize_ToScene(_scene);
-        apply_NumberSize_ToScene(_scene);
-        updateLineColorsForScene(_scene);
-
-        for (QGraphicsItem* item : _scene->items())
-        {
-            apply_PointStyle_ToItem(item);
-
-            const QString cls = item ? item->data(0).toString() : QString();
-            if (!cls.isEmpty())
-                applyClassColorToItem(item, cls);
-        }
-        _scene->update();
-    }
-}
-
-void MainWindow::forEachScene(std::function<void(QGraphicsScene*)> fn)
-{
-    for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
-    {
-        auto doc = it.value();
-        if (!doc) continue;
-        auto *sc = doc->scene;
-        if (!sc) continue;
-        fn(sc);
-    }
-}
-
-void MainWindow::apply_LineWidth_ToScene(QGraphicsScene* sc)
-{
-    if (!sc)
-    {
-        forEachScene([this](QGraphicsScene* scene){
-            for (auto *it : scene->items()) apply_LineWidth_ToItem(it);
-            scene->update();
-        });
-        return;
-    }
-    for (auto *it : sc->items()) apply_LineWidth_ToItem(it);
-    sc->update();
-}
-
-void MainWindow::apply_PointSize_ToScene(QGraphicsScene* sc)
-{
-    if (!sc)
-    {
-        forEachScene([this](QGraphicsScene* scene){
-            for (auto *it : scene->items()) apply_PointSize_ToItem(it);
-            scene->update();
-        });
-        return;
-    }
-    for (auto *it : sc->items()) apply_PointSize_ToItem(it);
-    sc->update();
-}
-
-void MainWindow::apply_NumberSize_ToScene(QGraphicsScene* sc)
-{
-    auto applyForScene = [this](QGraphicsScene* scene)
-    {
-        if (!scene)
-            return;
-
-        for (auto* it : scene->items())
-            apply_NumberSize_ToItem(it);
-        scene->update();
-    };
-    if (!sc)
-    {
-        forEachScene([&](QGraphicsScene* scene){
-            applyForScene(scene);
-        });
-        return;
-    }
-
-    applyForScene(sc);
-}
-
-void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
-{
-    if (!it) return;
-    const auto w = _vis.lineWidth;
-
-    if (auto r = dynamic_cast<qgraph::Rectangle*>(it))
-    {
-        QPen p=r->pen();
-        p.setWidthF(w);
-        //p.setColor(_vis.rectangleLineColor);
-        p.setCosmetic(true);
-
-        const QString cls = r->data(0).toString();
-        const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vis.rectangleLineColor);
-
-        r->setPen(p);
-        return;
-    }
-    if (auto c = dynamic_cast<qgraph::Circle*>(it))
-    {
-        QPen p=c->pen();
-        p.setWidthF(w);
-        //p.setColor(_vis.circleLineColor);
-        p.setCosmetic(true);
-
-        const QString cls = c->data(0).toString();
-        const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vis.circleLineColor);
-
-        c->setPen(p);
-        c->applyLineStyle(w);
-        return;
-    }
-    if (auto pl= dynamic_cast<qgraph::Polyline*>(it))
-    {
-        QPen p=pl->pen();
-        p.setWidthF(w);
-        //p.setColor(_vis.polylineLineColor);
-        p.setCosmetic(true);
-
-        const QString cls = pl->data(0).toString();
-        const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vis.polylineLineColor);
-
-        pl->setPen(p);
-        return;
-    }
-    if (auto l = dynamic_cast<qgraph::Line*>(it))
-    {
-        QPen p = l->pen();
-        p.setWidthF(_vis.lineWidth);
-        //p.setColor(_vis.lineLineColor);
-        p.setCosmetic(true);
-
-        const QString cls = l->data(0).toString();
-        const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vis.lineLineColor);
-
-        l->setPen(p);
-        return;
-    }
-    if (auto pnt = dynamic_cast<qgraph::Point*>(it))
-    {
-        QPen p = pnt->pen();
-        p.setWidthF(_vis.pointOutlineWidth); // Отдельная толщина для точки
-        p.setCosmetic(true);
-
-        const QString cls = pnt->data(0).toString();
-        const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vis.pointOutlineWidth);
-
-        pnt->setPen(p);
-        return;
-    }
-
-    // Базовые Qt‑элементы
-    if (auto l = qgraphicsitem_cast<QGraphicsLineItem*>(it))
-    {
-        QPen p=l->pen();
-        p.setWidthF(w);
-        p.setCosmetic(true);
-        l->setPen(p);
-        return;
-    }
-
-    if (auto pth=qgraphicsitem_cast<QGraphicsPathItem*>(it))
-    {
-        QPen p=pth->pen();
-        p.setWidthF(w);
-        p.setCosmetic(true);
-        pth->setPen(p);
-        return;
-    }
-    if (auto el = qgraphicsitem_cast<QGraphicsEllipseItem*>(it))
-    {
-        QPen p=el->pen();
-        p.setWidthF(w);
-        p.setCosmetic(true);
-        el->setPen(p);
-        return;
-    }
-    if (auto rc = qgraphicsitem_cast<QGraphicsRectItem*>(it))
-    {
-        QPen p=rc->pen();
-        p.setWidthF(w);
-        p.setCosmetic(true);
-        rc->setPen(p);
-        return;
-    }
-}
-
-void MainWindow::apply_PointSize_ToItem(QGraphicsItem* it)
-{
-    if (!it) return;
-    // Ручки обычно лежат детьми нужной фигуры
-    for (QGraphicsItem* ch : it->childItems())
-    {
-        if (auto h = dynamic_cast<qgraph::DragCircle*>(ch))
-        {
-            const bool isPoint = (dynamic_cast<qgraph::Point*>(it) != nullptr);
-
-            // Размер узла для Point должен следовать размеру точки
-            const qreal pointHandleSize = std::max<qreal>(_vis.pointSize, 4.0);
-
-            h->setBaseStyle(_vis.handleColor, isPoint ? pointHandleSize : _vis.handleSize);
-            h->setInteractionRadius(_ghostPickRadius);
-            h->setSelectedHandleColor(_vis.selectedHandleColor);
-            h->restoreBaseStyle();
-            qgraph::DragCircle::rememberCurrentAsBase(h);
-        }
-    }
-}
-
-void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* it)
-{
-    if (!it) return;
-
-    // Для классов фигур
-    if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(it))
-    {
-        rectangle->setGlobalPointNumbersVisible(_vis.showNumbers);
-        rectangle->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
-        return;
-    }
-    if (auto* polyline = dynamic_cast<qgraph::Polyline*>(it))
-    {
-        polyline->setGlobalPointNumbersVisible(_vis.showNumbers);
-        polyline->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
-        return;
-    }
-    if (auto* line = dynamic_cast<qgraph::Line*>(it))
-    {
-        line->setGlobalPointNumbersVisible(_vis.showNumbers);
-        line->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
-        return;
-    }
-
-    // Для стандартных Qt элементов
-    QVector<QGraphicsSimpleTextItem*> texts;
-    QVector<QGraphicsRectItem*> backgrounds;
-
-    for (QGraphicsItem* ch : it->childItems())
-    {
-        if (auto t = dynamic_cast<QGraphicsSimpleTextItem*>(ch))
-        {
-            // Проверяем, что это номер (короткое число)
-            QString text = t->text();
-            if (text.length() <= 3)
-            {
-                bool ok;
-                text.toInt(&ok);
-                if (ok) texts << t;
-            }
-        }
-        else if (auto bg = dynamic_cast<QGraphicsRectItem*>(ch))
-        {
-            if (bg->zValue() > 900 && bg->zValue() < 1010)
-                backgrounds << bg;
-        }
-    }
-
-    // Применяем стиль к текстам
-    for (auto* t : texts)
-    {
-        if (!t) continue;
-
-        QFont f = t->font();
-        f.setPointSizeF(_vis.numberFontPt);
-        t->setFont(f);
-        t->setBrush(Qt::white);
-        t->setPen(Qt::NoPen);
-        t->setZValue(1001);
-        t->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
-    }
-
-    // Обновляем фоны
-    for (auto* bg : backgrounds)
-    {
-        if (!bg) continue;
-
-        // Ищем ближайший текст
-        QGraphicsSimpleTextItem* nearest = nullptr;
-        qreal bestDistance = std::numeric_limits<qreal>::max();
-
-        for (auto* t : texts)
-        {
-            if (!t) continue;
-
-            qreal distance = QLineF(bg->pos(), t->pos()).length();
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                nearest = t;
-            }
-        }
-
-        if (nearest)
-        {
-            bg->setRect(nearest->boundingRect());
-            bg->setBrush(QBrush(QColor(0, 0, 0, 180)));
-            bg->setPen(Qt::NoPen);
-            bg->setPos(nearest->pos());
-            bg->setZValue(1000);
-            bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
-        }
-    }
-}
-
-void MainWindow::apply_PointStyle_ToItem(QGraphicsItem* it)
-{
-    if (!it)
-        return;
-
-    if (auto* p = dynamic_cast<qgraph::Point*>(it))
-    {
-
-        const QString cls = p->data(0).toString();
-        const QColor cc = classColorFor(cls);
-        const QColor color = cc.isValid() ? cc : _vis.pointColor;
-
-        const qreal diam = std::max(2, _vis.pointSize);
-        p->setDotStyle(color, diam, _vis.handleSize);
-    }
-}
-
-void MainWindow::applyLabelFontToUi()
-{
-    if (!ui || !ui->splitter)
-        return;
-
-    // Берем текущий шрифт правой зоны как базовый
-    QFont f = ui->splitter->font();
-
-    if (!_vis.labelFont.isEmpty())
-        f.setFamily(_vis.labelFont);
-
-    if (_vis.labelFontPt > 0)
-        f.setPointSize(_vis.labelFontPt);
-
-    // Применяем ко всей правой панели
-    ui->splitter->setFont(f);
-
-    if (ui->toolBar)
-        ui->toolBar->setFont(f);
-    if (ui->toolBar_2)
-        ui->toolBar_2->setFont(f);
-
-    ui->splitter->updateGeometry();
-    ui->splitter->update();
-}
-
-void MainWindow::updateLineColorsForScene(QGraphicsScene* scene)
-{
-    if (!scene) return;
-
-    for (QGraphicsItem* item : scene->items())
-    {
-        const QString cls = item->data(0).toString();
-        const QColor classC = classColorFor(cls);
-        const bool hasClassColor = classC.isValid();
-
-        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
-        {
-            QPen pen = rect->pen();
-            //pen.setColor(_vis.rectangleLineColor);
-            pen.setColor(hasClassColor ? classC : _vis.rectangleLineColor);
-            rect->setPen(pen);
-        }
-        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
-        {
-            QPen pen = circle->pen();
-            //pen.setColor(_vis.circleLineColor);
-            pen.setColor(hasClassColor ? classC : _vis.circleLineColor);
-            circle->setPen(pen);
-        }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
-        {
-            QPen pen = polyline->pen();
-            //pen.setColor(_vis.polylineLineColor);
-            pen.setColor(hasClassColor ? classC : _vis.polylineLineColor);
-            polyline->setPen(pen);
-        }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
-        {
-            QPen pen = line->pen();
-            //pen.setColor(_vis.lineLineColor);
-            pen.setColor(hasClassColor ? classC : _vis.lineLineColor);
-            line->setPen(pen);
-        }
-        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
-        {
-            QPen pen = point->pen();
-            //pen.setColor(_vis.pointColor);
-            pen.setColor(hasClassColor ? classC : _vis.pointColor);
-            pen.setWidthF(_vis.pointOutlineWidth);
-            pen.setCosmetic(true);
-            point->setPen(pen);
-        }
-    }
-    scene->update();
-}
-
-void MainWindow::applyZoom(qreal z)
-{
-    if (!ui->graphView) return;
-
-    // Ограничим диапазон
-    if (z < _kMinZoom)
-        z = _kMinZoom;
-    if (z > _kMaxZoom)
-        z = _kMaxZoom;
-
-    // Сохраним текущий центр сцены, чтобы картинка не «уезжала»
-    const QPointF centerScene =
-        ui->graphView->mapToScene(ui->graphView->viewport()->rect().center());
-
-    QTransform t;
-    t.scale(z, z);
-    ui->graphView->setTransform(t);
-
-    // Вернем центр
-    ui->graphView->centerOn(centerScene);
-
-    _m_zoom = z;
-
-    if (auto doc = currentDocument())
-    {
-        doc->viewState = {
-            ui->graphView->horizontalScrollBar()->value(),
-            ui->graphView->verticalScrollBar()->value(),
-            _m_zoom,
-            centerScene
-        };
-    }
-}
-
-void MainWindow::applyClosePolyline()
-{
-    //using SDV = Settings::Values;
-    using SDM = Settings::PolylineCloseMode;
-    using PLM = qgraph::Polyline::CloseMode;
-
-    qgraph::Polyline::CloseMode mode = PLM::DoubleClick;
-    switch (_polylineCloseMode)
-    {
-        case SDM::DoubleClick:             mode = PLM::DoubleClick;   break;
-        case SDM::SingleClickOnFirstPoint: mode = PLM::SingleClickOnFirstPoint; break;
-        case SDM::CtrlModifier:            mode = PLM::CtrlModifier;            break;
-        case SDM::KeyCWithoutNewPoint:     mode = PLM::KeyC;                    break;
-    }
-    qgraph::Polyline::setGlobalCloseMode(mode);
-    if (ui && ui->actClosePolyline)
-        ui->actClosePolyline->setShortcut(mode == PLM::KeyC ? QKeySequence(Qt::Key_C) : QKeySequence());
-}
-
-void MainWindow::applyFinishLine()
-{
-    //using SDV = Settings::Values;
-    using SDM = Settings::LineFinishMode;
-    using PLM = qgraph::Line::CloseMode;
-
-    qgraph::Line::CloseMode mode = PLM::DoubleClick;
-    switch (_lineFinishMode)
-    {
-        case SDM::DoubleClick: mode = PLM::DoubleClick;
-            break;
-        case SDM::CtrlModifier: mode = PLM::CtrlModifier;
-            break;
-        case SDM::KeyCWithoutNewPoint: mode = PLM::KeyC;
-            break;
-    }
-    qgraph::Line::setGlobalCloseMode(mode);
-}
-
-QVector<ShapeBackup> MainWindow::collectBackupsForItems(const QList<QListWidgetItem*>& listItems) const
-{
-    QVector<ShapeBackup> out;
-    out.reserve(listItems.size());
-
-    for (QListWidgetItem* li : listItems)
-    {
-        if (!li)
-            continue;
-
-        QGraphicsItem* gi = sceneItemFromListItem(li);
-        if (!gi)
-            continue;
-
-        out.push_back(makeBackupFromItem(gi));
-    }
-    return out;
-}
-
-void MainWindow::removeListEntryBySceneItem(QGraphicsItem* sceneItem)
-{
-    if (!sceneItem)
-        return;
-    for (int row = 0; row < ui->polygonList->count(); ++row)
-    {
-        QListWidgetItem* it = ui->polygonList->item(row);
-        if (!it)
-            continue;
-        QGraphicsItem* linked = sceneItemFromListItem(it);
-        if (linked == sceneItem)
-        {
-            delete ui->polygonList->takeItem(row);
-            renumberPolygonList();
-            return;
-        }
-    }
-}
-
-QGraphicsItem* MainWindow::sceneItemFromListItem(const QListWidgetItem* it)
-{
-    if (!it)
-        return nullptr;
-    return it->data(Qt::UserRole).value<QGraphicsItem*>();
-}
-
-QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
-{
-    if (!_scene || uid == 0)
-        return nullptr;
-
-    const auto itemsList = _scene->items();
-    for (QGraphicsItem* it : itemsList)
-    {
-        if (!it)
-            continue;
-
-        if (it->data(_roleUid).toULongLong() == uid)
-            return it;
-    }
-    return nullptr;
-}
-
-qulonglong MainWindow::ensureUid(QGraphicsItem* it) const
-{
-    if (!it)
-        return 0;
-    QVariant v = it->data(_roleUid);
-    if (!v.isNull())
-        return v.toULongLong();
-    qulonglong uid = _uidCounter++;
-    it->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
-    return uid;
-}
-
-void MainWindow::clearLinePolylineStateForDeletedItem(QGraphicsItem* item)
-{
-    if (!item)
-        return;
-
-    const qulonglong uid = item->data(_roleUid).toULongLong();
-
-    const bool isLine = (dynamic_cast<qgraph::Line*>(item) != nullptr);
-    const bool isPolyline = (dynamic_cast<qgraph::Polyline*>(item) != nullptr);
-
-    if (isLine)
-    {
-        if (_line == item)
-            _line = nullptr;
-        _drawingLine = false;
-    }
-
-    if (isPolyline)
-    {
-        if (_polyline == item)
-            _polyline = nullptr;
-        _drawingPolyline = false;
-    }
-
-    if (_resumeEditing && _resumeUid != 0 && uid != 0 && uid == _resumeUid)
-    {
-        _resumeEditing = false;
-        _resumeUid = 0;
-    }
-
-    // Возврат в режим просмотра, если мы больше не рисуем
-    if (!_drawingLine && !_drawingPolyline && (!_resumeEditing || _resumeUid == 0))
-    {
-        _isInDrawingMode = false;
-        setSceneItemsMovable(true);
-        updateModeLabel();
-    }
-}
-
-void MainWindow::cancelRulerMode()
-{
-    _drawingRuler = false;
-    _isDrawingRuler = false;
-    _isInDrawingMode = false;
-
-    clearAllHandleHoverEffects();
-    hideGhost();
-    setSceneItemsMovable(true);
-
-    if (_rulerLine)
-    {
-        _scene->removeItem(_rulerLine);
-        delete _rulerLine;
-        _rulerLine = nullptr;
-    }
-
-    if (_rulerText)
-    {
-        _scene->removeItem(_rulerText);
-        delete _rulerText;
-        _rulerText = nullptr;
-    }
-
-    updateModeLabel();
-}
-
-void MainWindow::toggleMenuBarVisible()
-{
-    if (!ui || !ui->menuBar)
-        return;
-
-    const bool newVisible = !ui->menuBar->isVisible();
-    ui->menuBar->setVisible(newVisible);
-    bool keepMenuVis = false;
-    config::base().getValue("ui.keep_menu_visibility", keepMenuVis);
-    if (keepMenuVis)
-    {
-        config::base().setValue("ui.menu_visible", newVisible);
-        config::base().saveFile();
-    }
-}
-
-QColor MainWindow::classColorFor(const QString& className) const
-{
-    if (className.isEmpty())
-        return QColor();
-
-    const auto it = _projectClassColors.find(className);
-    if (it == _projectClassColors.end())
-        return QColor();
-
-    if (!it.value().isValid())
-        return QColor();
-
-    return it.value();
-}
-
-void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& className)
-{
-    if (!item)
-        return;
-
-    const QColor lineColor = classColorFor(className);
-    if (!lineColor.isValid())
-        return;
-
-    QColor fillColor = lineColor;
-    fillColor.setAlpha(60);
-
-    const QBrush fillBrush =
-        _vis.fillShapeWhenSelected ? QBrush(fillColor)
-                                   : QBrush(Qt::transparent);
-
-    const QBrush noBrush(Qt::transparent);
-
-    if (auto* r = dynamic_cast<qgraph::Rectangle*>(item))
-    {
-        QPen p = r->pen();
-        p.setColor(lineColor);
-        p.setWidthF(_vis.lineWidth);
-        p.setCosmetic(true);
-        r->setPen(p);
-
-        r->setBrush(r->isSelected() ? fillBrush : noBrush);
-        return;
-    }
-
-    if (auto* cir = dynamic_cast<qgraph::Circle*>(item))
-    {
-        QPen p = cir->pen();
-        p.setColor(lineColor);
-        p.setWidthF(_vis.lineWidth);
-        p.setCosmetic(true);
-        cir->setPen(p);
-
-        cir->setBrush(cir->isSelected() ? fillBrush : noBrush);
-
-        for (QGraphicsItem* ch : cir->childItems())
-        {
-            if (auto* li = dynamic_cast<QGraphicsLineItem*>(ch))
-            {
-                QPen cp = li->pen();
-                cp.setColor(lineColor);
-                cp.setWidthF(_vis.lineWidth);
-                cp.setCosmetic(true);
-                li->setPen(cp);
-            }
-        }
-        return;
-    }
-
-    if (auto* pl = dynamic_cast<qgraph::Polyline*>(item))
-    {
-        QPen p = pl->pen();
-        p.setColor(lineColor);
-        p.setWidthF(_vis.lineWidth);
-        p.setCosmetic(true);
-        pl->setPen(p);
-
-        pl->setBrush(pl->isSelected() ? fillBrush : noBrush);
-        return;
-    }
-
-    if (auto* l = dynamic_cast<qgraph::Line*>(item))
-    {
-        QPen p = l->pen();
-        p.setColor(lineColor);
-        p.setWidthF(_vis.lineWidth);
-        p.setCosmetic(true);
-        l->setPen(p);
-
-        l->setBrush(l->isSelected() ? fillBrush : noBrush);
-        return;
-    }
-
-    if (auto* pnt = dynamic_cast<qgraph::Point*>(item))
-    {
-        const qreal diam = std::max(2, _vis.pointSize);
-        pnt->setDotStyle(lineColor, diam, _vis.handleSize);
-        return;
-    }
-}
-
-void MainWindow::updateImageSizeLabel(const QSize& size)
-{
-    if (!_imageSizeLabel)
-        return;
-
-    if (!size.isValid())
-    {
-        _imageSizeLabel->setText(tr("Размер изображения: —"));
-        return;
-    }
-
-    _imageSizeLabel->setText(
-        tr("Размер изображения: %1 × %2")
-            .arg(size.width())
-            .arg(size.height())
-    );
-}
-
-void MainWindow::startMergeLinesMode()
-{
-    _mergeLinesMode = true;
-    _mergeLineA = nullptr;
-    _mergeLineAEndIdx = -1;
-
-    if (statusBar())
-        statusBar()->showMessage(tr("Объединение линий: кликните по КОНЕЧНОЙ точке первой линии"), 0);
-    updateModeLabel();
-}
-
-void MainWindow::cancelMergeLinesMode()
-{
-    _mergeLinesMode = false;
-    _mergeLineA = nullptr;
-    _mergeLineAEndIdx = -1;
-
-    if (statusBar())
-        statusBar()->showMessage(tr("Объединение линий отменено"), 2000);
-    updateModeLabel();
-}
-
-bool MainWindow::handleMergeLinesClick(const QPointF& scenePos)
-{
-    if (!_mergeLinesMode)
-        return false;
-
-    qgraph::DragCircle* h = pickHandleAt(scenePos);
-    if (!h || !h->isValid())
-        return false;
-
-    QGraphicsItem* parent = h->parentItem();
-    auto* line = dynamic_cast<qgraph::Line*>(parent);
-    if (!line)
-        return false;
-
-    const auto& circles = line->circles();
-    const int idx = circles.indexOf(h);
-    if (idx != 0 && idx != circles.size() - 1)
-        return false; // Нужен только конец линии
-
-    if (!_mergeLineA)
-    {
-        _mergeLineA = line;
-        _mergeLineAEndIdx = idx;
-
-        if (statusBar())
-            statusBar()->showMessage(tr("Объединение линий: теперь кликните по КОНЕЧНОЙ точке второй линии"), 0);
-
-        return true;
-    }
-
-    // Второй клик
-    if (line == _mergeLineA)
-        return true; // Игнорируем “в ту же линию”, но клик съедаем чтобы не двигать/редактировать
-
-    const bool ok = performMergeLines(_mergeLineA, _mergeLineAEndIdx, line, idx);
-    cancelMergeLinesMode();
-    return ok ? true : true;
-}
-
-bool MainWindow::isBetterTopLeft(const QPointF& a, const QPointF& b)
-{
-    // “верхний-левый”: меньше y, при равных y - меньше x
-    if (a.y() < b.y()) return true;
-    if (a.y() > b.y()) return false;
-    return a.x() < b.x();
-}
-
-void MainWindow::updateModeLabel()
-{
-    if (!_modeLabel) return;
-
-    if (_drawingRuler || _isDrawingRuler) {
-        _modeLabel->setText(_isDrawingRuler
-            ? tr("Режим: линейка (измерение...)")
-            : tr("Режим: линейка"));
-        return;
-    }
-    if (_isInDrawingMode
-        || _isDrawingRectangle || _isDrawingCircle || _isDrawingLine || _isDrawingPolyline || _isDrawingPoint
-        || _drawingRectangle  || _drawingCircle  || _drawingLine  || _drawingPolyline  || _drawingPoint)
-    {
-        QString tool = tr("фигура");
-        if (_isDrawingRectangle || _drawingRectangle)
-            tool = tr("прямоугольник");
-        else if (_isDrawingCircle || _drawingCircle)
-            tool = tr("круг");
-        else if (_isDrawingPolyline || _drawingPolyline)
-            tool = tr("полилиния");
-        else if (_isDrawingLine || _drawingLine)
-            tool = tr("линия");
-        else if (_isDrawingPoint || _drawingPoint)
-            tool = tr("точка");
-
-        _modeLabel->setText(tr("Режим: рисование (%1)").arg(tool));
-        return;
-    }
-    if (_zoomRectActive)
-    {
-        _modeLabel->setText(tr("Режим: зум-область"));
-        return;
-    }
-    if (_mergeLinesMode)
-    {
-        _modeLabel->setText(tr("Режим: соединение линий"));
-        return;
-    }
-    // if (_shiftImageDragging)
-    // {
-    //     _modeLabel->setText(tr("Режим: сдвиг изображения"));
-    //     return;
-    // }
-    if (_isDraggingImage)
-    {
-        _modeLabel->setText(_isAllMoved
-            ? tr("Режим: перемещение (изображение + разметка)")
-            : tr("Режим: перемещение (изображение)"));
-        return;
-    }
-    if (_editInProgress || _handleDragging || _m_isDraggingHandle || _ghostActive)
-    {
-        _modeLabel->setText(tr("Режим: редактирование"));
-        return;
-    }
-    if (_resumeEditing)
-    {
-        _modeLabel->setText(tr("Режим: продолжение"));
-        return;
-    }
-    _modeLabel->setText(tr("Режим: просмотр"));
-}
-
-void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers mods, GraphicsView* graphView)
-{
-    Q_UNUSED(mods);
-    Q_UNUSED(graphView);
-
-    _isInDrawingMode = true;
-    setSceneItemsMovable(false);
-    updateModeLabel();
-    _startPoint = scenePos;
-
-    if (!_polyline)
-    {
-        _resumeEditing = false;
-        _resumeUid = 0;
-        // Если полилиния еще не создана, создаем объект
-        _polyline = new qgraph::Polyline(_scene, _startPoint);
-        ensureUid(_polyline);
-        apply_LineWidth_ToItem(_polyline);
-        apply_PointSize_ToItem(_polyline);
-        apply_NumberSize_ToItem(_polyline);
-
-        _polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
-        _polyline->setSelected(true);
-        _polyline->setFocus();
-        _polyline->updatePointNumbers();
-
-        ShapeBackup b0 = makeBackupFromItem(_polyline);
-        pushAdoptExistingShapeCommand(_polyline, b0, tr("Узел полилинии"));
-        _polyline->setModificationCallback([this]()
-        {
-            if (_drawingPolyline && _polyline && _polyline->isClosed())
-            {
-                _drawingPolyline = false;
-                updateModeLabel();
-
-                _polyline->updatePointNumbers();
-                apply_LineWidth_ToItem(_polyline);
-                apply_PointSize_ToItem(_polyline);
-                apply_NumberSize_ToItem(_polyline);
-
-                // QStringList classes;
-                // for (int i = 0; i < ui->polygonLabel->count(); ++i)
-                //     classes << ui->polygonLabel->item(i)->text();
-
-                // SelectClass dialog(classes, this);
-                if (!_resumeEditing)
-                {
-                    SelectClass dialog(_projectClasses, this);
-
-                    if (dialog.exec() == QDialog::Accepted)
-                    {
-                        const QString selectedClass = dialog.selectedClass();
-                        if (!selectedClass.isEmpty())
-                        {
-                            // _polyline->setData(0, selectedClass);
-                            // applyClassColorToItem(_polyline, selectedClass);
-                            // linkSceneItemToList(_polyline);
-
-                            // ShapeBackup b = makeBackupFromItem(_polyline);
-                            // pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
-                            const qulonglong uid = ensureUid(_polyline);
-                            const QString cls = selectedClass;
-
-                            _drawingPolyline = false;
-                            updateModeLabel();
-
-                            auto redoFn = [this, uid, cls]()
-                            {
-                                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                                if (!pl) return;
-
-                                pl->setClosed(true, false);
-                                pl->setFlag(QGraphicsItem::ItemIsMovable, true);
-
-                                pl->setData(0, cls);
-                                applyClassColorToItem(pl, cls);
-                                linkSceneItemToList(pl);
-
-                                if (_polyline && ensureUid(_polyline) == uid)
-                                    _polyline = nullptr;
-
-                                _drawingPolyline = false;
-                                _resumeEditing = false;
-                                _resumeUid = 0;
-                                updateModeLabel();
-
-                                if (auto doc = currentDocument())
-                                {
-                                    doc->isModified = true;
-                                    updateFileListDisplay(doc->filePath);
-                                }
-                            };
-
-                            auto undoFn = [this, uid]()
-                            {
-                                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                                if (!pl) return;
-
-                                pl->setClosed(false, false);
-                                pl->setFlag(QGraphicsItem::ItemIsMovable, false);
-
-                                _drawingPolyline = true;
-                                _polyline = pl;
-                                updateModeLabel();
-
-                                _resumeEditing = true;
-                                _resumeUid = uid;
-
-                                pl->setSelected(true);
-                                pl->setFocus();
-
-                                removeListEntryBySceneItem(pl);
-
-                                if (auto doc = currentDocument())
-                                {
-                                    doc->isModified = true;
-                                    updateFileListDisplay(doc->filePath);
-                                }
-
-                                raiseAllHandlesToTop();
-                            };
-                            if (QUndoStack* st = activeUndoStack())
-                                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
-                            else
-                                redoFn();
-                        }
-                    }
-                }
-                else
-                {
-                    const QString cls = _polyline->data(0).toString();
-                    const qulonglong uid = ensureUid(_polyline);
-                    _drawingPolyline = false;
-                    updateModeLabel();
-
-                    auto redoFn = [this, uid, cls]()
-                    {
-                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                        if (!pl) return;
-
-                        pl->setClosed(true, false);
-                        pl->setFlag(QGraphicsItem::ItemIsMovable, true);
-
-                        if (!cls.isEmpty())
-                        {
-                            pl->setData(0, cls);
-                            applyClassColorToItem(pl, cls);
-                        }
-                        linkSceneItemToList(pl);
-
-                        if (_polyline && ensureUid(_polyline) == uid)
-                            _polyline = nullptr;
-
-                        _drawingPolyline = false;
-                        _resumeEditing = false;
-                        _resumeUid = 0;
-                        updateModeLabel();
-
-                        if (auto doc = currentDocument())
-                        {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
-                        }
-                        raiseAllHandlesToTop();
-                    };
-
-                    auto undoFn = [this, uid]()
-                    {
-                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                        if (!pl) return;
-
-                        pl->setClosed(false, false);
-                        pl->setFlag(QGraphicsItem::ItemIsMovable, false);
-
-                        _drawingPolyline = true;
-                        _polyline = pl;
-                        updateModeLabel();
-
-                        _resumeEditing = true;
-                        _resumeUid = uid;
-
-                        pl->setSelected(true);
-                        pl->setFocus();
-
-                        removeListEntryBySceneItem(pl);
-
-                        if (auto doc = currentDocument())
-                        {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
-                        }
-                        raiseAllHandlesToTop();
-                    };
-
-                    if (QUndoStack* st = activeUndoStack())
-                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
-                    else
-                        redoFn();
-                }
-
-
-                _polyline = nullptr;
-
-                if (auto doc = currentDocument())
-                {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
-                raiseAllHandlesToTop();
-            }
-        });
-    }
-    //_polyline->addPoint(_startPoint, _scene);
-    const QPointF p = _startPoint;
-
-    if (!_polyline->_circles.isEmpty() &&
-        QLineF(_polyline->_circles.last()->scenePos(), p).length() < 0.1)
-    {
-        // Ничего
-    }
-    else if (QUndoStack* st = activeUndoStack())
-    {
-        struct Payload
-        {
-            qulonglong uid = 0;
-            QPointF    pt;
-            bool       didAdd = false;
-        };
-
-        auto payload = std::make_shared<Payload>();
-        payload->uid = ensureUid(_polyline);
-        payload->pt  = p;
-
-        auto redoFn = [this, payload]()
-        {
-            auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(payload->uid));
-            if (!pl) return;
-
-            const int before = pl->_circles.size();
-            pl->addPoint(payload->pt, _scene);
-
-            pl->setFlag(QGraphicsItem::ItemIsMovable, false);
-            pl->setSelected(true);
-            pl->setFocus();
-            pl->updatePointNumbers();
-
-            payload->didAdd = (pl->_circles.size() > before);
-
-            if (auto d = currentDocument())
-            {
-                d->isModified = true;
-                updateFileListDisplay(d->filePath);
-            }
-        };
-
-        auto undoFn = [this, payload]()
-        {
-            auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(payload->uid));
-            if (!pl) return;
-
-            if (payload->didAdd)
-                pl->removeLastPointForce(true);
-
-            if (auto d = currentDocument())
-            {
-                d->isModified = true;
-                updateFileListDisplay(d->filePath);
-            }
-        };
-
-        st->push(new LambdaCommand(redoFn, undoFn, tr("Узел полилинии")));
-    }
-
-    // Закрытие полилинии по Ctrl
-    if (qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::CtrlModifier &&
-        (mods & Qt::ControlModifier))
-    {
-        //_polyline->closePolyline();
-        if (_polyline && !_polyline->isClosed())
-        {
-            _polyline->closePolyline();
-        }
-
-    }
-    apply_PointSize_ToItem(_polyline);
-    raiseAllHandlesToTop();
-}
-
-void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers mods, GraphicsView* graphView)
-{
-    Q_UNUSED(mods);
-    Q_UNUSED(graphView);
-
-     _isInDrawingMode = true;
-    setSceneItemsMovable(false);
-    updateModeLabel();
-    _startPoint = scenePos;
-    if (!_line)
-    {
-        _resumeEditing = false;
-        _resumeUid = 0;
-        // Если линия еще не создана, создаем объект
-        _line = new qgraph::Line(_scene, _startPoint);
-        ensureUid(_line);
-        apply_LineWidth_ToItem(_line);
-        apply_PointSize_ToItem(_line);
-        apply_NumberSize_ToItem(_line);
-        _line->setSelected(true);
-        _line->setFocus();
-        _line->updatePointNumbers();
-        ShapeBackup b0 = makeBackupFromItem(_line);
-        pushAdoptExistingShapeCommand(_line, b0, tr("Узел линии"));
-        _line->setModificationCallback([this]()
-        {
-            if (_drawingLine && _line && _line->isClosed())
-            {
-                _drawingLine = false;
-                updateModeLabel();
-
-                _line->updatePointNumbers();
-                apply_LineWidth_ToItem(_line);
-                apply_PointSize_ToItem(_line);
-                apply_NumberSize_ToItem(_line);
-
-                // QStringList classes;
-                // for (int i = 0; i < ui->polygonLabel->count(); ++i)
-                //     classes << ui->polygonLabel->item(i)->text();
-
-                // SelectClass dialog(classes, this);
-
-                if (!_resumeEditing)
-                {
-                    SelectClass dialog(_projectClasses, this);
-
-                    if (dialog.exec() == QDialog::Accepted)
-                    {
-                        const QString selectedClass = dialog.selectedClass();
-                        if (!selectedClass.isEmpty())
-                        {
-                            // _line->setData(0, selectedClass);
-                            // applyClassColorToItem(_line, selectedClass);
-                            // linkSceneItemToList(_line);
-
-                            // ShapeBackup b = makeBackupFromItem(_line);
-                            // pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
-                            const qulonglong uid = ensureUid(_line);
-                            const QString cls = selectedClass;
-
-                            _drawingLine = false;
-                            updateModeLabel();
-
-                            auto redoFn = [this, uid, cls]()
-                            {
-                                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                                if (!ln) return;
-
-                                ln->setClosed(true, false);
-                                ln->setFlag(QGraphicsItem::ItemIsMovable, true);
-                                ln->setData(0, cls);
-                                applyClassColorToItem(ln, cls);
-                                linkSceneItemToList(ln);
-
-                                if (_line && ensureUid(_line) == uid)
-                                    _line = nullptr;
-
-                                _drawingLine = false;
-                                _resumeEditing = false;
-                                _resumeUid = 0;
-                                updateModeLabel();
-
-                                if (auto doc = currentDocument())
-                                {
-                                    doc->isModified = true;
-                                    updateFileListDisplay(doc->filePath);
-                                }
-                                raiseAllHandlesToTop();
-                            };
-
-                            auto undoFn = [this, uid]()
-                            {
-                                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                                if (!ln) return;
-
-                                ln->setClosed(false, false);
-                                ln->setFlag(QGraphicsItem::ItemIsMovable, false);
-
-                                _drawingLine = true;
-                                _line = ln;
-                                updateModeLabel();
-
-                                _resumeEditing = true;
-                                _resumeUid = uid;
-
-                                ln->setSelected(true);
-                                ln->setFocus();
-
-                                removeListEntryBySceneItem(ln);
-
-                                if (auto doc = currentDocument())
-                                {
-                                    doc->isModified = true;
-                                    updateFileListDisplay(doc->filePath);
-                                }
-                                raiseAllHandlesToTop();
-                            };
-
-                            if (QUndoStack* st = activeUndoStack())
-                                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
-                            else
-                                redoFn();
-
-                        }
-                    }
-                }
-                else
-                {
-                    const qulonglong uid = ensureUid(_line);
-                    const QString cls = _line->data(0).toString();
-
-                    _drawingLine = false;
-                    updateModeLabel();
-
-                    auto redoFn = [this, uid, cls]()
-                    {
-                        auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                        if (!ln) return;
-
-                        ln->setClosed(true, false);
-                        ln->setFlag(QGraphicsItem::ItemIsMovable, true);
-
-                        if (!cls.isEmpty())
-                        {
-                            ln->setData(0, cls);
-                            applyClassColorToItem(ln, cls);
-                        }
-                        linkSceneItemToList(ln);
-
-                        if (_line && ensureUid(_line) == uid)
-                            _line = nullptr;
-
-                        _drawingLine = false;
-                        _resumeEditing = false;
-                        _resumeUid = 0;
-                        updateModeLabel();
-
-                        if (auto doc = currentDocument())
-                        {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
-                        }
-                        raiseAllHandlesToTop();
-                    };
-
-                    auto undoFn = [this, uid]()
-                    {
-                        auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                        if (!ln) return;
-
-                        ln->setClosed(false, false);
-                        ln->setFlag(QGraphicsItem::ItemIsMovable, false);
-
-                        _drawingLine = true;
-                        _line = ln;
-                        updateModeLabel();
-
-                        _resumeEditing = true;
-                        _resumeUid = uid;
-
-                        ln->setSelected(true);
-                        ln->setFocus();
-
-                        removeListEntryBySceneItem(ln);
-
-                        if (auto doc = currentDocument())
-                        {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
-                        }
-                        raiseAllHandlesToTop();
-                    };
-
-                    if (QUndoStack* st = activeUndoStack())
-                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
-                    else
-                        redoFn();
-                }
-
-                _line = nullptr;
-
-                if (auto doc = currentDocument())
-                {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
-                raiseAllHandlesToTop();
-            }
-        });
-    }
-    //_line->addPoint(_startPoint, _scene);
-    const QPointF p = _startPoint;
-    if (!_line->_circles.isEmpty() &&
-        QLineF(_line->_circles.last()->scenePos(), p).length() < 0.1)
-    {
-        // Ничего
-    }
-    else if (QUndoStack* st = activeUndoStack())
-    {
-        struct Payload
-        {
-            qulonglong uid = 0;
-            QPointF    pt;
-            bool       didAdd = false;
-        };
-
-        auto payload = std::make_shared<Payload>();
-        payload->uid = ensureUid(_line);
-        payload->pt  = p;
-
-        auto redoFn = [this, payload]()
-        {
-            auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(payload->uid));
-            if (!ln) return;
-
-            const int before = ln->_circles.size();
-            ln->addPoint(payload->pt, _scene);
-
-            ln->setSelected(true);
-            ln->setFocus();
-            ln->updatePointNumbers();
-
-            payload->didAdd = (ln->_circles.size() > before);
-
-            if (auto d = currentDocument())
-            {
-                d->isModified = true;
-                updateFileListDisplay(d->filePath);
-            }
-        };
-
-        auto undoFn = [this, payload]()
-        {
-            auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(payload->uid));
-            if (!ln) return;
-
-            if (payload->didAdd)
-                ln->removeLastPointForce(true);
-
-            if (auto d = currentDocument())
-            {
-                d->isModified = true;
-                updateFileListDisplay(d->filePath);
-            }
-        };
-
-        st->push(new LambdaCommand(redoFn, undoFn, tr("Узел линии")));
-    }
-
-    // Завершение линии по Ctrl
-    if (qgraph::Line::globalCloseMode() == qgraph::Line::CloseMode::CtrlModifier &&
-        (mods & Qt::ControlModifier))
-    {
-        _line->closeLine();
-    }
-    apply_PointSize_ToItem(_line);
-    raiseAllHandlesToTop();
-}
-
-bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, int bIdx)
-{
-    auto doc = currentDocument();
-    if (!doc || !doc->_undoStack || !a || !b)
-        return false;
-    if (a == b)
-        return false;
-
-    // Только концы
-    const int aLast = a->circles().size() - 1;
-    const int bLast = b->circles().size() - 1;
-
-    if (!((aIdx == 0) || (aIdx == aLast)))
-        return false;
-    if (!((bIdx == 0) || (bIdx == bLast)))
-        return false;
-
-    // Класс должен совпадать
-    const QString la = a->data(0).toString();
-    const QString lb = b->data(0).toString();
-    if (!la.isEmpty() && !lb.isEmpty() && la != lb)
-    {
-        QMessageBox::warning(this, tr("Объединить линии"),
-                             tr("Нельзя объединить линии разных классов:\n\"%1\" и \"%2\".")
-                                 .arg(la, lb));
-        return false;
-    }
-    const QString outLabel = !la.isEmpty() ? la : lb;
-
-    // Собираем точки
-    QVector<QPointF> pa = a->points();
-    QVector<QPointF> pb = b->points();
-
-    if (pa.size() < 2 || pb.size() < 2)
-        return false;
-
-    // Разворачиваем так, чтобы выбранный конец A стал последним,
-    // а выбранный конец B стал первым.
-    if (aIdx == 0)
-        std::reverse(pa.begin(), pa.end());
-    if (bIdx == bLast)
-        std::reverse(pb.begin(), pb.end());
-
-    // Склейка + удаление дубликата в месте стыка
-    QVector<QPointF> merged;
-    merged.reserve(pa.size() + pb.size());
-    merged += pa;
-
-    const QPointF lastA = merged.last();
-    const QPointF firstB = pb.first();
-
-    const qreal eps = 2.0;
-    if (QLineF(lastA, firstB).length() < eps)
-    {
-        // Не добавляем первый узел B
-        for (int i = 1; i < pb.size(); ++i)
-            merged.push_back(pb[i]);
-    }
-    else
-    {
-        merged += pb;
-    }
-
-    if (merged.size() < 2)
-        return false;    
-
-    auto rotateToIndex = [](QVector<QPointF>& pts, int k)
-    {
-        if (pts.isEmpty()) return;
-        k %= pts.size();
-        if (k < 0) k += pts.size();
-        if (k == 0) return;
-
-        QVector<QPointF> tmp;
-        tmp.reserve(pts.size());
-        for (int i = 0; i < pts.size(); ++i)
-            tmp.push_back(pts[(k + i) % pts.size()]);
-        pts = std::move(tmp);
-    };
-
-    // Нормализация нумерации
-    const qreal epsClose = 6.0;
-    const bool looksClosed =
-        (merged.size() >= 3) && (QLineF(merged.first(), merged.last()).length() < epsClose);
-
-    const double a2 = signedArea2(merged);
-
-    const bool numberingFromLast = (a2 > 0.0);
-
-    if (looksClosed)
-    {
-        // Старт - верхний-левый
-        const int k = topLeftIndex(merged);
-        rotateToIndex(merged, k);
-
-        // Если после поворота первый и последний почти совпали, то убираем дубль
-        if (merged.size() >= 2 && QLineF(merged.first(), merged.last()).length() < epsClose)
-            merged.pop_back();
-    }
-    else
-    {
-        // Открытая линия: старт - верхне-левый конец
-        if (isBetterTopLeft(merged.last(), merged.first()))
-            std::reverse(merged.begin(), merged.end());
-    }
-
-    struct Payload
-    {
-        ShapeBackup aBackup;
-        ShapeBackup bBackup;
-        QVector<QPointF> mergedPts;
-        QString label;
-        qulonglong mergedUid = 0;
-        qreal z = 0.0;
-        bool numberingFromLast = false;
-    };
-
-    auto payload = std::make_shared<Payload>();
-
-    auto backupForSceneItem = [this](QGraphicsItem* gi) -> ShapeBackup
-    {
-        ShapeBackup b{};
-        b.uid = gi->data(_roleUid).toULongLong();
-        if (b.uid == 0) b.uid = ensureUid(gi);
-        b.className = gi->data(0).toString();
-        b.z = gi->zValue();
-        b.visible = gi->isVisible();
-
-        if (auto* ln = dynamic_cast<qgraph::Line*>(gi))
-        {
-            b.kind = ShapeKind::Line;
-            b.points = ln->points();
-            b.closed = false;
-        }
-        return b;
-    };
-
-    payload->numberingFromLast = numberingFromLast;
-    payload->aBackup = backupForSceneItem(a);
-    payload->bBackup = backupForSceneItem(b);
-    payload->mergedPts = merged;
-    payload->label = outLabel;
-    payload->z = qMax(a->zValue(), b->zValue());
-
-    payload->mergedUid = _uidCounter++; // Резервируем uid
-
-    auto redoFn = [this, payload]()
-    {
-        // Удаляем А и В по uid
-        for (qulonglong uid : {payload->aBackup.uid, payload->bBackup.uid})
-        {
-            if (!uid) continue;
-            if (QGraphicsItem* gi = findItemByUid(uid))
-            {
-                _scene->removeItem(gi);
-                removeListEntryBySceneItem(gi);
-                clearLinePolylineStateForDeletedItem(gi);
-                delete gi;
-            }
-        }
-
-        if (payload->mergedPts.isEmpty())
-            return;
-
-        auto* ln = new qgraph::Line(_scene, payload->mergedPts.front());
-        ln->setData(_roleUid, QVariant::fromValue<qulonglong>(payload->mergedUid));
-
-        for (int i = 1; i < payload->mergedPts.size(); ++i)
-            ln->addPoint(payload->mergedPts[i], _scene);
-        ln->setNumberingFromLast(payload->numberingFromLast);
-
-        apply_LineWidth_ToItem(ln);
-        apply_PointSize_ToItem(ln);
-        apply_NumberSize_ToItem(ln);
-
-        ln->setData(0, payload->label);
-        applyClassColorToItem(ln, payload->label);
-        ln->setZValue(payload->z);
-        ln->setVisible(true);
-        ln->updateHandlePosition();
-        linkSceneItemToList(ln);
-
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    auto undoFn = [this, payload]()
-    {
-        if (payload->mergedUid)
-        {
-            if (QGraphicsItem* gi = findItemByUid(payload->mergedUid))
-            {
-                _scene->removeItem(gi);
-                removeListEntryBySceneItem(gi);
-                clearLinePolylineStateForDeletedItem(gi);
-                delete gi;
-            }
-        }
-
-        // Восстанавливаем A и B
-        recreateFromBackup(payload->aBackup);
-        recreateFromBackup(payload->bBackup);
-
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Объединить линии")));
-    return true;
-}
-
-bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePos)
-{
-    auto doc = currentDocument();
-    if (!doc || !doc->_undoStack || !ln)
-        return false;
-
-    ShapeBackup before = makeBackupFromItem(ln);
-    const int n = before.points.size();
-    if (n < 4)
-    {
-        QMessageBox::warning(this, tr("Разорвать линию"),
-                             tr("Нельзя разорвать линию: нужно минимум 4 точки."));
-        return false;
-    }
-
-    auto dist2PointToSegment = [](const QPointF& p, const QPointF& a, const QPointF& b) -> double
-    {
-        const double vx = b.x() - a.x();
-        const double vy = b.y() - a.y();
-        const double wx = p.x() - a.x();
-        const double wy = p.y() - a.y();
-        const double vv = vx*vx + vy*vy;
-        double t = 0.0;
-        if (vv > 1e-12)
-            t = (wx*vx + wy*vy) / vv;
-        if (t < 0.0) t = 0.0;
-        if (t > 1.0) t = 1.0;
-        const double px = a.x() + t*vx;
-        const double py = a.y() + t*vy;
-        const double dx = p.x() - px;
-        const double dy = p.y() - py;
-        return dx*dx + dy*dy;
-    };
-
-    // Ищем ребро (i, i+1), ближайшее к клику
-    int bestIdx = 0;
-    double bestD2 = std::numeric_limits<double>::infinity();
-    for (int i = 0; i < n - 1; ++i)
-    {
-        const QPointF& a = before.points[i];
-        const QPointF& b = before.points[i + 1];
-        const double d2 = dist2PointToSegment(scenePos, a, b);
-        if (d2 < bestD2)
-        {
-            bestD2 = d2;
-            bestIdx = i;
-        }
-    }
-
-    // Чтобы обе линии были валидны (>=2 точки), ребро не должно быть крайним
-    if (bestIdx < 1 || bestIdx > n - 3)
-    {
-        QMessageBox::warning(this, tr("Разорвать линию"),
-                             tr("Нельзя разорвать по этому ребру: получится линия из одной точки.\n"
-                                "Выберите внутреннее ребро."));
-        return false;
-    }
-
-    struct Payload
-    {
-        ShapeBackup oldBackup;
-        QVector<QPointF> pts1;
-        QVector<QPointF> pts2;
-        QString label;
-        qreal z = 0.0;
-        bool visible = true;
-        bool numberingFromLast = false;
-        qulonglong uid1 = 0;
-        qulonglong uid2 = 0;
-    };
-
-    auto payload = std::make_shared<Payload>();
-    payload->oldBackup = before;
-    payload->label = before.className;
-    payload->z = before.z;
-    payload->visible = before.visible;
-    payload->numberingFromLast = before.numberingFromLast;
-
-    payload->uid1 = _uidCounter++;
-    payload->uid2 = _uidCounter++;
-
-    payload->pts1.reserve(bestIdx + 1);
-    for (int i = 0; i <= bestIdx; ++i)
-        payload->pts1.push_back(before.points[i]);
-
-    payload->pts2.reserve(n - (bestIdx + 1));
-    for (int i = bestIdx + 1; i < n; ++i)
-        payload->pts2.push_back(before.points[i]);
-
-    auto redoFn = [this, payload]()
-    {
-        // Удалить старую линию
-        if (payload->oldBackup.uid)
-        {
-            if (QGraphicsItem* gi = findItemByUid(payload->oldBackup.uid))
-            {
-                _scene->removeItem(gi);
-                removeListEntryBySceneItem(gi);
-                clearLinePolylineStateForDeletedItem(gi);
-                delete gi;
-            }
-        }
-
-        auto makeLine = [this, payload](const QVector<QPointF>& pts, qulonglong uid)
-        {
-            if (pts.size() < 2) return;
-
-            auto* ln = new qgraph::Line(_scene, pts.front());
-            ln->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
-            for (int i = 1; i < pts.size(); ++i)
-                ln->addPoint(pts[i], _scene);
-
-            ln->setNumberingFromLast(payload->numberingFromLast);
-
-            apply_LineWidth_ToItem(ln);
-            apply_PointSize_ToItem(ln);
-            apply_NumberSize_ToItem(ln);
-
-            ln->setData(0, payload->label);
-            applyClassColorToItem(ln, payload->label);
-            ln->setZValue(payload->z);
-            ln->setVisible(payload->visible);
-            ln->updateHandlePosition();
-            linkSceneItemToList(ln);
-        };
-
-        makeLine(payload->pts1, payload->uid1);
-        makeLine(payload->pts2, payload->uid2);
-
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    auto undoFn = [this, payload]()
-    {
-        // Удалить две новые линии
-        for (qulonglong uid : {payload->uid1, payload->uid2})
-        {
-            if (!uid) continue;
-            if (QGraphicsItem* gi = findItemByUid(uid))
-            {
-                _scene->removeItem(gi);
-                removeListEntryBySceneItem(gi);
-                clearLinePolylineStateForDeletedItem(gi);
-                delete gi;
-            }
-        }
-
-        // Восстановить старую
-        recreateFromBackup(payload->oldBackup);
-
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Разрыв линию")));
-    return true;
-}
-
-int MainWindow::topLeftIndex(const QVector<QPointF>& pts)
-{
-    if (pts.isEmpty()) return -1;
-    int best = 0;
-    for (int i = 1; i < pts.size(); ++i)
-        if (isBetterTopLeft(pts[i], pts[best]))
-            best = i;
-    return best;
-}
-
-// Формула шнуровки
-double MainWindow::signedArea2(const QVector<QPointF>& pts)
-{
-    // Удвоенная ориентированная площадь для замкнутого контура
-    // Без дублирования первой точки в конце
-    const int n = pts.size();
-    if (n < 3) return 0.0;
-
-    double s = 0.0;
-    for (int i = 0; i < n; ++i)
-    {
-        const QPointF& a = pts[i];
-        const QPointF& b = pts[(i + 1) % n];
-        s += (double)a.x() * (double)b.y() - (double)b.x() * (double)a.y();
-    }
-    return s;
-}
-
-void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString& description)
-{
-    struct Payload
-    {
-        ShapeBackup  b;
-        qulonglong   uid = 0;
-    };
-
-    auto payload = std::make_shared<Payload>();
-    payload->b   = backup;
-    payload->uid = backup.uid;
-
-    auto redoFn = [this, payload]()
-    {
-        // Ищем существующий объект по uid
-        QGraphicsItem* it = nullptr;
-        if (payload->uid != 0)
-            it = findItemByUid(payload->uid);
-
-        if (it)
-        {
-            // Фигура уже есть
-            applyBackupToExisting(it, payload->b);
-        }
-        else
-        {
-            // Фигуры нет, создаем по снапшоту
-            it = recreateFromBackup(payload->b);
-            if (it && payload->uid != 0)
-            {
-                it->setData(_roleUid, QVariant::fromValue<qulonglong>(payload->uid));
-            }
-        }
-
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    auto undoFn = [this, payload]()
-    {
-        if (payload->uid == 0)
-            return;
-
-        if (QGraphicsItem* it = findItemByUid(payload->uid))
-        {
-            _scene->removeItem(it);
-            removeListEntryBySceneItem(it);
-            clearLinePolylineStateForDeletedItem(it);
-            delete it;
-        }
-
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    if (auto* st = activeUndoStack())
-        st->push(new LambdaCommand(redoFn, undoFn, description));
-}
-
-QUndoStack* MainWindow::activeUndoStack() const
-{
-    if (!_undoGroup) return nullptr;
-    if (QUndoStack* st = _undoGroup->activeStack()) return st;
-
-    // Запасной вариант - стек текущего документа
-    if (auto d = currentDocument())
-        return d->_undoStack ? d->_undoStack.get() : nullptr;
-
-    return nullptr;
-}
-
-ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* gi) const
-{
-    ShapeBackup b{};
-    if (!gi)
-        return b;
-
-    b.uid = gi->data(_roleUid).toULongLong();
-    if (b.uid == 0)
-        b.uid = ensureUid(gi);
-
-    b.className = gi->data(0).toString();
-    b.z = gi->zValue();
-    b.visible = gi->isVisible();
-
-    if (auto* rect = dynamic_cast<qgraph::Rectangle*>(gi))
-    {
-        b.kind = ShapeKind::Rectangle;
-        //b.rect = rect->sceneBoundingRect();
-        b.rect = rect->mapRectToScene(rect->rect());
-    }
-    else if (auto* c = dynamic_cast<qgraph::Circle*>(gi))
-    {
-        b.kind = ShapeKind::Circle;
-        b.circleCenter = c->center();
-        b.circleRadius = c->realRadius();
-    }
-    else if (auto* pl = dynamic_cast<qgraph::Polyline*>(gi))
-    {
-        b.kind  = ShapeKind::Polyline;
-        b.points = pl->points();
-        b.closed = pl->isClosed();
-    }
-    else if (auto* ln = dynamic_cast<qgraph::Line*>(gi))
-    {
-        b.kind  = ShapeKind::Line;
-        b.points = ln->points();
-        b.closed = ln->isClosed();
-        b.numberingFromLast = ln->isNumberingFromLast();
-    }
-    else if (auto* p = dynamic_cast<qgraph::Point*>(gi))
-    {
-        b.kind = ShapeKind::Point;
-        b.pointCenter = p->center();
-    }
-
-    b.listRow = -1;
-    if (ui && ui->polygonList && gi)
-    {
-        for (int i = 0; i < ui->polygonList->count(); ++i)
-        {
-            QListWidgetItem* li = ui->polygonList->item(i);
-            if (!li)
-                continue;
-
-            if (li->data(Qt::UserRole).value<QGraphicsItem*>() == gi)
-            {
-                b.listRow = i;
-                break;
-            }
-        }
-    }
-    b.sceneRow = -1;
-    if (ui && ui->polygonList && gi)
-    {
-        for (int i = 0; i < ui->polygonList->count(); ++i)
-        {
-            QListWidgetItem* li = ui->polygonList->item(i);
-            if (!li)
-                continue;
-
-            if (li->data(Qt::UserRole).value<QGraphicsItem*>() == gi)
-            {
-                b.sceneRow = i;
-                break;
-            }
-        }
-    }
-    return b;
-}
-
-void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
-                                               const ShapeBackup& backup,
-                                               const QString& description)
-{
-    struct Payload
-    {
-        ShapeBackup b;
-        qulonglong  uid = 0;
-        bool skipFirstRedo = false;
-    };
-
-    auto payload = std::make_shared<Payload>();
-    payload->b = backup;
-
-    // Берем uid из снапшота или с самого объекта
-    qulonglong uid = backup.uid;
-    if (uid == 0 && createdNow)
-        uid = createdNow->data(_roleUid).toULongLong();
-    if (uid == 0 && createdNow)
-        uid = ensureUid(createdNow);
-    payload->uid = uid;
-    payload->skipFirstRedo = (createdNow != nullptr);
-
-    auto redoFn = [this, payload]()
-    {
-        if (payload->uid == 0)
-            return;
-
-        // После QUndoStack::push() redo вызывается сразу.
-        // Фигура уже существует и уже в нужном состоянии,
-        // поэтому первый redo пропускаем.
-        if (payload->skipFirstRedo)
-        {
-            payload->skipFirstRedo = false;
-
-            if (auto d = currentDocument())
-            {
-                d->isModified = true;
-                updateFileListDisplay(d->filePath);
-            }
-            return;
-        }
-
-        // Пытаемся найти уже существующий объект по uid
-        QGraphicsItem* item = findItemByUid(payload->uid);
-        if (item)
-        {
-            // Фигура есть - просто приводим ее к состоянию из снапшота
-            applyBackupToExisting(item, payload->b);
-        }
-        else
-        {
-            // Фигуры нет - создаем по снапшоту
-            QGraphicsItem* created = recreateFromBackup(payload->b);
-            if (created && payload->uid != 0)
-            {
-                created->setData(_roleUid,
-                                 QVariant::fromValue<qulonglong>(payload->uid));
-            }
-        }
-
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    auto undoFn = [this, payload]()
-    {
-        if (payload->uid == 0)
-            return;
-
-        if (QGraphicsItem* item = findItemByUid(payload->uid))
-        {
-            if (auto sc = item->scene())
-                sc->removeItem(item);
-            removeListEntryBySceneItem(item);
-            clearLinePolylineStateForDeletedItem(item);
-            delete item;
-        }
-
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    if (auto* st = activeUndoStack())
-        st->push(new LambdaCommand(redoFn, undoFn, description));
-}
-
-void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
-                                      const ShapeBackup& before,
-                                      const ShapeBackup& after,
-                                      const QString& description)
-{
-    struct Payload
-    {
-        ShapeBackup before;
-        ShapeBackup after;
-        qulonglong uid = 0;
-        bool skipFirstRedo = false;
-    };
-
-    auto p = std::make_shared<Payload>();
-    p->before = before;
-    p->after  = after;
-
-    qulonglong uid = 0;
-    if (item)
-        uid = item->data(_roleUid).toULongLong();
-    if (uid == 0 && item)
-        uid = ensureUid(item);
-    p->uid = uid;
-
-    auto apply = [this](qulonglong uid, const ShapeBackup& snap)
-    {
-        QGraphicsItem* it = findItemByUid(uid);
-        if (it)
-        {
-            applyBackupToExisting(it, snap);
-            return true;
-        }
-        QGraphicsItem* created = recreateFromBackup(snap);
-        if (created)
-        {
-            created->setData(_roleUid, QVariant::fromValue<qulonglong>(snap.uid ? snap.uid : uid));
-            return true;
-        }
-        return false;
-    };
-
-    auto redoFn = [this, p, apply]()
-    {
-        apply(p->uid, p->after);
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    auto undoFn = [this, p, apply]()
-    {
-        apply(p->uid, p->before);
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    if (auto* st = activeUndoStack())
-        st->push(new LambdaCommand(redoFn, undoFn, description));
-}
-
-void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
-                                       const ShapeBackup& before,
-                                       const ShapeBackup& after,
-                                       const QString& description)
-{
-    struct Payload
-    {
-        ShapeBackup before;
-        ShapeBackup after;
-        qulonglong uid = 0;
-    };
-
-    auto p = std::make_shared<Payload>();
-    p->before = before;
-    p->after  = after;
-
-    // Сохраняем uid
-    qulonglong uid = 0;
-    if (item)
-        uid = item->data(_roleUid).toULongLong();
-    if (uid == 0 && item)
-        uid = ensureUid(item);
-    p->uid = uid;
-
-    // Найти актуальный item по uid; если нет - пересоздать из снапшота
-    auto apply = [this](qulonglong uid, const ShapeBackup& snap)
-    {
-        QGraphicsItem* it = findItemByUid(uid);
-        if (it)
-        {
-            applyBackupToExisting(it, snap);
-            return true;
-        }
-        // Не нашли - пересоздаем (и привязываем тот же uid)
-        QGraphicsItem* created = recreateFromBackup(snap);
-        if (created)
-        {
-            created->setData(_roleUid, QVariant::fromValue<qulonglong>(snap.uid ? snap.uid : uid));
-            return true;
-        }
-        return false;
-    };
-
-    auto redoFn = [this, p, apply]()
-    {
-        apply(p->uid, p->after);
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    auto undoFn = [this, p, apply]()
-    {
-        apply(p->uid, p->before);
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    if (auto* st = activeUndoStack())
-        st->push(new LambdaCommand(redoFn, undoFn, description));
-}
-
-void MainWindow::pushModifyShapeCommand(qulonglong uid,
-                                        const ShapeBackup& before,
-                                        const ShapeBackup& after,
-                                        const QString& description)
-{
-    auto doc = currentDocument();
-    if (!doc || !doc->_undoStack)
-        return;
-
-    struct Payload
-    {
-        qulonglong uid;
-        ShapeBackup before;
-        ShapeBackup after;
-    };
-
-    auto payload = std::make_shared<Payload>();
-    payload->uid    = uid;
-    payload->before = before;
-    payload->after  = after;
-
-    // Применяем снапшот к существующей фигуре по uid.
-    // Если фигуру не нашли - просто no-op, без пересоздания.
-    auto applySnap = [this](qulonglong uid, const ShapeBackup& snap)
-    {
-        if (QGraphicsItem* it = findItemByUid(uid))
-        {
-            applyBackupToExisting(it, snap);
-        }
-    };
-
-    auto redoFn = [this, payload, applySnap]()
-    {
-        applySnap(payload->uid, payload->after);
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    auto undoFn = [this, payload, applySnap]()
-    {
-        applySnap(payload->uid, payload->before);
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
-}
-
-void MainWindow::pushMoveImageCommand(const QPointF& before,
-                                      const QPointF& after,
-                                      const QString& description)
-{
-    auto doc = currentDocument();
-    if (!doc || !doc->_undoStack || !_videoRect)
-        return;
-
-    if (before == after)
-        return;
-
-    struct Payload
-    {
-        QPointF before;
-        QPointF after;
-    };
-
-    auto payload   = std::make_shared<Payload>();
-    payload->before = before;
-    payload->after  = after;
-
-    auto applyPos = [this](const QPointF& pos)
-    {
-        if (_videoRect)
-            _videoRect->setPos(pos);
-    };
-
-    auto redoFn = [this, payload, applyPos]()
-    {
-        applyPos(payload->after);
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    auto undoFn = [this, payload, applyPos]()
-    {
-        applyPos(payload->before);
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
-}
-
-void MainWindow::pushReplaceShapeCommand(qulonglong uid,
-                                        const ShapeBackup& before,
-                                        const ShapeBackup& after,
-                                        const QString& description)
-{
-    auto doc = currentDocument();
-    if (!doc || !doc->_undoStack)
-        return;
-
-    struct Payload
-    {
-        qulonglong uid = 0;
-        ShapeBackup before;
-        ShapeBackup after;
-    };
-
-    auto p = std::make_shared<Payload>();
-    p->uid = uid;
-    p->before = before;
-    p->after  = after;
-
-    p->before.uid = uid;
-    p->after.uid  = uid;
-
-    auto replaceBySnap = [this](qulonglong uid, const ShapeBackup& snap)
-    {
-        if (!uid)
-            return;
-
-        if (QGraphicsItem* it = findItemByUid(uid))
-        {
-            if (auto sc = it->scene())
-                sc->removeItem(it);
-            removeListEntryBySceneItem(it);
-            clearLinePolylineStateForDeletedItem(it);
-            delete it;
-        }
-
-        QGraphicsItem* created = recreateFromBackup(snap);
-        if (created)
-            created->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
-    };
-
-    auto redoFn = [this, p, replaceBySnap]()
-    {
-        replaceBySnap(p->uid, p->after);
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    auto undoFn = [this, p, replaceBySnap]()
-    {
-        replaceBySnap(p->uid, p->before);
-        if (auto d = currentDocument())
-        {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
-        }
-    };
-
-    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
-}
-
-void MainWindow::removeSceneAndListItems(const QList<QListWidgetItem*>& listItems)
-{
-    // Удаляем все выбранные по связке из списка - сцена
-    for (QListWidgetItem* li : listItems)
-    {
-        if (!li)
-            continue;
-        QGraphicsItem* gi = li->data(Qt::UserRole).value<QGraphicsItem*>();
-        if (gi)
-        {
-            _scene->removeItem(gi);
-            clearLinePolylineStateForDeletedItem(gi);
-            delete gi;
-        }
-        // Удаляем сам элемент списка
-        delete ui->polygonList->takeItem(ui->polygonList->row(li));
-    }
-}
-
-QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
-{
-    QGraphicsItem* created = nullptr;
-
-    auto applyBackupUid = [this](QGraphicsItem* it, qulonglong uid)
-    {
-        if (!it) return;
-        if (uid != 0)
-        {
-            it->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
-            if (uid >= _uidCounter)
-                _uidCounter = uid + 1;
-        }
-        else
-        {
-            ensureUid(it);
-        }
-    };
-
-    switch (b.kind)
-    {
-        case ShapeKind::Rectangle:
-        {
-            auto* rect = new qgraph::Rectangle(_scene);
-            //ensureUid(rect);
-            applyBackupUid(rect, b.uid);
-            rect->setRealSceneRect(b.rect);
-            rect->updatePointNumbers();
-            apply_LineWidth_ToItem(rect);
-            apply_PointSize_ToItem(rect);
-            apply_NumberSize_ToItem(rect);
-            rect->setData(0, b.className);
-            applyClassColorToItem(rect, b.className);
-            //rect->setZValue(b.z);
-            rect->setVisible(b.visible);
-            linkSceneItemToList(rect, b.listRow);
-            created = rect;
-            break;
-        }
-        case ShapeKind::Circle:
-        {
-            auto* c = new qgraph::Circle(_scene, b.circleCenter);
-            //ensureUid(c);
-            applyBackupUid(c, b.uid);
-            c->setRealRadius(b.circleRadius);
-            apply_LineWidth_ToItem(c);
-            apply_PointSize_ToItem(c);
-            c->setData(0, b.className);
-            applyClassColorToItem(c, b.className);
-            //c->setZValue(b.z);
-            c->setVisible(b.visible);
-            c->updateHandlePosition();
-            linkSceneItemToList(c, b.listRow);
-            created = c;
-            break;
-        }
-        case ShapeKind::Polyline:
-        {
-            if (b.points.isEmpty())
-                break;
-            auto* pl = new qgraph::Polyline(_scene, b.points.front());
-            //ensureUid(pl);
-            applyBackupUid(pl, b.uid);
-
-            pl->beginBulkLoad();
-            for (int i = 1; i < b.points.size(); ++i)
-                pl->addPoint(b.points[i], _scene);
-            pl->endBulkLoad();
-
-            if (b.closed)
-                pl->closePolyline();
-
-            apply_LineWidth_ToItem(pl);
-            apply_PointSize_ToItem(pl);
-            apply_NumberSize_ToItem(pl);
-
-            pl->setData(0, b.className);
-            applyClassColorToItem(pl, b.className);
-            //pl->setZValue(b.z);
-            pl->setVisible(b.visible);
-            pl->updateHandlePosition();
-            linkSceneItemToList(pl, b.listRow);
-            created = pl;
-            break;
-        }
-        case ShapeKind::Line:
-        {
-            if (b.points.isEmpty())
-                break;
-            auto* ln = new qgraph::Line(_scene, b.points.front());
-            //ensureUid(ln);
-            applyBackupUid(ln, b.uid);
-
-            ln->beginBulkLoad();
-            for (int i = 1; i < b.points.size(); ++i)
-                ln->addPoint(b.points[i], _scene);
-            ln->endBulkLoad();
-
-            if (b.closed)
-                ln->closeLine();
-
-            apply_LineWidth_ToItem(ln);
-            apply_PointSize_ToItem(ln);
-            apply_NumberSize_ToItem(ln);
-
-            ln->setData(0, b.className);
-            applyClassColorToItem(ln, b.className);
-            //ln->setZValue(b.z);
-            ln->setVisible(b.visible);
-            ln->updateHandlePosition();
-            linkSceneItemToList(ln, b.listRow);
-            created = ln;
-            break;
-        }
-        case ShapeKind::Point:
-        {
-            auto* pt = new qgraph::Point(_scene);
-            //ensureUid(pt);
-            applyBackupUid(pt, b.uid);
-            apply_PointSize_ToItem(pt);
-            apply_NumberSize_ToItem(pt);
-            apply_PointStyle_ToItem(pt);
-            pt->setCenter(b.pointCenter);
-            pt->setData(0, b.className);
-            applyClassColorToItem(pt, b.className);
-            //pt->setZValue(b.z);
-            pt->setVisible(b.visible);
-            linkSceneItemToList(pt, b.listRow);
-            created = pt;
-            break;
-        }
-    }
-
-    if (created)
-        created->setFocus();
-
-    if (created)
-        created->setData(_roleUid, QVariant::fromValue<qulonglong>(b.uid));
-
-    return created;
-}
-
-void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
-{
-    if (!it) return;
-
-    switch (b.kind)
-    {
-        case ShapeKind::Rectangle:
-            if (auto* r = qgraphicsitem_cast<qgraph::Rectangle*>(it))
-            {
-                r->setRealSceneRect(b.rect);
-                r->updatePointNumbers();
-                apply_LineWidth_ToItem(r);
-                apply_PointSize_ToItem(r);
-                apply_NumberSize_ToItem(r);
-                r->setData(0, b.className);
-                applyClassColorToItem(r, b.className);
-                r->setZValue(b.z);
-                r->setVisible(b.visible);
-                r->updateHandlePosition();
-            }
-            break;
-
-        case ShapeKind::Circle:
-            if (auto* c = qgraphicsitem_cast<qgraph::Circle*>(it))
-            {
-                c->setRealRadius(b.circleRadius);
-                apply_LineWidth_ToItem(c);
-                apply_PointSize_ToItem(c);
-                c->setData(0, b.className);
-                applyClassColorToItem(c, b.className);
-                c->setZValue(b.z);
-                c->setVisible(b.visible);
-
-                const QPointF cur = c->sceneBoundingRect().center();
-                const QPointF dst = QPointF(b.circleCenter);
-                const QPointF d = dst - cur;
-                if (!qFuzzyIsNull(d.x()) || !qFuzzyIsNull(d.y()))
-                    c->moveBy(d.x(), d.y());
-
-                c->updateHandlePosition();
-            }
-            break;
-
-        case ShapeKind::Polyline:
-        {
-            if (auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(it))
-            {
-                // Полная замена узлов из снапшота
-                pl->replaceScenePoints(b.points, b.closed);
-                pl->setData(0, b.className);
-                pl->setVisible(b.visible);
-                pl->setZValue(b.z);
-                apply_LineWidth_ToItem(pl);
-                apply_PointSize_ToItem(pl);
-                apply_NumberSize_ToItem(pl);
-                applyClassColorToItem(pl, b.className);
-            }
-            break;
-        }
-
-        case ShapeKind::Line:
-        {
-            if (auto* ln = qgraphicsitem_cast<qgraph::Line*>(it))
-            {
-
-                ln->replaceScenePoints(b.points, b.closed);
-                ln->setNumberingFromLast(b.numberingFromLast);
-                ln->setData(0, b.className);
-                ln->setVisible(b.visible);
-                ln->setZValue(b.z);
-                apply_LineWidth_ToItem(ln);
-                apply_PointSize_ToItem(ln);
-                apply_NumberSize_ToItem(ln);
-                applyClassColorToItem(ln, b.className);
-            }
-            break;
-        }
-        case ShapeKind::Point:
-            if (auto* pt = qgraphicsitem_cast<qgraph::Point*>(it))
-            {
-                apply_PointStyle_ToItem(pt);
-                apply_PointSize_ToItem(pt);
-                apply_NumberSize_ToItem(pt);
-                pt->setCenter(b.pointCenter);
-                pt->setData(0, b.className);
-                applyClassColorToItem(pt, b.className);
-                pt->setZValue(b.z);
-                pt->setVisible(b.visible);
-                pt->updateHandlePosition();
-            }
-            break;
-    }
-    if (ui && ui->polygonList)
-    {
-        int currentRow = -1;
-        QListWidgetItem* currentItem = nullptr;
-
-        for (int i = 0; i < ui->polygonList->count(); ++i)
-        {
-            QListWidgetItem* li = ui->polygonList->item(i);
-            if (!li)
-                continue;
-
-            if (li->data(Qt::UserRole).value<QGraphicsItem*>() == it)
-            {
-                currentRow = i;
-                currentItem = li;
-                break;
-            }
-        }
-
-        if (!currentItem && !b.className.isEmpty())
-        {
-            linkSceneItemToList(it, b.listRow);
-        }
-        else if (currentItem)
-        {
-            const int targetRow = (b.listRow < 0) ? currentRow : b.listRow;
-            if (targetRow != currentRow &&
-                targetRow >= 0 &&
-                targetRow < ui->polygonList->count())
-            {
-                QListWidgetItem* moved = ui->polygonList->takeItem(currentRow);
-                ui->polygonList->insertItem(targetRow, moved);
-            }
-            renumberPolygonList();
-        }
-    }
-}
-
-void MainWindow::removePolygonListItem(QListWidgetItem* item)
-{
-    if (!item) return;
-
-    // Получаем связанный графический элемент
-    QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
-    if (sceneItem && sceneItem->scene() == _scene)
-    {
-        _scene->removeItem(sceneItem);
-        clearLinePolylineStateForDeletedItem(sceneItem);
-        delete sceneItem;
-    }
-    // Удаляем из списка
-    delete ui->polygonList->takeItem(ui->polygonList->row(item));
-    renumberPolygonList();
-    // Помечаем документ как измененный
-    if (auto doc = currentDocument())
-    {
-        doc->isModified = true;
-        updateFileListDisplay(doc->filePath);
-    }
 }
 
 void MainWindow::fitImageToView()
@@ -10149,21 +4017,6 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
                 this, &MainWindow::onSceneChanged,
                 Qt::UniqueConnection);
     }
-    // if (_scene)
-    // {
-    //     for (QGraphicsItem* item : _scene->items())
-    //     {
-    //         if (!item)
-    //             continue;
-
-    //         apply_PointStyle_ToItem(item);
-
-    //         const QString cls = item->data(0).toString();
-    //         if (!cls.isEmpty())
-    //             applyClassColorToItem(item, cls);
-    //     }
-    //     _scene->update();
-    // }
 
     _loadingNow = false;
 
@@ -11311,7 +5164,6 @@ void MainWindow::on_Paste_triggered()
     pasteCopiedShapesToCurrentScene();
 }
 
-
 void MainWindow::on_toggleSelectionFrame_triggered()
 {
     if (!_scene)
@@ -11450,7 +5302,6 @@ void MainWindow::on_actResetAnnotation_triggered()
         doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Сброс разметки")));
 }
 
-
 void MainWindow::on_actRestoreAnnotation_triggered()
 {
     auto doc = currentDocument();
@@ -11553,4 +5404,6135 @@ void MainWindow::on_actScrollBars_triggered(bool checked)
 void MainWindow::on_actUserGuide_triggered()
 {
 
+}
+
+void MainWindow::loadFilesFromFolder(const QString& folderPath)
+{
+    QDir directory(folderPath);
+    _currentFolderPath = folderPath; // Сохраняем путь
+
+    // Путь к папке в заголовке окна
+    updateWindowTitle();
+    //Путь к папке внизу окна
+    updateFolderPathDisplay();
+
+    ui->fileList->clear(); // Очищаем список перед добавлением
+    // Путь к папке над полем FileList
+    ui->listPath->setText(QDir::toNativeSeparators(folderPath));
+
+
+    QStringList filters;
+    filters << "*.jpg";
+    filters << "*.jpeg";
+    filters << "*.png";
+    QStringList files = directory.entryList(filters, QDir::Files);
+
+    // Загружаем иконки из ресурсов
+    QIcon modifiedIcon(":/images/resources/ok.svg");
+    QIcon defaultIcon(":/images/resources/not_ok.svg");
+
+    // Добавляем файлы
+    for (auto filename : files)
+    {
+        QString filePath = directory.filePath(filename);
+        QListWidgetItem* item = new QListWidgetItem(filename);
+        bool hasValidAnnotation = false;
+        if (hasAnnotationFile(filePath))
+        {
+            // Проверяем, не пустой ли YAML файл
+            QString yamlPath = getAnnotationFilePath(filePath);
+            if (!isYamlFileEmpty(yamlPath))
+            {
+                hasValidAnnotation = true;
+            }
+        }
+
+        if (hasValidAnnotation)
+        {
+            item->setIcon(modifiedIcon);
+        }
+        else
+        {
+            item->setIcon(defaultIcon);
+            //item->setText("* " + filename);
+        }
+        // Создаем документ и сохраняем его в данных элемента
+        Document::Ptr doc = Document::create(filePath);
+        item->setData(Qt::UserRole, QVariant::fromValue(doc));
+        _documentsMap.insert(doc->filePath, doc);
+
+        // Инициализируем индивидуальный стек для документа и регистрируем его в группе
+        doc->_undoStack = std::make_unique<QUndoStack>();      // без родителя, владеем unique_ptr
+        _undoGroup->addStack(doc->_undoStack.get());           // группа будет переключать активный
+
+        QUndoStack* st = doc->_undoStack.get();
+        QObject::connect(st, &QUndoStack::indexChanged, this, [this, st](int){
+            if (_loadingNow) return;
+
+            // реагируем только если этот стек активен у группы
+            if (_undoGroup && _undoGroup->activeStack() != st) return;
+
+            if (auto d = currentDocument())
+            {
+                // Если стек в состоянии <пусто>, считаем файл неизмененным
+                const bool clean = st->isClean();
+                d->isModified = !clean;
+                updateFileListDisplay(d->filePath);
+            }
+        });
+
+        // Убираем чекбоксы
+        //item->setFlags(item->flags() & ~Qt::ItemIsUserCheckable);
+
+        ui->fileList->addItem(item);
+        if (doc->loadImage())
+        {
+            loadAnnotationFromFile(doc, false);
+        }
+    }
+}
+
+void MainWindow::updatePolygonListForCurrentScene()
+{
+    ui->polygonList->clear();
+
+    if (ui->coordinateList)
+        ui->coordinateList->clear();
+
+    if (!_scene)
+        return;
+
+    QList<QGraphicsItem*> roots;
+    for (QGraphicsItem* item : _scene->items())
+    {
+        if (!item)
+            continue;
+
+        if (item == _videoRect ||
+            item == _tempRectItem ||
+            item == _tempCircleItem ||
+            item == _tempPolyline)
+        {
+            continue;
+        }
+
+        if (item->parentItem() != nullptr)
+            continue;
+
+        const QString className = item->data(0).toString();
+        if (!className.isEmpty())
+            roots.append(item);
+    }
+
+    std::sort(roots.begin(), roots.end(),
+              [](QGraphicsItem* a, QGraphicsItem* b)
+    {
+        return a->zValue() < b->zValue();
+    });
+
+    for (QGraphicsItem* item : roots)
+        linkSceneItemToList(item);
+
+    renumberPolygonList();
+}
+
+void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
+{
+    if (!item)
+        return;
+
+    const QString oldClass = item->data(0).toString();
+
+    if (_projectClasses.isEmpty())
+        return;
+
+    SelectClass dialog(_projectClasses, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    const QString newClass = dialog.selectedClass();
+    if (newClass.isEmpty() || newClass == oldClass)
+        return;
+
+    ShapeBackup before = makeBackupFromItem(item);
+    const qulonglong uid = before.uid;
+
+    item->setData(0, newClass);
+    applyClassColorToItem(item, newClass);
+
+    bool foundInList = false;
+    for (int i = 0; i < ui->polygonList->count(); ++i)
+    {
+        QListWidgetItem* li = ui->polygonList->item(i);
+        if (!li)
+            continue;
+
+        if (li->data(Qt::UserRole).value<QGraphicsItem*>() == item)
+        {
+            foundInList = true;
+            break;
+        }
+    }
+    if (!foundInList)
+        linkSceneItemToList(item);
+    else
+        renumberPolygonList();
+
+    ShapeBackup after = makeBackupFromItem(item);
+    if (!sameGeometry(before, after))
+        pushModifyShapeCommand(uid, before, after, tr("Смена класса"));
+
+    if (auto doc = currentDocument(); doc && !doc->isModified)
+    {
+        doc->isModified = true;
+        updateFileListDisplay(doc->filePath);
+    }
+}
+
+void MainWindow::loadGeometry()
+{
+    // QVector<int> v {100, 100, 800, 600};
+    // config::base().getValue("windows.main_window.geometry", v);
+    // setGeometry(v[0], v[1], v[2], v[3]);
+
+    QVector<int> wg;
+    config::base().getValue("windows.main_window.geometry", wg);
+    if (wg.count() != 4)
+    {
+        //wg.resize(4);
+        wg = {10, 10, 1400, 800};
+        //setGeometry(wg[0], wg[1], wg[2], wg[3]);
+
+        QList<QScreen*> screens = QGuiApplication::screens();
+        if (!screens.isEmpty())
+        {
+            QRect screenGeometry = screens[0]->geometry();
+            //QRect windowGeometry = this->geometry();
+            QRect windowGeometry {0, 0, int(screenGeometry.width()  * (2./3)),
+                                        int(screenGeometry.height() * (2./3))};
+            wg[0] = screenGeometry.width()  / 2 - windowGeometry.width()  / 2;
+            wg[1] = screenGeometry.height() / 2 - windowGeometry.height() / 2;
+            wg[2] = windowGeometry.width();
+            wg[3] = windowGeometry.height();
+        }
+    }
+    setGeometry(wg[0], wg[1], wg[2], wg[3]);
+
+    QList<int> splitterSizes;
+    if (config::base().getValue("windows.main_window.splitter_sizes", splitterSizes))
+        ui->splitter->setSizes(splitterSizes);
+
+    splitterSizes.clear();
+    if (!config::base().getValue("windows.main_window.splitter2_sizes", splitterSizes))
+    {
+        splitterSizes = {100, 100};
+        QRect windowGeometry = this->geometry();
+        splitterSizes[0] = windowGeometry.width() * (2./3);
+    }
+    ui->splitter2->setSizes(splitterSizes);
+
+//    int tabIndex = 0;
+//    config::base().getValue("windows.main_window.tab_index", tabIndex);
+//    ui->tabWidget->setCurrentIndex(tabIndex);
+
+//    QString sval;
+//    config::base().getValue("windows.main_window.event_journal_header", sval);
+//    if (!sval.isEmpty())
+//    {
+//        QByteArray ba = QByteArray::fromBase64(sval.toLatin1());
+//        ui->tableJournal->horizontalHeader()->restoreState(ba);
+//    }
+}
+
+void MainWindow::saveGeometry()
+{
+    QRect g = geometry();
+    QVector<int> v {g.x(), g.y(), g.width(), g.height()};
+    config::base().setValue("windows.main_window.geometry", v);
+
+    QList<int> splitterSizes = ui->splitter->sizes();
+    config::base().setValue("windows.main_window.splitter_sizes", splitterSizes);
+
+    splitterSizes = ui->splitter2->sizes();
+    config::base().setValue("windows.main_window.splitter2_sizes", splitterSizes);
+
+//    config::base().setValue("windows.main_window.tab_index", ui->tabWidget->currentIndex());
+
+//    QByteArray ba = ui->tableJournal->horizontalHeader()->saveState().toBase64();
+//    config::base().setValue("windows.main_window.event_journal_header", QString::fromLatin1(ba));
+    saveVisualStyle();
+}
+
+void MainWindow::writeShapesJsonToClipboard(const QJsonObject& json) const
+{
+    if (json.isEmpty())
+        return;
+
+    // JSON-данные - для внутренней вставки
+    QJsonDocument doc(json);
+    QByteArray raw = doc.toJson(QJsonDocument::Compact);
+
+    QJsonArray shapesArray = json["shapes"].toArray();
+
+    struct Circle { QString label; double x, y, radius; };
+    struct Polyline { QString label; QVector<QPointF> points; };
+    struct Rectangle{ QString label; double x1, y1, x2, y2; };
+    struct Point { QString label; double x, y; };
+    struct Line { QString label; QVector<QPointF> points; };
+
+    QVector<Circle> circles;
+    QVector<Polyline> polylines;
+    QVector<Rectangle> rectangles;
+    QVector<Point> points;
+    QVector<Line> lines;
+
+    for (const QJsonValue& v : shapesArray)
+    {
+        QJsonObject o = v.toObject();
+        QString type  = o["type"].toString();
+        QString label = o["class"].toString();
+        if (label.isEmpty())
+            label = "none";
+
+        if (type == "circle")
+        {
+            Circle c;
+            c.label  = label;
+            c.x  = o["x"].toDouble();
+            c.y = o["y"].toDouble();
+            c.radius = o["radius"].toDouble();
+            circles.append(c);
+        }
+        else if (type == "rectangle")
+        {
+            Rectangle r;
+            r.label = label;
+            double x = o["x"].toDouble();
+            double y = o["y"].toDouble();
+            double w = o["width"].toDouble();
+            double h = o["height"].toDouble();
+            r.x1 = x;
+            r.y1 = y;
+            r.x2 = x + w;
+            r.y2 = y + h;
+            rectangles.append(r);
+        }
+        else if (type == "polyline")
+        {
+            Polyline pl;
+            pl.label = label;
+            QJsonArray pts = o["points"].toArray();
+            for (const QJsonValue& pv : pts)
+            {
+                QJsonObject po = pv.toObject();
+                pl.points.append(QPointF(po["x"].toDouble(),
+                                         po["y"].toDouble()));
+            }
+            polylines.append(pl);
+        }
+        else if (type == "line")
+        {
+            Line ln;
+            ln.label = label;
+            QJsonArray pts = o["points"].toArray();
+            for (const QJsonValue& pv : pts)
+            {
+                QJsonObject po = pv.toObject();
+                ln.points.append(QPointF(po["x"].toDouble(),
+                                         po["y"].toDouble()));
+            }
+            lines.append(ln);
+        }
+        else if (type == "point")
+        {
+            Point p;
+            p.label = label;
+            p.x     = o["x"].toDouble();
+            p.y     = o["y"].toDouble();
+            points.append(p);
+        }
+    }
+
+    QString yaml;
+    {
+        QTextStream out(&yaml);
+        out << "shapes:\n";
+
+        if (!circles.isEmpty())
+        {
+            out << "  circles:\n";
+            for (const Circle& c : circles)
+            {
+                int cx = static_cast<int>(std::round(c.x));
+                int cy = static_cast<int>(std::round(c.y));
+                int r  = static_cast<int>(std::round(c.radius));
+
+                out << "    - label: " << c.label << "\n";
+                out << "      center: {x: " << cx << ", y: " << cy << "}\n";
+                out << "      radius: " << r << "\n";
+            }
+        }
+
+        if (!polylines.isEmpty())
+        {
+            out << "  polylines:\n";
+            for (const Polyline& pl : polylines)
+            {
+                out << "    - label: " << pl.label << "\n";
+                out << "      points: [";
+                for (int i = 0; i < pl.points.size(); ++i)
+                {
+                    const QPointF& p = pl.points[i];
+                    int px = static_cast<int>(std::round(p.x()));
+                    int py = static_cast<int>(std::round(p.y()));
+                    if (i > 0)
+                        out << ", ";
+                    out << "{x: " << px << ", y: " << py << "}";
+                }
+                out << "]\n";
+            }
+        }
+
+        if (!rectangles.isEmpty())
+        {
+            out << "  rectangles:\n";
+            for (const Rectangle& r : rectangles)
+            {
+                int x1 = static_cast<int>(std::round(r.x1));
+                int y1 = static_cast<int>(std::round(r.y1));
+                int x2 = static_cast<int>(std::round(r.x2));
+                int y2 = static_cast<int>(std::round(r.y2));
+
+                out << "    - label: " << r.label << "\n";
+                out << "      point1: {x: " << x1 << ", y: " << y1 << "}\n";
+                out << "      point2: {x: " << x2 << ", y: " << y2 << "}\n";
+            }
+        }
+
+        if (!points.isEmpty())
+        {
+            out << "  points:\n";
+            for (const Point& p : points)
+            {
+                int px = static_cast<int>(std::round(p.x));
+                int py = static_cast<int>(std::round(p.y));
+
+                out << "    - label: " << p.label << "\n";
+                out << "      point: {x: " << px << ", y: " << py << "}\n";
+            }
+        }
+
+        if (!lines.isEmpty())
+        {
+            out << "  lines:\n";
+            for (const Line& ln : lines)
+            {
+                out << "    - label: " << ln.label << "\n";
+                out << "      points: [";
+                for (int i = 0; i < ln.points.size(); ++i)
+                {
+                    const QPointF& p = ln.points[i];
+                    int px = static_cast<int>(std::round(p.x()));
+                    int py = static_cast<int>(std::round(p.y()));
+                    if (i > 0)
+                        out << ", ";
+                    out << "{x: " << px << ", y: " << py << "}";
+                }
+                out << "]\n";
+            }
+        }
+    }
+
+    // Пишем и JSON, и YAML в буфер обмена
+    auto* mime = new QMimeData;
+    mime->setData(kShapesMimeType, raw);
+    mime->setText(yaml);
+
+    QClipboard* cb = QGuiApplication::clipboard();
+    cb->setMimeData(mime);
+}
+
+QJsonObject MainWindow::readShapesJsonFromClipboard() const
+{
+    QClipboard* cb = QGuiApplication::clipboard();
+    const QMimeData* mime = cb->mimeData();
+    if (!mime)
+        return {};
+
+    QByteArray raw;
+
+    // Сначала пробуем наш MIME-тип
+    if (mime->hasFormat(kShapesMimeType))
+    {
+        raw = mime->data(kShapesMimeType);
+    }
+    else if (mime->hasText())
+    {
+        // fallback: вдруг пользователь сам сохранил JSON в виде текста
+        raw = mime->text().toUtf8();
+    }
+    else
+    {
+        return {};
+    }
+
+    QJsonParseError err{};
+    QJsonDocument doc = QJsonDocument::fromJson(raw, &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject())
+        return {};
+
+    return doc.object();
+}
+
+QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
+{
+    QJsonObject root;
+    QJsonArray shapesArray;
+
+
+    if (!scene)
+    {
+        root["shapes"] = shapesArray;
+        return root;
+    }
+
+    for (QGraphicsItem* item : scene->items())
+    {
+        // Пропускаем само изображение и временные элементы
+        if (item == _videoRect || item == _tempRectItem ||
+            item == _tempCircleItem || item == _tempPolyline)
+        {
+            continue;
+        }
+
+        QJsonObject shapeObj;
+        QString className = item->data(0).toString();
+        shapeObj["class"] = className;
+        // Пропускаем элементы без класса
+        if (className.isEmpty() || className == "--")
+        {
+            continue;
+        }
+
+        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            shapeObj["type"] = "rectangle";
+            // QRectF r = rect->rect();
+            QRectF r = rect->sceneBoundingRect();
+            shapeObj["x"] = r.x();
+            shapeObj["y"] = r.y();
+            shapeObj["width"] = r.width();
+            shapeObj["height"] = r.height();
+        }
+        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        {
+            shapeObj["type"] = "circle";
+            //QPointF center = circle->realCenter();
+            QPointF center = circle->center();
+            shapeObj["x"] = center.x();
+            shapeObj["y"] = center.y();
+            shapeObj["radius"] = circle->realRadius();
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            shapeObj["type"] = "polyline";
+            shapeObj["closed"] = polyline->isClosed();
+            QJsonArray pointsArray;
+
+            // Получаем точки полилинии через метод points()
+            for (const QPointF& point : polyline->points())
+            {
+                QJsonObject pointObj;
+                pointObj["x"] = point.x();
+                pointObj["y"] = point.y();
+                pointsArray.append(pointObj);
+            }
+            shapeObj["points"] = pointsArray;
+        }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            shapeObj["type"] = "line";
+            QJsonArray pointsArray;
+
+            for (const QPointF& point : line->points())
+            {
+                QJsonObject pointObj;
+                pointObj["x"] = point.x();
+                pointObj["y"] = point.y();
+                pointsArray.append(pointObj);
+            }
+
+            shapeObj["points"] = pointsArray;
+        }
+        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
+        {
+            shapeObj["type"] = "point";
+            QPointF center = point->center();
+            shapeObj["x"] = center.x();
+            shapeObj["y"] = center.y();
+        }
+        else
+        {
+            continue;
+        }
+
+        shapesArray.append(shapeObj);
+    }
+
+    root["shapes"] = shapesArray;
+    return root;
+}
+
+void MainWindow::deserializeJsonToScene(QGraphicsScene* scene,
+                                        const QJsonObject& json,
+                                        const QPointF& offset)
+{
+    if (!scene)
+    {
+        return;
+    }
+
+    QJsonArray shapesArray = json["shapes"].toArray();
+    for (const QJsonValue& shapeValue : shapesArray)
+    {
+        QJsonObject shapeObj = shapeValue.toObject();
+        QString className = shapeObj["class"].toString();
+        QString type = shapeObj["type"].toString();
+
+        if (type == "rectangle")
+        {
+            qreal x = shapeObj["x"].toDouble();
+            qreal y = shapeObj["y"].toDouble();
+            qreal width = shapeObj["width"].toDouble();
+            qreal height = shapeObj["height"].toDouble();
+
+            QPointF topLeft(x, y);
+            topLeft += offset;
+
+            qgraph::Rectangle* rect = new qgraph::Rectangle(scene);
+
+            ensureUid(rect);
+            //rect->setRect(QRectF(x, y, width, height));
+            rect->setRealSceneRect(QRectF(topLeft, QSizeF(width, height)));
+            rect->setData(0, className);
+            apply_LineWidth_ToItem(rect);
+            apply_PointSize_ToItem(rect);
+            apply_NumberSize_ToItem(rect);
+        }
+        else if (type == "circle")
+        {
+            qreal x = shapeObj["x"].toDouble();
+            qreal y = shapeObj["y"].toDouble();
+            qreal radius = shapeObj["radius"].toDouble();
+
+            QPointF center(x, y);
+            center += offset;
+
+            qgraph::Circle* circle = new qgraph::Circle(scene, center);
+
+            ensureUid(circle);
+            circle->setRealRadius(radius);
+            circle->setData(0, className);
+            apply_LineWidth_ToItem(circle);
+            apply_PointSize_ToItem(circle);
+            apply_NumberSize_ToItem(circle);
+        }
+        else if (type == "polyline")
+        {
+            QJsonArray pointsArray = shapeObj["points"].toArray();
+            if (pointsArray.isEmpty())
+                continue;
+
+            const bool closed = shapeObj["closed"].toBool(false);
+
+            QPointF firstPoint(pointsArray[0].toObject()["x"].toDouble(),
+                               pointsArray[0].toObject()["y"].toDouble());
+
+            firstPoint += offset;
+
+            qgraph::Polyline* polyline = new qgraph::Polyline(scene, firstPoint);
+            ensureUid(polyline);
+
+            polyline->beginBulkLoad();
+            for (int i = 1; i < pointsArray.size(); ++i)
+            {
+                QPointF point(pointsArray[i].toObject()["x"].toDouble(),
+                              pointsArray[i].toObject()["y"].toDouble());
+                point += offset;
+                polyline->addPoint(point, scene);
+            }
+            polyline->endBulkLoad();
+
+            if (closed)
+                polyline->closePolyline();
+
+            polyline->setData(0, className);
+            apply_LineWidth_ToItem(polyline);
+            apply_PointSize_ToItem(polyline);
+            apply_NumberSize_ToItem(polyline);
+        }
+        else if (type == "line")
+        {
+            QJsonArray pointsArray = shapeObj["points"].toArray();
+            if (pointsArray.size() < 2)
+                continue;
+
+            QPointF firstPoint(pointsArray[0].toObject()["x"].toDouble(),
+                               pointsArray[0].toObject()["y"].toDouble());
+            firstPoint += offset;
+
+            qgraph::Line* line = new qgraph::Line(scene, firstPoint);
+            ensureUid(line);
+
+            line->beginBulkLoad();
+            for (int i = 1; i < pointsArray.size(); ++i)
+            {
+                QJsonObject ptObj = pointsArray[i].toObject();
+                QPointF p(ptObj["x"].toDouble(), ptObj["y"].toDouble());
+                p += offset;
+                line->addPoint(p, scene);
+            }
+            line->endBulkLoad();
+
+            line->setData(0, className);
+
+            apply_LineWidth_ToItem(line);
+            apply_PointSize_ToItem(line);
+            apply_NumberSize_ToItem(line);
+        }
+        else if (type == "point")
+        {
+            qreal x = shapeObj["x"].toDouble();
+            qreal y = shapeObj["y"].toDouble();
+
+            QPointF center(x, y);
+            center += offset;
+
+            qgraph::Point* p = new qgraph::Point(scene);
+
+            ensureUid(p);
+            p->setCenter(center);
+            p->setData(0, className);
+
+            apply_PointSize_ToItem(p);
+            apply_NumberSize_ToItem(p);
+            apply_PointStyle_ToItem(p);
+        }
+        else
+        {
+            continue;
+        }
+    }
+}
+
+QJsonObject MainWindow::serializeSelectedItemsToJson(QGraphicsScene* scene)
+{
+    QJsonObject root;
+    QJsonArray shapesArray;
+
+    if (!scene)
+    {
+        root["shapes"] = shapesArray;
+        return root;
+    }
+
+    // Берем именно выделенные элементы
+    const QList<QGraphicsItem*> items = scene->selectedItems();
+
+    for (QGraphicsItem* item : items)
+    {
+        // Пропускаем само изображение и временные элементы
+        if (item == _videoRect || item == _tempRectItem ||
+            item == _tempCircleItem || item == _tempPolyline)
+        {
+            continue;
+        }
+
+        QJsonObject shapeObj;
+        QString className = item->data(0).toString();
+
+        // Пропускаем элементы без класса
+        if (className.isEmpty() || className == "--")
+        {
+            continue;
+        }
+
+        shapeObj["class"] = className;
+
+        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            shapeObj["type"] = "rectangle";
+            //QRectF r = rect->rect();
+            QRectF r = rect->sceneBoundingRect();
+            shapeObj["x"] = r.x();
+            shapeObj["y"] = r.y();
+            shapeObj["width"] = r.width();
+            shapeObj["height"] = r.height();
+        }
+        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        {
+            shapeObj["type"] = "circle";
+            //QPointF center = circle->realCenter();
+            QPointF center = circle->center();
+            shapeObj["x"] = center.x();
+            shapeObj["y"] = center.y();
+            shapeObj["radius"] = circle->realRadius();
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            shapeObj["type"] = "polyline";
+            shapeObj["closed"] = polyline->isClosed();
+            QJsonArray pointsArray;
+
+            for (const QPointF& point : polyline->points())
+            {
+                QJsonObject pt;
+                pt["x"] = point.x();
+                pt["y"] = point.y();
+                pointsArray.append(pt);
+            }
+
+            shapeObj["points"] = pointsArray;
+        }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            shapeObj["type"] = "line";
+            QJsonArray pointsArray;
+
+            for (const QPointF& point : line->points())
+            {
+                QJsonObject pt;
+                pt["x"] = point.x();
+                pt["y"] = point.y();
+                pointsArray.append(pt);
+            }
+
+            shapeObj["points"] = pointsArray;
+        }
+        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
+        {
+            shapeObj["type"] = "point";
+            QPointF center = point->center();
+            shapeObj["x"] = center.x();
+            shapeObj["y"] = center.y();
+        }
+        else
+        {
+            continue;
+        }
+
+        shapesArray.append(shapeObj);
+    }
+
+    root["shapes"] = shapesArray;
+    return root;
+}
+
+void MainWindow::copySelectedShapes()
+{
+    auto doc = currentDocument();
+    if (!doc || !doc->scene)
+        return;
+
+    // Собираем JSON только по выделенным фигурам на текущей сцене
+    QJsonObject json = serializeSelectedItemsToJson(doc->scene);
+
+    // Локальный буфер
+    _shapesClipboard = json;
+
+    // Отправляем JSON в системный буфер обмена
+    writeShapesJsonToClipboard(json);
+}
+
+void MainWindow::pasteCopiedShapesToCurrentScene()
+{
+    Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene)
+        return;
+
+    QJsonObject json = readShapesJsonFromClipboard();
+    if (json.isEmpty())
+        json = _shapesClipboard;
+
+    if (json.isEmpty())
+        return;
+
+    QGraphicsScene* scene = doc->scene;
+
+    // Запоминаем, что было на сцене ДО вставки
+    QList<QGraphicsItem*> beforeItems = scene->items();
+    const QPointF pasteOffset(10.0, 10.0);
+    deserializeJsonToScene(scene, json, pasteOffset);
+    //deserializeJsonToScene(scene, json);
+
+    // Собираем список новых фигур (тех, которых не было в beforeItems)
+    QList<QGraphicsItem*> afterItems = scene->items();
+    QList<QGraphicsItem*> newItems;
+
+    for (QGraphicsItem* item : afterItems)
+    {
+        if (!item)
+            continue;
+
+        if (item == _videoRect ||
+            item == _tempRectItem ||
+            item == _tempCircleItem ||
+            item == _tempPolyline)
+        {
+            continue;
+        }
+
+        if (item->parentItem() != nullptr)
+            continue;
+
+        if (beforeItems.contains(item))
+            continue;
+
+        if (dynamic_cast<qgraph::Rectangle*>(item) ||
+            dynamic_cast<qgraph::Circle*>(item) ||
+            dynamic_cast<qgraph::Polyline*>(item) ||
+            dynamic_cast<qgraph::Line*>(item) ||
+            dynamic_cast<qgraph::Point*>(item))
+        {
+            newItems.append(item);
+        }
+    }
+
+    if (newItems.isEmpty())
+        return;
+
+    // После вставки активными должны стать именно новые фигуры
+    const QList<QGraphicsItem*> selectedBeforePaste = scene->selectedItems();
+    for (QGraphicsItem* it : selectedBeforePaste)
+    {
+        if (it)
+            it->setSelected(false);
+    }
+
+    for (QGraphicsItem* item : newItems)
+    {
+        if (item)
+            item->setSelected(true);
+    }
+
+    if (!newItems.isEmpty() && newItems.last())
+        newItems.last()->setFocus();
+
+    raiseAllHandlesToTop();
+
+    // Новые фигуры должны быть выше уже существующих на сцене
+    qreal maxZ = 0.0;
+    bool hasExisting = false;
+
+    for (QGraphicsItem* item : beforeItems)
+    {
+        if (!item)
+            continue;
+
+        if (item == _videoRect ||
+            item == _tempRectItem ||
+            item == _tempCircleItem ||
+            item == _tempPolyline)
+        {
+            continue;
+        }
+
+        if (item->parentItem() != nullptr)
+            continue;
+
+        maxZ = hasExisting ? qMax(maxZ, item->zValue()) : item->zValue();
+        hasExisting = true;
+    }
+
+    if (!hasExisting)
+        maxZ = 0.0;
+
+    for (int i = 0; i < newItems.size(); ++i)
+    {
+        if (newItems[i])
+            newItems[i]->setZValue(maxZ + 1.0 + i);
+    }
+
+    // Добавляем новые фигуры в конец списка справа
+    QList<QListWidgetItem*> pastedListItems;
+    pastedListItems.reserve(newItems.size());
+
+    for (QGraphicsItem* item : newItems)
+    {
+        if (!item)
+            continue;
+
+        const QString className = item->data(0).toString();
+        if (className.isEmpty())
+            continue;
+
+        QListWidgetItem* listItem = new QListWidgetItem;
+        listItem->setData(Qt::UserRole, QVariant::fromValue(item));
+        ui->polygonList->addItem(listItem);
+        pastedListItems.append(listItem);
+    }
+
+    renumberPolygonListTextOnly();
+
+    {
+        QSignalBlocker blocker(ui->polygonList);
+        ui->polygonList->clearSelection();
+
+        for (QListWidgetItem* listItem : pastedListItems)
+        {
+            if (listItem)
+                listItem->setSelected(true);
+        }
+
+        if (!pastedListItems.isEmpty() && pastedListItems.last())
+            ui->polygonList->setCurrentItem(pastedListItems.last());
+    }
+
+    ui->polygonList->setFocus();
+
+    QString descr = (newItems.size() == 1)
+                        ? tr("Вставка примитива")
+                        : tr("Вставка примитивов");
+
+    if (QUndoStack* st = activeUndoStack())
+        st->beginMacro(descr);
+
+    for (QGraphicsItem* item : newItems)
+    {
+        ShapeBackup backup = makeBackupFromItem(item);
+        pushAdoptExistingShapeCommand(item, backup, descr);
+    }
+
+    if (QUndoStack* st = activeUndoStack())
+        st->endMacro();
+
+    doc->isModified = true;
+    updateFileListDisplay(doc->filePath);
+}
+
+qgraph::VideoRect* MainWindow::findVideoRect(QGraphicsScene* scene)
+{
+    if (!scene)
+    {
+        return nullptr;
+    }
+
+    foreach(QGraphicsItem* item, scene->items())
+    {
+        if (auto* videoRect = dynamic_cast<qgraph::VideoRect*>(item))
+        {
+            return videoRect;
+        }
+    }
+    return nullptr;
+}
+
+void MainWindow::toggleRightSplitter()
+{
+    QSplitter* rightSplitter = ui->splitter;
+
+    if (_isRightSplitterCollapsed)
+    {
+        // Восстанавливаем предыдущие размеры
+        rightSplitter->setSizes(_savedSplitterSizes);
+        rightSplitter->setVisible(true);
+    }
+    else
+    {
+        // Сохраняем текущие размеры перед схлопыванием
+        _savedSplitterSizes = rightSplitter->sizes();
+
+        // Схлопываем сплиттер (устанавливаем все размеры в 0)
+        QList<int> newSizes;
+        for (int i = 0; i < rightSplitter->count(); ++i)
+            newSizes << 0;
+        rightSplitter->setSizes(newSizes);
+    }
+
+    _isRightSplitterCollapsed = !_isRightSplitterCollapsed;
+}
+
+void MainWindow::updateWindowTitle()
+{
+    QString title;
+
+    if (!_currentFolderPath.isEmpty())
+    {
+        // Форматируем путь для отображения
+        QString displayPath = QDir::toNativeSeparators(_currentFolderPath);
+
+        // Если путь длинный, можно сократить его
+        if (displayPath.length() > 50)
+        {
+            displayPath = "..." + displayPath.right(47);
+        }
+
+        title = QString("%1 ― QLabelMe").arg(displayPath);
+    }
+    else
+    {
+        title = "QLabelMe";
+    }
+
+    setWindowTitle(title);
+}
+
+void MainWindow::updateFolderPathDisplay()
+{
+    // if (_currentFolderPath.isEmpty())
+    // {
+    //     _folderPathLabel->clear();
+    //     _folderPathLabel->setToolTip("");
+    // }
+    // else
+    // {
+    //     QString displayPath = QDir::toNativeSeparators(_currentFolderPath);
+    //     _folderPathLabel->setText(displayPath);
+    //     _folderPathLabel->setToolTip(displayPath); // Полный путь в подсказке
+
+    //     // Можно добавить иконку папки
+    //     //QIcon folderIcon = style()->standardIcon(QStyle::SP_DirIcon);
+    //     //_folderPathLabel->setPixmap(folderIcon.pixmap(16, 16));
+    // }
+}
+
+QString MainWindow::annotationPathFor(const QString& imagePath)
+{
+    QFileInfo fileInfo(imagePath);
+    QDir dir(fileInfo.absolutePath());
+    return dir.filePath(fileInfo.completeBaseName() + ".yaml");
+}
+
+double MainWindow::round2(double value)
+{
+    return std::round(value * 100.0) / 100.0;
+}
+
+void MainWindow::saveAnnotationToFile(Document::Ptr doc)
+{
+    if (!doc || !doc->scene || !doc->videoRect)
+    {
+        return;
+    }
+
+    YamlConfig::Func saveCircles = [&](YamlConfig* conf, YAML::Node& ycircles, bool)
+    {
+        for (QGraphicsItem* item : doc->scene->items())
+            if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
+            {
+                YAML::Node ycircle;
+
+                QString className = circle->data(0).toString();
+                if (className.isEmpty())
+                    className = "none";
+
+                conf->setValue(ycircle, "label",  className);
+
+                QPointF center = circle->realCenter();
+                double radius = circle->realRadius();
+
+                YamlConfig::Func saveCenter = [center](YamlConfig* conf, YAML::Node& ycenter, bool)
+                {
+                    conf->setValue(ycenter, "x", static_cast<double>(center.x()));
+                    conf->setValue(ycenter, "y", static_cast<double>(center.y()));
+                    return true;
+                };
+
+                conf->setValue(ycircle, "center", saveCenter);
+                conf->setValue(ycircle, "radius", static_cast<double>(radius));
+
+                ycircles.push_back(ycircle);
+            }
+        return true;
+    };
+    YamlConfig::Func savePolylines = [&](YamlConfig* conf, YAML::Node& ypolylines, bool)
+    {
+        for (QGraphicsItem* item : doc->scene->items())
+            if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
+            {
+                YAML::Node ypolyline;
+
+                QString className = polyline->data(0).toString();
+                if (className.isEmpty())
+                    className = "none";
+
+                conf->setValue(ypolyline, "label", className);
+
+                const QVector<QPointF> points = polyline->points();
+                YamlConfig::Func savePoints = [points](YamlConfig* conf, YAML::Node& ypoints, bool)
+                {
+                    for (const QPointF& point : points)
+                    {
+                        YamlConfig::Func savePoint = [point](YamlConfig* conf, YAML::Node& ypoint, bool)
+                        {
+                            conf->setValue(ypoint, "x", static_cast<double>(point.x()));
+                            conf->setValue(ypoint, "y", static_cast<double>(point.y()));
+                            return true;
+                        };
+
+                        YAML::Node ypoint;
+                        savePoint(conf, ypoint, false);
+                        ypoints.push_back(ypoint);
+                    }
+                    return true;
+                };
+                conf->setValue(ypolyline, "points", savePoints);
+                conf->setNodeStyle(ypolyline, "points", YAML::EmitterStyle::Flow);
+
+                ypolylines.push_back(ypolyline);
+            }
+
+        return true;
+    };
+    YamlConfig::Func saveRectangles = [&](YamlConfig* conf, YAML::Node& yrectangles, bool)
+    {
+        for (QGraphicsItem* item : doc->scene->items())
+            if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
+            {
+                YAML::Node yrectangle;
+
+                QString className = rect->data(0).toString();
+                if (className.isEmpty())
+                    className = "none";
+
+                conf->setValue(yrectangle, "label", className);
+
+                const QRectF sceneRect = rect->realSceneRect();
+
+                const QPointF p1 = sceneRect.topLeft();
+                const QPointF p2 = sceneRect.bottomRight();
+
+                YamlConfig::Func savePoint1 = [p1](YamlConfig* conf, YAML::Node& ypoint1, bool)
+                {
+                    conf->setValue(ypoint1, "x", static_cast<double>(p1.x()));
+                    conf->setValue(ypoint1, "y", static_cast<double>(p1.y()));
+                    return true;
+                };
+
+                YamlConfig::Func savePoint2 = [p2](YamlConfig* conf, YAML::Node& ypoint2, bool)
+                {
+                    conf->setValue(ypoint2, "x", static_cast<double>(p2.x()));
+                    conf->setValue(ypoint2, "y", static_cast<double>(p2.y()));
+                    return true;
+                };
+
+                conf->setValue(yrectangle, "point1", savePoint1);
+                conf->setValue(yrectangle, "point2", savePoint2);
+
+                yrectangles.push_back(yrectangle);
+            }
+
+        return true;
+    };
+    YamlConfig::Func savePoints = [&](YamlConfig* conf, YAML::Node& ypoints, bool)
+    {
+        for (QGraphicsItem* item : doc->scene->items())
+            if (qgraph::Point* p = dynamic_cast<qgraph::Point*>(item))
+            {
+                YAML::Node ypoint;
+
+                QString className = p->data(0).toString();
+                if (className.isEmpty())
+                    className = "none";
+
+                conf->setValue(ypoint, "label", className);
+
+                const QPointF center = p->center();
+
+                YamlConfig::Func savePoint = [center](YamlConfig* conf, YAML::Node& ypointNode, bool)
+                {
+                    conf->setValue(ypointNode, "x", static_cast<double>(center.x()));
+                    conf->setValue(ypointNode, "y", static_cast<double>(center.y()));
+                    return true;
+                };
+
+                conf->setValue(ypoint, "point", savePoint);
+
+                ypoints.push_back(ypoint);
+            }
+        return true;
+    };
+    YamlConfig::Func saveLines = [&](YamlConfig* conf, YAML::Node& ylines, bool)
+    {
+        for (QGraphicsItem* item : doc->scene->items())
+            if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
+            {
+                YAML::Node yline;
+
+                QString className = line->data(0).toString();
+                if (className.isEmpty())
+                    className = "none";
+
+                conf->setValue(yline, "label", className);
+
+                const QVector<QPointF> points = line->points();
+                YamlConfig::Func savePoints = [points](YamlConfig* conf, YAML::Node& ypoints, bool)
+                {
+                    for (const QPointF& point : points)
+                    {
+                        YamlConfig::Func savePoint = [point](YamlConfig* conf, YAML::Node& ypoint, bool)
+                        {
+                            conf->setValue(ypoint, "x", static_cast<double>(point.x()));
+                            conf->setValue(ypoint, "y", static_cast<double>(point.y()));
+                            return true;
+                        };
+
+                        YAML::Node ypoint;
+                        savePoint(conf, ypoint, false);
+                        ypoints.push_back(ypoint);
+                    }
+                    return true;
+                };
+
+                conf->setValue(yline, "points", savePoints);
+                conf->setNodeStyle(yline, "points", YAML::EmitterStyle::Flow);
+
+                ylines.push_back(yline);
+            }
+        return true;
+    };
+
+    YamlConfig::Func saveFunc = [&](YamlConfig* conf, YAML::Node& shapes, bool /*logWarn*/)
+    {
+
+        conf->setValue(shapes, "circles", saveCircles);
+        conf->setValue(shapes, "polylines", savePolylines);
+        conf->setValue(shapes, "rectangles", saveRectangles);
+        conf->setValue(shapes, "points", savePoints);
+        conf->setValue(shapes, "lines", saveLines);
+
+        return true;
+    };
+
+    YamlConfig yconfig;
+    yconfig.setRounding(2);
+    yconfig.setValue("shapes", saveFunc);
+    //yconfig.saveFile("/tmp/1.yaml");
+    //yconfig.saveFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml");
+
+    // QFileInfo fileInfo(doc->filePath);
+    // QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
+    // yconfig.saveFile(yamlPath.toStdString());
+
+    const QString yamlPath = annotationPathFor(doc->filePath);
+    // Для внешних C/STD API на Windows используем нативную кодировку ОС
+    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(yamlPath));
+    yconfig.saveFile(std::string(encoded.constData(), encoded.size()));
+
+    // После успешного сохранения обновляем отображение в списке файлов
+    if (QFile::exists(yamlPath))
+    {
+        // Находим соответствующий элемент в списке и убираем звездочку
+        for (int i = 0; i < ui->fileList->count(); ++i)
+        {
+            QListWidgetItem* item = ui->fileList->item(i);
+            QVariant data = item->data(Qt::UserRole);
+            if (data.canConvert<Document::Ptr>())
+            {
+                Document::Ptr itemDoc = data.value<Document::Ptr>();
+                if (itemDoc->filePath == doc->filePath)
+                {
+                    // Убираем звездочку из названия
+                    QString fileName = QFileInfo(doc->filePath).fileName();
+                    item->setText(fileName);
+                    break;
+                }
+            }
+        }
+        QListWidgetItem* item = findFileListItem(doc->filePath);
+        if (item)
+        {
+            updateFileListItemIcon(item, true);
+        }
+    }
+    if (doc->_undoStack)
+        doc->_undoStack->setClean();
+
+    // После успешного сохранения
+    doc->isModified = false;
+    updateFileListDisplay(doc->filePath);
+}
+
+void MainWindow::updateFileListDisplay(const QString& filePath)
+{
+    QIcon modifiedIcon(":/images/resources/not_ok.svg");     // Красная иконка - есть изменения
+    QIcon savedIcon(":/images/resources/ok.svg");            // Зеленая иконка - сохранено
+    QIcon noAnnotationIcon(":/images/resources/not_ok.svg"); // Красная иконка - нет аннотаций
+
+    for (int i = 0; i < ui->fileList->count(); ++i)
+    {
+        QListWidgetItem* item = ui->fileList->item(i);
+        QVariant data = item->data(Qt::UserRole);
+        if (data.canConvert<Document::Ptr>())
+        {
+            Document::Ptr itemDoc = data.value<Document::Ptr>();
+            if (itemDoc->filePath == filePath)
+            {
+                QString fileName = QFileInfo(filePath).fileName();
+
+                if (itemDoc->isModified)
+                {
+                    // Документ изменен, но не сохранен
+                    item->setText("* " + fileName);
+                    item->setIcon(modifiedIcon);
+                }
+                else if (hasAnnotationFile(filePath))
+                {
+                    // Документ сохранен, проверяем не пустой ли YAML
+                    QString yamlPath = getAnnotationFilePath(filePath);
+                    if (!isYamlFileEmpty(yamlPath))
+                    {
+                        item->setText(fileName);
+                        item->setIcon(savedIcon);
+                    }
+                    else
+                    {
+                        item->setText(fileName);
+                        item->setIcon(noAnnotationIcon);
+                    }
+                }
+                else
+                {
+                    // Нет файла аннотаций
+                    item->setText(fileName);
+                    item->setIcon(noAnnotationIcon);
+                }
+                break;
+            }
+        }
+    }
+}
+
+void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
+{
+    if (!doc || !doc->scene)
+    {
+        return;
+    }
+
+    // Временно блокируем обработку изменений
+    _loadingNow = true;
+    QSignalBlocker blocker(doc->scene); // временно глушим QGraphicsScene::changed
+    // Сдвиг изображения, если восстанавливаем разметку
+    const QPointF imageOffset = (doc->videoRect ? doc->videoRect->pos() : QPointF(0.0, 0.0));
+
+    // Получаем путь к файлу аннотаций (заменяем расширение изображения на .yaml)
+    // QFileInfo fileInfo(doc->filePath);
+    // QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
+
+    // YamlConfig yconfig;
+    // if (!yconfig.readFile(yamlPath.toStdString()))
+    // {
+    //     log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
+    //     _loadingNow = false;
+    //     return;
+    // }
+
+    const QString yamlPath = annotationPathFor(doc->filePath);
+    YamlConfig yconfig;
+
+    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(yamlPath));
+    if (!yconfig.readFile(std::string(encoded.constData(), encoded.size())))
+    {
+        log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
+        _loadingNow = false;
+        return;
+    }
+
+    //if (yconfig.readFile("/tmp/1.yaml"))
+    //if (!yconfig.readFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml"))
+
+
+    // Очищаем сцену только если нет несохраненных изменений
+    if (!doc->isModified)
+    {
+        const QList<QGraphicsItem*> items = doc->scene->items();
+        for (QGraphicsItem* item : items)
+        {
+            if (!item)
+                continue;
+
+            if (item == doc->videoRect || item == doc->pixmapItem)
+                continue;
+
+            if (item == _ghostHandle)
+                continue;
+
+            // Не удаляем дочерние элементы
+            if (item->parentItem() != nullptr)
+                continue;
+
+            doc->scene->removeItem(item);
+            delete item; // Удалит и всех детей автоматически
+        }
+    }
+    YamlConfig::Func loadCircles = [&](YamlConfig* conf, YAML::Node& ycircles, bool)
+    {
+        for (const YAML::Node& ycircle : ycircles)
+        {
+            QString label;
+            conf->getValue(ycircle, "label", label);
+
+            double centerX = 0.0;
+            double centerY = 0.0;
+            double radius = 0.0;
+
+            if (ycircle["center"])
+            {
+                conf->getValue(ycircle["center"], "x", centerX);
+                conf->getValue(ycircle["center"], "y", centerY);
+            }
+            conf->getValue(ycircle, "radius", radius);
+
+            qgraph::Circle* circle = new qgraph::Circle(doc->scene, QPointF(centerX, centerY) + imageOffset);
+            ensureUid(circle);
+            circle->setRealRadius(radius);
+            circle->setData(0, label);
+            apply_LineWidth_ToItem(circle);
+            apply_PointSize_ToItem(circle);
+            applyClassColorToItem(circle, label);
+        }
+        return true;
+    };
+    YamlConfig::Func loadPolylines = [&](YamlConfig* conf, YAML::Node& ypolylines, bool)
+    {
+        for (const YAML::Node& ypolyline : ypolylines)
+        {
+            QString label;
+            conf->getValue(ypolyline, "label", label);
+
+            QVector<QPointF> points;
+            YamlConfig::Func loadPoints = [&points, &imageOffset](YamlConfig* conf, YAML::Node& ypoints, bool)
+            {
+                for (const YAML::Node& ypoint : ypoints)
+                {
+                    double x = 0.0;
+                    double y = 0.0;
+                    conf->getValue(ypoint, "x", x);
+                    conf->getValue(ypoint, "y", y);
+                    points.append(QPointF(x, y) + imageOffset);
+                }
+                return true;
+            };
+            conf->getValue(ypolyline, "points", loadPoints);
+
+            if (points.isEmpty())
+                continue;
+            // Создаем полилинию на сцене
+            qgraph::Polyline* polyline = new qgraph::Polyline(doc->scene, points.first());
+            ensureUid(polyline);
+
+            polyline->beginBulkLoad();
+            for (int i = 1; i < points.size(); ++i)
+            {
+                polyline->addPoint(points[i], doc->scene);
+            }
+            polyline->endBulkLoad();
+
+            polyline->closePolyline();
+            polyline->updatePath();
+            polyline->setData(0, label);
+            apply_LineWidth_ToItem(polyline);
+            apply_PointSize_ToItem(polyline);
+            apply_NumberSize_ToItem(polyline);
+            applyClassColorToItem(polyline, label);
+        }
+        return true;
+    };
+    YamlConfig::Func loadRectangles = [&](YamlConfig* conf, YAML::Node& yrectangles, bool)
+    {
+        for (const YAML::Node& yrectangle : yrectangles)
+        {
+            QString label;
+            conf->getValue(yrectangle, "label", label);
+
+            double x1 = 0.0, y1 = 0.0;
+            double x2 = 0.0, y2 = 0.0;
+
+            if (yrectangle["point1"])
+            {
+                conf->getValue(yrectangle["point1"], "x", x1);
+                conf->getValue(yrectangle["point1"], "y", y1);
+            }
+            if (yrectangle["point2"])
+            {
+                conf->getValue(yrectangle["point2"], "x", x2);
+                conf->getValue(yrectangle["point2"], "y", y2);
+            }
+            // Создаем прямоугольник на сцене
+            qgraph::Rectangle* rect = new qgraph::Rectangle(doc->scene);
+            ensureUid(rect);
+            rect->setRealSceneRect(QRectF(QPointF(x1, y1) + imageOffset,
+                                          QPointF(x2, y2) + imageOffset));
+            rect->setData(0, label);
+            apply_LineWidth_ToItem(rect);
+            apply_PointSize_ToItem(rect);
+            apply_NumberSize_ToItem(rect);
+            applyClassColorToItem(rect, label);
+        }
+
+        return true;
+    };
+    YamlConfig::Func loadPoints = [&](YamlConfig* conf, YAML::Node& ypoints, bool)
+    {
+        for (const YAML::Node& ypoint : ypoints)
+        {
+            QString label;
+            conf->getValue(ypoint, "label", label);
+
+            double x = 0.0;
+            double y = 0.0;
+
+            if (ypoint["point"])
+            {
+                conf->getValue(ypoint["point"], "x", x);
+                conf->getValue(ypoint["point"], "y", y);
+            }
+
+            qgraph::Point* p = new qgraph::Point(doc->scene);
+            ensureUid(p);
+            p->setCenter(QPointF(x, y) + imageOffset);
+            p->setData(0, label);
+
+            apply_PointSize_ToItem(p);
+            apply_NumberSize_ToItem(p);
+            apply_PointStyle_ToItem(p);
+            applyClassColorToItem(p, label);
+        }
+        return true;
+    };
+    YamlConfig::Func loadLines = [&](YamlConfig* conf, YAML::Node& ylines, bool)
+    {
+        for (const YAML::Node& yline : ylines)
+        {
+            QString label;
+            conf->getValue(yline, "label", label);
+
+            QVector<QPointF> points;
+            YamlConfig::Func loadPoints = [&points, &imageOffset](YamlConfig* conf, YAML::Node& ypoints, bool)
+            {
+                for (const YAML::Node& ypoint : ypoints)
+                {
+                    double x = 0.0;
+                    double y = 0.0;
+                    conf->getValue(ypoint, "x", x);
+                    conf->getValue(ypoint, "y", y);
+                    points.append(QPointF(x, y) + imageOffset);
+                }
+                return true;
+            };
+            conf->getValue(yline, "points", loadPoints);
+
+            if (points.isEmpty())
+                continue;
+            // Создаем линию на сцене
+            qgraph::Line* line = new qgraph::Line(doc->scene, points.first());
+            ensureUid(line);
+
+            line->beginBulkLoad();
+            for (int i = 1; i < points.size(); ++i)
+            {
+                line->addPoint(points[i], doc->scene);
+            }
+            line->endBulkLoad();
+
+            line->closeLine();
+            line->updatePath();
+            line->setData(0, label);
+            apply_LineWidth_ToItem(line);
+            apply_PointSize_ToItem(line);
+            apply_NumberSize_ToItem(line);
+            applyClassColorToItem(line, label);
+        }
+        return true;
+    };
+
+    YamlConfig::Func loadFunc = [&](YamlConfig* conf, YAML::Node& shapes, bool /*logWarn*/)
+    {
+        conf->getValue(shapes, "circles", loadCircles);
+        conf->getValue(shapes, "polylines", loadPolylines);
+        conf->getValue(shapes, "rectangles", loadRectangles);
+        conf->getValue(shapes, "points", loadPoints);
+        conf->getValue(shapes, "lines", loadLines);
+        return true;
+    };
+
+    // Загружаем данные из YAML
+    if (!yconfig.getValue("shapes", loadFunc, false))
+    {
+        log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
+        _loadingNow = false;
+
+        return;
+    }
+    _loadingNow = false;
+    if (rebuildUi && doc == currentDocument())
+    {
+        updatePolygonListForCurrentScene();
+    }
+}
+
+void MainWindow::saveCurrentViewState(Document::Ptr doc)
+{
+    if (!doc || !ui->graphView)
+    {
+        return;
+    }
+
+    doc->viewState = {
+        ui->graphView->horizontalScrollBar()->value(),
+        ui->graphView->verticalScrollBar()->value(),
+        ui->graphView->transform().m11(),
+        ui->graphView->mapToScene(ui->graphView->viewport()->rect().center())
+    };
+}
+
+void MainWindow::restoreViewState(Document::Ptr doc)
+{
+    if (!doc || !ui->graphView || !_scene || !_videoRect)
+    {
+        fitImageToView();
+        return;
+    }
+
+    _scene->setSceneRect(_videoRect->boundingRect().translated(_videoRect->pos()));
+
+    // Если viewState еще не был сохранен
+    if (doc->viewState.zoom <= 0.000001)
+    {
+        fitImageToView();
+        return;
+    }
+
+    ui->graphView->resetTransform();
+    ui->graphView->scale(doc->viewState.zoom, doc->viewState.zoom);
+    ui->graphView->horizontalScrollBar()->setValue(doc->viewState.hScroll);
+    ui->graphView->verticalScrollBar()->setValue(doc->viewState.vScroll);
+    ui->graphView->centerOn(doc->viewState.center);
+    _m_zoom = ui->graphView->transform().m11();
+    if (_m_zoom <= 0.000001)
+        _m_zoom = 1.0;
+    updateAllPointNumbers();
+    ui->graphView->viewport()->update();
+}
+
+void MainWindow::handleCheckBoxClick(QCheckBox* clickedCheckBox)
+{
+    if (_lastCheckedPolygonLabel == clickedCheckBox)
+    {
+        clickedCheckBox->setChecked(false);
+        _lastCheckedPolygonLabel = nullptr;
+    }
+    else
+    {
+        if (_lastCheckedPolygonLabel)
+        {
+            _lastCheckedPolygonLabel->setChecked(false);
+        }
+        clickedCheckBox->setChecked(true);
+        _lastCheckedPolygonLabel = clickedCheckBox;
+    }
+}
+
+void MainWindow::loadLastUsedFolder()
+{
+    if (!config::base().getValue("application.last_used_folder", _lastUsedFolder, false))
+    {
+        _lastUsedFolder = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
+    }
+    log_verbose_m << "Loaded last used folder: " << _lastUsedFolder;
+}
+
+void MainWindow::saveLastUsedFolder()
+{
+    config::base().setValue("application.last_used_folder", _lastUsedFolder);
+    config::base().saveFile();
+    log_verbose_m << "Saved last used folder: " << _lastUsedFolder;
+}
+
+bool MainWindow::hasAnnotationFile(const QString& imagePath) const
+{
+    // QFileInfo fileInfo(imagePath);
+    // QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
+    // return QFile::exists(yamlPath);
+    QFileInfo fileInfo(imagePath);
+    QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
+
+    if (!QFile::exists(yamlPath)) {
+        return false;
+    }
+
+    // Проверяем, что файл не пустой
+    QFile file(yamlPath);
+    if (file.open(QIODevice::ReadOnly))
+    {
+        return file.size() > 0;
+    }
+    return false;
+}
+
+QString MainWindow::classesYamlPath() const
+{
+    QDir dir(_currentFolderPath);
+    return dir.filePath("classes.yaml");
+}
+
+bool MainWindow::loadClassesFromFile(const QString& filePath)
+{
+    YamlConfig yconfig;
+    //config::dirExpansion(configFile);
+    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(filePath));
+    if (!QFile::exists(filePath))
+    {
+        QFile file;
+        QByteArray conf;
+
+        file.setFileName(":/config/resources/classes.base.yaml");
+        file.open(QIODevice::ReadOnly);
+        conf = file.readAll();
+
+        if (!yconfig.readString(conf.toStdString()))
+        {
+            QMessageBox::warning(this, tr("Ошибка"),
+                                 tr("Ошибка при чтении базового файла с классами!"));
+            //alog::stop();
+            return false;
+        }
+        if (!yconfig.saveFile(std::string(encoded.constData(), encoded.size())))
+        {
+            QMessageBox::warning(this, tr("Ошибка"),
+                                 tr("Ошибка при сохранении в базовый файл с классами! "
+                                    "Более подробную информацию смотри в .log файле"));
+            //alog::stop();
+            return false;
+        }
+    }
+    else
+    {
+        if (!yconfig.readFile(std::string(encoded.constData(), encoded.size())))
+        {
+            QMessageBox::warning(this, tr("Ошибка"),
+                                 tr("Ошибка при чтении файла с классами!"
+                                    "Более подробную информацию смотри в .log файле"));
+            return false;
+        }
+    }
+
+    QList<QString> classes;
+
+    if (!yconfig.getValue("classes", classes, false))
+    {
+        QMessageBox::warning(this, tr("Ошибка"),
+                             tr("Нет секции классов"));
+        return false;
+    }
+    QMap<QString, QColor> colors;
+    QList<QString> colorLines;
+
+    if (yconfig.getValue("class_colors", colorLines, true))
+    {
+        for (const QString& s : colorLines)
+        {
+            // ожидаем "name=#AARRGGBB"
+            const int eq = s.indexOf('=');
+            if (eq <= 0) continue;
+
+            const QString name = s.left(eq).trimmed();
+            const QString hex  = s.mid(eq + 1).trimmed();
+
+            const QColor c(hex);
+            if (!name.isEmpty() && c.isValid())
+                colors[name] = c;
+        }
+    }
+
+    _projectClasses = classes;
+    _projectClassColors = colors;
+
+    // Cинхронизируем диалог
+    if (_projPropsDialog)
+    {
+        _projPropsDialog->setProjectClasses(_projectClasses);
+        _projPropsDialog->setProjectClassColors(_projectClassColors);
+    }
+
+    return true;
+}
+
+bool MainWindow::saveProjectClasses(const QStringList& classes,
+                                    const QMap<QString, QColor>& colors)
+{
+    const QString path = classesYamlPath();
+    if (path.isEmpty())
+        return false;
+
+    QList<QString> cls;
+    cls.reserve(classes.size());
+    for (const QString& s : classes)
+        cls.push_back(s);
+
+    // class_colors как список строк "name=#AARRGGBB"
+    QList<QString> colorLines;
+    colorLines.reserve(classes.size());
+    for (const QString& name : classes)
+    {
+        const QColor c = colors.value(name, QColor());
+        if (c.isValid())
+            colorLines.push_back(name + "=" + c.name(QColor::HexArgb));
+    }
+
+    YamlConfig yconfig;
+    yconfig.setValue("classes", cls);
+    yconfig.setValue("class_colors", colorLines);
+
+    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(path));
+    return yconfig.saveFile(std::string(encoded.constData(), encoded.size()));
+
+    // std::string str;
+    // yconfig.saveString(str);
+
+    // // YAML::Emitter seq;
+    // // seq.SetIndent(2);
+    // // seq << YAML::Flow << YAML::BeginSeq;
+    // // for (const QString& s : classes)
+    // //     seq << s.toUtf8().constData();
+    // // seq << YAML::EndSeq;
+    // // if (!seq.good())
+    // //     return false;
+
+    // // защита от "пустой записи"
+    // if (str.empty())
+    //     return false;
+
+
+    // QByteArray body;
+    // body += "---\n";
+    // body += "### QLabelMe YAML syntax ###\n\n";
+    // body += str.c_str();
+    // body += "\n\n...\n";
+
+    // QSaveFile sf {path};
+    // if (!sf.open(QIODevice::WriteOnly))
+    //     return false;
+
+    // if (sf.write(body) != body.size())
+    //     return false;
+
+    // return sf.commit();
+}
+
+void MainWindow::onPolygonListItemClicked(QListWidgetItem* item)
+{
+    if (!item) return;
+
+    QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
+    if (sceneItem)
+    {
+       ui->graphView->centerOn(sceneItem);
+    }
+}
+
+void MainWindow::onPolygonListItemDoubleClicked(QListWidgetItem* item)
+{
+    if (!item) return;
+
+    QGraphicsItem* graphicsItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
+    if (!graphicsItem) return;
+
+    // Фокусируемся на элементе и увеличиваем масштаб
+    ui->graphView->centerOn(graphicsItem);
+    ui->graphView->scale(1.2, 1.2);
+}
+
+void MainWindow::onSceneSelectionChanged()
+{
+    if (!_scene || !ui || !ui->polygonList)
+        return;
+
+    if (_syncingSelection)
+        return;
+
+    _syncingSelection = true;
+
+    // Обновляем цвета/заливку всех фигур с учетом текущего выделения
+    for (QGraphicsItem* it : _scene->items())
+    {
+        if (!it)
+            continue;
+
+        if (it == _videoRect ||
+            it == _tempRectItem ||
+            it == _tempCircleItem ||
+            it == _tempPolyline)
+        {
+            continue;
+        }
+
+        if (it->parentItem() != nullptr)
+            continue;
+
+        const QString cls = it->data(0).toString();
+        if (!cls.isEmpty())
+            applyClassColorToItem(it, cls);
+    }
+
+    {
+        QSignalBlocker blocker(ui->polygonList);
+        ui->polygonList->clearSelection();
+
+        const QList<QGraphicsItem*> selected = _scene->selectedItems();
+        for (QGraphicsItem* sceneItem : selected)
+        {
+            if (!sceneItem)
+                continue;
+
+            if (auto* h = dynamic_cast<qgraph::DragCircle*>(sceneItem))
+            {
+                if (h->parentItem())
+                    sceneItem = h->parentItem();
+            }
+
+            for (int i = 0; i < ui->polygonList->count(); ++i)
+            {
+                QListWidgetItem* listItem = ui->polygonList->item(i);
+                if (!listItem)
+                    continue;
+
+                QGraphicsItem* boundItem =
+                    listItem->data(Qt::UserRole).value<QGraphicsItem*>();
+
+                if (boundItem == sceneItem)
+                {
+                    listItem->setSelected(true);
+                    break;
+                }
+            }
+        }
+    }
+
+    updateCoordinateList();
+    _scene->update();
+
+    _syncingSelection = false;
+}
+
+void MainWindow::updateCoordinateList()
+{
+    if (!ui || !ui->coordinateList)
+        return;
+
+    ui->coordinateList->clear();
+
+    if (!_scene)
+        return;
+
+    QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+    if (selectedItems.isEmpty())
+        return;
+
+    auto addLine = [this](const QString& text)
+    {
+        ui->coordinateList->addItem(text);
+    };
+
+    auto calcBounds = [](const QVector<QPointF>& pts,
+                         QPointF& topLeft,
+                         QPointF& bottomRight) -> bool
+    {
+        if (pts.isEmpty())
+            return false;
+
+        qreal minX = pts[0].x();
+        qreal maxX = pts[0].x();
+        qreal minY = pts[0].y();
+        qreal maxY = pts[0].y();
+
+        for (const QPointF& p : pts)
+        {
+            if (p.x() < minX) minX = p.x();
+            if (p.x() > maxX) maxX = p.x();
+            if (p.y() < minY) minY = p.y();
+            if (p.y() > maxY) maxY = p.y();
+        }
+
+        topLeft = QPointF(minX, minY);
+        bottomRight = QPointF(maxX, maxY);
+        return true;
+    };
+
+    bool firstShape = true;
+
+    for (QGraphicsItem* item : selectedItems)
+    {
+        if (!item)
+            continue;
+
+        if (auto* point = dynamic_cast<qgraph::Point*>(item))
+        {
+            if (!firstShape)
+                addLine(QString());
+            firstShape = false;
+
+            const QPointF center = point->center();
+
+            addLine(tr("Точка"));
+            addLine(tr("Центр: (%1; %2)")
+                        .arg(round2(center.x()))
+                        .arg(round2(center.y())));
+        }
+        else if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            if (!firstShape)
+                addLine(QString());
+            firstShape = false;
+
+            const QRectF r = rect->realSceneRect();
+
+            const QPointF topLeft = r.topLeft();
+            const QPointF bottomRight = r.bottomRight();
+            const QPointF center = r.center();
+
+            const qreal width  = r.width();
+            const qreal height = r.height();
+
+            addLine(tr("Прямоугольник"));
+            addLine(tr("TL точка: (%1; %2)")
+                        .arg(round2(topLeft.x()))
+                        .arg(round2(topLeft.y())));
+            addLine(tr("BR точка: (%1; %2)")
+                        .arg(round2(bottomRight.x()))
+                        .arg(round2(bottomRight.y())));
+            addLine(tr("Центр: (%1; %2)")
+                        .arg(round2(center.x()))
+                        .arg(round2(center.y())));
+            addLine(tr("Ширина: %1").arg(round2(width)));
+            addLine(tr("Высота: %1").arg(round2(height)));
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            if (!firstShape)
+                addLine(QString());
+            firstShape = false;
+
+            const QVector<QPointF> pts = polyline->points();
+
+            QPointF topLeft, bottomRight;
+            calcBounds(pts, topLeft, bottomRight);
+
+            const QPointF center((topLeft.x() + bottomRight.x()) / 2.0,
+                                 (topLeft.y() + bottomRight.y()) / 2.0);
+
+            const qreal width  = bottomRight.x() - topLeft.x();
+            const qreal height = bottomRight.y() - topLeft.y();
+
+            addLine(tr("Полилиния"));
+            addLine(tr("TL точка: (%1; %2)")
+                        .arg(round2(topLeft.x()))
+                        .arg(round2(topLeft.y())));
+            addLine(tr("BR точка: (%1; %2)")
+                        .arg(round2(bottomRight.x()))
+                        .arg(round2(bottomRight.y())));
+            addLine(tr("Центр: (%1; %2)")
+                        .arg(round2(center.x()))
+                        .arg(round2(center.y())));
+            addLine(tr("Ширина: %1").arg(round2(width)));
+            addLine(tr("Высота: %1").arg(round2(height)));
+        }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            if (!firstShape)
+                addLine(QString());
+            firstShape = false;
+
+            const QVector<QPointF> pts = line->points();
+
+            QPointF topLeft, bottomRight;
+            if (!calcBounds(pts, topLeft, bottomRight))
+                continue;
+
+            const QPointF center((topLeft.x() + bottomRight.x()) / 2.0,
+                                 (topLeft.y() + bottomRight.y()) / 2.0);
+
+            const qreal width  = bottomRight.x() - topLeft.x();
+            const qreal height = bottomRight.y() - topLeft.y();
+
+            addLine(tr("Линия"));
+            addLine(tr("TL точка: (%1; %2)")
+                        .arg(round2(topLeft.x()))
+                        .arg(round2(topLeft.y())));
+            addLine(tr("BR точка: (%1; %2)")
+                        .arg(round2(bottomRight.x()))
+                        .arg(round2(bottomRight.y())));
+            addLine(tr("Центр: (%1; %2)")
+                        .arg(round2(center.x()))
+                        .arg(round2(center.y())));
+            addLine(tr("Ширина: %1").arg(round2(width)));
+            addLine(tr("Высота: %1").arg(round2(height)));
+        }
+        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        {
+            if (!firstShape)
+                addLine(QString());
+            firstShape = false;
+
+            QPointF center = circle->center();
+            qreal radius = circle->realRadius();
+
+            QPointF topLeft(center.x() - radius,
+                            center.y() - radius);
+            QPointF bottomRight(center.x() + radius,
+                                center.y() + radius);
+
+            qreal width  = bottomRight.x() - topLeft.x();
+            qreal height = bottomRight.y() - topLeft.y();
+
+            addLine(tr("Круг"));
+            addLine(tr("TL точка: (%1; %2)")
+                        .arg(round2(topLeft.x()))
+                        .arg(round2(topLeft.y())));
+            addLine(tr("BR точка: (%1; %2)")
+                        .arg(round2(bottomRight.x()))
+                        .arg(round2(bottomRight.y())));
+            addLine(tr("Центр: (%1; %2)")
+                        .arg(round2(center.x()))
+                        .arg(round2(center.y())));
+            addLine(tr("Ширина: %1").arg(round2(width)));
+            addLine(tr("Высота: %1").arg(round2(height)));
+        }
+    }
+}
+
+void MainWindow::updateFileListItemIcon(QListWidgetItem* item, bool hasAnnotations)
+{
+    if (!item) return;
+
+    Document::Ptr doc = item->data(Qt::UserRole).value<Document::Ptr>();
+    if (!doc) return;
+
+    // Получаем превью изображения
+    QPixmap preview(doc->filePath);
+    preview = preview.scaled(50, 50, Qt::KeepAspectRatio);
+
+    // Создаем композитное изображение
+    QPixmap result(70, 70);
+    result.fill(Qt::transparent);
+
+    QPainter painter(&result);
+    painter.drawPixmap(10, 10, preview);
+
+    // Добавляем иконку статуса
+    QPixmap statusIcon(hasAnnotations ? "/images/resources/ok.svg" : "/images/resources/not_ok.svg");
+    statusIcon = statusIcon.scaled(20, 20, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    painter.drawPixmap(0, 0, statusIcon);
+
+    item->setIcon(QIcon(result));
+}
+
+QListWidgetItem* MainWindow::findFileListItem(const QString& filePath)
+{
+    for (int i = 0; i < ui->fileList->count(); ++i)
+    {
+        QListWidgetItem* item = ui->fileList->item(i);
+        Document::Ptr doc = item->data(Qt::UserRole).value<Document::Ptr>();
+        if (doc && doc->filePath == filePath)
+        {
+            return item;
+        }
+    }
+    return nullptr;
+}
+
+void MainWindow::removePolygonItem(QGraphicsItem* item)
+{
+    if (!item) return;
+
+    // Удаляем из списка
+    for (int i = 0; i < ui->polygonList->count(); ++i)
+    {
+        QListWidgetItem* listItem = ui->polygonList->item(i);
+        if (listItem && listItem->data(Qt::UserRole).value<QGraphicsItem*>() == item)
+        {
+            delete ui->polygonList->takeItem(i);
+            renumberPolygonList();
+            break;
+        }
+    }
+
+    // Удаляем со сцены
+    if (item->scene())
+    {
+        item->scene()->removeItem(item);
+    }
+    delete item;
+
+    // Помечаем документ как измененный
+    if (auto doc = currentDocument())
+    {
+        doc->isModified = true;
+        updateFileListDisplay(doc->filePath);
+    }
+}
+
+void MainWindow::removePolygonListItem(QListWidgetItem* item)
+{
+    if (!item) return;
+
+    // Получаем связанный графический элемент
+    QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
+    if (sceneItem && sceneItem->scene() == _scene)
+    {
+        _scene->removeItem(sceneItem);
+        clearLinePolylineStateForDeletedItem(sceneItem);
+        delete sceneItem;
+    }
+    // Удаляем из списка
+    delete ui->polygonList->takeItem(ui->polygonList->row(item));
+    renumberPolygonList();
+    // Помечаем документ как измененный
+    if (auto doc = currentDocument())
+    {
+        doc->isModified = true;
+        updateFileListDisplay(doc->filePath);
+    }
+}
+
+void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem)
+{
+    linkSceneItemToList(sceneItem, -1);
+}
+
+void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem, int row)
+{
+    if (!sceneItem)
+        return;
+
+    QString className = sceneItem->data(0).toString();
+    if (className.isEmpty())
+        return;
+
+    QListWidgetItem* listItem = new QListWidgetItem;
+    listItem->setData(Qt::UserRole, QVariant::fromValue(sceneItem));
+
+    if (row < 0 || row > ui->polygonList->count())
+        ui->polygonList->addItem(listItem);
+    else
+        ui->polygonList->insertItem(row, listItem);
+
+    //renumberPolygonList();
+}
+
+void MainWindow::renumberPolygonList()
+{
+    if (!ui || !ui->polygonList)
+        return;
+
+    const int count = ui->polygonList->count();
+
+    for (int i = 0; i < count; ++i)
+    {
+        QListWidgetItem* item = ui->polygonList->item(i);
+        if (!item)
+            continue;
+
+        QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
+        if (!sceneItem)
+            continue;
+
+        const QString className = sceneItem->data(0).toString();
+        //item->setText(QString("%1: %2").arg(i).arg(className));
+        QString text = QString("%1: %2").arg(i).arg(className);
+        if (!sceneItem->isVisible())
+            text += " [скрыто]";
+        item->setText(text);
+
+        // Порядок списка = порядок фигур
+        sceneItem->setZValue(i);
+    }
+
+    if (_scene)
+        _scene->update();
+}
+
+void MainWindow::renumberPolygonListTextOnly()
+{
+    if (!ui || !ui->polygonList)
+        return;
+
+    for (int i = 0; i < ui->polygonList->count(); ++i)
+    {
+        QListWidgetItem* item = ui->polygonList->item(i);
+        if (!item)
+            continue;
+
+        QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
+        if (!sceneItem)
+            continue;
+
+        const QString className = sceneItem->data(0).toString();
+        //item->setText(QString("%1: %2").arg(i).arg(className));
+        QString text = QString("%1: %2").arg(i).arg(className);
+        if (!sceneItem->isVisible())
+            text += " [скрыто]";
+        item->setText(text);
+    }
+}
+
+void MainWindow::showPolygonListContextMenu(const QPoint &pos)
+{
+    QListWidgetItem* item = ui->polygonList->itemAt(pos);
+    if (!item) return;
+
+    QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
+    if (!sceneItem)
+        return;
+
+    QMenu menu;
+    QAction* toggleVisibleAction =
+        menu.addAction(sceneItem->isVisible() ? "Скрыть разметку" : "Показать разметку");
+    QAction* deleteAction = menu.addAction("Удалить");
+
+    QAction* chosen = menu.exec(ui->polygonList->viewport()->mapToGlobal(pos));
+    if (chosen == toggleVisibleAction)
+        toggleSceneItemVisibility(sceneItem);
+    else if (chosen == deleteAction)
+        removePolygonListItem(item);
+}
+
+void MainWindow::updatePolygonListItemText(QListWidgetItem* item)
+{
+    if (!item)
+        return;
+
+    QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
+    if (!sceneItem)
+        return;
+
+    const QString className = sceneItem->data(0).toString();
+    const int row = ui->polygonList->row(item);
+
+    QString text = QString("%1: %2").arg(row).arg(className);
+    if (!sceneItem->isVisible())
+        text += " [скрыто]";
+
+    item->setText(text);
+}
+
+void MainWindow::updatePolygonListTexts()
+{
+    if (!ui || !ui->polygonList)
+        return;
+
+    for (int i = 0; i < ui->polygonList->count(); ++i)
+        updatePolygonListItemText(ui->polygonList->item(i));
+}
+
+bool MainWindow::isYamlFileEmpty(const QString& yamlPath) const
+{
+    QFile file(yamlPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        return true; // Если не можем открыть, считаем пустым
+    }
+
+    QTextStream in(&file);
+    QString content = in.readAll();
+    file.close();
+
+    // Убираем комментарии и пустые строки для проверки
+    QStringList lines = content.split('\n');
+    for (const QString& line : lines)
+    {
+        QString trimmed = line.trimmed();
+        // Пропускаем пустые строки и комментарии
+        if (!trimmed.isEmpty() && !trimmed.startsWith('#'))
+        {
+            // Проверяем наличие ключа shapes (основная структура аннотаций)
+            if (trimmed.contains("shapes:") || trimmed.contains("circles:") ||
+                trimmed.contains("rectangles:") || trimmed.contains("polylines:") ||
+                trimmed.contains("points:") || trimmed.contains("lines:"))
+            {
+                return false; // Файл не пустой
+            }
+        }
+    }
+    return true; // Файл пустой
+}
+
+QString MainWindow::getAnnotationFilePath(const QString& imagePath) const
+{
+    // Преобразуем путь к изображению в путь к YAML файлу
+    QFileInfo imageInfo(imagePath);
+    QString yamlPath = imageInfo.path() + "/" + imageInfo.completeBaseName() + ".yaml";
+    return yamlPath;
+}
+
+void MainWindow::raiseAllHandlesToTop()
+{
+    if (!_scene) return;
+
+    // Проходим по всем элементам и поднимаем их ручки
+    for (QGraphicsItem* item : _scene->items())
+    {
+        if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            rectangle->raiseHandlesToTop();
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            polyline->raiseHandlesToTop();
+        }
+        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        {
+            circle->raiseHandlesToTop();
+        }
+        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
+            point->raiseHandlesToTop();
+    }
+}
+
+void MainWindow::moveSelectedItemsToBack()
+{
+    if (!_scene)
+        return;
+
+    QList<QGraphicsItem*> selectedRoots;
+    QList<QGraphicsItem*> allRoots;
+
+    for (QGraphicsItem* item : _scene->items())
+    {
+        if (!item)
+            continue;
+
+        if (item == _videoRect ||
+            item == _tempRectItem ||
+            item == _tempCircleItem ||
+            item == _tempPolyline)
+        {
+            continue;
+        }
+
+        if (item->parentItem() != nullptr)
+            continue;
+
+        const bool isShape =
+                dynamic_cast<qgraph::Rectangle*>(item) ||
+                dynamic_cast<qgraph::Circle*>(item) ||
+                dynamic_cast<qgraph::Polyline*>(item) ||
+                dynamic_cast<qgraph::Line*>(item) ||
+                dynamic_cast<qgraph::Point*>(item);
+
+        if (!isShape)
+            continue;
+
+        allRoots.append(item);
+
+        if (item->isSelected())
+            selectedRoots.append(item);
+    }
+
+    if (selectedRoots.isEmpty())
+        return;
+
+    // Сохраняем относительный порядок выделенных фигур
+    std::sort(selectedRoots.begin(), selectedRoots.end(),
+              [](QGraphicsItem* a, QGraphicsItem* b)
+    {
+        return a->zValue() < b->zValue();
+    });
+
+    qreal minNonSelectedZ = 0.0;
+    bool hasNonSelected = false;
+
+    for (QGraphicsItem* item : allRoots)
+    {
+        if (!item || selectedRoots.contains(item))
+            continue;
+
+        if (!hasNonSelected)
+        {
+            minNonSelectedZ = item->zValue();
+            hasNonSelected = true;
+        }
+        else
+        {
+            minNonSelectedZ = qMin(minNonSelectedZ, item->zValue());
+        }
+    }
+
+    // Базовый нижний слой для фигур: сразу над изображением
+    const qreal imageZ = (_videoRect ? _videoRect->zValue() : 0.0);
+    const qreal shapesFloorZ = imageZ + 1.0;
+
+    qreal startZ = shapesFloorZ;
+
+    // Если есть другие невыделенные фигуры выше нижнего слоя,
+    // ставим выделенные перед ними, но не ниже изображения
+    if (hasNonSelected)
+        startZ = qMax(shapesFloorZ, minNonSelectedZ - selectedRoots.size());
+
+    qreal z = startZ;
+    for (QGraphicsItem* item : selectedRoots)
+    {
+        item->setZValue(z);
+        z += 1.0;
+    }
+    for (QGraphicsItem* item : selectedRoots)
+    {
+        if (item)
+            item->setSelected(false);
+    }
+
+    raiseAllHandlesToTop();
+    updateCoordinateList();
+    _scene->update();
+}
+
+bool MainWindow::hasUnsavedChanges() const
+{
+    for (const auto& doc : _documentsMap.values())
+    {
+        if (doc && doc->isModified)
+            return true;
+    }
+    return false;
+}
+
+QList<Document::Ptr> MainWindow::getUnsavedDocuments() const
+{
+    QList<Document::Ptr> unsavedDocs;
+    for (auto it = _documentsMap.constBegin(); it != _documentsMap.constEnd(); ++it)
+    {
+        if (it.value()->isModified)
+        {
+            unsavedDocs.append(it.value());
+        }
+    }
+    return unsavedDocs;
+}
+
+int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr> &unsavedDocs)
+{
+    //QDialog dialog(this);
+    QDialog dialog(
+        this,
+        Qt::Dialog |
+            Qt::CustomizeWindowHint |
+            Qt::WindowTitleHint |
+            Qt::WindowCloseButtonHint
+        );
+
+    dialog.setWindowTitle(tr("Несохраненные изменения"));
+    dialog.setModal(true);
+    //dialog.setMinimumWidth(500);
+
+
+    dialog.setWindowFlag(Qt::WindowMaximizeButtonHint, false);
+    dialog.setWindowFlag(Qt::WindowMinMaxButtonsHint, false);
+    dialog.setWindowFlag(Qt::WindowFullscreenButtonHint, false);
+    dialog.setWindowState(Qt::WindowNoState);
+
+    //dialog.setWindowState(Qt::WindowNoState);
+
+    QVector<int> dlgGeom {100, 100, 600, 400};
+    config::base().getValue("windows.unsaved_changes_dialog.geometry", dlgGeom);
+    dialog.setGeometry(dlgGeom[0], dlgGeom[1], dlgGeom[2], dlgGeom[3]);
+    //dialog.setFixedSize(dialog.size());
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
+
+    QLabel *messageLabel = new QLabel(
+        tr("Следующие файлы имеют несохраненные изменения:\nХотите сохранить изменения?"));
+    mainLayout->addWidget(messageLabel);
+
+    // Список файлов
+    QListWidget *fileList = new QListWidget();
+    for (const Document::Ptr &doc : unsavedDocs)
+    {
+        QFileInfo fileInfo(doc->filePath);
+        QListWidgetItem *item = new QListWidgetItem(fileInfo.fileName());
+        //item->setData(Qt::UserRole, QVariant::fromValue(doc));
+        item->setData(Qt::UserRole, doc->filePath);
+        fileList->addItem(item);
+        item->setSelected(true);
+    }
+    mainLayout->addWidget(fileList);
+
+    // Кнопки
+    QDialogButtonBox *buttonBox = new QDialogButtonBox();
+
+    QPushButton *saveAllButton = new QPushButton(tr("Сохранить все"));
+    QPushButton *discardAllButton = new QPushButton(tr("Не сохранять"));
+    QPushButton *cancelButton = new QPushButton(tr("Отмена"));
+
+    buttonBox->addButton(saveAllButton, QDialogButtonBox::AcceptRole);
+    buttonBox->addButton(discardAllButton, QDialogButtonBox::DestructiveRole);
+    buttonBox->addButton(cancelButton, QDialogButtonBox::RejectRole);
+
+    mainLayout->addWidget(buttonBox);
+
+    int result = QDialog::Rejected;
+
+    connect(saveAllButton, &QPushButton::clicked, [&]() {
+        result = QDialogButtonBox::SaveAll;
+        dialog.accept();
+    });
+
+    connect(discardAllButton, &QPushButton::clicked, [&]() {
+        result = QDialogButtonBox::Discard;
+        dialog.accept();
+    });
+
+    connect(cancelButton, &QPushButton::clicked, [&]() {
+        result = QDialogButtonBox::Cancel;
+        dialog.reject();
+    });
+
+    dialog.exec();
+    // Сохраняем геометрию только если окно не было развернуто на весь экран
+    if (!dialog.isMaximized() && !dialog.isFullScreen())
+    {
+        QRect g = dialog.geometry();
+        QVector<int> v {g.x(), g.y(), g.width(), g.height()};
+        config::base().setValue("windows.unsaved_changes_dialog.geometry", v);
+    }
+    return result;
+}
+
+void MainWindow::saveAllDocuments()
+{
+    for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
+    {
+        if (it.value()->isModified)
+        {
+            saveAnnotationToFile(it.value());
+        }
+    }
+}
+
+qgraph::DragCircle* MainWindow::pickHiddenHandle(const QPointF& scenePos, bool& topIsHandle) const
+{
+    topIsHandle = false;
+    if (!_scene) return nullptr;
+
+    GraphicsView* view = ui ? ui->graphView : nullptr;
+    const qreal radiusScene = viewPixelsToSceneRadius(view, effectiveViewPickPx(_ghostPickRadius));
+    if (radiusScene <= 0.0)
+      return nullptr;
+
+    const QRectF pickRect(scenePos - QPointF(radiusScene, radiusScene),
+                        QSizeF(2 * radiusScene, 2 * radiusScene));
+
+    const auto items = _scene->items(pickRect, Qt::IntersectsItemShape, Qt::DescendingOrder);
+
+    // Если верхний элемент уже ручка - «обманка» не нужна, пусть работает стандартный drag
+    if (!items.isEmpty())
+        if (auto* dc = dynamic_cast<qgraph::DragCircle*>(items.front()))
+        {
+            topIsHandle = true;
+            return dc;
+        }
+
+    // Ищем ближайшую ручку в глубине стека
+    qgraph::DragCircle* best = nullptr;
+    qreal bestD2 = std::numeric_limits<qreal>::max();
+
+    for (auto* it : items)
+    {
+        if (auto* circle = dynamic_cast<qgraph::Circle*>(it))
+        {
+            QPointF localCursorPos = circle->mapFromScene(scenePos);
+            if (circle->isCursorNearCircle(localCursorPos))
+            {
+                auto* handle = circle->getDragCircle();
+                if (handle && handle->isValid())
+                {
+                    const QPointF c = handle->mapToScene(handle->rect().center());
+                    const qreal dx = c.x() - scenePos.x();
+                    const qreal dy = c.y() - scenePos.y();
+                    const qreal d2 = dx*dx + dy*dy;
+                    if (d2 <= bestD2)
+                    {
+                        bestD2 = d2;
+                        best = handle;
+                    }
+                }
+            }
+            continue;
+        }
+        if (auto* dc = dynamic_cast<qgraph::DragCircle*>(it))
+        {
+            const QPointF c = dc->mapToScene(dc->rect().center());
+            const qreal dx = c.x() - scenePos.x();
+            const qreal dy = c.y() - scenePos.y();
+            const qreal d2 = dx*dx + dy*dy;
+            if (d2 <= bestD2)
+            {
+                bestD2 = d2;
+                best = dc;
+            }
+        }
+    }
+    return best;
+}
+
+void MainWindow::ensureGhostAllocated()
+{
+    if (!_ghostHandle)
+    {
+        _ghostHandle = new QGraphicsRectItem();
+    }
+    if (_ghostHandle->scene() != _scene)
+    {
+        if (_ghostHandle->scene())
+            _ghostHandle->scene()->removeItem(_ghostHandle);
+        if (_scene)
+            _scene->addItem(_ghostHandle);
+    }
+
+    // Всегда (пере)настраиваем, чтобы гарантировать корректный Z и поведение
+    _ghostHandle->setAcceptHoverEvents(true);
+    _ghostHandle->setAcceptedMouseButtons(Qt::NoButton);
+    _ghostHandle->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
+
+    // Держим «призрака» поверх всего
+    _ghostHandle->setZValue(1e9);
+    _ghostHandle->hide();
+}
+
+void MainWindow::showGhostOver(qgraph::DragCircle* target, const QPointF& scenePos)
+{
+    ensureGhostAllocated();
+    _ghostTarget = target;
+    _ghostActive = true;
+
+    QColor ghostColor = _vis.selectedHandleColor;
+    _ghostHandle->setRect(target->baseRect());
+    _ghostHandle->setPen (target->basePen());
+    _ghostHandle->setBrush(QBrush(ghostColor));
+    DragCircle::rememberCurrentAsBase(_ghostHandle);
+
+    // Поставим «призрака» поверх позиции настоящей ручки
+    const QPointF sceneHandlePos = target->scenePos();
+    _ghostHandle->setPos(sceneHandlePos);
+    setGhostStyleHover(), _ghostHover = true;
+    _ghostHandle->show();
+
+    _ghostGrabOffset = QPointF(0,0);
+    _ghostTarget->setGhostDriven(true);
+}
+
+void MainWindow::moveGhostTo(const QPointF& scenePos)
+{
+    if (!_ghostActive || !_ghostTarget) return;
+
+    // Двигаем «призрака» центром под курсор
+    _ghostHandle->setPos(scenePos - _ghostHandle->rect().center());
+
+    QGraphicsItem* parent = _ghostTarget->parentItem();
+    const QPointF sceneTopLeft = scenePos - _ghostTarget->rect().center();
+    const QPointF newLocalTopLeft = parent ? parent->mapFromScene(sceneTopLeft) : sceneTopLeft;
+
+    if (_ghostHandle && _ghostHandle->isVisible())
+    {
+        //_ghostHandle->setPos(scenePos);
+        if (_ghostActive)
+            setGhostStyleHover();
+    }
+    _ghostTarget->setPos(newLocalTopLeft); // это триггерит itemChange() -> dragCircleMove()
+}
+
+void MainWindow::endGhost()
+{
+    if (_ghostTarget)
+    {
+        _ghostTarget->setHoverStyle(false);
+    }
+    if (_lastHoverHandle)
+    {
+        _ghostTarget->setHoverStyle(false);
+        _lastHoverHandle = nullptr;
+    }
+
+    if (_ghostTarget)
+    {
+        if (auto* shape = dynamic_cast<qgraph::Shape*>(_ghostTarget->parentItem()))
+            shape->dragCircleRelease(_ghostTarget);
+        _ghostTarget->setHoverStyle(false);
+        _ghostTarget->setGhostDriven(false);
+
+        // Помечаем документ как измененный после завершения перетаскивания
+        Document::Ptr doc = currentDocument();
+        if (doc && !doc->isModified)
+        {
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
+        }
+    }
+
+    _ghostActive = false;
+    _ghostHover  = false;
+    _ghostTarget = nullptr;
+    _handleDragging = false; // Завершение перетаскивания
+    updateModeLabel();
+    if (_ghostHandle)
+    {
+        _ghostHandle->hide();
+        setGhostStyleIdle();
+    }
+    updateAllPointNumbers();
+}
+
+void MainWindow::setGhostStyleHover()
+{
+    if (!_ghostHandle || !_ghostTarget)
+        return;
+
+    const QPointF centerScene = _ghostHandle->mapToScene(QPointF(0,0));
+
+    // Увеличим на 1.5x относительно базового размера реальной ручки
+    const QRectF base = _ghostTarget->baseRect();
+    const qreal scale = 1.5;
+    //const qreal scale = 1;
+    const QSizeF newSize(base.size() * scale);
+    const QRectF newRect(QPointF(-newSize.width()/2.0, -newSize.height()/2.0), newSize);
+
+    QColor ghostColor = _vis.selectedHandleColor;
+    _ghostHandle->setRect(newRect);
+    _ghostHandle->setPen(QPen(Qt::black, 1));
+    _ghostHandle->setBrush(QBrush(ghostColor));
+    _ghostHandle->update();
+
+    _ghostHandle->setPos(centerScene - newRect.center());
+}
+
+void MainWindow::setGhostStyleIdle()
+{
+    if (!_ghostHandle || !_ghostTarget) return;
+
+    const QPointF centerScene = _ghostHandle->mapToScene(_ghostHandle->rect().center());
+
+    qreal _smallSize = 8.0;
+    _ghostHandle->setRect(-_smallSize/2, -_smallSize/2, _smallSize, _smallSize);
+    QColor color(255, 255, 255, 200);
+    _ghostHandle->setBrush(QBrush(color));
+    _ghostHandle->setPen(QPen(Qt::black, 1));
+    _ghostHandle->setPen(QPen(color.darker(200)));
+
+    _ghostHandle->setPos(centerScene - _ghostHandle->rect().center());
+    _ghostHandle->update();
+}
+
+void MainWindow::showGhostPreview(qgraph::DragCircle* target, const QPointF& scenePos)
+{
+    ensureGhostAllocated();
+    _ghostTarget = target;
+
+    _ghostHandle->setRect(target->baseRect());
+    _ghostHandle->setPen(target->basePen());
+    _ghostHandle->setBrush(target->baseBrush());
+    DragCircle::rememberCurrentAsBase(_ghostHandle);
+    _ghostHandle->setPos(target->scenePos());
+    setGhostStyleHover(), _ghostHover = true;
+
+    _ghostHandle->show();
+}
+
+void MainWindow::startGhostDrag(const QPointF& scenePos)
+{
+    if (!_ghostTarget || !_ghostHandle)
+        return;
+
+    _ghostActive = true;
+    _ghostActive = true;
+    _ghostHover  = false;
+
+    _ghostGrabOffset = scenePos - _ghostHandle->pos();
+    _ghostTarget->setGhostDriven(true);
+    setGhostStyleHover();
+}
+
+qreal MainWindow::imagePickScale() const
+{
+    return 1.0;
+}
+
+qreal MainWindow::viewPixelsToSceneRadius(GraphicsView* view, qreal viewPx) const
+{
+    if (!view || viewPx <= 0.0)
+        return 0.0;
+
+    const QTransform t = view->viewportTransform();
+
+    const qreal sx = std::hypot(t.m11(), t.m21());
+    const qreal sy = std::hypot(t.m22(), t.m12());
+    const qreal s  = std::max<qreal>(sx, sy);
+
+    if (s <= 0.000001)
+        return viewPx;
+
+    return viewPx / s;
+}
+
+qreal MainWindow::effectiveViewPickPx(qreal baseValue) const
+{
+    return baseValue * imagePickScale();
+}
+
+qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
+{
+    return pickHandleAt(scenePos, _ghostPickRadius);
+}
+
+qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos, qreal customRadius) const
+{
+    if (!_scene)
+        return nullptr;
+
+    GraphicsView* view = ui ? ui->graphView : nullptr;
+    const qreal pickRadius = viewPixelsToSceneRadius(view, effectiveViewPickPx(customRadius));
+    if (pickRadius <= 0.0)
+        return nullptr;
+
+    const QRectF probe(scenePos - QPointF(pickRadius, pickRadius),
+                       QSizeF(pickRadius * 2, pickRadius * 2));
+
+    qgraph::DragCircle* best = nullptr;
+    qreal bestD2 = std::numeric_limits<qreal>::max();
+
+    for (QGraphicsItem* item : _scene->items(probe, Qt::IntersectsItemShape))
+    {
+        if (!item || !item->scene())
+            continue;
+
+        if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        {
+            if (circle->isCursorNearCircle(circle->mapFromScene(scenePos)))
+            {
+                auto* handle = circle->getDragCircle();
+                if (handle && handle->isValid())
+                {
+                    circle->updateHandlePosition(scenePos);
+                    return handle;
+                }
+            }
+            continue;
+        }
+
+        if (auto* handle = dynamic_cast<qgraph::DragCircle*>(item))
+        {
+            if (!handle->isValid())
+                continue;
+
+            const QPointF c = handle->mapToScene(handle->rect().center());
+            const qreal dx = c.x() - scenePos.x();
+            const qreal dy = c.y() - scenePos.y();
+            const qreal d2 = dx * dx + dy * dy;
+            const qreal r2 = pickRadius * pickRadius;
+
+            if (d2 > r2)
+                continue;
+
+            if (d2 < bestD2)
+            {
+                bestD2 = d2;
+                best = handle;
+            }
+        }
+    }
+    return best;
+}
+
+QGraphicsItem* MainWindow::pickItemByEdgeAt(GraphicsView* view, const QPoint& viewPos) const
+{
+    if (!view)
+        return nullptr;
+
+    QGraphicsScene* sc = view->scene();
+    if (!sc)
+        return nullptr;
+
+    const QPointF scenePos = view->mapToScene(viewPos);
+
+    const qreal radiusScene = viewPixelsToSceneRadius(view, effectiveViewPickPx(_edgePickRadius));
+
+    if (radiusScene <= 0.0)
+        return nullptr;
+
+    const QRectF probe(scenePos - QPointF(radiusScene, radiusScene),
+                       QSizeF(radiusScene * 2.0, radiusScene * 2.0));
+
+    const QList<QGraphicsItem*> items =
+        _scene->items(probe, Qt::IntersectsItemBoundingRect, Qt::DescendingOrder);
+
+    for (QGraphicsItem* it : items)
+    {
+        if (!it || !it->isVisible() || !it->scene())
+            continue;
+
+        if (it == _videoRect)
+            continue;
+
+        if (qgraphicsitem_cast<qgraph::DragCircle*>(it))
+            continue;
+
+        // Берем только фигуры
+        const bool isShape =
+                (dynamic_cast<qgraph::Polyline*>(it)  != nullptr) ||
+                (dynamic_cast<qgraph::Line*>(it)      != nullptr) ||
+                (dynamic_cast<qgraph::Rectangle*>(it) != nullptr) ||
+                (dynamic_cast<qgraph::Circle*>(it)    != nullptr);
+
+        if (!isShape)
+            continue;
+
+        const QPointF pLocal  = it->mapFromScene(scenePos);
+        const QPointF pLocal2 = it->mapFromScene(scenePos + QPointF(radiusScene, 0));
+        const qreal radiusLocal = QLineF(pLocal, pLocal2).length();
+        if (radiusLocal <= 0.0)
+            continue;
+
+        QPainterPathStroker stroker;
+        stroker.setWidth(2.0 * radiusLocal);
+        stroker.setCapStyle(Qt::RoundCap);
+        stroker.setJoinStyle(Qt::RoundJoin);
+
+        const QPainterPath hit = stroker.createStroke(it->shape());
+        if (hit.contains(pLocal))
+            return it;
+    }
+
+    return nullptr;
+}
+
+void MainWindow::startHandleDrag(qgraph::DragCircle* h, const QPointF& scenePos)
+{    
+    _m_isDraggingHandle = true;
+    _m_dragHandle = h;
+    _handleDragging = true; // Начало перетаскивания ручки
+    updateModeLabel();
+
+    // UNDO: запомним владельца и снимок "до"
+    _handleEditedItem = h ? h->parentItem() : nullptr;
+    _handleDragHadChanges = false;
+    if (_handleEditedItem)
+    {
+        _handleBeforeSnap = makeBackupFromItem(_handleEditedItem);
+    }
+
+    const QPointF handleCenter = h->sceneBoundingRect().center();
+    _m_pressLocalOffset = scenePos - handleCenter;
+    h->setHoverStyle(true);
+}
+
+void MainWindow::updateHandleDrag(const QPointF& scenePos)
+{
+    if (!_m_dragHandle) return;
+
+    QGraphicsItem* parent = _m_dragHandle->parentItem();
+    QPointF parentPos = parent
+                            ? parent->mapFromScene(scenePos - _m_pressLocalOffset)
+                            : (scenePos - _m_pressLocalOffset);
+
+    _m_dragHandle->setPos(parentPos);
+
+    emit _m_dragHandle->dragCircleMove(_m_dragHandle->index(),
+                                       _m_dragHandle->scenePos());
+    updateAllPointNumbers();
+    _handleDragHadChanges = true;
+    updateCoordinateList();
+}
+
+void MainWindow::finishHandleDrag()
+{
+    if (_m_dragHandle)
+    {
+        emit _m_dragHandle->dragCircleRelease(_m_dragHandle->index(),
+                                             _m_dragHandle->scenePos());
+
+        // Помечаем документ как измененный после завершения перетаскивания
+        Document::Ptr doc = currentDocument();
+        if (doc && !doc->isModified)
+        {
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
+        }
+        _m_dragHandle->restoreBaseStyle();
+    }
+    // UNDO: если что-то реально поменяли - пушим команду
+    if (_handleEditedItem && _handleDragHadChanges)
+    {
+        ShapeBackup after = makeBackupFromItem(_handleEditedItem);
+        if (!sameGeometry(_handleBeforeSnap, after))
+        {
+            // красивое имя действия
+            QString what = tr("Перемещение узла");
+            pushHandleEditCommand(_handleEditedItem, _handleBeforeSnap, after, what);
+        }
+    }
+    _handleEditedItem = nullptr;
+    _handleDragHadChanges = false;
+
+    _m_isDraggingHandle = false;
+    _m_dragHandle = nullptr;
+    _handleDragging = false; // Завершение перетаскивания ручки
+    updateAllPointNumbers();
+    updateModeLabel();
+}
+
+void MainWindow::clearAllHandleHoverEffects()
+{
+    if (_currentHoveredHandle && _currentHoveredHandle->isValid())
+    {
+         _currentHoveredHandle->setHoverStyle(false);
+    }
+    _currentHoveredHandle = nullptr;
+    hideGhost();
+}
+
+void MainWindow::showGhostFor(qgraph::DragCircle* h)
+{
+    if (!h) return;
+    ensureGhostAllocated();
+
+    _ghostTarget = h;
+    _ghostHover  = true;
+    _ghostActive = false;
+
+    // Для круга используем специальную логику позиционирования
+    if (auto* circle = dynamic_cast<qgraph::Circle*>(h->parentItem()))
+    {
+        // Получаем позицию курсора в сцене
+        QPointF cursorPos = ui->graphView->mapToScene(ui->graphView->mapFromGlobal(QCursor::pos()));
+
+        // Проверяем, что курсор действительно рядом с окружностью
+        QPointF localCursorPos = circle->mapFromScene(cursorPos);
+        if (circle->isCursorNearCircle(localCursorPos))
+        {
+            // Обновляем позицию реальной ручки
+            circle->updateHandlePosition(cursorPos);
+
+            const QPointF sceneHandlePos = h->scenePos();
+            _ghostHandle->setPos(sceneHandlePos);
+            _ghostHandle->setVisible(true);
+        }
+        else
+        {
+            // Курсор не рядом с окружностью - не показываем призрак
+            hideGhost();
+            return;
+        }
+    }
+    else
+    {
+        // Для других фигур используем старую логику
+        const QPointF centerScene = h->sceneBoundingRect().center();
+        _ghostHandle->setPos(centerScene - _ghostHandle->rect().center());
+    }
+
+    const QPointF centerScene = h->sceneBoundingRect().center();
+    const QRectF base = _ghostTarget->baseRect();
+    const qreal scale = 1.5;
+    //const qreal scale = 1;
+    const QSizeF newSize(base.size() * scale);
+    const QRectF newRect(QPointF(-newSize.width()/2.0, -newSize.height()/2.0), newSize);
+
+    QColor ghostColor = _vis.selectedHandleColor;
+    _ghostHandle->setRect(newRect);
+    _ghostHandle->setPen(QPen(Qt::black, 1));
+    _ghostHandle->setBrush(QBrush(ghostColor));
+    _ghostHandle->setPos(centerScene - newRect.center());
+    _ghostHandle->setVisible(true);
+    _ghostHandle->update();
+}
+
+void MainWindow::hideGhost()
+{
+    // Восстанавливаем оригинальный стиль реальной ручки, если она была подсвечена
+    if (_ghostTarget)
+    {
+        _ghostTarget->setHoverStyle(false);
+    }
+    _ghostTarget = nullptr;
+    if (_ghostHandle)
+    {
+        _ghostHandle->setVisible(false);
+    }
+}
+
+void MainWindow::updateAllPointNumbers()
+{
+    if (!_scene) return;
+
+    for (QGraphicsItem* item : _scene->items())
+    {
+        if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            rectangle->updatePointNumbers();
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            polyline->updatePointNumbers();
+        }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            line->updatePointNumbers();
+        }
+    }
+}
+
+void MainWindow::loadVisualStyle()
+{
+    // Устанавливаем значения по умолчанию, если они не найдены в конфиге
+    if (!config::base().getValue("graphics.line_width", _vis.lineWidth))
+        _vis.lineWidth = 2.0;
+
+    if (!config::base().getValue("graphics.handle_size", _vis.handleSize))
+        _vis.handleSize = 10.0;
+
+    if (!config::base().getValue("graphics.handle_pick_radius", _ghostPickRadius))
+        _ghostPickRadius = 6.0;
+
+    if (!config::base().getValue("graphics.edge_pick_radius", _edgePickRadius))
+        _edgePickRadius = 8.0;
+
+    if (!config::base().getValue("graphics.number_font_pt", _vis.numberFontPt))
+        _vis.numberFontPt = 10.0;
+
+    if (!config::base().getValue("graphics.show_numbers", _vis.showNumbers))
+        _vis.showNumbers = false;
+
+    if (!config::base().getValue("graphics.fill_shape_when_selected", _vis.fillShapeWhenSelected))
+        _vis.fillShapeWhenSelected = true;
+
+    if (!config::base().getValue("graphics.point_size", _vis.pointSize))
+        _vis.pointSize = 6;
+
+    // Загружаем цвета
+    QString colorStr;
+    if (config::base().getValue("graphics.handle_color", colorStr))
+        _vis.handleColor = QColor(colorStr);
+    else
+        _vis.handleColor = Qt::red;
+
+    if (config::base().getValue("graphics.number_color", colorStr))
+        _vis.numberColor = QColor(colorStr);
+    else
+        _vis.numberColor = Qt::white;
+
+    if (config::base().getValue("graphics.number_bg_color", colorStr))
+        _vis.numberBgColor = QColor(colorStr);
+    else
+        _vis.numberBgColor = QColor(0, 0, 0, 180);
+
+    // Загружаем цвета линий
+    if (config::base().getValue("graphics.colors.rectangle", colorStr))
+        _vis.rectangleLineColor = QColor(colorStr);
+    else
+        _vis.rectangleLineColor = Qt::green;
+
+    if (config::base().getValue("graphics.colors.circle", colorStr))
+        _vis.circleLineColor = QColor(colorStr);
+    else
+        _vis.circleLineColor = Qt::red;
+
+    if (config::base().getValue("graphics.colors.polyline", colorStr))
+        _vis.polylineLineColor = QColor(colorStr);
+    else
+        _vis.polylineLineColor = Qt::blue;
+
+    if (config::base().getValue("graphics.all.selected_handle_color", colorStr))
+        _vis.selectedHandleColor = QColor(colorStr);
+    else
+        _vis.selectedHandleColor = Qt::yellow;
+
+    if (config::base().getValue("graphics.colors.line", colorStr))
+        _vis.lineLineColor = QColor(colorStr);
+
+    if (config::base().getValue("graphics.colors.point", colorStr))
+        _vis.pointColor = QColor(colorStr);
+
+    if (config::base().getValue("graphics.colors.ruler", colorStr))
+        _vis.rulerColor = QColor(colorStr);
+    else
+        _vis.rulerColor = QColor(200, 200, 200);
+
+    int ow = 1;
+    if (config::base().getValue("graphics.point.outline_width", ow))
+        _vis.pointOutlineWidth = ow;
+    else
+        _vis.pointOutlineWidth = 1;
+
+    //config::base().getValue("vis.all.label_font_pt", _vis.labelFontPt);
+    if (!config::base().getValue("graphics.label_font_pt", _vis.labelFontPt))
+        _vis.labelFontPt = 0;
+
+    QString font;
+    if (config::base().getValue("graphics.label_font_family", font))
+        _vis.labelFont = font;
+    else
+        _vis.labelFont.clear();
+
+
+    applyStyle_AllDocuments();
+}
+
+void MainWindow::saveVisualStyle() const
+{
+    config::base().setValue("graphics.line_width", _vis.lineWidth);
+    config::base().setValue("graphics.handle_size", _vis.handleSize);
+    config::base().setValue("graphics.handle_pick_radius", _ghostPickRadius);
+    config::base().setValue("graphics.edge_pick_radius", _edgePickRadius);
+    config::base().setValue("graphics.number_font_pt", _vis.numberFontPt);
+    config::base().setValue("graphics.show_numbers", _vis.showNumbers);
+    config::base().setValue("graphics.point_size", _vis.pointSize);
+    config::base().setValue("graphics.handle_color", _vis.handleColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.selected_handle_color", _vis.selectedHandleColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.number_color", _vis.numberColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.number_bg_color", _vis.numberBgColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.rectangle", _vis.rectangleLineColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.circle", _vis.circleLineColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.polyline", _vis.polylineLineColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.line",  _vis.lineLineColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.point", _vis.pointColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.ruler", _vis.rulerColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.point.outline_width", _vis.pointOutlineWidth);
+    config::base().setValue("graphics.fill_shape_when_selected", _vis.fillShapeWhenSelected);
+    // config::base().setValue("vis.all.label_font_pt", _vis.labelFontPt);
+    // config::base().setValue("vis.all.label_font_family", _vis.labelFont);
+    if (_vis.labelFontPt > 0)
+        config::base().setValue("graphics.label_font_pt", _vis.labelFontPt);
+
+    if (!_vis.labelFont.isEmpty())
+        config::base().setValue("graphics.label_font_family", _vis.labelFont);
+}
+
+void MainWindow::applyStyle_AllDocuments()
+{
+    for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
+    {
+        auto doc = it.value();
+        if (!doc || !doc->scene)
+            continue;
+
+        doc->scene->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
+
+        apply_LineWidth_ToScene(doc->scene);
+        apply_PointSize_ToScene(doc->scene);
+        apply_NumberSize_ToScene(doc->scene);
+        updateLineColorsForScene(doc->scene);
+
+        for (QGraphicsItem* item : doc->scene->items())
+        {
+            apply_PointStyle_ToItem(item);
+
+            const QString cls = item ? item->data(0).toString() : QString();
+            if (!cls.isEmpty())
+                applyClassColorToItem(item, cls);
+        }
+        doc->scene->update();
+    }
+    if (_scene)
+    {
+        _scene->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
+
+        apply_LineWidth_ToScene(_scene);
+        apply_PointSize_ToScene(_scene);
+        apply_NumberSize_ToScene(_scene);
+        updateLineColorsForScene(_scene);
+
+        for (QGraphicsItem* item : _scene->items())
+        {
+            apply_PointStyle_ToItem(item);
+
+            const QString cls = item ? item->data(0).toString() : QString();
+            if (!cls.isEmpty())
+                applyClassColorToItem(item, cls);
+        }
+        _scene->update();
+    }
+}
+
+void MainWindow::forEachScene(std::function<void(QGraphicsScene*)> fn)
+{
+    for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
+    {
+        auto doc = it.value();
+        if (!doc) continue;
+        auto *sc = doc->scene;
+        if (!sc) continue;
+        fn(sc);
+    }
+}
+
+void MainWindow::apply_LineWidth_ToScene(QGraphicsScene* sc)
+{
+    if (!sc)
+    {
+        forEachScene([this](QGraphicsScene* scene){
+            for (auto *it : scene->items()) apply_LineWidth_ToItem(it);
+            scene->update();
+        });
+        return;
+    }
+    for (auto *it : sc->items()) apply_LineWidth_ToItem(it);
+    sc->update();
+}
+
+void MainWindow::apply_PointSize_ToScene(QGraphicsScene* sc)
+{
+    if (!sc)
+    {
+        forEachScene([this](QGraphicsScene* scene){
+            for (auto *it : scene->items()) apply_PointSize_ToItem(it);
+            scene->update();
+        });
+        return;
+    }
+    for (auto *it : sc->items()) apply_PointSize_ToItem(it);
+    sc->update();
+}
+
+void MainWindow::apply_NumberSize_ToScene(QGraphicsScene* sc)
+{
+    auto applyForScene = [this](QGraphicsScene* scene)
+    {
+        if (!scene)
+            return;
+
+        for (auto* it : scene->items())
+            apply_NumberSize_ToItem(it);
+        scene->update();
+    };
+    if (!sc)
+    {
+        forEachScene([&](QGraphicsScene* scene){
+            applyForScene(scene);
+        });
+        return;
+    }
+
+    applyForScene(sc);
+}
+
+void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
+{
+    if (!it) return;
+    const auto w = _vis.lineWidth;
+
+    if (auto r = dynamic_cast<qgraph::Rectangle*>(it))
+    {
+        QPen p=r->pen();
+        p.setWidthF(w);
+        //p.setColor(_vis.rectangleLineColor);
+        p.setCosmetic(true);
+
+        const QString cls = r->data(0).toString();
+        const QColor cc = classColorFor(cls);
+        p.setColor(cc.isValid() ? cc : _vis.rectangleLineColor);
+
+        r->setPen(p);
+        return;
+    }
+    if (auto c = dynamic_cast<qgraph::Circle*>(it))
+    {
+        QPen p=c->pen();
+        p.setWidthF(w);
+        //p.setColor(_vis.circleLineColor);
+        p.setCosmetic(true);
+
+        const QString cls = c->data(0).toString();
+        const QColor cc = classColorFor(cls);
+        p.setColor(cc.isValid() ? cc : _vis.circleLineColor);
+
+        c->setPen(p);
+        c->applyLineStyle(w);
+        return;
+    }
+    if (auto pl= dynamic_cast<qgraph::Polyline*>(it))
+    {
+        QPen p=pl->pen();
+        p.setWidthF(w);
+        //p.setColor(_vis.polylineLineColor);
+        p.setCosmetic(true);
+
+        const QString cls = pl->data(0).toString();
+        const QColor cc = classColorFor(cls);
+        p.setColor(cc.isValid() ? cc : _vis.polylineLineColor);
+
+        pl->setPen(p);
+        return;
+    }
+    if (auto l = dynamic_cast<qgraph::Line*>(it))
+    {
+        QPen p = l->pen();
+        p.setWidthF(_vis.lineWidth);
+        //p.setColor(_vis.lineLineColor);
+        p.setCosmetic(true);
+
+        const QString cls = l->data(0).toString();
+        const QColor cc = classColorFor(cls);
+        p.setColor(cc.isValid() ? cc : _vis.lineLineColor);
+
+        l->setPen(p);
+        return;
+    }
+    if (auto pnt = dynamic_cast<qgraph::Point*>(it))
+    {
+        QPen p = pnt->pen();
+        p.setWidthF(_vis.pointOutlineWidth); // Отдельная толщина для точки
+        p.setCosmetic(true);
+
+        const QString cls = pnt->data(0).toString();
+        const QColor cc = classColorFor(cls);
+        p.setColor(cc.isValid() ? cc : _vis.pointOutlineWidth);
+
+        pnt->setPen(p);
+        return;
+    }
+
+    // Базовые Qt‑элементы
+    if (auto l = qgraphicsitem_cast<QGraphicsLineItem*>(it))
+    {
+        QPen p=l->pen();
+        p.setWidthF(w);
+        p.setCosmetic(true);
+        l->setPen(p);
+        return;
+    }
+
+    if (auto pth=qgraphicsitem_cast<QGraphicsPathItem*>(it))
+    {
+        QPen p=pth->pen();
+        p.setWidthF(w);
+        p.setCosmetic(true);
+        pth->setPen(p);
+        return;
+    }
+    if (auto el = qgraphicsitem_cast<QGraphicsEllipseItem*>(it))
+    {
+        QPen p=el->pen();
+        p.setWidthF(w);
+        p.setCosmetic(true);
+        el->setPen(p);
+        return;
+    }
+    if (auto rc = qgraphicsitem_cast<QGraphicsRectItem*>(it))
+    {
+        QPen p=rc->pen();
+        p.setWidthF(w);
+        p.setCosmetic(true);
+        rc->setPen(p);
+        return;
+    }
+}
+
+void MainWindow::apply_PointSize_ToItem(QGraphicsItem* it)
+{
+    if (!it) return;
+    // Ручки обычно лежат детьми нужной фигуры
+    for (QGraphicsItem* ch : it->childItems())
+    {
+        if (auto h = dynamic_cast<qgraph::DragCircle*>(ch))
+        {
+            const bool isPoint = (dynamic_cast<qgraph::Point*>(it) != nullptr);
+
+            // Размер узла для Point должен следовать размеру точки
+            const qreal pointHandleSize = std::max<qreal>(_vis.pointSize, 4.0);
+
+            h->setBaseStyle(_vis.handleColor, isPoint ? pointHandleSize : _vis.handleSize);
+            h->setInteractionRadius(_ghostPickRadius);
+            h->setSelectedHandleColor(_vis.selectedHandleColor);
+            h->restoreBaseStyle();
+            qgraph::DragCircle::rememberCurrentAsBase(h);
+        }
+    }
+}
+
+void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* it)
+{
+    if (!it) return;
+
+    // Для классов фигур
+    if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(it))
+    {
+        rectangle->setGlobalPointNumbersVisible(_vis.showNumbers);
+        rectangle->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
+        return;
+    }
+    if (auto* polyline = dynamic_cast<qgraph::Polyline*>(it))
+    {
+        polyline->setGlobalPointNumbersVisible(_vis.showNumbers);
+        polyline->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
+        return;
+    }
+    if (auto* line = dynamic_cast<qgraph::Line*>(it))
+    {
+        line->setGlobalPointNumbersVisible(_vis.showNumbers);
+        line->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
+        return;
+    }
+
+    // Для стандартных Qt элементов
+    QVector<QGraphicsSimpleTextItem*> texts;
+    QVector<QGraphicsRectItem*> backgrounds;
+
+    for (QGraphicsItem* ch : it->childItems())
+    {
+        if (auto t = dynamic_cast<QGraphicsSimpleTextItem*>(ch))
+        {
+            // Проверяем, что это номер (короткое число)
+            QString text = t->text();
+            if (text.length() <= 3)
+            {
+                bool ok;
+                text.toInt(&ok);
+                if (ok) texts << t;
+            }
+        }
+        else if (auto bg = dynamic_cast<QGraphicsRectItem*>(ch))
+        {
+            if (bg->zValue() > 900 && bg->zValue() < 1010)
+                backgrounds << bg;
+        }
+    }
+
+    // Применяем стиль к текстам
+    for (auto* t : texts)
+    {
+        if (!t) continue;
+
+        QFont f = t->font();
+        f.setPointSizeF(_vis.numberFontPt);
+        t->setFont(f);
+        t->setBrush(Qt::white);
+        t->setPen(Qt::NoPen);
+        t->setZValue(1001);
+        t->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
+    }
+
+    // Обновляем фоны
+    for (auto* bg : backgrounds)
+    {
+        if (!bg) continue;
+
+        // Ищем ближайший текст
+        QGraphicsSimpleTextItem* nearest = nullptr;
+        qreal bestDistance = std::numeric_limits<qreal>::max();
+
+        for (auto* t : texts)
+        {
+            if (!t) continue;
+
+            qreal distance = QLineF(bg->pos(), t->pos()).length();
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                nearest = t;
+            }
+        }
+
+        if (nearest)
+        {
+            bg->setRect(nearest->boundingRect());
+            bg->setBrush(QBrush(QColor(0, 0, 0, 180)));
+            bg->setPen(Qt::NoPen);
+            bg->setPos(nearest->pos());
+            bg->setZValue(1000);
+            bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
+        }
+    }
+}
+
+void MainWindow::apply_PointStyle_ToItem(QGraphicsItem* it)
+{
+    if (!it)
+        return;
+
+    if (auto* p = dynamic_cast<qgraph::Point*>(it))
+    {
+
+        const QString cls = p->data(0).toString();
+        const QColor cc = classColorFor(cls);
+        const QColor color = cc.isValid() ? cc : _vis.pointColor;
+
+        const qreal diam = std::max(2, _vis.pointSize);
+        p->setDotStyle(color, diam, _vis.handleSize);
+    }
+}
+
+void MainWindow::applyLabelFontToUi()
+{
+    if (!ui || !ui->splitter)
+        return;
+
+    // Берем текущий шрифт правой зоны как базовый
+    QFont f = ui->splitter->font();
+
+    if (!_vis.labelFont.isEmpty())
+        f.setFamily(_vis.labelFont);
+
+    if (_vis.labelFontPt > 0)
+        f.setPointSize(_vis.labelFontPt);
+
+    // Применяем ко всей правой панели
+    ui->splitter->setFont(f);
+
+    if (ui->toolBar)
+        ui->toolBar->setFont(f);
+    if (ui->toolBar_2)
+        ui->toolBar_2->setFont(f);
+
+    ui->splitter->updateGeometry();
+    ui->splitter->update();
+}
+
+void MainWindow::updateLineColorsForScene(QGraphicsScene* scene)
+{
+    if (!scene) return;
+
+    for (QGraphicsItem* item : scene->items())
+    {
+        const QString cls = item->data(0).toString();
+        const QColor classC = classColorFor(cls);
+        const bool hasClassColor = classC.isValid();
+
+        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            QPen pen = rect->pen();
+            //pen.setColor(_vis.rectangleLineColor);
+            pen.setColor(hasClassColor ? classC : _vis.rectangleLineColor);
+            rect->setPen(pen);
+        }
+        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        {
+            QPen pen = circle->pen();
+            //pen.setColor(_vis.circleLineColor);
+            pen.setColor(hasClassColor ? classC : _vis.circleLineColor);
+            circle->setPen(pen);
+        }
+        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            QPen pen = polyline->pen();
+            //pen.setColor(_vis.polylineLineColor);
+            pen.setColor(hasClassColor ? classC : _vis.polylineLineColor);
+            polyline->setPen(pen);
+        }
+        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            QPen pen = line->pen();
+            //pen.setColor(_vis.lineLineColor);
+            pen.setColor(hasClassColor ? classC : _vis.lineLineColor);
+            line->setPen(pen);
+        }
+        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
+        {
+            QPen pen = point->pen();
+            //pen.setColor(_vis.pointColor);
+            pen.setColor(hasClassColor ? classC : _vis.pointColor);
+            pen.setWidthF(_vis.pointOutlineWidth);
+            pen.setCosmetic(true);
+            point->setPen(pen);
+        }
+    }
+    scene->update();
+}
+
+void MainWindow::applyZoom(qreal z)
+{
+    if (!ui->graphView) return;
+
+    // Ограничим диапазон
+    if (z < _kMinZoom)
+        z = _kMinZoom;
+    if (z > _kMaxZoom)
+        z = _kMaxZoom;
+
+    // Сохраним текущий центр сцены, чтобы картинка не «уезжала»
+    const QPointF centerScene =
+        ui->graphView->mapToScene(ui->graphView->viewport()->rect().center());
+
+    QTransform t;
+    t.scale(z, z);
+    ui->graphView->setTransform(t);
+
+    // Вернем центр
+    ui->graphView->centerOn(centerScene);
+
+    _m_zoom = z;
+
+    if (auto doc = currentDocument())
+    {
+        doc->viewState = {
+            ui->graphView->horizontalScrollBar()->value(),
+            ui->graphView->verticalScrollBar()->value(),
+            _m_zoom,
+            centerScene
+        };
+    }
+}
+
+void MainWindow::applyClosePolyline()
+{
+    //using SDV = Settings::Values;
+    using SDM = Settings::PolylineCloseMode;
+    using PLM = qgraph::Polyline::CloseMode;
+
+    qgraph::Polyline::CloseMode mode = PLM::DoubleClick;
+    switch (_polylineCloseMode)
+    {
+        case SDM::DoubleClick:             mode = PLM::DoubleClick;   break;
+        case SDM::SingleClickOnFirstPoint: mode = PLM::SingleClickOnFirstPoint; break;
+        case SDM::CtrlModifier:            mode = PLM::CtrlModifier;            break;
+        case SDM::KeyCWithoutNewPoint:     mode = PLM::KeyC;                    break;
+    }
+    qgraph::Polyline::setGlobalCloseMode(mode);
+    if (ui && ui->actClosePolyline)
+        ui->actClosePolyline->setShortcut(mode == PLM::KeyC ? QKeySequence(Qt::Key_C) : QKeySequence());
+}
+
+void MainWindow::applyFinishLine()
+{
+    //using SDV = Settings::Values;
+    using SDM = Settings::LineFinishMode;
+    using PLM = qgraph::Line::CloseMode;
+
+    qgraph::Line::CloseMode mode = PLM::DoubleClick;
+    switch (_lineFinishMode)
+    {
+        case SDM::DoubleClick: mode = PLM::DoubleClick;
+            break;
+        case SDM::CtrlModifier: mode = PLM::CtrlModifier;
+            break;
+        case SDM::KeyCWithoutNewPoint: mode = PLM::KeyC;
+            break;
+    }
+    qgraph::Line::setGlobalCloseMode(mode);
+}
+
+QUndoStack* MainWindow::activeUndoStack() const
+{
+    if (!_undoGroup) return nullptr;
+    if (QUndoStack* st = _undoGroup->activeStack()) return st;
+
+    // Запасной вариант - стек текущего документа
+    if (auto d = currentDocument())
+        return d->_undoStack ? d->_undoStack.get() : nullptr;
+
+    return nullptr;
+}
+
+ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* gi) const
+{
+    ShapeBackup b{};
+    if (!gi)
+        return b;
+
+    b.uid = gi->data(_roleUid).toULongLong();
+    if (b.uid == 0)
+        b.uid = ensureUid(gi);
+
+    b.className = gi->data(0).toString();
+    b.z = gi->zValue();
+    b.visible = gi->isVisible();
+
+    if (auto* rect = dynamic_cast<qgraph::Rectangle*>(gi))
+    {
+        b.kind = ShapeKind::Rectangle;
+        //b.rect = rect->sceneBoundingRect();
+        b.rect = rect->mapRectToScene(rect->rect());
+    }
+    else if (auto* c = dynamic_cast<qgraph::Circle*>(gi))
+    {
+        b.kind = ShapeKind::Circle;
+        b.circleCenter = c->center();
+        b.circleRadius = c->realRadius();
+    }
+    else if (auto* pl = dynamic_cast<qgraph::Polyline*>(gi))
+    {
+        b.kind  = ShapeKind::Polyline;
+        b.points = pl->points();
+        b.closed = pl->isClosed();
+    }
+    else if (auto* ln = dynamic_cast<qgraph::Line*>(gi))
+    {
+        b.kind  = ShapeKind::Line;
+        b.points = ln->points();
+        b.closed = ln->isClosed();
+        b.numberingFromLast = ln->isNumberingFromLast();
+    }
+    else if (auto* p = dynamic_cast<qgraph::Point*>(gi))
+    {
+        b.kind = ShapeKind::Point;
+        b.pointCenter = p->center();
+    }
+
+    b.listRow = -1;
+    if (ui && ui->polygonList && gi)
+    {
+        for (int i = 0; i < ui->polygonList->count(); ++i)
+        {
+            QListWidgetItem* li = ui->polygonList->item(i);
+            if (!li)
+                continue;
+
+            if (li->data(Qt::UserRole).value<QGraphicsItem*>() == gi)
+            {
+                b.listRow = i;
+                break;
+            }
+        }
+    }
+    b.sceneRow = -1;
+    if (ui && ui->polygonList && gi)
+    {
+        for (int i = 0; i < ui->polygonList->count(); ++i)
+        {
+            QListWidgetItem* li = ui->polygonList->item(i);
+            if (!li)
+                continue;
+
+            if (li->data(Qt::UserRole).value<QGraphicsItem*>() == gi)
+            {
+                b.sceneRow = i;
+                break;
+            }
+        }
+    }
+    return b;
+}
+
+QVector<ShapeBackup> MainWindow::collectBackupsForItems(const QList<QListWidgetItem*>& listItems) const
+{
+    QVector<ShapeBackup> out;
+    out.reserve(listItems.size());
+
+    for (QListWidgetItem* li : listItems)
+    {
+        if (!li)
+            continue;
+
+        QGraphicsItem* gi = sceneItemFromListItem(li);
+        if (!gi)
+            continue;
+
+        out.push_back(makeBackupFromItem(gi));
+    }
+    return out;
+}
+
+QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
+{
+    QGraphicsItem* created = nullptr;
+
+    auto applyBackupUid = [this](QGraphicsItem* it, qulonglong uid)
+    {
+        if (!it) return;
+        if (uid != 0)
+        {
+            it->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
+            if (uid >= _uidCounter)
+                _uidCounter = uid + 1;
+        }
+        else
+        {
+            ensureUid(it);
+        }
+    };
+
+    switch (b.kind)
+    {
+        case ShapeKind::Rectangle:
+        {
+            auto* rect = new qgraph::Rectangle(_scene);
+            //ensureUid(rect);
+            applyBackupUid(rect, b.uid);
+            rect->setRealSceneRect(b.rect);
+            rect->updatePointNumbers();
+            apply_LineWidth_ToItem(rect);
+            apply_PointSize_ToItem(rect);
+            apply_NumberSize_ToItem(rect);
+            rect->setData(0, b.className);
+            applyClassColorToItem(rect, b.className);
+            //rect->setZValue(b.z);
+            rect->setVisible(b.visible);
+            linkSceneItemToList(rect, b.listRow);
+            created = rect;
+            break;
+        }
+        case ShapeKind::Circle:
+        {
+            auto* c = new qgraph::Circle(_scene, b.circleCenter);
+            //ensureUid(c);
+            applyBackupUid(c, b.uid);
+            c->setRealRadius(b.circleRadius);
+            apply_LineWidth_ToItem(c);
+            apply_PointSize_ToItem(c);
+            c->setData(0, b.className);
+            applyClassColorToItem(c, b.className);
+            //c->setZValue(b.z);
+            c->setVisible(b.visible);
+            c->updateHandlePosition();
+            linkSceneItemToList(c, b.listRow);
+            created = c;
+            break;
+        }
+        case ShapeKind::Polyline:
+        {
+            if (b.points.isEmpty())
+                break;
+            auto* pl = new qgraph::Polyline(_scene, b.points.front());
+            //ensureUid(pl);
+            applyBackupUid(pl, b.uid);
+
+            pl->beginBulkLoad();
+            for (int i = 1; i < b.points.size(); ++i)
+                pl->addPoint(b.points[i], _scene);
+            pl->endBulkLoad();
+
+            if (b.closed)
+                pl->closePolyline();
+
+            apply_LineWidth_ToItem(pl);
+            apply_PointSize_ToItem(pl);
+            apply_NumberSize_ToItem(pl);
+
+            pl->setData(0, b.className);
+            applyClassColorToItem(pl, b.className);
+            //pl->setZValue(b.z);
+            pl->setVisible(b.visible);
+            pl->updateHandlePosition();
+            linkSceneItemToList(pl, b.listRow);
+            created = pl;
+            break;
+        }
+        case ShapeKind::Line:
+        {
+            if (b.points.isEmpty())
+                break;
+            auto* ln = new qgraph::Line(_scene, b.points.front());
+            //ensureUid(ln);
+            applyBackupUid(ln, b.uid);
+
+            ln->beginBulkLoad();
+            for (int i = 1; i < b.points.size(); ++i)
+                ln->addPoint(b.points[i], _scene);
+            ln->endBulkLoad();
+
+            if (b.closed)
+                ln->closeLine();
+
+            apply_LineWidth_ToItem(ln);
+            apply_PointSize_ToItem(ln);
+            apply_NumberSize_ToItem(ln);
+
+            ln->setData(0, b.className);
+            applyClassColorToItem(ln, b.className);
+            //ln->setZValue(b.z);
+            ln->setVisible(b.visible);
+            ln->updateHandlePosition();
+            linkSceneItemToList(ln, b.listRow);
+            created = ln;
+            break;
+        }
+        case ShapeKind::Point:
+        {
+            auto* pt = new qgraph::Point(_scene);
+            //ensureUid(pt);
+            applyBackupUid(pt, b.uid);
+            apply_PointSize_ToItem(pt);
+            apply_NumberSize_ToItem(pt);
+            apply_PointStyle_ToItem(pt);
+            pt->setCenter(b.pointCenter);
+            pt->setData(0, b.className);
+            applyClassColorToItem(pt, b.className);
+            //pt->setZValue(b.z);
+            pt->setVisible(b.visible);
+            linkSceneItemToList(pt, b.listRow);
+            created = pt;
+            break;
+        }
+    }
+
+    if (created)
+        created->setFocus();
+
+    if (created)
+        created->setData(_roleUid, QVariant::fromValue<qulonglong>(b.uid));
+
+    return created;
+}
+
+void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
+{
+    if (!it) return;
+
+    switch (b.kind)
+    {
+        case ShapeKind::Rectangle:
+            if (auto* r = qgraphicsitem_cast<qgraph::Rectangle*>(it))
+            {
+                r->setRealSceneRect(b.rect);
+                r->updatePointNumbers();
+                apply_LineWidth_ToItem(r);
+                apply_PointSize_ToItem(r);
+                apply_NumberSize_ToItem(r);
+                r->setData(0, b.className);
+                applyClassColorToItem(r, b.className);
+                r->setZValue(b.z);
+                r->setVisible(b.visible);
+                r->updateHandlePosition();
+            }
+            break;
+
+        case ShapeKind::Circle:
+            if (auto* c = qgraphicsitem_cast<qgraph::Circle*>(it))
+            {
+                c->setRealRadius(b.circleRadius);
+                apply_LineWidth_ToItem(c);
+                apply_PointSize_ToItem(c);
+                c->setData(0, b.className);
+                applyClassColorToItem(c, b.className);
+                c->setZValue(b.z);
+                c->setVisible(b.visible);
+
+                const QPointF cur = c->sceneBoundingRect().center();
+                const QPointF dst = QPointF(b.circleCenter);
+                const QPointF d = dst - cur;
+                if (!qFuzzyIsNull(d.x()) || !qFuzzyIsNull(d.y()))
+                    c->moveBy(d.x(), d.y());
+
+                c->updateHandlePosition();
+            }
+            break;
+
+        case ShapeKind::Polyline:
+        {
+            if (auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(it))
+            {
+                // Полная замена узлов из снапшота
+                pl->replaceScenePoints(b.points, b.closed);
+                pl->setData(0, b.className);
+                pl->setVisible(b.visible);
+                pl->setZValue(b.z);
+                apply_LineWidth_ToItem(pl);
+                apply_PointSize_ToItem(pl);
+                apply_NumberSize_ToItem(pl);
+                applyClassColorToItem(pl, b.className);
+            }
+            break;
+        }
+
+        case ShapeKind::Line:
+        {
+            if (auto* ln = qgraphicsitem_cast<qgraph::Line*>(it))
+            {
+
+                ln->replaceScenePoints(b.points, b.closed);
+                ln->setNumberingFromLast(b.numberingFromLast);
+                ln->setData(0, b.className);
+                ln->setVisible(b.visible);
+                ln->setZValue(b.z);
+                apply_LineWidth_ToItem(ln);
+                apply_PointSize_ToItem(ln);
+                apply_NumberSize_ToItem(ln);
+                applyClassColorToItem(ln, b.className);
+            }
+            break;
+        }
+        case ShapeKind::Point:
+            if (auto* pt = qgraphicsitem_cast<qgraph::Point*>(it))
+            {
+                apply_PointStyle_ToItem(pt);
+                apply_PointSize_ToItem(pt);
+                apply_NumberSize_ToItem(pt);
+                pt->setCenter(b.pointCenter);
+                pt->setData(0, b.className);
+                applyClassColorToItem(pt, b.className);
+                pt->setZValue(b.z);
+                pt->setVisible(b.visible);
+                pt->updateHandlePosition();
+            }
+            break;
+    }
+    if (ui && ui->polygonList)
+    {
+        int currentRow = -1;
+        QListWidgetItem* currentItem = nullptr;
+
+        for (int i = 0; i < ui->polygonList->count(); ++i)
+        {
+            QListWidgetItem* li = ui->polygonList->item(i);
+            if (!li)
+                continue;
+
+            if (li->data(Qt::UserRole).value<QGraphicsItem*>() == it)
+            {
+                currentRow = i;
+                currentItem = li;
+                break;
+            }
+        }
+
+        if (!currentItem && !b.className.isEmpty())
+        {
+            linkSceneItemToList(it, b.listRow);
+        }
+        else if (currentItem)
+        {
+            const int targetRow = (b.listRow < 0) ? currentRow : b.listRow;
+            if (targetRow != currentRow &&
+                targetRow >= 0 &&
+                targetRow < ui->polygonList->count())
+            {
+                QListWidgetItem* moved = ui->polygonList->takeItem(currentRow);
+                ui->polygonList->insertItem(targetRow, moved);
+            }
+            renumberPolygonList();
+        }
+    }
+}
+
+void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
+                                               const ShapeBackup& backup,
+                                               const QString& description)
+{
+    struct Payload
+    {
+        ShapeBackup b;
+        qulonglong  uid = 0;
+        bool skipFirstRedo = false;
+    };
+
+    auto payload = std::make_shared<Payload>();
+    payload->b = backup;
+
+    // Берем uid из снапшота или с самого объекта
+    qulonglong uid = backup.uid;
+    if (uid == 0 && createdNow)
+        uid = createdNow->data(_roleUid).toULongLong();
+    if (uid == 0 && createdNow)
+        uid = ensureUid(createdNow);
+    payload->uid = uid;
+    payload->skipFirstRedo = (createdNow != nullptr);
+
+    auto redoFn = [this, payload]()
+    {
+        if (payload->uid == 0)
+            return;
+
+        // После QUndoStack::push() redo вызывается сразу.
+        // Фигура уже существует и уже в нужном состоянии,
+        // поэтому первый redo пропускаем.
+        if (payload->skipFirstRedo)
+        {
+            payload->skipFirstRedo = false;
+
+            if (auto d = currentDocument())
+            {
+                d->isModified = true;
+                updateFileListDisplay(d->filePath);
+            }
+            return;
+        }
+
+        // Пытаемся найти уже существующий объект по uid
+        QGraphicsItem* item = findItemByUid(payload->uid);
+        if (item)
+        {
+            // Фигура есть - просто приводим ее к состоянию из снапшота
+            applyBackupToExisting(item, payload->b);
+        }
+        else
+        {
+            // Фигуры нет - создаем по снапшоту
+            QGraphicsItem* created = recreateFromBackup(payload->b);
+            if (created && payload->uid != 0)
+            {
+                created->setData(_roleUid,
+                                 QVariant::fromValue<qulonglong>(payload->uid));
+            }
+        }
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, payload]()
+    {
+        if (payload->uid == 0)
+            return;
+
+        if (QGraphicsItem* item = findItemByUid(payload->uid))
+        {
+            if (auto sc = item->scene())
+                sc->removeItem(item);
+            removeListEntryBySceneItem(item);
+            clearLinePolylineStateForDeletedItem(item);
+            delete item;
+        }
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    if (auto* st = activeUndoStack())
+        st->push(new LambdaCommand(redoFn, undoFn, description));
+}
+
+void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString& description)
+{
+    struct Payload
+    {
+        ShapeBackup  b;
+        qulonglong   uid = 0;
+    };
+
+    auto payload = std::make_shared<Payload>();
+    payload->b   = backup;
+    payload->uid = backup.uid;
+
+    auto redoFn = [this, payload]()
+    {
+        // Ищем существующий объект по uid
+        QGraphicsItem* it = nullptr;
+        if (payload->uid != 0)
+            it = findItemByUid(payload->uid);
+
+        if (it)
+        {
+            // Фигура уже есть
+            applyBackupToExisting(it, payload->b);
+        }
+        else
+        {
+            // Фигуры нет, создаем по снапшоту
+            it = recreateFromBackup(payload->b);
+            if (it && payload->uid != 0)
+            {
+                it->setData(_roleUid, QVariant::fromValue<qulonglong>(payload->uid));
+            }
+        }
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, payload]()
+    {
+        if (payload->uid == 0)
+            return;
+
+        if (QGraphicsItem* it = findItemByUid(payload->uid))
+        {
+            _scene->removeItem(it);
+            removeListEntryBySceneItem(it);
+            clearLinePolylineStateForDeletedItem(it);
+            delete it;
+        }
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    if (auto* st = activeUndoStack())
+        st->push(new LambdaCommand(redoFn, undoFn, description));
+}
+
+void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
+                                      const ShapeBackup& before,
+                                      const ShapeBackup& after,
+                                      const QString& description)
+{
+    struct Payload
+    {
+        ShapeBackup before;
+        ShapeBackup after;
+        qulonglong uid = 0;
+        bool skipFirstRedo = false;
+    };
+
+    auto p = std::make_shared<Payload>();
+    p->before = before;
+    p->after  = after;
+
+    qulonglong uid = 0;
+    if (item)
+        uid = item->data(_roleUid).toULongLong();
+    if (uid == 0 && item)
+        uid = ensureUid(item);
+    p->uid = uid;
+
+    auto apply = [this](qulonglong uid, const ShapeBackup& snap)
+    {
+        QGraphicsItem* it = findItemByUid(uid);
+        if (it)
+        {
+            applyBackupToExisting(it, snap);
+            return true;
+        }
+        QGraphicsItem* created = recreateFromBackup(snap);
+        if (created)
+        {
+            created->setData(_roleUid, QVariant::fromValue<qulonglong>(snap.uid ? snap.uid : uid));
+            return true;
+        }
+        return false;
+    };
+
+    auto redoFn = [this, p, apply]()
+    {
+        apply(p->uid, p->after);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, p, apply]()
+    {
+        apply(p->uid, p->before);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    if (auto* st = activeUndoStack())
+        st->push(new LambdaCommand(redoFn, undoFn, description));
+}
+
+void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
+                                       const ShapeBackup& before,
+                                       const ShapeBackup& after,
+                                       const QString& description)
+{
+    struct Payload
+    {
+        ShapeBackup before;
+        ShapeBackup after;
+        qulonglong uid = 0;
+    };
+
+    auto p = std::make_shared<Payload>();
+    p->before = before;
+    p->after  = after;
+
+    // Сохраняем uid
+    qulonglong uid = 0;
+    if (item)
+        uid = item->data(_roleUid).toULongLong();
+    if (uid == 0 && item)
+        uid = ensureUid(item);
+    p->uid = uid;
+
+    // Найти актуальный item по uid; если нет - пересоздать из снапшота
+    auto apply = [this](qulonglong uid, const ShapeBackup& snap)
+    {
+        QGraphicsItem* it = findItemByUid(uid);
+        if (it)
+        {
+            applyBackupToExisting(it, snap);
+            return true;
+        }
+        // Не нашли - пересоздаем (и привязываем тот же uid)
+        QGraphicsItem* created = recreateFromBackup(snap);
+        if (created)
+        {
+            created->setData(_roleUid, QVariant::fromValue<qulonglong>(snap.uid ? snap.uid : uid));
+            return true;
+        }
+        return false;
+    };
+
+    auto redoFn = [this, p, apply]()
+    {
+        apply(p->uid, p->after);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, p, apply]()
+    {
+        apply(p->uid, p->before);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    if (auto* st = activeUndoStack())
+        st->push(new LambdaCommand(redoFn, undoFn, description));
+}
+
+void MainWindow::pushModifyShapeCommand(qulonglong uid,
+                                        const ShapeBackup& before,
+                                        const ShapeBackup& after,
+                                        const QString& description)
+{
+    auto doc = currentDocument();
+    if (!doc || !doc->_undoStack)
+        return;
+
+    struct Payload
+    {
+        qulonglong uid;
+        ShapeBackup before;
+        ShapeBackup after;
+    };
+
+    auto payload = std::make_shared<Payload>();
+    payload->uid    = uid;
+    payload->before = before;
+    payload->after  = after;
+
+    // Применяем снапшот к существующей фигуре по uid.
+    // Если фигуру не нашли - просто no-op, без пересоздания.
+    auto applySnap = [this](qulonglong uid, const ShapeBackup& snap)
+    {
+        if (QGraphicsItem* it = findItemByUid(uid))
+        {
+            applyBackupToExisting(it, snap);
+        }
+    };
+
+    auto redoFn = [this, payload, applySnap]()
+    {
+        applySnap(payload->uid, payload->after);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, payload, applySnap]()
+    {
+        applySnap(payload->uid, payload->before);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+}
+
+void MainWindow::pushMoveImageCommand(const QPointF& before,
+                                      const QPointF& after,
+                                      const QString& description)
+{
+    auto doc = currentDocument();
+    if (!doc || !doc->_undoStack || !_videoRect)
+        return;
+
+    if (before == after)
+        return;
+
+    struct Payload
+    {
+        QPointF before;
+        QPointF after;
+    };
+
+    auto payload   = std::make_shared<Payload>();
+    payload->before = before;
+    payload->after  = after;
+
+    auto applyPos = [this](const QPointF& pos)
+    {
+        if (_videoRect)
+            _videoRect->setPos(pos);
+    };
+
+    auto redoFn = [this, payload, applyPos]()
+    {
+        applyPos(payload->after);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, payload, applyPos]()
+    {
+        applyPos(payload->before);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+}
+
+void MainWindow::pushReplaceShapeCommand(qulonglong uid,
+                                        const ShapeBackup& before,
+                                        const ShapeBackup& after,
+                                        const QString& description)
+{
+    auto doc = currentDocument();
+    if (!doc || !doc->_undoStack)
+        return;
+
+    struct Payload
+    {
+        qulonglong uid = 0;
+        ShapeBackup before;
+        ShapeBackup after;
+    };
+
+    auto p = std::make_shared<Payload>();
+    p->uid = uid;
+    p->before = before;
+    p->after  = after;
+
+    p->before.uid = uid;
+    p->after.uid  = uid;
+
+    auto replaceBySnap = [this](qulonglong uid, const ShapeBackup& snap)
+    {
+        if (!uid)
+            return;
+
+        if (QGraphicsItem* it = findItemByUid(uid))
+        {
+            if (auto sc = it->scene())
+                sc->removeItem(it);
+            removeListEntryBySceneItem(it);
+            clearLinePolylineStateForDeletedItem(it);
+            delete it;
+        }
+
+        QGraphicsItem* created = recreateFromBackup(snap);
+        if (created)
+            created->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
+    };
+
+    auto redoFn = [this, p, replaceBySnap]()
+    {
+        replaceBySnap(p->uid, p->after);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, p, replaceBySnap]()
+    {
+        replaceBySnap(p->uid, p->before);
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+}
+
+void MainWindow::removeSceneAndListItems(const QList<QListWidgetItem*>& listItems)
+{
+    // Удаляем все выбранные по связке из списка - сцена
+    for (QListWidgetItem* li : listItems)
+    {
+        if (!li)
+            continue;
+        QGraphicsItem* gi = li->data(Qt::UserRole).value<QGraphicsItem*>();
+        if (gi)
+        {
+            _scene->removeItem(gi);
+            clearLinePolylineStateForDeletedItem(gi);
+            delete gi;
+        }
+        // Удаляем сам элемент списка
+        delete ui->polygonList->takeItem(ui->polygonList->row(li));
+    }
+}
+
+void MainWindow::removeListEntryBySceneItem(QGraphicsItem* sceneItem)
+{
+    if (!sceneItem)
+        return;
+    for (int row = 0; row < ui->polygonList->count(); ++row)
+    {
+        QListWidgetItem* it = ui->polygonList->item(row);
+        if (!it)
+            continue;
+        QGraphicsItem* linked = sceneItemFromListItem(it);
+        if (linked == sceneItem)
+        {
+            delete ui->polygonList->takeItem(row);
+            renumberPolygonList();
+            return;
+        }
+    }
+}
+
+QGraphicsItem* MainWindow::sceneItemFromListItem(const QListWidgetItem* it)
+{
+    if (!it)
+        return nullptr;
+    return it->data(Qt::UserRole).value<QGraphicsItem*>();
+}
+
+QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
+{
+    if (!_scene || uid == 0)
+        return nullptr;
+
+    const auto itemsList = _scene->items();
+    for (QGraphicsItem* it : itemsList)
+    {
+        if (!it)
+            continue;
+
+        if (it->data(_roleUid).toULongLong() == uid)
+            return it;
+    }
+    return nullptr;
+}
+
+qulonglong MainWindow::ensureUid(QGraphicsItem* it) const
+{
+    if (!it)
+        return 0;
+    QVariant v = it->data(_roleUid);
+    if (!v.isNull())
+        return v.toULongLong();
+    qulonglong uid = _uidCounter++;
+    it->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
+    return uid;
+}
+
+void MainWindow::clearLinePolylineStateForDeletedItem(QGraphicsItem* item)
+{
+    if (!item)
+        return;
+
+    const qulonglong uid = item->data(_roleUid).toULongLong();
+
+    const bool isLine = (dynamic_cast<qgraph::Line*>(item) != nullptr);
+    const bool isPolyline = (dynamic_cast<qgraph::Polyline*>(item) != nullptr);
+
+    if (isLine)
+    {
+        if (_line == item)
+            _line = nullptr;
+        _drawingLine = false;
+    }
+
+    if (isPolyline)
+    {
+        if (_polyline == item)
+            _polyline = nullptr;
+        _drawingPolyline = false;
+    }
+
+    if (_resumeEditing && _resumeUid != 0 && uid != 0 && uid == _resumeUid)
+    {
+        _resumeEditing = false;
+        _resumeUid = 0;
+    }
+
+    // Возврат в режим просмотра, если мы больше не рисуем
+    if (!_drawingLine && !_drawingPolyline && (!_resumeEditing || _resumeUid == 0))
+    {
+        _isInDrawingMode = false;
+        setSceneItemsMovable(true);
+        updateModeLabel();
+    }
+}
+
+void MainWindow::cancelRulerMode()
+{
+    _drawingRuler = false;
+    _isDrawingRuler = false;
+    _isInDrawingMode = false;
+
+    clearAllHandleHoverEffects();
+    hideGhost();
+    setSceneItemsMovable(true);
+
+    if (_rulerLine)
+    {
+        _scene->removeItem(_rulerLine);
+        delete _rulerLine;
+        _rulerLine = nullptr;
+    }
+
+    if (_rulerText)
+    {
+        _scene->removeItem(_rulerText);
+        delete _rulerText;
+        _rulerText = nullptr;
+    }
+
+    updateModeLabel();
+}
+
+void MainWindow::toggleMenuBarVisible()
+{
+    if (!ui || !ui->menuBar)
+        return;
+
+    const bool newVisible = !ui->menuBar->isVisible();
+    ui->menuBar->setVisible(newVisible);
+    bool keepMenuVis = false;
+    config::base().getValue("ui.keep_menu_visibility", keepMenuVis);
+    if (keepMenuVis)
+    {
+        config::base().setValue("ui.menu_visible", newVisible);
+        config::base().saveFile();
+    }
+}
+
+QColor MainWindow::classColorFor(const QString& className) const
+{
+    if (className.isEmpty())
+        return QColor();
+
+    const auto it = _projectClassColors.find(className);
+    if (it == _projectClassColors.end())
+        return QColor();
+
+    if (!it.value().isValid())
+        return QColor();
+
+    return it.value();
+}
+
+void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& className)
+{
+    if (!item)
+        return;
+
+    const QColor lineColor = classColorFor(className);
+    if (!lineColor.isValid())
+        return;
+
+    QColor fillColor = lineColor;
+    fillColor.setAlpha(60);
+
+    const QBrush fillBrush =
+        _vis.fillShapeWhenSelected ? QBrush(fillColor)
+                                   : QBrush(Qt::transparent);
+
+    const QBrush noBrush(Qt::transparent);
+
+    if (auto* r = dynamic_cast<qgraph::Rectangle*>(item))
+    {
+        QPen p = r->pen();
+        p.setColor(lineColor);
+        p.setWidthF(_vis.lineWidth);
+        p.setCosmetic(true);
+        r->setPen(p);
+
+        r->setBrush(r->isSelected() ? fillBrush : noBrush);
+        return;
+    }
+
+    if (auto* cir = dynamic_cast<qgraph::Circle*>(item))
+    {
+        QPen p = cir->pen();
+        p.setColor(lineColor);
+        p.setWidthF(_vis.lineWidth);
+        p.setCosmetic(true);
+        cir->setPen(p);
+
+        cir->setBrush(cir->isSelected() ? fillBrush : noBrush);
+
+        for (QGraphicsItem* ch : cir->childItems())
+        {
+            if (auto* li = dynamic_cast<QGraphicsLineItem*>(ch))
+            {
+                QPen cp = li->pen();
+                cp.setColor(lineColor);
+                cp.setWidthF(_vis.lineWidth);
+                cp.setCosmetic(true);
+                li->setPen(cp);
+            }
+        }
+        return;
+    }
+
+    if (auto* pl = dynamic_cast<qgraph::Polyline*>(item))
+    {
+        QPen p = pl->pen();
+        p.setColor(lineColor);
+        p.setWidthF(_vis.lineWidth);
+        p.setCosmetic(true);
+        pl->setPen(p);
+
+        pl->setBrush(pl->isSelected() ? fillBrush : noBrush);
+        return;
+    }
+
+    if (auto* l = dynamic_cast<qgraph::Line*>(item))
+    {
+        QPen p = l->pen();
+        p.setColor(lineColor);
+        p.setWidthF(_vis.lineWidth);
+        p.setCosmetic(true);
+        l->setPen(p);
+
+        l->setBrush(l->isSelected() ? fillBrush : noBrush);
+        return;
+    }
+
+    if (auto* pnt = dynamic_cast<qgraph::Point*>(item))
+    {
+        const qreal diam = std::max(2, _vis.pointSize);
+        pnt->setDotStyle(lineColor, diam, _vis.handleSize);
+        return;
+    }
+}
+
+void MainWindow::updateImageSizeLabel(const QSize& size)
+{
+    if (!_imageSizeLabel)
+        return;
+
+    if (!size.isValid())
+    {
+        _imageSizeLabel->setText(tr("Размер изображения: —"));
+        return;
+    }
+
+    _imageSizeLabel->setText(
+        tr("Размер изображения: %1 × %2")
+            .arg(size.width())
+            .arg(size.height())
+    );
+}
+
+void MainWindow::startMergeLinesMode()
+{
+    _mergeLinesMode = true;
+    _mergeLineA = nullptr;
+    _mergeLineAEndIdx = -1;
+
+    if (statusBar())
+        statusBar()->showMessage(tr("Объединение линий: кликните по КОНЕЧНОЙ точке первой линии"), 0);
+    updateModeLabel();
+}
+
+void MainWindow::cancelMergeLinesMode()
+{
+    _mergeLinesMode = false;
+    _mergeLineA = nullptr;
+    _mergeLineAEndIdx = -1;
+
+    if (statusBar())
+        statusBar()->showMessage(tr("Объединение линий отменено"), 2000);
+    updateModeLabel();
+}
+
+bool MainWindow::handleMergeLinesClick(const QPointF& scenePos)
+{
+    if (!_mergeLinesMode)
+        return false;
+
+    qgraph::DragCircle* h = pickHandleAt(scenePos);
+    if (!h || !h->isValid())
+        return false;
+
+    QGraphicsItem* parent = h->parentItem();
+    auto* line = dynamic_cast<qgraph::Line*>(parent);
+    if (!line)
+        return false;
+
+    const auto& circles = line->circles();
+    const int idx = circles.indexOf(h);
+    if (idx != 0 && idx != circles.size() - 1)
+        return false; // Нужен только конец линии
+
+    if (!_mergeLineA)
+    {
+        _mergeLineA = line;
+        _mergeLineAEndIdx = idx;
+
+        if (statusBar())
+            statusBar()->showMessage(tr("Объединение линий: теперь кликните по КОНЕЧНОЙ точке второй линии"), 0);
+
+        return true;
+    }
+
+    // Второй клик
+    if (line == _mergeLineA)
+        return true; // Игнорируем “в ту же линию”, но клик съедаем чтобы не двигать/редактировать
+
+    const bool ok = performMergeLines(_mergeLineA, _mergeLineAEndIdx, line, idx);
+    cancelMergeLinesMode();
+    return ok ? true : true;
+}
+
+bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, int bIdx)
+{
+    auto doc = currentDocument();
+    if (!doc || !doc->_undoStack || !a || !b)
+        return false;
+    if (a == b)
+        return false;
+
+    // Только концы
+    const int aLast = a->circles().size() - 1;
+    const int bLast = b->circles().size() - 1;
+
+    if (!((aIdx == 0) || (aIdx == aLast)))
+        return false;
+    if (!((bIdx == 0) || (bIdx == bLast)))
+        return false;
+
+    // Класс должен совпадать
+    const QString la = a->data(0).toString();
+    const QString lb = b->data(0).toString();
+    if (!la.isEmpty() && !lb.isEmpty() && la != lb)
+    {
+        QMessageBox::warning(this, tr("Объединить линии"),
+                             tr("Нельзя объединить линии разных классов:\n\"%1\" и \"%2\".")
+                                 .arg(la, lb));
+        return false;
+    }
+    const QString outLabel = !la.isEmpty() ? la : lb;
+
+    // Собираем точки
+    QVector<QPointF> pa = a->points();
+    QVector<QPointF> pb = b->points();
+
+    if (pa.size() < 2 || pb.size() < 2)
+        return false;
+
+    // Разворачиваем так, чтобы выбранный конец A стал последним,
+    // а выбранный конец B стал первым.
+    if (aIdx == 0)
+        std::reverse(pa.begin(), pa.end());
+    if (bIdx == bLast)
+        std::reverse(pb.begin(), pb.end());
+
+    // Склейка + удаление дубликата в месте стыка
+    QVector<QPointF> merged;
+    merged.reserve(pa.size() + pb.size());
+    merged += pa;
+
+    const QPointF lastA = merged.last();
+    const QPointF firstB = pb.first();
+
+    const qreal eps = 2.0;
+    if (QLineF(lastA, firstB).length() < eps)
+    {
+        // Не добавляем первый узел B
+        for (int i = 1; i < pb.size(); ++i)
+            merged.push_back(pb[i]);
+    }
+    else
+    {
+        merged += pb;
+    }
+
+    if (merged.size() < 2)
+        return false;
+
+    auto rotateToIndex = [](QVector<QPointF>& pts, int k)
+    {
+        if (pts.isEmpty()) return;
+        k %= pts.size();
+        if (k < 0) k += pts.size();
+        if (k == 0) return;
+
+        QVector<QPointF> tmp;
+        tmp.reserve(pts.size());
+        for (int i = 0; i < pts.size(); ++i)
+            tmp.push_back(pts[(k + i) % pts.size()]);
+        pts = std::move(tmp);
+    };
+
+    // Нормализация нумерации
+    const qreal epsClose = 6.0;
+    const bool looksClosed =
+        (merged.size() >= 3) && (QLineF(merged.first(), merged.last()).length() < epsClose);
+
+    const double a2 = signedArea2(merged);
+
+    const bool numberingFromLast = (a2 > 0.0);
+
+    if (looksClosed)
+    {
+        // Старт - верхний-левый
+        const int k = topLeftIndex(merged);
+        rotateToIndex(merged, k);
+
+        // Если после поворота первый и последний почти совпали, то убираем дубль
+        if (merged.size() >= 2 && QLineF(merged.first(), merged.last()).length() < epsClose)
+            merged.pop_back();
+    }
+    else
+    {
+        // Открытая линия: старт - верхне-левый конец
+        if (isBetterTopLeft(merged.last(), merged.first()))
+            std::reverse(merged.begin(), merged.end());
+    }
+
+    struct Payload
+    {
+        ShapeBackup aBackup;
+        ShapeBackup bBackup;
+        QVector<QPointF> mergedPts;
+        QString label;
+        qulonglong mergedUid = 0;
+        qreal z = 0.0;
+        bool numberingFromLast = false;
+    };
+
+    auto payload = std::make_shared<Payload>();
+
+    auto backupForSceneItem = [this](QGraphicsItem* gi) -> ShapeBackup
+    {
+        ShapeBackup b{};
+        b.uid = gi->data(_roleUid).toULongLong();
+        if (b.uid == 0) b.uid = ensureUid(gi);
+        b.className = gi->data(0).toString();
+        b.z = gi->zValue();
+        b.visible = gi->isVisible();
+
+        if (auto* ln = dynamic_cast<qgraph::Line*>(gi))
+        {
+            b.kind = ShapeKind::Line;
+            b.points = ln->points();
+            b.closed = false;
+        }
+        return b;
+    };
+
+    payload->numberingFromLast = numberingFromLast;
+    payload->aBackup = backupForSceneItem(a);
+    payload->bBackup = backupForSceneItem(b);
+    payload->mergedPts = merged;
+    payload->label = outLabel;
+    payload->z = qMax(a->zValue(), b->zValue());
+
+    payload->mergedUid = _uidCounter++; // Резервируем uid
+
+    auto redoFn = [this, payload]()
+    {
+        // Удаляем А и В по uid
+        for (qulonglong uid : {payload->aBackup.uid, payload->bBackup.uid})
+        {
+            if (!uid) continue;
+            if (QGraphicsItem* gi = findItemByUid(uid))
+            {
+                _scene->removeItem(gi);
+                removeListEntryBySceneItem(gi);
+                clearLinePolylineStateForDeletedItem(gi);
+                delete gi;
+            }
+        }
+
+        if (payload->mergedPts.isEmpty())
+            return;
+
+        auto* ln = new qgraph::Line(_scene, payload->mergedPts.front());
+        ln->setData(_roleUid, QVariant::fromValue<qulonglong>(payload->mergedUid));
+
+        for (int i = 1; i < payload->mergedPts.size(); ++i)
+            ln->addPoint(payload->mergedPts[i], _scene);
+        ln->setNumberingFromLast(payload->numberingFromLast);
+
+        apply_LineWidth_ToItem(ln);
+        apply_PointSize_ToItem(ln);
+        apply_NumberSize_ToItem(ln);
+
+        ln->setData(0, payload->label);
+        applyClassColorToItem(ln, payload->label);
+        ln->setZValue(payload->z);
+        ln->setVisible(true);
+        ln->updateHandlePosition();
+        linkSceneItemToList(ln);
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, payload]()
+    {
+        if (payload->mergedUid)
+        {
+            if (QGraphicsItem* gi = findItemByUid(payload->mergedUid))
+            {
+                _scene->removeItem(gi);
+                removeListEntryBySceneItem(gi);
+                clearLinePolylineStateForDeletedItem(gi);
+                delete gi;
+            }
+        }
+
+        // Восстанавливаем A и B
+        recreateFromBackup(payload->aBackup);
+        recreateFromBackup(payload->bBackup);
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Объединить линии")));
+    return true;
+}
+
+bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePos)
+{
+    auto doc = currentDocument();
+    if (!doc || !doc->_undoStack || !ln)
+        return false;
+
+    ShapeBackup before = makeBackupFromItem(ln);
+    const int n = before.points.size();
+    if (n < 4)
+    {
+        QMessageBox::warning(this, tr("Разорвать линию"),
+                             tr("Нельзя разорвать линию: нужно минимум 4 точки."));
+        return false;
+    }
+
+    auto dist2PointToSegment = [](const QPointF& p, const QPointF& a, const QPointF& b) -> double
+    {
+        const double vx = b.x() - a.x();
+        const double vy = b.y() - a.y();
+        const double wx = p.x() - a.x();
+        const double wy = p.y() - a.y();
+        const double vv = vx*vx + vy*vy;
+        double t = 0.0;
+        if (vv > 1e-12)
+            t = (wx*vx + wy*vy) / vv;
+        if (t < 0.0) t = 0.0;
+        if (t > 1.0) t = 1.0;
+        const double px = a.x() + t*vx;
+        const double py = a.y() + t*vy;
+        const double dx = p.x() - px;
+        const double dy = p.y() - py;
+        return dx*dx + dy*dy;
+    };
+
+    // Ищем ребро (i, i+1), ближайшее к клику
+    int bestIdx = 0;
+    double bestD2 = std::numeric_limits<double>::infinity();
+    for (int i = 0; i < n - 1; ++i)
+    {
+        const QPointF& a = before.points[i];
+        const QPointF& b = before.points[i + 1];
+        const double d2 = dist2PointToSegment(scenePos, a, b);
+        if (d2 < bestD2)
+        {
+            bestD2 = d2;
+            bestIdx = i;
+        }
+    }
+
+    // Чтобы обе линии были валидны (>=2 точки), ребро не должно быть крайним
+    if (bestIdx < 1 || bestIdx > n - 3)
+    {
+        QMessageBox::warning(this, tr("Разорвать линию"),
+                             tr("Нельзя разорвать по этому ребру: получится линия из одной точки.\n"
+                                "Выберите внутреннее ребро."));
+        return false;
+    }
+
+    struct Payload
+    {
+        ShapeBackup oldBackup;
+        QVector<QPointF> pts1;
+        QVector<QPointF> pts2;
+        QString label;
+        qreal z = 0.0;
+        bool visible = true;
+        bool numberingFromLast = false;
+        qulonglong uid1 = 0;
+        qulonglong uid2 = 0;
+    };
+
+    auto payload = std::make_shared<Payload>();
+    payload->oldBackup = before;
+    payload->label = before.className;
+    payload->z = before.z;
+    payload->visible = before.visible;
+    payload->numberingFromLast = before.numberingFromLast;
+
+    payload->uid1 = _uidCounter++;
+    payload->uid2 = _uidCounter++;
+
+    payload->pts1.reserve(bestIdx + 1);
+    for (int i = 0; i <= bestIdx; ++i)
+        payload->pts1.push_back(before.points[i]);
+
+    payload->pts2.reserve(n - (bestIdx + 1));
+    for (int i = bestIdx + 1; i < n; ++i)
+        payload->pts2.push_back(before.points[i]);
+
+    auto redoFn = [this, payload]()
+    {
+        // Удалить старую линию
+        if (payload->oldBackup.uid)
+        {
+            if (QGraphicsItem* gi = findItemByUid(payload->oldBackup.uid))
+            {
+                _scene->removeItem(gi);
+                removeListEntryBySceneItem(gi);
+                clearLinePolylineStateForDeletedItem(gi);
+                delete gi;
+            }
+        }
+
+        auto makeLine = [this, payload](const QVector<QPointF>& pts, qulonglong uid)
+        {
+            if (pts.size() < 2) return;
+
+            auto* ln = new qgraph::Line(_scene, pts.front());
+            ln->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
+            for (int i = 1; i < pts.size(); ++i)
+                ln->addPoint(pts[i], _scene);
+
+            ln->setNumberingFromLast(payload->numberingFromLast);
+
+            apply_LineWidth_ToItem(ln);
+            apply_PointSize_ToItem(ln);
+            apply_NumberSize_ToItem(ln);
+
+            ln->setData(0, payload->label);
+            applyClassColorToItem(ln, payload->label);
+            ln->setZValue(payload->z);
+            ln->setVisible(payload->visible);
+            ln->updateHandlePosition();
+            linkSceneItemToList(ln);
+        };
+
+        makeLine(payload->pts1, payload->uid1);
+        makeLine(payload->pts2, payload->uid2);
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, payload]()
+    {
+        // Удалить две новые линии
+        for (qulonglong uid : {payload->uid1, payload->uid2})
+        {
+            if (!uid) continue;
+            if (QGraphicsItem* gi = findItemByUid(uid))
+            {
+                _scene->removeItem(gi);
+                removeListEntryBySceneItem(gi);
+                clearLinePolylineStateForDeletedItem(gi);
+                delete gi;
+            }
+        }
+
+        // Восстановить старую
+        recreateFromBackup(payload->oldBackup);
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Разрыв линию")));
+    return true;
+}
+
+// Формула шнуровки
+double MainWindow::signedArea2(const QVector<QPointF>& pts)
+{
+    // Удвоенная ориентированная площадь для замкнутого контура
+    // Без дублирования первой точки в конце
+    const int n = pts.size();
+    if (n < 3) return 0.0;
+
+    double s = 0.0;
+    for (int i = 0; i < n; ++i)
+    {
+        const QPointF& a = pts[i];
+        const QPointF& b = pts[(i + 1) % n];
+        s += (double)a.x() * (double)b.y() - (double)b.x() * (double)a.y();
+    }
+    return s;
+}
+
+int MainWindow::topLeftIndex(const QVector<QPointF>& pts)
+{
+    if (pts.isEmpty()) return -1;
+    int best = 0;
+    for (int i = 1; i < pts.size(); ++i)
+        if (isBetterTopLeft(pts[i], pts[best]))
+            best = i;
+    return best;
+}
+
+bool MainWindow::isBetterTopLeft(const QPointF& a, const QPointF& b)
+{
+    // “верхний-левый”: меньше y, при равных y - меньше x
+    if (a.y() < b.y()) return true;
+    if (a.y() > b.y()) return false;
+    return a.x() < b.x();
+}
+
+void MainWindow::updateModeLabel()
+{
+    if (!_modeLabel) return;
+
+    if (_drawingRuler || _isDrawingRuler) {
+        _modeLabel->setText(_isDrawingRuler
+            ? tr("Режим: линейка (измерение...)")
+            : tr("Режим: линейка"));
+        return;
+    }
+    if (_isInDrawingMode
+        || _isDrawingRectangle || _isDrawingCircle || _isDrawingLine || _isDrawingPolyline || _isDrawingPoint
+        || _drawingRectangle  || _drawingCircle  || _drawingLine  || _drawingPolyline  || _drawingPoint)
+    {
+        QString tool = tr("фигура");
+        if (_isDrawingRectangle || _drawingRectangle)
+            tool = tr("прямоугольник");
+        else if (_isDrawingCircle || _drawingCircle)
+            tool = tr("круг");
+        else if (_isDrawingPolyline || _drawingPolyline)
+            tool = tr("полилиния");
+        else if (_isDrawingLine || _drawingLine)
+            tool = tr("линия");
+        else if (_isDrawingPoint || _drawingPoint)
+            tool = tr("точка");
+
+        _modeLabel->setText(tr("Режим: рисование (%1)").arg(tool));
+        return;
+    }
+    if (_zoomRectActive)
+    {
+        _modeLabel->setText(tr("Режим: зум-область"));
+        return;
+    }
+    if (_mergeLinesMode)
+    {
+        _modeLabel->setText(tr("Режим: соединение линий"));
+        return;
+    }
+    // if (_shiftImageDragging)
+    // {
+    //     _modeLabel->setText(tr("Режим: сдвиг изображения"));
+    //     return;
+    // }
+    if (_isDraggingImage)
+    {
+        _modeLabel->setText(_isAllMoved
+            ? tr("Режим: перемещение (изображение + разметка)")
+            : tr("Режим: перемещение (изображение)"));
+        return;
+    }
+    if (_editInProgress || _handleDragging || _m_isDraggingHandle || _ghostActive)
+    {
+        _modeLabel->setText(tr("Режим: редактирование"));
+        return;
+    }
+    if (_resumeEditing)
+    {
+        _modeLabel->setText(tr("Режим: продолжение"));
+        return;
+    }
+    _modeLabel->setText(tr("Режим: просмотр"));
+}
+
+void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers mods, GraphicsView* graphView)
+{
+    Q_UNUSED(mods);
+    Q_UNUSED(graphView);
+
+    _isInDrawingMode = true;
+    setSceneItemsMovable(false);
+    updateModeLabel();
+    _startPoint = scenePos;
+
+    if (!_polyline)
+    {
+        _resumeEditing = false;
+        _resumeUid = 0;
+        // Если полилиния еще не создана, создаем объект
+        _polyline = new qgraph::Polyline(_scene, _startPoint);
+        ensureUid(_polyline);
+        apply_LineWidth_ToItem(_polyline);
+        apply_PointSize_ToItem(_polyline);
+        apply_NumberSize_ToItem(_polyline);
+
+        _polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
+        _polyline->setSelected(true);
+        _polyline->setFocus();
+        _polyline->updatePointNumbers();
+
+        ShapeBackup b0 = makeBackupFromItem(_polyline);
+        pushAdoptExistingShapeCommand(_polyline, b0, tr("Узел полилинии"));
+        _polyline->setModificationCallback([this]()
+        {
+            if (_drawingPolyline && _polyline && _polyline->isClosed())
+            {
+                _drawingPolyline = false;
+                updateModeLabel();
+
+                _polyline->updatePointNumbers();
+                apply_LineWidth_ToItem(_polyline);
+                apply_PointSize_ToItem(_polyline);
+                apply_NumberSize_ToItem(_polyline);
+
+                // QStringList classes;
+                // for (int i = 0; i < ui->polygonLabel->count(); ++i)
+                //     classes << ui->polygonLabel->item(i)->text();
+
+                // SelectClass dialog(classes, this);
+                if (!_resumeEditing)
+                {
+                    SelectClass dialog(_projectClasses, this);
+
+                    if (dialog.exec() == QDialog::Accepted)
+                    {
+                        const QString selectedClass = dialog.selectedClass();
+                        if (!selectedClass.isEmpty())
+                        {
+                            // _polyline->setData(0, selectedClass);
+                            // applyClassColorToItem(_polyline, selectedClass);
+                            // linkSceneItemToList(_polyline);
+
+                            // ShapeBackup b = makeBackupFromItem(_polyline);
+                            // pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                            const qulonglong uid = ensureUid(_polyline);
+                            const QString cls = selectedClass;
+
+                            _drawingPolyline = false;
+                            updateModeLabel();
+
+                            auto redoFn = [this, uid, cls]()
+                            {
+                                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                if (!pl) return;
+
+                                pl->setClosed(true, false);
+                                pl->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+                                pl->setData(0, cls);
+                                applyClassColorToItem(pl, cls);
+                                linkSceneItemToList(pl);
+
+                                if (_polyline && ensureUid(_polyline) == uid)
+                                    _polyline = nullptr;
+
+                                _drawingPolyline = false;
+                                _resumeEditing = false;
+                                _resumeUid = 0;
+                                updateModeLabel();
+
+                                if (auto doc = currentDocument())
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
+                            };
+
+                            auto undoFn = [this, uid]()
+                            {
+                                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                if (!pl) return;
+
+                                pl->setClosed(false, false);
+                                pl->setFlag(QGraphicsItem::ItemIsMovable, false);
+
+                                _drawingPolyline = true;
+                                _polyline = pl;
+                                updateModeLabel();
+
+                                _resumeEditing = true;
+                                _resumeUid = uid;
+
+                                pl->setSelected(true);
+                                pl->setFocus();
+
+                                removeListEntryBySceneItem(pl);
+
+                                if (auto doc = currentDocument())
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
+
+                                raiseAllHandlesToTop();
+                            };
+                            if (QUndoStack* st = activeUndoStack())
+                                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+                            else
+                                redoFn();
+                        }
+                    }
+                }
+                else
+                {
+                    const QString cls = _polyline->data(0).toString();
+                    const qulonglong uid = ensureUid(_polyline);
+                    _drawingPolyline = false;
+                    updateModeLabel();
+
+                    auto redoFn = [this, uid, cls]()
+                    {
+                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                        if (!pl) return;
+
+                        pl->setClosed(true, false);
+                        pl->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+                        if (!cls.isEmpty())
+                        {
+                            pl->setData(0, cls);
+                            applyClassColorToItem(pl, cls);
+                        }
+                        linkSceneItemToList(pl);
+
+                        if (_polyline && ensureUid(_polyline) == uid)
+                            _polyline = nullptr;
+
+                        _drawingPolyline = false;
+                        _resumeEditing = false;
+                        _resumeUid = 0;
+                        updateModeLabel();
+
+                        if (auto doc = currentDocument())
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                        raiseAllHandlesToTop();
+                    };
+
+                    auto undoFn = [this, uid]()
+                    {
+                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                        if (!pl) return;
+
+                        pl->setClosed(false, false);
+                        pl->setFlag(QGraphicsItem::ItemIsMovable, false);
+
+                        _drawingPolyline = true;
+                        _polyline = pl;
+                        updateModeLabel();
+
+                        _resumeEditing = true;
+                        _resumeUid = uid;
+
+                        pl->setSelected(true);
+                        pl->setFocus();
+
+                        removeListEntryBySceneItem(pl);
+
+                        if (auto doc = currentDocument())
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                        raiseAllHandlesToTop();
+                    };
+
+                    if (QUndoStack* st = activeUndoStack())
+                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+                    else
+                        redoFn();
+                }
+
+
+                _polyline = nullptr;
+
+                if (auto doc = currentDocument())
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+                raiseAllHandlesToTop();
+            }
+        });
+    }
+    //_polyline->addPoint(_startPoint, _scene);
+    const QPointF p = _startPoint;
+
+    if (!_polyline->_circles.isEmpty() &&
+        QLineF(_polyline->_circles.last()->scenePos(), p).length() < 0.1)
+    {
+        // Ничего
+    }
+    else if (QUndoStack* st = activeUndoStack())
+    {
+        struct Payload
+        {
+            qulonglong uid = 0;
+            QPointF    pt;
+            bool       didAdd = false;
+        };
+
+        auto payload = std::make_shared<Payload>();
+        payload->uid = ensureUid(_polyline);
+        payload->pt  = p;
+
+        auto redoFn = [this, payload]()
+        {
+            auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(payload->uid));
+            if (!pl) return;
+
+            const int before = pl->_circles.size();
+            pl->addPoint(payload->pt, _scene);
+
+            pl->setFlag(QGraphicsItem::ItemIsMovable, false);
+            pl->setSelected(true);
+            pl->setFocus();
+            pl->updatePointNumbers();
+
+            payload->didAdd = (pl->_circles.size() > before);
+
+            if (auto d = currentDocument())
+            {
+                d->isModified = true;
+                updateFileListDisplay(d->filePath);
+            }
+        };
+
+        auto undoFn = [this, payload]()
+        {
+            auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(payload->uid));
+            if (!pl) return;
+
+            if (payload->didAdd)
+                pl->removeLastPointForce(true);
+
+            if (auto d = currentDocument())
+            {
+                d->isModified = true;
+                updateFileListDisplay(d->filePath);
+            }
+        };
+
+        st->push(new LambdaCommand(redoFn, undoFn, tr("Узел полилинии")));
+    }
+
+    // Закрытие полилинии по Ctrl
+    if (qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::CtrlModifier &&
+        (mods & Qt::ControlModifier))
+    {
+        //_polyline->closePolyline();
+        if (_polyline && !_polyline->isClosed())
+        {
+            _polyline->closePolyline();
+        }
+
+    }
+    apply_PointSize_ToItem(_polyline);
+    raiseAllHandlesToTop();
+}
+
+void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers mods, GraphicsView* graphView)
+{
+    Q_UNUSED(mods);
+    Q_UNUSED(graphView);
+
+     _isInDrawingMode = true;
+    setSceneItemsMovable(false);
+    updateModeLabel();
+    _startPoint = scenePos;
+    if (!_line)
+    {
+        _resumeEditing = false;
+        _resumeUid = 0;
+        // Если линия еще не создана, создаем объект
+        _line = new qgraph::Line(_scene, _startPoint);
+        ensureUid(_line);
+        apply_LineWidth_ToItem(_line);
+        apply_PointSize_ToItem(_line);
+        apply_NumberSize_ToItem(_line);
+        _line->setSelected(true);
+        _line->setFocus();
+        _line->updatePointNumbers();
+        ShapeBackup b0 = makeBackupFromItem(_line);
+        pushAdoptExistingShapeCommand(_line, b0, tr("Узел линии"));
+        _line->setModificationCallback([this]()
+        {
+            if (_drawingLine && _line && _line->isClosed())
+            {
+                _drawingLine = false;
+                updateModeLabel();
+
+                _line->updatePointNumbers();
+                apply_LineWidth_ToItem(_line);
+                apply_PointSize_ToItem(_line);
+                apply_NumberSize_ToItem(_line);
+
+                // QStringList classes;
+                // for (int i = 0; i < ui->polygonLabel->count(); ++i)
+                //     classes << ui->polygonLabel->item(i)->text();
+
+                // SelectClass dialog(classes, this);
+
+                if (!_resumeEditing)
+                {
+                    SelectClass dialog(_projectClasses, this);
+
+                    if (dialog.exec() == QDialog::Accepted)
+                    {
+                        const QString selectedClass = dialog.selectedClass();
+                        if (!selectedClass.isEmpty())
+                        {
+                            // _line->setData(0, selectedClass);
+                            // applyClassColorToItem(_line, selectedClass);
+                            // linkSceneItemToList(_line);
+
+                            // ShapeBackup b = makeBackupFromItem(_line);
+                            // pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                            const qulonglong uid = ensureUid(_line);
+                            const QString cls = selectedClass;
+
+                            _drawingLine = false;
+                            updateModeLabel();
+
+                            auto redoFn = [this, uid, cls]()
+                            {
+                                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                                if (!ln) return;
+
+                                ln->setClosed(true, false);
+                                ln->setFlag(QGraphicsItem::ItemIsMovable, true);
+                                ln->setData(0, cls);
+                                applyClassColorToItem(ln, cls);
+                                linkSceneItemToList(ln);
+
+                                if (_line && ensureUid(_line) == uid)
+                                    _line = nullptr;
+
+                                _drawingLine = false;
+                                _resumeEditing = false;
+                                _resumeUid = 0;
+                                updateModeLabel();
+
+                                if (auto doc = currentDocument())
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
+                                raiseAllHandlesToTop();
+                            };
+
+                            auto undoFn = [this, uid]()
+                            {
+                                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                                if (!ln) return;
+
+                                ln->setClosed(false, false);
+                                ln->setFlag(QGraphicsItem::ItemIsMovable, false);
+
+                                _drawingLine = true;
+                                _line = ln;
+                                updateModeLabel();
+
+                                _resumeEditing = true;
+                                _resumeUid = uid;
+
+                                ln->setSelected(true);
+                                ln->setFocus();
+
+                                removeListEntryBySceneItem(ln);
+
+                                if (auto doc = currentDocument())
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
+                                raiseAllHandlesToTop();
+                            };
+
+                            if (QUndoStack* st = activeUndoStack())
+                                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
+                            else
+                                redoFn();
+
+                        }
+                    }
+                }
+                else
+                {
+                    const qulonglong uid = ensureUid(_line);
+                    const QString cls = _line->data(0).toString();
+
+                    _drawingLine = false;
+                    updateModeLabel();
+
+                    auto redoFn = [this, uid, cls]()
+                    {
+                        auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        if (!ln) return;
+
+                        ln->setClosed(true, false);
+                        ln->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+                        if (!cls.isEmpty())
+                        {
+                            ln->setData(0, cls);
+                            applyClassColorToItem(ln, cls);
+                        }
+                        linkSceneItemToList(ln);
+
+                        if (_line && ensureUid(_line) == uid)
+                            _line = nullptr;
+
+                        _drawingLine = false;
+                        _resumeEditing = false;
+                        _resumeUid = 0;
+                        updateModeLabel();
+
+                        if (auto doc = currentDocument())
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                        raiseAllHandlesToTop();
+                    };
+
+                    auto undoFn = [this, uid]()
+                    {
+                        auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        if (!ln) return;
+
+                        ln->setClosed(false, false);
+                        ln->setFlag(QGraphicsItem::ItemIsMovable, false);
+
+                        _drawingLine = true;
+                        _line = ln;
+                        updateModeLabel();
+
+                        _resumeEditing = true;
+                        _resumeUid = uid;
+
+                        ln->setSelected(true);
+                        ln->setFocus();
+
+                        removeListEntryBySceneItem(ln);
+
+                        if (auto doc = currentDocument())
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                        raiseAllHandlesToTop();
+                    };
+
+                    if (QUndoStack* st = activeUndoStack())
+                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
+                    else
+                        redoFn();
+                }
+
+                _line = nullptr;
+
+                if (auto doc = currentDocument())
+                {
+                    doc->isModified = true;
+                    updateFileListDisplay(doc->filePath);
+                }
+                raiseAllHandlesToTop();
+            }
+        });
+    }
+    //_line->addPoint(_startPoint, _scene);
+    const QPointF p = _startPoint;
+    if (!_line->_circles.isEmpty() &&
+        QLineF(_line->_circles.last()->scenePos(), p).length() < 0.1)
+    {
+        // Ничего
+    }
+    else if (QUndoStack* st = activeUndoStack())
+    {
+        struct Payload
+        {
+            qulonglong uid = 0;
+            QPointF    pt;
+            bool       didAdd = false;
+        };
+
+        auto payload = std::make_shared<Payload>();
+        payload->uid = ensureUid(_line);
+        payload->pt  = p;
+
+        auto redoFn = [this, payload]()
+        {
+            auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(payload->uid));
+            if (!ln) return;
+
+            const int before = ln->_circles.size();
+            ln->addPoint(payload->pt, _scene);
+
+            ln->setSelected(true);
+            ln->setFocus();
+            ln->updatePointNumbers();
+
+            payload->didAdd = (ln->_circles.size() > before);
+
+            if (auto d = currentDocument())
+            {
+                d->isModified = true;
+                updateFileListDisplay(d->filePath);
+            }
+        };
+
+        auto undoFn = [this, payload]()
+        {
+            auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(payload->uid));
+            if (!ln) return;
+
+            if (payload->didAdd)
+                ln->removeLastPointForce(true);
+
+            if (auto d = currentDocument())
+            {
+                d->isModified = true;
+                updateFileListDisplay(d->filePath);
+            }
+        };
+
+        st->push(new LambdaCommand(redoFn, undoFn, tr("Узел линии")));
+    }
+
+    // Завершение линии по Ctrl
+    if (qgraph::Line::globalCloseMode() == qgraph::Line::CloseMode::CtrlModifier &&
+        (mods & Qt::ControlModifier))
+    {
+        _line->closeLine();
+    }
+    apply_PointSize_ToItem(_line);
+    raiseAllHandlesToTop();
 }
