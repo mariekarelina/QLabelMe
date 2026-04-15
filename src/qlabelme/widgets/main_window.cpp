@@ -1463,7 +1463,7 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
         }
         //return;
     }
-    if (_movingItem)
+    if (_movingItem && (mouseEvent->buttons() & Qt::LeftButton))
     {
         const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
 
@@ -1489,6 +1489,17 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
         }
 
         _moveHadChanges = true;
+    }
+    else if (_movingItem)
+    {
+        // ЛКМ уже не зажата, но _movingItem остался - сбрасываем состояние
+        _movingItem = nullptr;
+        _movingItems.clear();
+        _moveGroupBefore.clear();
+        _moveGroupInitialPos.clear();
+        _moveIsGroup = false;
+        _moveHadChanges = false;
+        _moveInProgress = false;
     }
 
     if (mouseEvent->buttons() & Qt::LeftButton)
@@ -2497,7 +2508,6 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
         doc->isModified = true;
         updateFileListDisplay(doc->filePath);
     }
-
     updateCoordinateList();
 
     if (_scene)
@@ -4562,11 +4572,11 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
 
     updateWindowTitle();
     updateFolderPathDisplay();
-    loadFilesFromFolder(folderPath);
-    //loadClassesFromFile(folderPath + "/classes.yaml");
 
     QDir dir(folderPath);
     loadClassesFromFile(dir.filePath("classes.yaml"));
+
+    loadFilesFromFolder(folderPath);
 
     // Открыть первое изображение из папки
     if (ui->fileList->count() > 0)
@@ -5453,6 +5463,8 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
     filters << "*.jpg";
     filters << "*.jpeg";
     filters << "*.png";
+    filters << "*.tif";
+    filters << "*.tiff";
     QStringList files = directory.entryList(filters, QDir::Files);
 
     // Загружаем иконки из ресурсов
