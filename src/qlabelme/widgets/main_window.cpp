@@ -2391,15 +2391,43 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
 
     QList<QGraphicsItem*> targets;
 
-    const QList<QGraphicsItem*> selectedItems =
-        (_scene ? _scene->selectedItems() : QList<QGraphicsItem*>());
+    // Сначала пытаемся собрать группу из выделения в правом списке,
+    // так как команда вызывается из контекстного меню polygonList
+    QList<QListWidgetItem*> selectedListItems;
+    if (ui && ui->polygonList)
+        selectedListItems = ui->polygonList->selectedItems();
 
-    const bool clickedItemIsInSelection = selectedItems.contains(item);
+    bool clickedItemIsInListSelection = false;
 
-    if (clickedItemIsInSelection)
+    for (QListWidgetItem* listItem : selectedListItems)
     {
-        for (QGraphicsItem* sel : selectedItems)
+        if (!listItem)
+            continue;
+
+        QGraphicsItem* sel = listItem->data(Qt::UserRole).value<QGraphicsItem*>();
+        if (!sel)
+            continue;
+
+        if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(sel))
+            sel = handle->parentItem();
+
+        sel = findMovableAncestor(sel);
+
+        if (!sel || sel == _videoRect)
+            continue;
+
+        if (sel == item)
+            clickedItemIsInListSelection = true;
+    }
+
+    if (clickedItemIsInListSelection)
+    {
+        for (QListWidgetItem* listItem : selectedListItems)
         {
+            if (!listItem)
+                continue;
+
+            QGraphicsItem* sel = listItem->data(Qt::UserRole).value<QGraphicsItem*>();
             if (!sel)
                 continue;
 
