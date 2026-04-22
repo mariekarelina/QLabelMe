@@ -1,6 +1,7 @@
 ---
 ### QLabelMe YAML syntax ###
 
-classes: [no_name]
+classes:
+  - name: no_name
 
 ...
