@@ -4573,6 +4573,8 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
     updateWindowTitle();
     updateFolderPathDisplay();
 
+    _currentFolderPath = folderPath;
+
     QDir dir(folderPath);
     loadClassesFromFile(dir.filePath("classes.yaml"));
 
@@ -7258,32 +7260,120 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
         }
     }
 
-    QList<QString> classes;
-
-    if (!yconfig.getValue("classes", classes, false))
-    {
-        QMessageBox::warning(this, tr("Ошибка"),
-                             tr("Нет секции классов"));
-        return false;
-    }
+    QStringList classes;
     QMap<QString, QColor> colors;
-    QList<QString> colorLines;
 
-    if (yconfig.getValue("class_colors", colorLines, true))
+    // Сначала пытаемся прочитать новый формат:
+    // classes:
+    //   - name: ...
+    //     color: ...
+    bool newFormatDetected = false;
+
+    YamlConfig::Func loadNewClasses = [&](YamlConfig* conf, YAML::Node& yclasses, bool)
     {
-        for (const QString& s : colorLines)
+        for (const YAML::Node& yclass : yclasses)
         {
-            // ожидаем "name=#AARRGGBB"
-            const int eq = s.indexOf('=');
-            if (eq <= 0) continue;
+            if (!yclass.IsMap())
+                continue;
 
-            const QString name = s.left(eq).trimmed();
-            const QString hex  = s.mid(eq + 1).trimmed();
+            QString name;
+            conf->getValue(yclass, "name", name);
 
-            const QColor c(hex);
-            if (!name.isEmpty() && c.isValid())
-                colors[name] = c;
+            if (name.trimmed().isEmpty())
+                continue;
+
+            newFormatDetected = true;
+            classes.push_back(name);
+
+            if (yclass["color"])
+            {
+                QString colorStr;
+                conf->getValue(yclass, "color", colorStr);
+
+                const QColor c(colorStr);
+                if (c.isValid())
+                    colors[name] = c;
+            }
         }
+        return true;
+    };
+
+    yconfig.getValue("classes", loadNewClasses, false);
+
+    // Fallback на старый формат, чтобы не сломать уже существующие файлы
+    if (!newFormatDetected)
+    {
+        QList<QString> oldClasses;
+
+        if (!yconfig.getValue("classes", oldClasses, false))
+        {
+            QMessageBox::warning(this, tr("Ошибка"),
+                                 tr("Нет секции классов"));
+            return false;
+        }
+
+        for (const QString& s : oldClasses)
+            classes.push_back(s);
+
+        QList<QString> colorLines;
+        if (yconfig.getValue("class_colors", colorLines, true))
+        {
+            for (const QString& s : colorLines)
+            {
+                const int eq = s.indexOf('=');
+                if (eq <= 0)
+                    continue;
+
+                const QString name = s.left(eq).trimmed();
+                const QString hex  = s.mid(eq + 1).trimmed();
+
+                const QColor c(hex);
+                if (!name.isEmpty() && c.isValid())
+                    colors[name] = c;
+            }
+        }
+    }
+
+    bool generatedMissingColors = false;
+
+    auto generateRandomClassColor = [&](const QMap<QString, QColor>& existingColors, int fallbackIndex) -> QColor
+    {
+        for (int attempt = 0; attempt < 64; ++attempt)
+        {
+            const int h = QRandomGenerator::global()->bounded(360);
+            QColor c = QColor::fromHsl(h, 200, 120);
+
+            bool alreadyUsed = false;
+            for (auto it = existingColors.begin(); it != existingColors.end(); ++it)
+            {
+                if (it.value().isValid() && it.value() == c)
+                {
+                    alreadyUsed = true;
+                    break;
+                }
+            }
+
+            if (!alreadyUsed)
+                return c;
+        }
+
+        QColor c;
+        c.setHsl((fallbackIndex * 47) % 360, 200, 120);
+        return c;
+    };
+
+    for (int i = 0; i < classes.size(); ++i)
+    {
+        const QString name = classes[i].trimmed();
+        if (name.isEmpty())
+            continue;
+
+        const QColor existing = colors.value(name, QColor());
+        if (existing.isValid())
+            continue;
+
+        colors[name] = generateRandomClassColor(colors, i);
+        generatedMissingColors = true;
     }
 
     _projectClasses = classes;
@@ -7296,6 +7386,43 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
         _projPropsDialog->setProjectClassColors(_projectClassColors);
     }
 
+    if (generatedMissingColors)
+    {
+        saveProjectClasses(_projectClasses, _projectClassColors);
+    }
+
+    forEachScene([this](QGraphicsScene* sc)
+    {
+        if (!sc)
+            return;
+
+        for (QGraphicsItem* it : sc->items())
+        {
+            if (!it)
+                continue;
+
+            if (it == _videoRect ||
+                it == _tempRectItem ||
+                it == _tempCircleItem ||
+                it == _tempPolyline)
+            {
+                continue;
+            }
+
+            if (it->parentItem() != nullptr)
+                continue;
+
+            const QString cls = it->data(0).toString();
+            if (!cls.isEmpty())
+                applyClassColorToItem(it, cls);
+        }
+
+        sc->update();
+    });
+
+    if (_scene)
+        onSceneSelectionChanged();
+
     return true;
 }
 
@@ -7306,59 +7433,28 @@ bool MainWindow::saveProjectClasses(const QStringList& classes,
     if (path.isEmpty())
         return false;
 
-    QList<QString> cls;
-    cls.reserve(classes.size());
-    for (const QString& s : classes)
-        cls.push_back(s);
-
-    // class_colors как список строк "name=#AARRGGBB"
-    QList<QString> colorLines;
-    colorLines.reserve(classes.size());
-    for (const QString& name : classes)
+    YamlConfig::Func saveClasses = [&](YamlConfig* conf, YAML::Node& yclasses, bool)
     {
-        const QColor c = colors.value(name, QColor());
-        if (c.isValid())
-            colorLines.push_back(name + "=" + c.name(QColor::HexArgb));
-    }
+        for (const QString& name : classes)
+        {
+            YAML::Node yclass;
+
+            conf->setValue(yclass, "name", name);
+
+            const QColor c = colors.value(name, QColor());
+            if (c.isValid())
+                conf->setValue(yclass, "color", c.name(QColor::HexArgb));
+
+            yclasses.push_back(yclass);
+        }
+        return true;
+    };
 
     YamlConfig yconfig;
-    yconfig.setValue("classes", cls);
-    yconfig.setValue("class_colors", colorLines);
+    yconfig.setValue("classes", saveClasses);
 
     const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(path));
     return yconfig.saveFile(std::string(encoded.constData(), encoded.size()));
-
-    // std::string str;
-    // yconfig.saveString(str);
-
-    // // YAML::Emitter seq;
-    // // seq.SetIndent(2);
-    // // seq << YAML::Flow << YAML::BeginSeq;
-    // // for (const QString& s : classes)
-    // //     seq << s.toUtf8().constData();
-    // // seq << YAML::EndSeq;
-    // // if (!seq.good())
-    // //     return false;
-
-    // // защита от "пустой записи"
-    // if (str.empty())
-    //     return false;
-
-
-    // QByteArray body;
-    // body += "---\n";
-    // body += "### QLabelMe YAML syntax ###\n\n";
-    // body += str.c_str();
-    // body += "\n\n...\n";
-
-    // QSaveFile sf {path};
-    // if (!sf.open(QIODevice::WriteOnly))
-    //     return false;
-
-    // if (sf.write(body) != body.size())
-    //     return false;
-
-    // return sf.commit();
 }
 
 void MainWindow::onPolygonListItemClicked(QListWidgetItem* item)
@@ -10368,8 +10464,20 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
     if (!item)
         return;
 
-    const QColor lineColor = classColorFor(className);
-    if (!lineColor.isValid())
+    const QColor classColor = classColorFor(className);
+
+    QColor lineColor;
+    if (dynamic_cast<qgraph::Rectangle*>(item))
+        lineColor = classColor.isValid() ? classColor : _vis.rectangleLineColor;
+    else if (dynamic_cast<qgraph::Circle*>(item))
+        lineColor = classColor.isValid() ? classColor : _vis.circleLineColor;
+    else if (dynamic_cast<qgraph::Polyline*>(item))
+        lineColor = classColor.isValid() ? classColor : _vis.polylineLineColor;
+    else if (dynamic_cast<qgraph::Line*>(item))
+        lineColor = classColor.isValid() ? classColor : _vis.lineLineColor;
+    else if (dynamic_cast<qgraph::Point*>(item))
+        lineColor = classColor.isValid() ? classColor : _vis.pointColor;
+    else
         return;
 
     QColor fillColor = lineColor;

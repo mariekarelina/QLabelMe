@@ -19,14 +19,6 @@
 
 static constexpr int RoleClassName = Qt::UserRole + 1; // Имя класса для QLabel
 
-// Выбор цвета
-static QColor defaultColorForIndex(int i)
-{
-    QColor c;
-    c.setHsl((i * 47) % 360, 200, 120);
-    return c;
-}
-
 static void applyColorToButton(QToolButton* btn, const QColor& c)
 {
     if (!btn) return;
@@ -119,8 +111,6 @@ void ProjectSettings::setProjectClasses(const QStringList& classes)
             it->setData(RoleClassName, name);
 
             QColor c = _classColors.value(name, QColor());
-            if (!c.isValid())
-                c = defaultColorForIndex(i);
 
             it->setData(Qt::UserRole, c);
 
@@ -149,6 +139,8 @@ QMap<QString, QColor> ProjectSettings::projectClassColors() const
 
 void ProjectSettings::setProjectClassColors(const QMap<QString, QColor>& colors)
 {
+    _classColors = colors;
+
     if (!ui || !ui->listClasses)
         return;
 
@@ -241,8 +233,6 @@ void ProjectSettings::onSortAZ()
         d.name = it->data(RoleClassName).toString();
 
         d.color = it->data(Qt::UserRole).value<QColor>();
-        if (!d.color.isValid())
-            d.color = defaultColorForIndex(i);
         items.append(d);
     }
 
@@ -377,8 +367,7 @@ void ProjectSettings::onAddClass()
     it->setText("");
     it->setData(RoleClassName, name);
 
-    QColor color = defaultColorForIndex(ui->listClasses->count());
-    it->setData(Qt::UserRole, color);
+    it->setData(Qt::UserRole, QColor());
 
     ui->listClasses->insertItem(insertRow, it);
     rebuildClassRowWidget(it);
@@ -551,9 +540,7 @@ QWidget* ProjectSettings::makeClassRowWidget(QListWidgetItem* item)
     lay->setAlignment(btn, Qt::AlignVCenter);
 
     QColor c = item->data(Qt::UserRole).value<QColor>();
-    if (!c.isValid())
-        c = QColor("#3b6cff");
-    applyColorToButton(btn, c);
+    applyColorToButton(btn, c.isValid() ? c : QColor("#808080"));
 
     lay->addWidget(lbl);
     lay->addStretch(1);
@@ -576,7 +563,8 @@ QWidget* ProjectSettings::makeClassRowWidget(QListWidgetItem* item)
     connect(btn, &QToolButton::clicked, this, [this, item, btn]()
     {
         QColor cur = item->data(Qt::UserRole).value<QColor>();
-        if (!cur.isValid()) cur = QColor("#3b6cff");
+        if (!cur.isValid())
+            cur = QColor("#3b6cff");
 
         QColor chosen = QColorDialog::getColor(cur, this, tr("Цвет"));
         if (!chosen.isValid())
