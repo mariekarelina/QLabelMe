@@ -5573,7 +5573,7 @@ void MainWindow::updatePolygonListForCurrentScene()
     });
 
     for (QGraphicsItem* item : roots)
-        linkSceneItemToList(item);
+        linkSceneItemToList(item, -1, false);
 
     renumberPolygonList();
 }
@@ -7834,10 +7834,10 @@ void MainWindow::removePolygonListItem(QListWidgetItem* item)
 
 void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem)
 {
-    linkSceneItemToList(sceneItem, -1);
+    linkSceneItemToList(sceneItem, -1, true);
 }
 
-void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem, int row)
+void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem, int row, bool needRenumber)
 {
     if (!sceneItem)
         return;
@@ -7854,7 +7854,10 @@ void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem, int row)
     else
         ui->polygonList->insertItem(row, listItem);
 
-    //renumberPolygonList();
+    if (needRenumber)
+        renumberPolygonList();
+    else
+        updatePolygonListItemText(listItem);
 }
 
 void MainWindow::renumberPolygonList()

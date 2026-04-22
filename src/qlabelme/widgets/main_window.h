@@ -331,7 +331,7 @@ private:
 
     // Связывание элементов сцены и списка
     void linkSceneItemToList(QGraphicsItem* sceneItem);
-    void linkSceneItemToList(QGraphicsItem* sceneItem, int row);
+    void linkSceneItemToList(QGraphicsItem* sceneItem, int row, bool needRenumber = true);
     void renumberPolygonList();
     void renumberPolygonListTextOnly();
 
