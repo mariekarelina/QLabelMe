@@ -894,6 +894,20 @@ void Polyline::toggleSelectionRect()
     updateSelectionRect();
 }
 
+void Polyline::setGlobalSelectionRectVisible(bool visible)
+{
+    if (_globalSelectionRectVisible == visible)
+    {
+        updateSelectionRect();
+        return;
+    }
+
+    _globalSelectionRectVisible = visible;
+    _selectionRectVisible = visible;
+
+    updateSelectionRect();
+}
+
 void Polyline::updateHandlesZValue()
 {
     for (DragCircle* circle : _circles)
@@ -1031,7 +1045,7 @@ void Polyline::updatePointNumbersAfterReorder()
 
 void Polyline::updatePointNumbers()
 {
-    const bool visibleNumbers = (_globalPointNumbersVisible || _pointNumbersVisible);
+    const bool visibleNumbers = _pointNumbersVisible;
 
     // Если нумерация выключена - ничего не удаляем, просто скрываем
     if (!visibleNumbers)
@@ -1511,9 +1525,14 @@ void Polyline::togglePointNumbers()
 void Polyline::setGlobalPointNumbersVisible(bool visible)
 {
     if (_globalPointNumbersVisible == visible)
+    {
+        updatePointNumbers();
         return;
+    }
 
     _globalPointNumbersVisible = visible;
+    _pointNumbersVisible = visible;
+
     updatePointNumbers();
 }
 

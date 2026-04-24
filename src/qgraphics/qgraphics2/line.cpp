@@ -876,6 +876,20 @@ void Line::toggleSelectionRect()
     updateSelectionRect();
 }
 
+void Line::setGlobalSelectionRectVisible(bool visible)
+{
+    if (_globalSelectionRectVisible == visible)
+    {
+        updateSelectionRect();
+        return;
+    }
+
+    _globalSelectionRectVisible = visible;
+    _selectionRectVisible = visible;
+
+    updateSelectionRect();
+}
+
 void Line::updateHandlesZValue()
 {
     for (DragCircle* circle : _circles)
@@ -1013,7 +1027,7 @@ void Line::updatePointNumbersAfterReorder()
 
 void Line::updatePointNumbers()
 {
-    const bool visibleNumbers = (_globalPointNumbersVisible || _pointNumbersVisible);
+    const bool visibleNumbers = _pointNumbersVisible;
 
     if (!visibleNumbers)
     {
@@ -1355,9 +1369,14 @@ void Line::togglePointNumbers()
 void Line::setGlobalPointNumbersVisible(bool visible)
 {
     if (_globalPointNumbersVisible == visible)
+    {
+        updatePointNumbers();
         return;
+    }
 
     _globalPointNumbersVisible = visible;
+    _pointNumbersVisible = visible;
+
     updatePointNumbers();
 }
 

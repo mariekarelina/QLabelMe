@@ -80,14 +80,11 @@ public:
     void setGlobalPointNumbersVisible(bool visible);
 
     bool isPointNumbersVisible() const { return _pointNumbersVisible; }
-    bool isGlobalPointNumbersVisible() const { return _globalPointNumbersVisible; }
-    bool isAnyPointNumbersVisible() const
-    {
-        return _globalPointNumbersVisible || _pointNumbersVisible;
-    }
 
     void toggleSelectionRect();
     bool isSelectionRectVisible() const { return _selectionRectVisible; }
+
+    void setGlobalSelectionRectVisible(bool visible);
 
     void updateHandlesZValue();
     void raiseHandlesToTop() override;
@@ -157,6 +154,7 @@ public:
     bool _globalPointNumbersVisible = false;
     QGraphicsRectItem* _selectionRect = nullptr;
     bool _selectionRectVisible = true;
+    bool _globalSelectionRectVisible = true;
 
     bool _closeCallbackScheduled = false;
 

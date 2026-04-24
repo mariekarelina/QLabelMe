@@ -175,6 +175,13 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="showSelectionFrame">
+         <property name="text">
+          <string>Показывать рамку фигур</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QCheckBox" name="fillShapeWhenSelected">
          <property name="text">
           <string>Заполнять фигуру при выделении</string>

@@ -4860,6 +4860,7 @@ void MainWindow::on_actSettingsApp_triggered()
     init.numberFontPt      = _vis.numberFontPt;
     init.pointSize         = _vis.pointSize;
     init.showNumbers = _vis.showNumbers;
+    init.showSelectionFrame = _vis.showSelectionFrame;
     init.fillShapeWhenSelected = _vis.fillShapeWhenSelected;
 
     init.nodeColor         = _vis.handleColor;           // «Цвет узла»
@@ -4901,6 +4902,7 @@ void MainWindow::on_actSettingsApp_triggered()
         _edgePickRadius  = v.edgePickRadius;
         _vis.numberFontPt = v.numberFontPt;
         _vis.showNumbers = v.showNumbers;
+        _vis.showSelectionFrame = v.showSelectionFrame;
         _vis.fillShapeWhenSelected = v.fillShapeWhenSelected;
         _vis.pointSize = v.pointSize;
 
@@ -8895,6 +8897,9 @@ void MainWindow::loadVisualStyle()
     if (!config::base().getValue("graphics.show_numbers", _vis.showNumbers))
         _vis.showNumbers = false;
 
+    if (!config::base().getValue("graphics.show_selection_frame", _vis.showSelectionFrame))
+        _vis.showSelectionFrame = false;
+
     if (!config::base().getValue("graphics.fill_shape_when_selected", _vis.fillShapeWhenSelected))
         _vis.fillShapeWhenSelected = true;
 
@@ -8978,6 +8983,7 @@ void MainWindow::saveVisualStyle() const
     config::base().setValue("graphics.edge_pick_radius", _edgePickRadius);
     config::base().setValue("graphics.number_font_pt", _vis.numberFontPt);
     config::base().setValue("graphics.show_numbers", _vis.showNumbers);
+    config::base().setValue("graphics.show_selection_frame", _vis.showSelectionFrame);
     config::base().setValue("graphics.point_size", _vis.pointSize);
     config::base().setValue("graphics.handle_color", _vis.handleColor.name(QColor::HexArgb));
     config::base().setValue("graphics.selected_handle_color", _vis.selectedHandleColor.name(QColor::HexArgb));
@@ -9140,6 +9146,7 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
 
         c->setPen(p);
         c->applyLineStyle(w);
+        c->setGlobalSelectionRectVisible(_vis.showSelectionFrame);
         return;
     }
     if (auto pl= dynamic_cast<qgraph::Polyline*>(it))
@@ -9154,6 +9161,7 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
         p.setColor(cc.isValid() ? cc : _vis.polylineLineColor);
 
         pl->setPen(p);
+        pl->setGlobalSelectionRectVisible(_vis.showSelectionFrame);
         return;
     }
     if (auto l = dynamic_cast<qgraph::Line*>(it))
@@ -9168,6 +9176,7 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
         p.setColor(cc.isValid() ? cc : _vis.lineLineColor);
 
         l->setPen(p);
+        l->setGlobalSelectionRectVisible(_vis.showSelectionFrame);
         return;
     }
     if (auto pnt = dynamic_cast<qgraph::Point*>(it))
