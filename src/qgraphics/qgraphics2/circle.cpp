@@ -799,6 +799,20 @@ void Circle::toggleSelectionRect()
     updateSelectionRect();
 }
 
+void Circle::setGlobalSelectionRectVisible(bool visible)
+{
+    if (_globalSelectionRectVisible == visible)
+    {
+        updateSelectionRect();
+        return;
+    }
+
+    _globalSelectionRectVisible = visible;
+    _selectionRectVisible = visible;
+
+    updateSelectionRect();
+}
+
 bool Circle::isCursorNearCircle(const QPointF& cursorPos) const
 {
     // Преобразуем координаты в систему сцены

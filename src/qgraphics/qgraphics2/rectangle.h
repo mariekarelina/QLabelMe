@@ -49,11 +49,6 @@ public:
     void setGlobalPointNumbersVisible(bool visible);
 
     bool isPointNumbersVisible() const { return _pointNumbersVisible; }
-    bool isGlobalPointNumbersVisible() const { return _globalPointNumbersVisible; }
-    bool isAnyPointNumbersVisible() const
-    {
-        return _globalPointNumbersVisible || _pointNumbersVisible;
-    }
 
     void updateHandlesZValue();
     void raiseHandlesToTop() override;

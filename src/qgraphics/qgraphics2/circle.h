@@ -56,6 +56,8 @@ public:
     void toggleSelectionRect();
     bool isSelectionRectVisible() const { return _selectionRectVisible; }
 
+    void setGlobalSelectionRectVisible(bool visible);
+
     DragCircle* getDragCircle() const { return _circle; }
 
     QVariant saveState() const;
@@ -100,6 +102,7 @@ private:
 
     QGraphicsRectItem* _selectionRect = nullptr;
     bool _selectionRectVisible = true;
+    bool _globalSelectionRectVisible = true;
 };
 
 } // namespace qgraph

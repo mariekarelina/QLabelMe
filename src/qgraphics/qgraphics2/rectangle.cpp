@@ -506,7 +506,7 @@ void Rectangle::updatePointNumbers()
     if (!scene())
         return;
 
-    const bool visibleNumbers = (_globalPointNumbersVisible || _pointNumbersVisible);
+    const bool visibleNumbers = _pointNumbersVisible;
 
     if (!visibleNumbers)
     {
@@ -720,9 +720,14 @@ void Rectangle::togglePointNumbers()
 void Rectangle::setGlobalPointNumbersVisible(bool visible)
 {
     if (_globalPointNumbersVisible == visible)
+    {
+        updatePointNumbers();
         return;
+    }
 
     _globalPointNumbersVisible = visible;
+    _pointNumbersVisible = visible;
+
     updatePointNumbers();
 }
 

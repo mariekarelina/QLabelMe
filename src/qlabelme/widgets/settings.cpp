@@ -143,6 +143,7 @@ void Settings::applyModelToUi()
     ui->keepImageScale->setChecked(_values.keepImageScale);
     ui->keepMenuBarVisibility->setChecked(_values.keepMenuBarVisibility);
     ui->showNumbers->setChecked(_values.showNumbers);
+    ui->showSelectionFrame->setChecked(_values.showSelectionFrame);
     ui->fillShapeWhenSelected->setChecked(_values.fillShapeWhenSelected);
 
 
@@ -241,6 +242,7 @@ void Settings::applyUiToModel()
     _values.keepImageScale = ui->keepImageScale->isChecked();
     _values.keepMenuBarVisibility = ui->keepMenuBarVisibility->isChecked();
     _values.showNumbers = ui->showNumbers->isChecked();
+    _values.showSelectionFrame = ui->showSelectionFrame->isChecked();
 
     if (ui->spinHandlePickRadius)
         _values.handlePickRadius = ui->spinHandlePickRadius->value();
