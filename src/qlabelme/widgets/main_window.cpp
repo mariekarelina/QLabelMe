@@ -1013,68 +1013,80 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         // }
         else
         {
-            // Обычный режим просмотра
-            if (clickedItem == _videoRect)
+            const bool shiftPressed = mouseEvent->modifiers() & Qt::ShiftModifier;
+
+            // Shift + ЛКМ по фигуре - перемещение фигуры
+            if (shiftPressed)
             {
-                _isDraggingImage = true;
+                if (selectionItem && selectionItem != _videoRect)
+                {
+                    QGraphicsItem* mov = findMovableAncestor(selectionItem);
+
+                    if (mov && mov != _videoRect &&
+                        mov->flags().testFlag(QGraphicsItem::ItemIsMovable))
+                    {
+                        _movingItem = mov;
+                        _moveBeforeSnap = makeBackupFromItem(_movingItem);
+                        _moveHadChanges = false;
+                        _moveInProgress = true;
+
+                        const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
+                        _moveGrabOffsetScene = scenePos - _movingItem->scenePos();
+                        _moveSavedFlags = _movingItem->flags();
+
+                        // Отключаем штатное Qt-перемещение, двигаем сами через _movingItem
+                        _movingItem->setFlag(QGraphicsItem::ItemIsMovable, false);
+
+                        _movingItems.clear();
+                        _moveGroupBefore.clear();
+                        _moveGroupInitialPos.clear();
+                        _moveIsGroup = false;
+                        _movePressScenePos = scenePos;
+
+                        const QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+                        if (selectedItems.size() > 1 && mov->isSelected())
+                        {
+                            _moveIsGroup = true;
+
+                            for (QGraphicsItem* sel : selectedItems)
+                            {
+                                if (!sel)
+                                    continue;
+
+                                QGraphicsItem* root = findMovableAncestor(sel);
+                                if (!root)
+                                    continue;
+
+                                if (_movingItems.contains(root))
+                                    continue;
+
+                                _movingItems.append(root);
+                                _moveGroupBefore.append(makeBackupFromItem(root));
+                                _moveGroupInitialPos.append(root->scenePos());
+                            }
+
+                            if (!_movingItems.contains(_movingItem))
+                            {
+                                _movingItems.append(_movingItem);
+                                _moveGroupBefore.append(makeBackupFromItem(_movingItem));
+                                _moveGroupInitialPos.append(_movingItem->scenePos());
+                            }
+                        }
+                    }
+                }
+
                 _lastMousePos = mouseEvent->pos();
                 mouseEvent->accept();
                 updateModeLabel();
                 return;
             }
 
-            if (clickedItem && !qgraphicsitem_cast<qgraph::DragCircle*>(clickedItem))
-            {
-                QGraphicsItem* mov = findMovableAncestor(clickedItem);
-                if (mov && mov->flags().testFlag(QGraphicsItem::ItemIsMovable))
-                {
-                    _movingItem = mov;
-                    _moveBeforeSnap = makeBackupFromItem(_movingItem);
-                    _moveHadChanges = false;
-                    _moveInProgress = true;
-
-                    const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
-                    _moveGrabOffsetScene = scenePos - _movingItem->scenePos();
-                    _moveSavedFlags = _movingItem->flags();
-                    _movingItem->setFlag(QGraphicsItem::ItemIsMovable, false);
-
-                    _movingItems.clear();
-                    _moveGroupBefore.clear();
-                    _moveGroupInitialPos.clear();
-                    _moveIsGroup = false;
-                    _movePressScenePos = scenePos;
-
-                    const QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
-                    if (selectedItems.size() > 1 && mov->isSelected())
-                    {
-                        _moveIsGroup = true;
-
-                        for (QGraphicsItem* sel : selectedItems)
-                        {
-                            if (!sel)
-                                continue;
-
-                            QGraphicsItem* root = findMovableAncestor(sel);
-                            if (!root)
-                                continue;
-
-                            if (_movingItems.contains(root))
-                                continue;
-
-                            _movingItems.append(root);
-                            _moveGroupBefore.append(makeBackupFromItem(root));
-                            _moveGroupInitialPos.append(root->scenePos());
-                        }
-
-                        if (!_movingItems.contains(_movingItem))
-                        {
-                            _movingItems.append(_movingItem);
-                            _moveGroupBefore.append(makeBackupFromItem(_movingItem));
-                            _moveGroupInitialPos.append(_movingItem->scenePos());
-                        }
-                    }
-                }
-            }
+            // Обычный ЛКМ - только перемещение изображения
+            _isDraggingImage = true;
+            _lastMousePos = mouseEvent->pos();
+            mouseEvent->accept();
+            updateModeLabel();
+            return;
         }
 
         _lastMousePos = mouseEvent->pos();
@@ -1492,6 +1504,8 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
     }
     else if (_movingItem)
     {
+        // Перед сбросом возвращаем исходные флаги
+        _movingItem->setFlags(_moveSavedFlags);
         // ЛКМ уже не зажата, но _movingItem остался - сбрасываем состояние
         _movingItem = nullptr;
         _movingItems.clear();
@@ -2597,6 +2611,10 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     }
                 }
             }
+            // Shift + ЛКМ используется для перемещения всей фигуры
+            // Поэтому ручки не должны перехватывать этот жест как редактирование узла
+            if (me->modifiers() & Qt::ShiftModifier)
+                break;
             // Если мы были в режиме "продолжение" и пользователь откатился undo
             // до состояния, где фигуры уже нет
             if (_resumeEditing && _resumeUid)
