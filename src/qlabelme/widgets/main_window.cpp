@@ -6297,6 +6297,9 @@ void MainWindow::copySelectedShapes()
     // Собираем JSON только по выделенным фигурам на текущей сцене
     QJsonObject json = serializeSelectedItemsToJson(doc->scene);
 
+    // Запоминаем снимок, с которого были скопированы примитивы
+    json["sourceImagePath"] = QFileInfo(doc->filePath).absoluteFilePath();
+
     // Локальный буфер
     _shapesClipboard = json;
 
@@ -6321,9 +6324,43 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     // Запоминаем, что было на сцене ДО вставки
     QList<QGraphicsItem*> beforeItems = scene->items();
-    const QPointF pasteOffset(10.0, 10.0);
+
+    auto normalizedImagePath = [](const QString& path) -> QString
+    {
+        if (path.isEmpty())
+            return {};
+
+        return QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+    };
+
+    const QString sourcePath = normalizedImagePath(json["sourceImagePath"].toString());
+    const QString currentPath = normalizedImagePath(doc->filePath);
+
+    #ifdef Q_OS_WIN
+    const bool sameImage = !sourcePath.isEmpty() &&
+                           QString::compare(sourcePath, currentPath, Qt::CaseInsensitive) == 0;
+    #else
+    const bool sameImage = !sourcePath.isEmpty() && sourcePath == currentPath;
+    #endif
+
+    QPointF pasteOffset;
+
+    if (sameImage)
+    {
+        QSize imageSize = doc->pixmap.size();
+
+        if (!imageSize.isValid() && _videoRect)
+            imageSize = _videoRect->pixmap().size();
+
+        const qreal imageSide = qMin(imageSize.width(), imageSize.height());
+
+        // Сдвиг равен 2% от меньшей стороны изображения
+        const qreal offsetValue = qBound<qreal>(10.0, imageSide * 0.02, 250.0);
+
+        pasteOffset = QPointF(offsetValue, offsetValue);
+    }
+
     deserializeJsonToScene(scene, json, pasteOffset);
-    //deserializeJsonToScene(scene, json);
 
     // Собираем список новых фигур (тех, которых не было в beforeItems)
     QList<QGraphicsItem*> afterItems = scene->items();
