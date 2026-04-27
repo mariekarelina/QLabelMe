@@ -7940,9 +7940,6 @@ void MainWindow::renumberPolygonList()
         if (!sceneItem->isVisible())
             text += " [скрыто]";
         item->setText(text);
-
-        // Порядок списка = порядок фигур
-        sceneItem->setZValue(i);
     }
 
     if (_scene)
@@ -8092,97 +8089,95 @@ void MainWindow::moveSelectedItemsToBack()
         return;
 
     QList<QGraphicsItem*> selectedRoots;
-    QList<QGraphicsItem*> allRoots;
+    QList<QGraphicsItem*> nonSelectedRoots;
 
-    for (QGraphicsItem* item : _scene->items())
+    auto isRootShape = [this](QGraphicsItem* item) -> bool
     {
         if (!item)
-            continue;
+            return false;
 
         if (item == _videoRect ||
             item == _tempRectItem ||
             item == _tempCircleItem ||
             item == _tempPolyline)
         {
-            continue;
+            return false;
         }
 
         if (item->parentItem() != nullptr)
+            return false;
+
+        return dynamic_cast<qgraph::Rectangle*>(item) ||
+               dynamic_cast<qgraph::Circle*>(item) ||
+               dynamic_cast<qgraph::Polyline*>(item) ||
+               dynamic_cast<qgraph::Line*>(item) ||
+               dynamic_cast<qgraph::Point*>(item);
+    };
+
+    for (QGraphicsItem* item : _scene->items())
+    {
+        if (!isRootShape(item))
             continue;
-
-        const bool isShape =
-                dynamic_cast<qgraph::Rectangle*>(item) ||
-                dynamic_cast<qgraph::Circle*>(item) ||
-                dynamic_cast<qgraph::Polyline*>(item) ||
-                dynamic_cast<qgraph::Line*>(item) ||
-                dynamic_cast<qgraph::Point*>(item);
-
-        if (!isShape)
-            continue;
-
-        allRoots.append(item);
 
         if (item->isSelected())
             selectedRoots.append(item);
+        else
+            nonSelectedRoots.append(item);
     }
 
     if (selectedRoots.isEmpty())
         return;
 
-    // Сохраняем относительный порядок выделенных фигур
-    std::sort(selectedRoots.begin(), selectedRoots.end(),
-              [](QGraphicsItem* a, QGraphicsItem* b)
+    auto byZ = [](QGraphicsItem* a, QGraphicsItem* b)
     {
+        if (qFuzzyCompare(a->zValue(), b->zValue()))
+            return a < b;
+
         return a->zValue() < b->zValue();
-    });
+    };
 
-    qreal minNonSelectedZ = 0.0;
-    bool hasNonSelected = false;
+    std::sort(selectedRoots.begin(), selectedRoots.end(), byZ);
+    std::sort(nonSelectedRoots.begin(), nonSelectedRoots.end(), byZ);
 
-    for (QGraphicsItem* item : allRoots)
-    {
-        if (!item || selectedRoots.contains(item))
-            continue;
+    QList<QGraphicsItem*> orderedRoots;
+    orderedRoots.reserve(selectedRoots.size() + nonSelectedRoots.size());
 
-        if (!hasNonSelected)
-        {
-            minNonSelectedZ = item->zValue();
-            hasNonSelected = true;
-        }
-        else
-        {
-            minNonSelectedZ = qMin(minNonSelectedZ, item->zValue());
-        }
-    }
+    // Выбранные фигуры уходят в самый низ среди фигур.
+    // Их внутренний относительный порядок сохраняется.
+    orderedRoots.append(selectedRoots);
+    orderedRoots.append(nonSelectedRoots);
 
-    // Базовый нижний слой для фигур: сразу над изображением
     const qreal imageZ = (_videoRect ? _videoRect->zValue() : 0.0);
-    const qreal shapesFloorZ = imageZ + 1.0;
+    qreal z = imageZ + 1.0;
 
-    qreal startZ = shapesFloorZ;
-
-    // Если есть другие невыделенные фигуры выше нижнего слоя,
-    // ставим выделенные перед ними, но не ниже изображения
-    if (hasNonSelected)
-        startZ = qMax(shapesFloorZ, minNonSelectedZ - selectedRoots.size());
-
-    qreal z = startZ;
-    for (QGraphicsItem* item : selectedRoots)
-    {
-        item->setZValue(z);
-        z += 1.0;
-    }
-    for (QGraphicsItem* item : selectedRoots)
+    for (QGraphicsItem* item : orderedRoots)
     {
         if (item)
-            item->setSelected(false);
+            item->setZValue(z++);
     }
 
-    raiseAllHandlesToTop();
-    updateCoordinateList();
-    _scene->update();
-}
+    {
+        QSignalBlocker blockScene(_scene);
+        QSignalBlocker blockList(ui->polygonList);
 
+        for (QGraphicsItem* item : selectedRoots)
+        {
+            if (item)
+                item->setSelected(false);
+        }
+
+        if (ui && ui->polygonList)
+            ui->polygonList->clearSelection();
+    }
+
+    if (ui && ui->coordinateList)
+        ui->coordinateList->clear();
+
+    raiseAllHandlesToTop();
+
+    if (_scene)
+        _scene->update();
+}
 bool MainWindow::hasUnsavedChanges() const
 {
     for (const auto& doc : _documentsMap.values())
@@ -9656,7 +9651,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
             apply_NumberSize_ToItem(rect);
             rect->setData(0, b.className);
             applyClassColorToItem(rect, b.className);
-            //rect->setZValue(b.z);
+            rect->setZValue(b.z);
             rect->setVisible(b.visible);
             linkSceneItemToList(rect, b.listRow);
             created = rect;
@@ -9672,7 +9667,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
             apply_PointSize_ToItem(c);
             c->setData(0, b.className);
             applyClassColorToItem(c, b.className);
-            //c->setZValue(b.z);
+            c->setZValue(b.z);
             c->setVisible(b.visible);
             c->updateHandlePosition();
             linkSceneItemToList(c, b.listRow);
@@ -9701,7 +9696,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
 
             pl->setData(0, b.className);
             applyClassColorToItem(pl, b.className);
-            //pl->setZValue(b.z);
+            pl->setZValue(b.z);
             pl->setVisible(b.visible);
             pl->updateHandlePosition();
             linkSceneItemToList(pl, b.listRow);
@@ -9730,7 +9725,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
 
             ln->setData(0, b.className);
             applyClassColorToItem(ln, b.className);
-            //ln->setZValue(b.z);
+            ln->setZValue(b.z);
             ln->setVisible(b.visible);
             ln->updateHandlePosition();
             linkSceneItemToList(ln, b.listRow);
@@ -9748,7 +9743,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
             pt->setCenter(b.pointCenter);
             pt->setData(0, b.className);
             applyClassColorToItem(pt, b.className);
-            //pt->setZValue(b.z);
+            pt->setZValue(b.z);
             pt->setVisible(b.visible);
             linkSceneItemToList(pt, b.listRow);
             created = pt;
