@@ -338,7 +338,11 @@ void ProjectSettings::onAddClass()
     const QString name = dlg.textValue().trimmed();
     if (name.isEmpty())
     {
-        QMessageBox::information(this, tr("Добавление"), tr("Имя класса не должно быть пустым."));
+        messageBox(
+            this,
+            QMessageBox::Information,
+            tr("Имя класса не должно быть пустым.")
+        );
         return;
     }
 
@@ -351,8 +355,11 @@ void ProjectSettings::onAddClass()
 
     if (containsCaseInsensitive(current, name))
     {
-        QMessageBox::information(this, tr("Добавление"),
-                                 tr("Класс с таким именем уже существует."));
+        messageBox(
+            this,
+            QMessageBox::Information,
+            tr("Класс с таким именем уже существует.")
+        );
         return;
     }
 
@@ -479,8 +486,11 @@ void ProjectSettings::onEditClass()
 
     if (newName.isEmpty())
     {
-        //QMessageBox::information(this, tr("Редактирование"), tr("Имя класса не должно быть пустым."));
-        messageBox(this, QMessageBox::Information, u8"Имя класса не должно быть пустым.");
+        messageBox(
+            this,
+            QMessageBox::Information,
+            tr("Имя класса не должно быть пустым.")
+        );
         return;
     }
     if (newName.compare(oldName, Qt::CaseInsensitive) == 0)
@@ -489,8 +499,11 @@ void ProjectSettings::onEditClass()
     }
     if (containsCaseInsensitiveExcept(current, newName, oldName))
     {
-        QMessageBox::information(this, tr("Редактирование"),
-                                 tr("Класс с таким именем уже существует."));
+        messageBox(
+            this,
+            QMessageBox::Information,
+            tr("Класс с таким именем уже существует.")
+        );
         return;
     }
 

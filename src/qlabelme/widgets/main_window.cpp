@@ -27,6 +27,7 @@
 #include "select_class.h"
 #include "settings.h"
 #include "user_guide.h"
+#include "message_box.h"
 
 #include <QApplication>
 #include <QMessageBox>
@@ -623,8 +624,11 @@ MainWindow::MainWindow(QWidget *parent) :
 
             if (!saveProjectClasses(_projectClasses, _projectClassColors))
             {
-                QMessageBox::warning(this, tr("Ошибка"),
-                                     tr("Не удалось сохранить classes.yaml"));
+                messageBox(
+                    this,
+                    QMessageBox::Warning,
+                    tr("Не удалось сохранить classes.yaml")
+                );
             }
         });
 
@@ -4552,7 +4556,11 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
     // Проверяем, существует ли выбранная папка
     if (!QDir(folderPath).exists())
     {
-        QMessageBox::warning(this, tr("Ошибка"), tr("Выбранная папка не существует!"));
+        messageBox(
+            this,
+            QMessageBox::Warning,
+            tr("Выбранная папка не существует!")
+        );
         return;
     }
 
@@ -5372,9 +5380,11 @@ void MainWindow::on_actRestoreAnnotation_triggered()
 
     if (!QFileInfo::exists(yamlPath))
     {
-        QMessageBox::information(this,
-                                 tr("Восстановить разметку"),
-                                 tr("Файл разметки не найден:\n%1").arg(yamlPath));
+        messageBox(
+            this,
+            QMessageBox::Information,
+            tr("Файл разметки не найден:\n%1").arg(yamlPath)
+        );
         return;
     }
 
@@ -7292,16 +7302,22 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
 
         if (!yconfig.readString(conf.toStdString()))
         {
-            QMessageBox::warning(this, tr("Ошибка"),
-                                 tr("Ошибка при чтении базового файла с классами!"));
+            messageBox(
+                this,
+                QMessageBox::Warning,
+                tr("Ошибка при чтении базового файла с классами!")
+            );
             //alog::stop();
             return false;
         }
         if (!yconfig.saveFile(std::string(encoded.constData(), encoded.size())))
         {
-            QMessageBox::warning(this, tr("Ошибка"),
-                                 tr("Ошибка при сохранении в базовый файл с классами! "
-                                    "Более подробную информацию смотри в .log файле"));
+            messageBox(
+                this,
+                QMessageBox::Warning,
+                tr("Ошибка при сохранении в базовый файл с классами! "
+                   "Более подробную информацию смотри в .log файле")
+            );
             //alog::stop();
             return false;
         }
@@ -7310,9 +7326,12 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
     {
         if (!yconfig.readFile(std::string(encoded.constData(), encoded.size())))
         {
-            QMessageBox::warning(this, tr("Ошибка"),
-                                 tr("Ошибка при чтении файла с классами!"
-                                    "Более подробную информацию смотри в .log файле"));
+            messageBox(
+                this,
+                QMessageBox::Warning,
+                tr("Ошибка при чтении файла с классами! "
+                   "Более подробную информацию смотри в .log файле")
+            );
             return false;
         }
     }
@@ -7364,8 +7383,11 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
 
         if (!yconfig.getValue("classes", oldClasses, false))
         {
-            QMessageBox::warning(this, tr("Ошибка"),
-                                 tr("Нет секции классов"));
+            messageBox(
+                this,
+                QMessageBox::Warning,
+                tr("Нет секции классов")
+            );
             return false;
         }
 
@@ -10720,9 +10742,12 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
     const QString lb = b->data(0).toString();
     if (!la.isEmpty() && !lb.isEmpty() && la != lb)
     {
-        QMessageBox::warning(this, tr("Объединить линии"),
-                             tr("Нельзя объединить линии разных классов:\n\"%1\" и \"%2\".")
-                                 .arg(la, lb));
+        messageBox(
+            this,
+            QMessageBox::Warning,
+            tr("Нельзя объединить линии разных классов:\n\"%1\" и \"%2\".")
+                .arg(la, lb)
+        );
         return false;
     }
     const QString outLabel = !la.isEmpty() ? la : lb;
@@ -10925,8 +10950,11 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePo
     const int n = before.points.size();
     if (n < 4)
     {
-        QMessageBox::warning(this, tr("Разорвать линию"),
-                             tr("Нельзя разорвать линию: нужно минимум 4 точки."));
+        messageBox(
+            this,
+            QMessageBox::Warning,
+            tr("Нельзя разорвать линию: нужно минимум 4 точки.")
+        );
         return false;
     }
 
@@ -10967,9 +10995,12 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePo
     // Чтобы обе линии были валидны (>=2 точки), ребро не должно быть крайним
     if (bestIdx < 1 || bestIdx > n - 3)
     {
-        QMessageBox::warning(this, tr("Разорвать линию"),
-                             tr("Нельзя разорвать по этому ребру: получится линия из одной точки.\n"
-                                "Выберите внутреннее ребро."));
+        messageBox(
+            this,
+            QMessageBox::Warning,
+            tr("Нельзя разорвать по этому ребру: получится линия из одной точки.\n"
+               "Выберите внутреннее ребро.")
+        );
         return false;
     }
 
