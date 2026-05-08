@@ -299,7 +299,7 @@ void Settings::onPickLabelFont()
         &ok,
         initial,
         this,
-        tr("Выбор шрифта"),
+        u8"Выбор шрифта",
         QFontDialog::DontUseNativeDialog
     );
 
@@ -344,6 +344,7 @@ bool Settings::pickColor(QWidget *parent, const QString &title,
                                                  QColorDialog::ShowAlphaChannel);
     if (!chosen.isValid())
         return false;
+
     ioColor = chosen;
     updateColorPreview(previewBtn, ioColor);
     return true;
@@ -353,8 +354,9 @@ void Settings::attachColorPicker(QPushButton *btn, QColor *target)
 {
     if (!btn || !target) return;
     updateColorPreview(btn, *target);
-    connect(btn, &QPushButton::clicked, this, [this, btn, target]{
-        pickColor(this, tr("Выбор цвета"), *target, btn);
+    connect(btn, &QPushButton::clicked, this, [this, btn, target]
+    {
+        pickColor(this, u8"Выбор цвета", *target, btn);
     });
 }
 

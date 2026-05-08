@@ -370,13 +370,13 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->statusBar->addPermanentWidget(new QLabel(vers, this));
 
     _imageSizeLabel = new QLabel(this);
-    _imageSizeLabel->setText(tr("Размер изображения: —"));
+    _imageSizeLabel->setText(u8"Размер изображения: —");
     _imageSizeLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     statusBar()->addWidget(_imageSizeLabel, 0);
 
     // Режим в statusBar
     _modeLabel = new QLabel(this);
-    _modeLabel->setText(tr("Режим: просмотр"));
+    _modeLabel->setText(u8"Режим: просмотр");
     _modeLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     _modeLabel->setObjectName("modeLabel");
     _modeLabel->setMinimumWidth(220);
@@ -511,14 +511,14 @@ MainWindow::MainWindow(QWidget *parent) :
 
     // Стек и действия
     // _undoStack = std::make_unique<QUndoStack>(this);
-    // _actUndo = _undoStack->createUndoAction(this, tr("Отменить"));
-    // _actRedo = _undoStack->createRedoAction(this, tr("Повторить"));
+    // _actUndo = _undoStack->createUndoAction(this, u8"Отменить"));
+    // _actRedo = _undoStack->createRedoAction(this, u8"Повторить"));
 
     // Группа стеков действий для разных документов
     _undoGroup = new QUndoGroup(this);
 
-    // _actUndo = _undoGroup->createUndoAction(this, tr("Отменить"));
-    // _actRedo = _undoGroup->createRedoAction(this, tr("Повторить"));
+    // _actUndo = _undoGroup->createUndoAction(this, u8"Отменить"));
+    // _actRedo = _undoGroup->createRedoAction(this, u8"Повторить"));
 
     // _actUndo->setShortcut(QKeySequence::Undo);
     // _actRedo->setShortcuts({QKeySequence::Redo, QKeySequence(Qt::CTRL | Qt::Key_Y)});
@@ -527,8 +527,8 @@ MainWindow::MainWindow(QWidget *parent) :
     // _actRedo->setShortcutContext(Qt::ApplicationShortcut);
 
     // Фиксированные подписи без динамического хвоста
-    // _actUndo = new QAction(tr("Отменить"), this);
-    // _actRedo = new QAction(tr("Повторить"), this);
+    // _actUndo = new QAction(u8"Отменить"), this);
+    // _actRedo = new QAction(u8"Повторить"), this);
 
     // Триггеры - методы группы
     // connect(_actUndo, &QAction::triggered, _undoGroup, &QUndoGroup::undo);
@@ -551,8 +551,8 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->actUndo->setShortcutContext(Qt::ApplicationShortcut);
     ui->actRedo->setShortcutContext(Qt::ApplicationShortcut);
 
-    // _actUndo->setToolTip(tr("Отменить"));
-    // _actRedo->setToolTip(tr("Повторить"));
+    // _actUndo->setToolTip(u8"Отменить"));
+    // _actRedo->setToolTip(u8"Повторить"));
 
     // actUndo->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
     // actRedo->setIcon(style()->standardIcon(QStyle::SP_ArrowForward));
@@ -603,15 +603,15 @@ MainWindow::MainWindow(QWidget *parent) :
 
     // Панель с QUndoView для визуального контроля
     // _undoView = new QUndoView(_undoStack.get(), this);
-    // _undoView->setEmptyLabel(tr("<пусто>"));
-    // _undoDock = new QDockWidget(tr("Стек действий (временный)"), this);
+    // _undoView->setEmptyLabel(u8"<пусто>"));
+    // _undoDock = new QDockWidget(u8"Стек действий (временный)"), this);
     // _undoDock->setObjectName("UndoDockDebug");
     // _undoDock->setWidget(_undoView);
     // addDockWidget(Qt::RightDockWidgetArea, _undoDock);
 
     _undoView = ui->undoView;
     //_undoView->setStack(_undoStack.get());
-    _undoView->setEmptyLabel(tr("<пусто>"));
+    _undoView->setEmptyLabel(u8"<пусто>");
 
     // Классы в настройках
     _projPropsDialog = new ProjectSettings(this);
@@ -627,7 +627,7 @@ MainWindow::MainWindow(QWidget *parent) :
                 messageBox(
                     this,
                     QMessageBox::Warning,
-                    tr("Не удалось сохранить classes.yaml")
+                    u8"Не удалось сохранить classes.yaml"
                 );
             }
         });
@@ -759,7 +759,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
                 ShapeBackup after = makeBackupFromItem(pl);
                 if (!sameGeometry(before, after))
-                    pushModifyShapeCommand(uid, before, after, tr("Добавление узла"));
+                    pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
 
                 if (auto doc = currentDocument(); doc && !doc->isModified)
                 {
@@ -780,7 +780,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
                 ShapeBackup after = makeBackupFromItem(ln);
                 if (!sameGeometry(before, after))
-                    pushModifyShapeCommand(uid, before, after, tr("Добавление узла"));
+                    pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
 
                 if (auto doc = currentDocument(); doc && !doc->isModified)
                 {
@@ -1262,7 +1262,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 linkSceneItemToList(_currPoint);
 
                 ShapeBackup b = makeBackupFromItem(_currPoint);
-                pushAdoptExistingShapeCommand(_currPoint, b, tr("Добавление точки"));
+                pushAdoptExistingShapeCommand(_currPoint, b, u8"Добавление точки");
             }
         }
 
@@ -1687,7 +1687,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
     //         QPointF after = _videoRect->pos();
     //         pushMoveImageCommand(_shiftImageBeforePos,
     //                              after,
-    //                              tr("Перемещение изображения"));
+    //                              u8"Перемещение изображения"));
     //     }
     //     updateModeLabel();
     //     mouseEvent->accept();
@@ -1727,8 +1727,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 {
                     // Групповое перемещение
                     QString descr = (_movingItems.size() == 1)
-                                      ? tr("Перемещение фигуры")
-                                      : tr("Перемещение фигур");
+                                    ? u8"Перемещение фигуры"
+                                    : u8"Перемещение фигур";
 
                     if (QUndoStack* st = activeUndoStack())
                         st->beginMacro(descr);
@@ -1762,7 +1762,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                         pushMoveShapeCommand(_movingItem,
                                              _moveBeforeSnap,
                                              after,
-                                             tr("Перемещение фигуры"));
+                                             u8"Перемещение фигуры");
                     }
                 }
             }
@@ -1846,7 +1846,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 linkSceneItemToList(rectangle); // Связываем новый элемент с списком
 
                 ShapeBackup b = makeBackupFromItem(rectangle);
-                pushAdoptExistingShapeCommand(rectangle, b, tr("Добавление прямоугольника"));
+                pushAdoptExistingShapeCommand(rectangle, b, u8"Добавление прямоугольника");
 
             }
         }
@@ -1916,7 +1916,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 linkSceneItemToList(circle); // Связываем новый элемент с списком
 
                 ShapeBackup b = makeBackupFromItem(circle);
-                pushAdoptExistingShapeCommand(circle, b, tr("Добавление круга"));
+                pushAdoptExistingShapeCommand(circle, b, u8"Добавление круга");
 
             }
         }
@@ -1959,7 +1959,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                     // linkSceneItemToList(_polyline);
 
                     // ShapeBackup b = makeBackupFromItem(_polyline);
-                    // pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                    // pushAdoptExistingShapeCommand(_polyline, b, u8"Добавление полилинии"));
                     const qulonglong uid = ensureUid(_polyline);
                     const QString cls = selectedClass;
 
@@ -2018,7 +2018,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                         raiseAllHandlesToTop();
                     };
                     if (QUndoStack* st = activeUndoStack())
-                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+                        st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
                     else
                         redoFn();
                 }
@@ -2092,7 +2092,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             };
 
             if (QUndoStack* st = activeUndoStack())
-                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+                st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
             else
                 redoFn();
         }
@@ -2138,7 +2138,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                     // linkSceneItemToList(_line);
 
                     // ShapeBackup b = makeBackupFromItem(_line);
-                    // pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                    // pushAdoptExistingShapeCommand(_line, b, u8"Добавление линии"));
                     const qulonglong uid = ensureUid(_line);
                     const QString cls = selectedClass;
 
@@ -2202,7 +2202,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                     };
 
                     if (QUndoStack* st = activeUndoStack())
-                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
+                        st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
                     else
                         redoFn();
                 }
@@ -2276,7 +2276,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             };
 
             if (QUndoStack* st = activeUndoStack())
-                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
+                st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
             else
                 redoFn();
         }
@@ -2492,8 +2492,8 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
 
     const QString description =
         hideMode
-            ? (targets.size() == 1 ? tr("Скрытие фигуры") : tr("Скрытие фигур"))
-            : (targets.size() == 1 ? tr("Показ фигуры")   : tr("Показ фигур"));
+            ? ((targets.size() == 1) ? u8"Скрытие фигуры" : u8"Скрытие фигур")
+            : ((targets.size() == 1) ? u8"Показ фигуры"   : u8"Показ фигур");
 
     if (QUndoStack* st = activeUndoStack())
         st->beginMacro(description);
@@ -2581,7 +2581,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                         ShapeBackup after = makeBackupFromItem(polyline);
                         if (!sameGeometry(before, after))
-                            pushModifyShapeCommand(uid, before, after, tr("Удаление узла"));
+                            pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
 
                         if (auto doc = currentDocument(); doc && !doc->isModified)
                         {
@@ -2602,7 +2602,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                         ShapeBackup after = makeBackupFromItem(line);
                         if (!sameGeometry(before, after))
-                            pushModifyShapeCommand(uid, before, after, tr("Удаление узла"));
+                            pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
 
                         if (auto doc = currentDocument(); doc && !doc->isModified)
                         {
@@ -2678,7 +2678,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                     // linkSceneItemToList(_polyline);
 
                                     // ShapeBackup b = makeBackupFromItem(_polyline);
-                                    // pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                                    // pushAdoptExistingShapeCommand(_polyline, b, u8"Добавление полилинии"));
                                     const qulonglong uid = ensureUid(_polyline);
                                     const QString cls = selectedClass;
 
@@ -2738,7 +2738,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                         raiseAllHandlesToTop();
                                     };
                                     if (QUndoStack* st = activeUndoStack())
-                                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+                                        st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
                                     else
                                         redoFn();
 
@@ -2813,7 +2813,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             };
 
                             if (QUndoStack* st = activeUndoStack())
-                                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+                                st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
                             else
                                 redoFn();
                         }
@@ -3125,12 +3125,12 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 {
                     if (auto* polyline = dynamic_cast<qgraph::Polyline*>(parent))
                     {
-                        QMenu menu(ui->graphView);
-                        QAction* actRemove = menu.addAction(tr("Удалить узел"));
-                        QAction* actResume = menu.addAction(tr("Возобновить редактирование"));
-                        QAction* actRecalc = menu.addAction(tr("Пересчитать нумерацию"));
-                        QAction* actClockwise = menu.addAction(tr("Нумерация по часовой стрелке"));
-                        QAction* actCounterClockwise = menu.addAction(tr("Нумерация против часовой стрелки"));
+                        QMenu menu {ui->graphView};
+                        QAction* actRemove = menu.addAction(u8"Удалить узел");
+                        QAction* actResume = menu.addAction(u8"Возобновить редактирование");
+                        QAction* actRecalc = menu.addAction(u8"Пересчитать нумерацию");
+                        QAction* actClockwise = menu.addAction(u8"Нумерация по часовой стрелке");
+                        QAction* actCounterClockwise = menu.addAction(u8"Нумерация против часовой стрелки");
 
                         QAction* chosen = menu.exec(ce->globalPos());
 
@@ -3143,7 +3143,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             ShapeBackup after = makeBackupFromItem(polyline);
                             if (!sameGeometry(before, after))
-                                pushModifyShapeCommand(uid, before, after, tr("Удаление узла"));
+                                pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
 
                             if (auto doc = currentDocument(); doc && !doc->isModified)
                             {
@@ -3177,7 +3177,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                     ShapeBackup after = makeBackupFromItem(_polyline);
                                     if (!sameGeometry(_resumeBefore, after))
-                                        pushModifyShapeCommand(_resumeUid, _resumeBefore, after, tr("Продолжение полилинии"));
+                                        pushModifyShapeCommand(_resumeUid, _resumeBefore, after, u8"Продолжение полилинии");
 
                                     _polyline = nullptr;
                                     _resumeEditing = false;
@@ -3212,7 +3212,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             ShapeBackup after = makeBackupFromItem(polyline);
                             if (!sameGeometry(before, after))
-                                pushModifyShapeCommand(uid, before, after, tr("Пересчет нумерации"));
+                                pushModifyShapeCommand(uid, before, after, u8"Пересчет нумерации");
 
                             if (auto doc = currentDocument(); doc && !doc->isModified)
                             {
@@ -3229,7 +3229,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             ShapeBackup after = makeBackupFromItem(polyline);
                             if (!sameGeometry(before, after))
-                                pushModifyShapeCommand(uid, before, after, tr("Нумерация по часовой стрелке"));
+                                pushModifyShapeCommand(uid, before, after, u8"Нумерация по часовой стрелке");
 
                             if (auto doc = currentDocument(); doc && !doc->isModified)
                             {
@@ -3246,7 +3246,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             ShapeBackup after = makeBackupFromItem(polyline);
                             if (!sameGeometry(before, after))
-                                pushModifyShapeCommand(uid, before, after, tr("Нумерация против часовой стрелки"));
+                                pushModifyShapeCommand(uid, before, after, u8"Нумерация против часовой стрелки");
 
                             if (auto doc = currentDocument(); doc && !doc->isModified)
                             {
@@ -3261,13 +3261,13 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     {
                         QMenu menu(ui->graphView);
 
-                        QAction* actRemove = menu.addAction(tr("Удалить узел"));
-                        QAction* actResume = menu.addAction(tr("Возобновить редактирование"));
+                        QAction* actRemove = menu.addAction(u8"Удалить узел");
+                        QAction* actResume = menu.addAction(u8"Возобновить редактирование");
                         QAction* actRecalc = nullptr;
                         const auto& circles = line->circles();
                         const int idx = circles.indexOf(circle);
                         if (idx == 0 || idx == circles.size() - 1)
-                            actRecalc = menu.addAction(tr("Пересчитать нумерацию"));
+                            actRecalc = menu.addAction(u8"Пересчитать нумерацию");
 
                         QAction* chosen = menu.exec(ce->globalPos());
 
@@ -3280,7 +3280,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             ShapeBackup after = makeBackupFromItem(line);
                             if (!sameGeometry(before, after))
-                                pushModifyShapeCommand(uid, before, after, tr("Удаление узла"));
+                                pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
 
                             if (auto doc = currentDocument(); doc && !doc->isModified)
                             {
@@ -3316,7 +3316,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                     ShapeBackup after = makeBackupFromItem(_line);
                                     if (!sameGeometry(_resumeBefore, after))
-                                        pushModifyShapeCommand(_resumeUid, _resumeBefore, after, tr("Продолжение линии"));
+                                        pushModifyShapeCommand(_resumeUid, _resumeBefore, after, u8"Продолжение линии");
 
                                     _line = nullptr;
                                     _resumeEditing = false;
@@ -3343,7 +3343,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             ShapeBackup after = makeBackupFromItem(line);
                             if (!sameGeometry(before, after))
-                                pushModifyShapeCommand(uid, before, after, tr("Пересчет нумерации"));
+                                pushModifyShapeCommand(uid, before, after, u8"Пересчет нумерации");
 
                             if (auto doc = currentDocument(); doc && !doc->isModified)
                             {
@@ -3357,7 +3357,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     if (auto* rect = dynamic_cast<qgraph::Rectangle*>(parent))
                     {
                         QMenu menu(ui->graphView);
-                        QAction* actRecalc = menu.addAction(tr("Пересчитать нумерацию"));
+                        QAction* actRecalc = menu.addAction(u8"Пересчитать нумерацию");
 
                         QAction* chosen = menu.exec(ce->globalPos());
                         if (chosen == actRecalc)
@@ -3369,7 +3369,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             ShapeBackup after = makeBackupFromItem(rect);
                             if (!sameGeometry(before, after))
-                                pushModifyShapeCommand(uid, before, after, tr("Пересчет нумерации"));
+                                pushModifyShapeCommand(uid, before, after, u8"Пересчет нумерации");
 
                             if (auto doc = currentDocument(); doc && !doc->isModified)
                             {
@@ -3405,8 +3405,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     break;
 
                 QMenu menu(ui->graphView);
-                QAction* actAdd = menu.addAction(tr("Добавить узел"));
-                QAction* actToLine = menu.addAction(tr("Полилиния -> линия"));
+                QAction* actAdd = menu.addAction(u8"Добавить узел");
+                QAction* actToLine = menu.addAction(u8"Полилиния -> линия");
 
                 QAction* chosen = menu.exec(ce->globalPos());
                 if (chosen == actAdd)
@@ -3418,7 +3418,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                     ShapeBackup after = makeBackupFromItem(polyline);
                     if (!sameGeometry(before, after))
-                        pushModifyShapeCommand(uid, before, after, tr("Добавление узла"));
+                        pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
 
                     if (auto doc = currentDocument(); doc && !doc->isModified)
                     {
@@ -3487,7 +3487,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         after.points = reordered;
                     }
 
-                    pushReplaceShapeCommand(before.uid, before, after, tr("Полилиния -> линия"));
+                    pushReplaceShapeCommand(before.uid, before, after, u8"Полилиния -> линия");
                 }
                 ce->accept();
                 return true;
@@ -3513,10 +3513,10 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     break;
 
                 QMenu menu(ui->graphView);
-                QAction* actAdd = menu.addAction(tr("Добавить узел"));
-                QAction* actMerge = menu.addAction(tr("Объединить линии"));
-                QAction* actSplit = menu.addAction(tr("Разорвать линию"));
-                QAction* actToPolyline = menu.addAction(tr("Линия -> полилиния"));
+                QAction* actAdd = menu.addAction(u8"Добавить узел");
+                QAction* actMerge = menu.addAction(u8"Объединить линии");
+                QAction* actSplit = menu.addAction(u8"Разорвать линию");
+                QAction* actToPolyline = menu.addAction(u8"Линия -> полилиния");
 
                 QAction* chosen = menu.exec(ce->globalPos());
                 if (chosen == actAdd)
@@ -3528,7 +3528,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                     ShapeBackup after = makeBackupFromItem(line);
                     if (!sameGeometry(before, after))
-                        pushModifyShapeCommand(uid, before, after, tr("Добавление узла"));
+                        pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
 
                     if (auto doc = currentDocument(); doc && !doc->isModified)
                     {
@@ -3560,7 +3560,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     after.closed = true;
                     after.numberingFromLast = false;
 
-                    pushReplaceShapeCommand(before.uid, before, after, tr("Линия -> полилиния"));
+                    pushReplaceShapeCommand(before.uid, before, after, u8"Линия -> полилиния");
                 }
                 ce->accept();
                 return true;
@@ -3848,7 +3848,7 @@ void MainWindow::on_actOpen_triggered(bool)
     // Создаем диалог выбора директории
     QString folderPath = QFileDialog::getExistingDirectory(
         this,
-        tr("Выберите рабочую папку с изображениями"),
+        u8"Выберите рабочую папку с изображениями",
         initialDir,
         QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks
         );
@@ -4368,7 +4368,7 @@ void MainWindow::on_actClosePolyline_triggered()
                     // linkSceneItemToList(_line);
 
                     // ShapeBackup b = makeBackupFromItem(_line);
-                    // pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                    // pushAdoptExistingShapeCommand(_line, b, u8"Добавление линии"));
                     const qulonglong uid = ensureUid(_line);
                     const QString cls = selectedClass;
 
@@ -4431,7 +4431,7 @@ void MainWindow::on_actClosePolyline_triggered()
                     };
 
                     if (QUndoStack* st = activeUndoStack())
-                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
+                        st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
                     else
                         redoFn();
                 }
@@ -4505,7 +4505,7 @@ void MainWindow::on_actClosePolyline_triggered()
             };
 
             if (QUndoStack* st = activeUndoStack())
-                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
+                st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
             else
                 redoFn();
         }
@@ -4559,7 +4559,7 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
         messageBox(
             this,
             QMessageBox::Warning,
-            tr("Выбранная папка не существует!")
+            u8"Выбранная папка не существует!"
         );
         return;
     }
@@ -4745,14 +4745,14 @@ void MainWindow::on_actDelete_triggered()
     };
 
     if (doc->_undoStack)
-        doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Удаление фигур")));
+        doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, u8"Удаление фигур"));
 }
 
 void MainWindow::on_actAbout_triggered()
 {
     // Диалоговое окно
     QDialog aboutDialog(this);
-    aboutDialog.setWindowTitle(tr("О программе QLabelMe"));
+    aboutDialog.setWindowTitle(u8"О программе QLabelMe");
     aboutDialog.resize(600, 500);
     aboutDialog.setMinimumSize(500, 400);
 
@@ -4763,21 +4763,20 @@ void MainWindow::on_actAbout_triggered()
     QWidget *aboutTab = new QWidget();
     QVBoxLayout *aboutLayout = new QVBoxLayout(aboutTab);
 
-    QLabel* titleLabel = new QLabel(tr("<b>QLabelMe<b>"));
+    QLabel* titleLabel = new QLabel(u8"<b>QLabelMe<b>");
 
     QLabel* versionLabel = new QLabel(
-        tr("Версия: %1 (gitrev: %2)<br>Программа для разметки и аннотирования изображений.")
-            .arg(VERSION_PROJECT)
-            .arg(GIT_REVISION)
-        );
+        QString(u8"Версия: %1 (gitrev: %2)<br>Программа для разметки и аннотирования изображений.")
+               .arg(VERSION_PROJECT)
+               .arg(GIT_REVISION));
     versionLabel->setWordWrap(true);
 
     QLabel* descriptionLabel = new QLabel(
-        tr("Программа позволяет вручную создавать и редактировать аннотации с помощью графических примитивов. "
-           "Используется для подготовки датасетов в задачах компьютерного зрения и машинного обучения.<br><br>"
-           "<b>Обратная связь:</b><br>"
-           "https://github.com/mariekarelina/qlabelme/issues<br><br>")
-        );
+        u8"Программа позволяет вручную создавать и редактировать аннотации с помощью графических примитивов. "
+        u8"Используется для подготовки датасетов в задачах компьютерного зрения и машинного обучения.<br><br>"
+        u8"<b>Обратная связь:</b><br>"
+        u8"https://github.com/mariekarelina/qlabelme/issues<br><br>");
+
     descriptionLabel->setWordWrap(true);
     descriptionLabel->setOpenExternalLinks(true);
 
@@ -4787,17 +4786,16 @@ void MainWindow::on_actAbout_triggered()
     aboutLayout->addStretch();
 
     // Вкладка "Компоненты"
-    QWidget *componentsTab = new QWidget();
+    QWidget* componentsTab = new QWidget();
     QVBoxLayout *componentsLayout = new QVBoxLayout(componentsTab);
 
-    QTextEdit *componentsText = new QTextEdit();
+    QTextEdit* componentsText = new QTextEdit();
     componentsText->setReadOnly(true);
     componentsText->setHtml(
-        tr("<ul>"
-           "<li>Qt %1 - кроссплатформенный фреймворк</li>"
-           "</ul>")
-            .arg(QT_VERSION_STR)
-        );
+        QString(u8"<ul>"
+                u8"<li>Qt %1 - кроссплатформенный фреймворк</li>"
+                u8"</ul>")
+               .arg(QT_VERSION_STR));
     componentsLayout->addWidget(componentsText);
 
     // Вкладка "Авторы"
@@ -4807,18 +4805,17 @@ void MainWindow::on_actAbout_triggered()
     QTextEdit *authorsText = new QTextEdit();
     authorsText->setReadOnly(true);
     authorsText->setHtml(
-        tr("<ul>"
-           "<li>Карелина Мария - автор, разработчик</li>"
-           "<li>Карелин Павел - консультант по коду и архитектуре программы</li>"
-           "<li>Назаровский Александр - консультант по функциональной части программы</li>"
-           "</ul>")
-        );
+        u8"<ul>"
+        u8"<li>Карелина Мария - автор, разработчик</li>"
+        u8"<li>Карелин Павел - консультант по коду и архитектуре программы</li>"
+        u8"<li>Назаровский Александр - консультант по функциональной части программы</li>"
+        u8"</ul>");
     authorsLayout->addWidget(authorsText);
 
     // Добавляем вкладки
-    tabWidget->addTab(aboutTab, tr("О программе"));
-    tabWidget->addTab(componentsTab, tr("Компоненты"));
-    tabWidget->addTab(authorsTab, tr("Авторы"));
+    tabWidget->addTab(aboutTab, u8"О программе");
+    tabWidget->addTab(componentsTab, u8"Компоненты");
+    tabWidget->addTab(authorsTab, u8"Авторы");
 
     // Кнопка OK
     QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok, &aboutDialog);
@@ -5285,12 +5282,12 @@ void MainWindow::on_actResetAnnotation_triggered()
 
     // Подтверждение
     QMessageBox msgBox(this);
-    msgBox.setWindowTitle(tr("Сбросить разметку"));
-    msgBox.setText(tr("Удалить всю разметку на текущем снимке?"));
+    msgBox.setWindowTitle(u8"Сбросить разметку");
+    msgBox.setText(u8"Удалить всю разметку на текущем снимке?");
     msgBox.setIcon(QMessageBox::Question);
 
-    QPushButton* btnYes = msgBox.addButton(tr("Да"), QMessageBox::AcceptRole);
-    QPushButton* btnNo  = msgBox.addButton(tr("Нет"), QMessageBox::RejectRole);
+    QPushButton* btnYes = msgBox.addButton(u8"Да",  QMessageBox::AcceptRole);
+    QPushButton* btnNo  = msgBox.addButton(u8"Нет", QMessageBox::RejectRole);
     msgBox.setDefaultButton(btnNo);
 
     msgBox.exec();
@@ -5367,7 +5364,7 @@ void MainWindow::on_actResetAnnotation_triggered()
     };
 
     if (doc->_undoStack)
-        doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Сброс разметки")));
+        doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, u8"Сброс разметки"));
 }
 
 void MainWindow::on_actRestoreAnnotation_triggered()
@@ -5383,7 +5380,7 @@ void MainWindow::on_actRestoreAnnotation_triggered()
         messageBox(
             this,
             QMessageBox::Information,
-            tr("Файл разметки не найден:\n%1").arg(yamlPath)
+            QString(u8"Файл разметки не найден:\n%1").arg(yamlPath)
         );
         return;
     }
@@ -5394,12 +5391,12 @@ void MainWindow::on_actRestoreAnnotation_triggered()
     if (hasUnsaved || ui->polygonList->count() > 0)
     {
         QMessageBox msgBox(this);
-        msgBox.setWindowTitle(tr("Восстановить разметку"));
-        msgBox.setText(tr("Восстановить разметку из файла .yaml?\nВсе несохранённые изменения будут потеряны."));
+        msgBox.setWindowTitle(u8"Восстановить разметку");
+        msgBox.setText(u8"Восстановить разметку из файла .yaml?\nВсе несохранённые изменения будут потеряны.");
         msgBox.setIcon(QMessageBox::Question);
 
-        QPushButton* btnYes = msgBox.addButton(tr("Да"), QMessageBox::AcceptRole);
-        QPushButton* btnNo  = msgBox.addButton(tr("Нет"), QMessageBox::RejectRole);
+        QPushButton* btnYes = msgBox.addButton(u8"Да",  QMessageBox::AcceptRole);
+        QPushButton* btnNo  = msgBox.addButton(u8"Нет", QMessageBox::RejectRole);
         msgBox.setDefaultButton(btnNo);
 
         msgBox.exec();
@@ -5652,7 +5649,7 @@ void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
 
     ShapeBackup after = makeBackupFromItem(item);
     if (!sameGeometry(before, after))
-        pushModifyShapeCommand(uid, before, after, tr("Смена класса"));
+        pushModifyShapeCommand(uid, before, after, u8"Смена класса");
 
     if (auto doc = currentDocument(); doc && !doc->isModified)
     {
@@ -6499,9 +6496,8 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     ui->polygonList->setFocus();
 
-    QString descr = (newItems.size() == 1)
-                        ? tr("Вставка примитива")
-                        : tr("Вставка примитивов");
+    QString descr = (newItems.count() == 1) ? u8"Вставка примитива"
+                                            : u8"Вставка примитивов";
 
     if (QUndoStack* st = activeUndoStack())
         st->beginMacro(descr);
@@ -7305,7 +7301,7 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
             messageBox(
                 this,
                 QMessageBox::Warning,
-                tr("Ошибка при чтении базового файла с классами!")
+                u8"Ошибка при чтении базового файла с классами!"
             );
             //alog::stop();
             return false;
@@ -7315,8 +7311,8 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
             messageBox(
                 this,
                 QMessageBox::Warning,
-                tr("Ошибка при сохранении в базовый файл с классами! "
-                   "Более подробную информацию смотри в .log файле")
+                u8"Ошибка при сохранении в базовый файл с классами!  "
+                u8"Более подробную информацию смотри в .log файле"
             );
             //alog::stop();
             return false;
@@ -7329,8 +7325,8 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
             messageBox(
                 this,
                 QMessageBox::Warning,
-                tr("Ошибка при чтении файла с классами! "
-                   "Более подробную информацию смотри в .log файле")
+                u8"Ошибка при чтении файла с классами!  "
+                u8"Более подробную информацию смотри в .log файле"
             );
             return false;
         }
@@ -7386,7 +7382,7 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
             messageBox(
                 this,
                 QMessageBox::Warning,
-                tr("Нет секции классов")
+                u8"Нет секции классов"
             );
             return false;
         }
@@ -7690,10 +7686,10 @@ void MainWindow::updateCoordinateList()
 
             const QPointF center = point->center();
 
-            addLine(tr("Точка"));
-            addLine(tr("Центр: (%1; %2)")
-                        .arg(round2(center.x()))
-                        .arg(round2(center.y())));
+            addLine(u8"Точка");
+            addLine(QString(u8"Центр: (%1; %2)")
+                           .arg(round2(center.x()))
+                           .arg(round2(center.y())));
         }
         else if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
         {
@@ -7710,18 +7706,21 @@ void MainWindow::updateCoordinateList()
             const qreal width  = r.width();
             const qreal height = r.height();
 
-            addLine(tr("Прямоугольник"));
-            addLine(tr("TL точка: (%1; %2)")
-                        .arg(round2(topLeft.x()))
-                        .arg(round2(topLeft.y())));
-            addLine(tr("BR точка: (%1; %2)")
-                        .arg(round2(bottomRight.x()))
-                        .arg(round2(bottomRight.y())));
-            addLine(tr("Центр: (%1; %2)")
-                        .arg(round2(center.x()))
-                        .arg(round2(center.y())));
-            addLine(tr("Ширина: %1").arg(round2(width)));
-            addLine(tr("Высота: %1").arg(round2(height)));
+            addLine(u8"Прямоугольник");
+            addLine(QString(u8"TL точка: (%1; %2)")
+                           .arg(round2(topLeft.x()))
+                           .arg(round2(topLeft.y())));
+
+            addLine(QString(u8"BR точка: (%1; %2)")
+                           .arg(round2(bottomRight.x()))
+                           .arg(round2(bottomRight.y())));
+
+            addLine(QString(u8"Центр: (%1; %2)")
+                           .arg(round2(center.x()))
+                           .arg(round2(center.y())));
+
+            addLine(QString(u8"Ширина: %1").arg(round2(width)));
+            addLine(QString(u8"Высота: %1").arg(round2(height)));
         }
         else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
@@ -7740,18 +7739,21 @@ void MainWindow::updateCoordinateList()
             const qreal width  = bottomRight.x() - topLeft.x();
             const qreal height = bottomRight.y() - topLeft.y();
 
-            addLine(tr("Полилиния"));
-            addLine(tr("TL точка: (%1; %2)")
-                        .arg(round2(topLeft.x()))
-                        .arg(round2(topLeft.y())));
-            addLine(tr("BR точка: (%1; %2)")
-                        .arg(round2(bottomRight.x()))
-                        .arg(round2(bottomRight.y())));
-            addLine(tr("Центр: (%1; %2)")
-                        .arg(round2(center.x()))
-                        .arg(round2(center.y())));
-            addLine(tr("Ширина: %1").arg(round2(width)));
-            addLine(tr("Высота: %1").arg(round2(height)));
+            addLine(u8"Полилиния");
+            addLine(QString(u8"TL точка: (%1; %2)")
+                           .arg(round2(topLeft.x()))
+                           .arg(round2(topLeft.y())));
+
+            addLine(QString(u8"BR точка: (%1; %2)")
+                           .arg(round2(bottomRight.x()))
+                           .arg(round2(bottomRight.y())));
+
+            addLine(QString(u8"Центр: (%1; %2)")
+                           .arg(round2(center.x()))
+                           .arg(round2(center.y())));
+
+            addLine(QString(u8"Ширина: %1").arg(round2(width)));
+            addLine(QString(u8"Высота: %1").arg(round2(height)));
         }
         else if (auto* line = dynamic_cast<qgraph::Line*>(item))
         {
@@ -7771,18 +7773,21 @@ void MainWindow::updateCoordinateList()
             const qreal width  = bottomRight.x() - topLeft.x();
             const qreal height = bottomRight.y() - topLeft.y();
 
-            addLine(tr("Линия"));
-            addLine(tr("TL точка: (%1; %2)")
-                        .arg(round2(topLeft.x()))
-                        .arg(round2(topLeft.y())));
-            addLine(tr("BR точка: (%1; %2)")
-                        .arg(round2(bottomRight.x()))
-                        .arg(round2(bottomRight.y())));
-            addLine(tr("Центр: (%1; %2)")
-                        .arg(round2(center.x()))
-                        .arg(round2(center.y())));
-            addLine(tr("Ширина: %1").arg(round2(width)));
-            addLine(tr("Высота: %1").arg(round2(height)));
+            addLine(u8"Линия");
+            addLine(QString(u8"TL точка: (%1; %2)")
+                           .arg(round2(topLeft.x()))
+                           .arg(round2(topLeft.y())));
+
+            addLine(QString(u8"BR точка: (%1; %2)")
+                           .arg(round2(bottomRight.x()))
+                           .arg(round2(bottomRight.y())));
+
+            addLine(QString(u8"Центр: (%1; %2)")
+                           .arg(round2(center.x()))
+                           .arg(round2(center.y())));
+
+            addLine(QString(u8"Ширина: %1").arg(round2(width)));
+            addLine(QString(u8"Высота: %1").arg(round2(height)));
         }
         else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
         {
@@ -7801,18 +7806,21 @@ void MainWindow::updateCoordinateList()
             qreal width  = bottomRight.x() - topLeft.x();
             qreal height = bottomRight.y() - topLeft.y();
 
-            addLine(tr("Круг"));
-            addLine(tr("TL точка: (%1; %2)")
-                        .arg(round2(topLeft.x()))
-                        .arg(round2(topLeft.y())));
-            addLine(tr("BR точка: (%1; %2)")
-                        .arg(round2(bottomRight.x()))
-                        .arg(round2(bottomRight.y())));
-            addLine(tr("Центр: (%1; %2)")
-                        .arg(round2(center.x()))
-                        .arg(round2(center.y())));
-            addLine(tr("Ширина: %1").arg(round2(width)));
-            addLine(tr("Высота: %1").arg(round2(height)));
+            addLine(u8"Круг");
+            addLine(QString(u8"TL точка: (%1; %2)")
+                           .arg(round2(topLeft.x()))
+                           .arg(round2(topLeft.y())));
+
+            addLine(QString(u8"BR точка: (%1; %2)")
+                           .arg(round2(bottomRight.x()))
+                           .arg(round2(bottomRight.y())));
+
+            addLine(QString(u8"Центр: (%1; %2)")
+                           .arg(round2(center.x()))
+                           .arg(round2(center.y())));
+
+            addLine(QString(u8"Ширина: %1").arg(round2(width)));
+            addLine(QString(u8"Высота: %1").arg(round2(height)));
         }
     }
 }
@@ -8234,7 +8242,7 @@ int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr> &unsavedDocs
             Qt::WindowCloseButtonHint
         );
 
-    dialog.setWindowTitle(tr("Несохраненные изменения"));
+    dialog.setWindowTitle(u8"Несохраненные изменения");
     dialog.setModal(true);
     //dialog.setMinimumWidth(500);
 
@@ -8253,8 +8261,7 @@ int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr> &unsavedDocs
 
     QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
 
-    QLabel *messageLabel = new QLabel(
-        tr("Следующие файлы имеют несохраненные изменения:\nХотите сохранить изменения?"));
+    QLabel *messageLabel = new QLabel(u8"Следующие файлы имеют несохраненные изменения:\nХотите сохранить изменения?");
     mainLayout->addWidget(messageLabel);
 
     // Список файлов
@@ -8273,9 +8280,9 @@ int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr> &unsavedDocs
     // Кнопки
     QDialogButtonBox *buttonBox = new QDialogButtonBox();
 
-    QPushButton *saveAllButton = new QPushButton(tr("Сохранить все"));
-    QPushButton *discardAllButton = new QPushButton(tr("Не сохранять"));
-    QPushButton *cancelButton = new QPushButton(tr("Отмена"));
+    QPushButton *saveAllButton = new QPushButton(u8"Сохранить все");
+    QPushButton *discardAllButton = new QPushButton(u8"Не сохранять");
+    QPushButton *cancelButton = new QPushButton(u8"Отмена");
 
     buttonBox->addButton(saveAllButton, QDialogButtonBox::AcceptRole);
     buttonBox->addButton(discardAllButton, QDialogButtonBox::DestructiveRole);
@@ -8778,7 +8785,7 @@ void MainWindow::finishHandleDrag()
         if (!sameGeometry(_handleBeforeSnap, after))
         {
             // красивое имя действия
-            QString what = tr("Перемещение узла");
+            QString what = u8"Перемещение узла";
             pushHandleEditCommand(_handleEditedItem, _handleBeforeSnap, after, what);
         }
     }
@@ -10648,15 +10655,13 @@ void MainWindow::updateImageSizeLabel(const QSize& size)
 
     if (!size.isValid())
     {
-        _imageSizeLabel->setText(tr("Размер изображения: —"));
+        _imageSizeLabel->setText(u8"Размер изображения: —");
         return;
     }
 
-    _imageSizeLabel->setText(
-        tr("Размер изображения: %1 × %2")
-            .arg(size.width())
-            .arg(size.height())
-    );
+    _imageSizeLabel->setText(QString(u8"Размер изображения: %1 × %2")
+                            .arg(size.width())
+                            .arg(size.height()));
 }
 
 void MainWindow::startMergeLinesMode()
@@ -10666,7 +10671,8 @@ void MainWindow::startMergeLinesMode()
     _mergeLineAEndIdx = -1;
 
     if (statusBar())
-        statusBar()->showMessage(tr("Объединение линий: кликните по КОНЕЧНОЙ точке первой линии"), 0);
+        statusBar()->showMessage(u8"Объединение линий: кликните по КОНЕЧНОЙ точке первой линии", 0);
+
     updateModeLabel();
 }
 
@@ -10677,7 +10683,8 @@ void MainWindow::cancelMergeLinesMode()
     _mergeLineAEndIdx = -1;
 
     if (statusBar())
-        statusBar()->showMessage(tr("Объединение линий отменено"), 2000);
+        statusBar()->showMessage(u8"Объединение линий отменено", 2000);
+
     updateModeLabel();
 }
 
@@ -10706,7 +10713,7 @@ bool MainWindow::handleMergeLinesClick(const QPointF& scenePos)
         _mergeLineAEndIdx = idx;
 
         if (statusBar())
-            statusBar()->showMessage(tr("Объединение линий: теперь кликните по КОНЕЧНОЙ точке второй линии"), 0);
+            statusBar()->showMessage(u8"Объединение линий: теперь кликните по КОНЕЧНОЙ точке второй линии", 0);
 
         return true;
     }
@@ -10734,6 +10741,7 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
 
     if (!((aIdx == 0) || (aIdx == aLast)))
         return false;
+
     if (!((bIdx == 0) || (bIdx == bLast)))
         return false;
 
@@ -10745,8 +10753,7 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
         messageBox(
             this,
             QMessageBox::Warning,
-            tr("Нельзя объединить линии разных классов:\n\"%1\" и \"%2\".")
-                .arg(la, lb)
+            QString(u8"Нельзя объединить линии разных классов:\n\"%1\" и \"%2\".").arg(la, lb)
         );
         return false;
     }
@@ -10936,7 +10943,7 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
         }
     };
 
-    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Объединить линии")));
+    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, u8"Объединить линии"));
     return true;
 }
 
@@ -10953,7 +10960,7 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePo
         messageBox(
             this,
             QMessageBox::Warning,
-            tr("Нельзя разорвать линию: нужно минимум 4 точки.")
+            u8"Нельзя разорвать линию: нужно минимум 4 точки."
         );
         return false;
     }
@@ -10998,8 +11005,8 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePo
         messageBox(
             this,
             QMessageBox::Warning,
-            tr("Нельзя разорвать по этому ребру: получится линия из одной точки.\n"
-               "Выберите внутреннее ребро.")
+            u8"Нельзя разорвать по этому ребру: получится линия из одной точки.  "
+            u8"Выберите внутреннее ребро."
         );
         return false;
     }
@@ -11107,7 +11114,7 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePo
         }
     };
 
-    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, tr("Разрыв линию")));
+    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, u8"Разрыв линию"));
     return true;
 }
 
@@ -11153,62 +11160,62 @@ void MainWindow::updateModeLabel()
 
     if (_drawingRuler || _isDrawingRuler) {
         _modeLabel->setText(_isDrawingRuler
-            ? tr("Режим: линейка (измерение...)")
-            : tr("Режим: линейка"));
+                            ? u8"Режим: линейка (измерение...)"
+                            : u8"Режим: линейка");
         return;
     }
     if (_isInDrawingMode
         || _isDrawingRectangle || _isDrawingCircle || _isDrawingLine || _isDrawingPolyline || _isDrawingPoint
         || _drawingRectangle  || _drawingCircle  || _drawingLine  || _drawingPolyline  || _drawingPoint)
     {
-        QString tool = tr("фигура");
+        QString tool = u8"фигура";
         if (_isDrawingRectangle || _drawingRectangle)
-            tool = tr("прямоугольник");
+            tool = u8"прямоугольник";
         else if (_isDrawingCircle || _drawingCircle)
-            tool = tr("круг");
+            tool = u8"круг";
         else if (_isDrawingPolyline || _drawingPolyline)
-            tool = tr("полилиния");
+            tool = u8"полилиния";
         else if (_isDrawingLine || _drawingLine)
-            tool = tr("линия");
+            tool = u8"линия";
         else if (_isDrawingPoint || _drawingPoint)
-            tool = tr("точка");
+            tool = u8"точка";
 
-        _modeLabel->setText(tr("Режим: рисование (%1)").arg(tool));
+        _modeLabel->setText(QString(u8"Режим: рисование (%1)").arg(tool));
         return;
     }
     if (_zoomRectActive)
     {
-        _modeLabel->setText(tr("Режим: зум-область"));
+        _modeLabel->setText(u8"Режим: зум-область");
         return;
     }
     if (_mergeLinesMode)
     {
-        _modeLabel->setText(tr("Режим: соединение линий"));
+        _modeLabel->setText(u8"Режим: соединение линий");
         return;
     }
     // if (_shiftImageDragging)
     // {
-    //     _modeLabel->setText(tr("Режим: сдвиг изображения"));
+    //     _modeLabel->setText(u8"Режим: сдвиг изображения"));
     //     return;
     // }
     if (_isDraggingImage)
     {
         _modeLabel->setText(_isAllMoved
-            ? tr("Режим: перемещение (изображение + разметка)")
-            : tr("Режим: перемещение (изображение)"));
+                            ? u8"Режим: перемещение (изображение + разметка)"
+                            : u8"Режим: перемещение (изображение)");
         return;
     }
     if (_editInProgress || _handleDragging || _m_isDraggingHandle || _ghostActive)
     {
-        _modeLabel->setText(tr("Режим: редактирование"));
+        _modeLabel->setText(u8"Режим: редактирование");
         return;
     }
     if (_resumeEditing)
     {
-        _modeLabel->setText(tr("Режим: продолжение"));
+        _modeLabel->setText(u8"Режим: продолжение");
         return;
     }
-    _modeLabel->setText(tr("Режим: просмотр"));
+    _modeLabel->setText(u8"Режим: просмотр");
 }
 
 void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers mods, GraphicsView* graphView)
@@ -11238,7 +11245,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
         _polyline->updatePointNumbers();
 
         ShapeBackup b0 = makeBackupFromItem(_polyline);
-        pushAdoptExistingShapeCommand(_polyline, b0, tr("Узел полилинии"));
+        pushAdoptExistingShapeCommand(_polyline, b0, u8"Узел полилинии");
         _polyline->setModificationCallback([this]()
         {
             if (_drawingPolyline && _polyline && _polyline->isClosed())
@@ -11270,7 +11277,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
                             // linkSceneItemToList(_polyline);
 
                             // ShapeBackup b = makeBackupFromItem(_polyline);
-                            // pushAdoptExistingShapeCommand(_polyline, b, tr("Добавление полилинии"));
+                            // pushAdoptExistingShapeCommand(_polyline, b, u8"Добавление полилинии"));
                             const qulonglong uid = ensureUid(_polyline);
                             const QString cls = selectedClass;
 
@@ -11333,7 +11340,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
                                 raiseAllHandlesToTop();
                             };
                             if (QUndoStack* st = activeUndoStack())
-                                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+                                st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
                             else
                                 redoFn();
                         }
@@ -11406,7 +11413,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
                     };
 
                     if (QUndoStack* st = activeUndoStack())
-                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление полилинии")));
+                        st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
                     else
                         redoFn();
                 }
@@ -11481,7 +11488,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
             }
         };
 
-        st->push(new LambdaCommand(redoFn, undoFn, tr("Узел полилинии")));
+        st->push(new LambdaCommand(redoFn, undoFn, u8"Узел полилинии"));
     }
 
     // Закрытие полилинии по Ctrl
@@ -11522,7 +11529,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
         _line->setFocus();
         _line->updatePointNumbers();
         ShapeBackup b0 = makeBackupFromItem(_line);
-        pushAdoptExistingShapeCommand(_line, b0, tr("Узел линии"));
+        pushAdoptExistingShapeCommand(_line, b0, u8"Узел линии");
         _line->setModificationCallback([this]()
         {
             if (_drawingLine && _line && _line->isClosed())
@@ -11555,7 +11562,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                             // linkSceneItemToList(_line);
 
                             // ShapeBackup b = makeBackupFromItem(_line);
-                            // pushAdoptExistingShapeCommand(_line, b, tr("Добавление линии"));
+                            // pushAdoptExistingShapeCommand(_line, b, u8"Добавление линии"));
                             const qulonglong uid = ensureUid(_line);
                             const QString cls = selectedClass;
 
@@ -11618,7 +11625,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                             };
 
                             if (QUndoStack* st = activeUndoStack())
-                                st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
+                                st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
                             else
                                 redoFn();
 
@@ -11693,7 +11700,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                     };
 
                     if (QUndoStack* st = activeUndoStack())
-                        st->push(new LambdaCommand(redoFn, undoFn, tr("Добавление линии")));
+                        st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
                     else
                         redoFn();
                 }
@@ -11765,7 +11772,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
             }
         };
 
-        st->push(new LambdaCommand(redoFn, undoFn, tr("Узел линии")));
+        st->push(new LambdaCommand(redoFn, undoFn, u8"Узел линии"));
     }
 
     // Завершение линии по Ctrl

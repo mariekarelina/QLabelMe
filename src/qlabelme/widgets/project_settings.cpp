@@ -341,7 +341,7 @@ void ProjectSettings::onAddClass()
         messageBox(
             this,
             QMessageBox::Information,
-            tr("Имя класса не должно быть пустым.")
+            u8"Имя класса не должно быть пустым."
         );
         return;
     }
@@ -358,7 +358,7 @@ void ProjectSettings::onAddClass()
         messageBox(
             this,
             QMessageBox::Information,
-            tr("Класс с таким именем уже существует.")
+            u8"Класс с таким именем уже существует."
         );
         return;
     }
@@ -489,7 +489,7 @@ void ProjectSettings::onEditClass()
         messageBox(
             this,
             QMessageBox::Information,
-            tr("Имя класса не должно быть пустым.")
+            u8"Имя класса не должно быть пустым."
         );
         return;
     }
@@ -502,7 +502,7 @@ void ProjectSettings::onEditClass()
         messageBox(
             this,
             QMessageBox::Information,
-            tr("Класс с таким именем уже существует.")
+            u8"Класс с таким именем уже существует."
         );
         return;
     }
@@ -579,7 +579,7 @@ QWidget* ProjectSettings::makeClassRowWidget(QListWidgetItem* item)
         if (!cur.isValid())
             cur = QColor("#3b6cff");
 
-        QColor chosen = QColorDialog::getColor(cur, this, tr("Цвет"));
+        QColor chosen = QColorDialog::getColor(cur, this, u8"Цвет");
         if (!chosen.isValid())
             return;
 
