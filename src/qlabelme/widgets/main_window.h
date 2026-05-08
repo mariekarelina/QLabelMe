@@ -1,5 +1,6 @@
 #pragma once
 
+#include "shared/defmac.h"
 #include "shared/container_ptr.h"
 #include "shared/qt/quuidex.h"
 
@@ -89,6 +90,8 @@ struct Document
 {
     typedef container_ptr<Document> Ptr;
 
+    //DISABLE_DEFAULT_COPY(Document)
+
     QString filePath;  // Путь к файлу изображения
     QGraphicsScene* scene = nullptr;  // Сцена с изображением и разметкой
     qgraph::VideoRect* videoRect = nullptr;
@@ -107,37 +110,9 @@ struct Document
         QPointF center;
     } viewState;
 
-    static Ptr create(const QString& path)
-    {
-        Ptr doc {new Document};
-        doc->filePath = path;
-        return doc;
-    }
+    static Ptr create(const QString& path);
 
-    bool loadImage()
-    {
-        steady_timer timer2;
-        log_debug2_m <<  "m5 " << timer2.elapsed();
-        pixmap = QPixmap(filePath);
-        if (pixmap.isNull())
-        {
-            return false;
-        }
-        if (!scene)
-        {
-            scene = new QGraphicsScene();
-        }
-        if (!videoRect)
-        {
-            videoRect = new qgraph::VideoRect(scene);
-        }
-        videoRect->setPixmap(pixmap);
-
-        videoRect->setPos(0, 0);
-        scene->setSceneRect(QRectF(QPointF(0, 0), QSizeF(pixmap.size())));
-        log_debug2_m <<  "m6 " << timer2.elapsed();
-        return true;
-    }
+    bool loadImage();
 };
 
 struct ShapeSnapshot
@@ -147,13 +122,14 @@ struct ShapeSnapshot
 };
 
 // Тип фигур
-enum class ShapeKind {Rectangle, Circle, Polyline, Line, Point};
+enum class ShapeKind {/*Unknown,*/ Rectangle, Circle, Polyline, Line, Point};
 
 struct ShapeBackup
 {
-    ShapeKind kind;
+    //ShapeKind kind = {ShapeKind::Unknown};
+    ShapeKind kind = {ShapeKind::Rectangle};
     QString   className;
-    qreal     z = 0.0;
+    qreal     z = {0};
     bool      visible = true;
 
     // Геометрия по типам
@@ -167,8 +143,8 @@ struct ShapeBackup
     qulonglong uid = 0;
 
     bool numberingFromLast = false;
-    int listRow = -1;   // Номер в правой панели
-    int sceneRow = -1;  // Порядок на сцене
+    int listRow = -1;  // Номер в правой панели
+    int sceneRow = -1; // Порядок на сцене
 };
 
 class MainWindow : public QMainWindow
@@ -348,7 +324,7 @@ private:
 
     bool hasUnsavedChanges() const;
     QList<Document::Ptr> getUnsavedDocuments() const;
-    int showUnsavedChangesDialog(const QList<Document::Ptr> &unsavedDocs);
+    int showUnsavedChangesDialog(const QList<Document::Ptr>& unsavedDocs);
     void saveAllDocuments();
 
     qgraph::DragCircle* pickHiddenHandle(const QPointF& scenePos, bool& topIsHandle) const;
@@ -434,17 +410,18 @@ private:
                               const ShapeBackup& before,
                               const ShapeBackup& after,
                               const QString& description);
-
     // Для узлов
     void pushHandleEditCommand(QGraphicsItem* item,
                                const ShapeBackup& before,
                                const ShapeBackup& after,
                                const QString& description);
+
     // Добавление/удаление узлов у линий
     void pushModifyShapeCommand(qulonglong uid,
                                 const ShapeBackup& before,
                                 const ShapeBackup& after,
                                 const QString& description);
+
     // Изменение положения изображения
     void pushMoveImageCommand(const QPointF& before,
                               const QPointF& after,
@@ -460,15 +437,21 @@ private:
 
     // Удаляет одну запись из списка по заданному QGraphicsItem
     void removeListEntryBySceneItem(QGraphicsItem* sceneItem);
+
     static QGraphicsItem* sceneItemFromListItem(const QListWidgetItem* it);
+
     // Поиск фигуры по uid на текущей сцене
     QGraphicsItem* findItemByUid(qulonglong uid) const;
+
     // Выдать/присвоить uid предмету
     qulonglong ensureUid(QGraphicsItem* it) const;
+
     // Сбросить состояния рисования при удалении line/polyline из сцены
     void clearLinePolylineStateForDeletedItem(QGraphicsItem* item);
+
     // Отмена линейки
     void cancelRulerMode();
+
     // Видимость menuBar
     void toggleMenuBarVisible();
 
@@ -481,9 +464,10 @@ private:
     void startMergeLinesMode();
     void cancelMergeLinesMode();
     bool handleMergeLinesClick(const QPointF& scenePos); // true если клик обработан
-    bool performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, int bIdx);
+    bool performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line* b, int bIdx);
+
     // Разрыв линии
-    bool performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePos);
+    bool performSplitLineByEdge(qgraph::Line*, const QPointF& scenePos);
 
     // Нормализация нумерации
     static double signedArea2(const QVector<QPointF>& pts);
@@ -492,8 +476,9 @@ private:
 
     // Режим в statusBar
     void updateModeLabel();
+
     // Перемещение в режиме рисования
-    void handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers mods, GraphicsView* graphView);
+    void handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers, GraphicsView*);
     void handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers mods, GraphicsView* graphView);
 
 private:
@@ -521,34 +506,33 @@ private:
     QPoint _point;
     QList <QPointF> _points;
 
-    bool _dragging = false; // Флаг для отслеживания состояния перетаскивания
+    bool _dragging = {false}; // Флаг для отслеживания состояния перетаскивания
     QPoint _lastMousePos; // Последняя позиция мыши
 
-
     //QToolButton* _selectModeButton;
-    bool _btnRectFlag = false;
-    bool _btnPolylineFlag = false;
-    bool _btnCircleFlag = false;
-    bool _btnPointFlag = false;
-    bool _btnLineFlag = false;
-
+    bool _btnRectFlag     = {false};
+    bool _btnPolylineFlag = {false};
+    bool _btnCircleFlag   = {false};
+    bool _btnPointFlag    = {false};
+    bool _btnLineFlag     = {false};
 
     QGraphicsItem* _draggingItem = {nullptr}; // Указатель на перетаскиваемый объект
 
-    bool _drawingCircle = false;    // Флаг, рисуется ли круг
-    bool _drawingLine = false;      // Флаг, рисуется ли линия
-    bool _drawingPolyline = false;  // Флаг, рисуется ли полилиния
-    bool _drawingRectangle = false; // Флаг, рисуется ли прямоугольник
-    bool _drawingPoint = false;
-    bool _isInDrawingMode = false; // Флаг, указывающий что мы в режиме рисования новой фигуры
-    bool _isDraggingImage = false; // Флаг для перетаскивания изображения
-    bool _isAllMoved = false; // Флаг для перетаскивания изображения вместе с разметкой
-    qgraph::Polyline* _currentLine = {nullptr}; // Текущая линия
+    bool _drawingCircle    = {false}; // Флаг, рисуется ли круг
+    bool _drawingLine      = {false}; // Флаг, рисуется ли линия
+    bool _drawingPolyline  = {false}; // Флаг, рисуется ли полилиния
+    bool _drawingRectangle = {false}; // Флаг, рисуется ли прямоугольник
+    bool _drawingPoint     = {false};
+    bool _isInDrawingMode  = {false}; // Флаг, указывающий что мы в режиме рисования новой фигуры
+    bool _isDraggingImage  = {false}; // Флаг для перетаскивания изображения
+    bool _isAllMoved       = {false}; // Флаг для перетаскивания изображения вместе с разметкой
+
+    qgraph::Polyline*  _currentLine = {nullptr};   // Текущая линия
     SquareDrawingItem* _currentSquare = {nullptr}; // Текущий квадрат
-    QList<QPointF> _polylinePoints; // Точки текущей полилинии
+    QList<QPointF>     _polylinePoints;            // Точки текущей полилинии
 
     enum class PendingDrawTool {None, Polyline, Line};
-    PendingDrawTool _pendingDrawTool = PendingDrawTool::None;
+    PendingDrawTool _pendingDrawTool = {PendingDrawTool::None};
     QPoint _pendingDrawPressViewPos;
     QPointF _pendingDrawPressScenePos;
 
@@ -558,24 +542,24 @@ private:
     bool _isDrawingRectangle = false;
 
     QGraphicsEllipseItem* _currCircle = {nullptr};
-    bool _isDrawingCircle = false;
+    bool _isDrawingCircle = {false};
     // Временный крестик центра при рисовании круга
     QGraphicsLineItem* _currCircleCrossV = {nullptr};
     QGraphicsLineItem* _currCircleCrossH = {nullptr};
 
     QGraphicsPathItem* _currPolyline = {nullptr}; // Временная визуализация полилинии
-    bool _isDrawingPolyline = false; // Флаг для состояния рисования
+    bool _isDrawingPolyline = {false}; // Флаг для состояния рисования
 
-    bool _isDrawingPoint = false;
+    bool _isDrawingPoint = {false};
 
     qgraph::Line* _currLine = {nullptr};
-    bool _isDrawingLine = false;
+    bool _isDrawingLine = {false};
     QPointF _lineFirstPoint;
 
     // Линейка
     QGraphicsLineItem* _rulerLine = {nullptr}; // Временная линия измерения
     QGraphicsTextItem* _rulerText = {nullptr}; // Подпись с расстоянием
-    bool _drawingRuler = false; // Выбран ли инструмент "Линейка"
+    bool _drawingRuler = {false}; // Выбран ли инструмент "Линейка"
     bool _isDrawingRuler = false; // Тянем вторую точку
     QPointF _rulerStartPoint; // Первая точка измерения
 
@@ -607,21 +591,21 @@ private:
     QGraphicsEllipseItem* _tempCircleItem = nullptr;
     qgraph::Polyline* _tempPolyline = nullptr;
 
-
     struct ScrollState
     {
-       int hScroll = 0;
-       int vScroll = 0;
-       qreal zoom = 1.0;
+       int hScroll = {0};
+       int vScroll = {0};
+       qreal zoom  = {1};
        QPointF center;
     };
-    QMap<QString, ScrollState> _scrollStates; // Ключ - путь к файлу
+    QMap<QString /*file path*/, ScrollState> _scrollStates; // Ключ - путь к файлу
+
     // double currentScale = 1.0;
     // const double scaleStep = 1.1;
     qreal _m_zoom = 1.0;
-    static constexpr qreal _kZoomStep = 1.1;
-    static constexpr qreal _kMinZoom  = 0.10;
-    static constexpr qreal _kMaxZoom  = 100.0;
+    static constexpr qreal _kZoomStep = {1.10};
+    static constexpr qreal _kMinZoom  = {0.10};
+    static constexpr qreal _kMaxZoom  = {100};
 
     QList<int> _savedSplitterSizes; // Хранит нормальные размеры сплиттера
     bool _isRightSplitterCollapsed = false;

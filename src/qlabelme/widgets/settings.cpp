@@ -1,5 +1,8 @@
 #include "settings.h"
 #include "ui_settings.h"
+
+#include "shared/defmac.h"
+
 #include <QDialogButtonBox>
 #include <QPushButton>
 #include <QColorDialog>
@@ -352,7 +355,9 @@ bool Settings::pickColor(QWidget *parent, const QString &title,
 
 void Settings::attachColorPicker(QPushButton *btn, QColor *target)
 {
-    if (!btn || !target) return;
+    if (!btn || !target)
+        return;
+
     updateColorPreview(btn, *target);
     connect(btn, &QPushButton::clicked, this, [this, btn, target]
     {

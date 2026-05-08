@@ -80,6 +80,7 @@
 // #include <cmath>
 // #include <limits>
 
+using namespace std;
 using namespace qgraph;
 
 #define log_error_m   alog::logger().error   (alog_line_location, "MainWin")
@@ -165,6 +166,37 @@ static bool sameGeometry(const ShapeBackup& a, const ShapeBackup& b)
     return false;
 }
 
+Document::Ptr Document::create(const QString& path)
+{
+    Ptr doc {new Document};
+    doc->filePath = path;
+    return doc;
+}
+
+bool Document::loadImage()
+{
+    steady_timer timer2;
+    log_debug2_m <<  "m5 "; // << timer2.elapsed();
+    pixmap = QPixmap(filePath);
+    if (pixmap.isNull())
+    {
+        return false;
+    }
+    if (!scene)
+    {
+        scene = new QGraphicsScene();
+    }
+    if (!videoRect)
+    {
+        videoRect = new qgraph::VideoRect(scene);
+    }
+    videoRect->setPixmap(pixmap);
+
+    videoRect->setPos(0, 0);
+    scene->setSceneRect(QRectF(QPointF(0, 0), QSizeF(pixmap.size())));
+    log_debug2_m <<  "m6 " << timer2.elapsed();
+    return true;
+}
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -3266,7 +3298,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         QAction* actRecalc = nullptr;
                         const auto& circles = line->circles();
                         const int idx = circles.indexOf(circle);
-                        if (idx == 0 || idx == circles.size() - 1)
+                        if ((idx == 0) || (idx == circles.size() - 1))
                             actRecalc = menu.addAction(u8"Пересчитать нумерацию");
 
                         QAction* chosen = menu.exec(ce->globalPos());
@@ -8231,16 +8263,15 @@ QList<Document::Ptr> MainWindow::getUnsavedDocuments() const
     return unsavedDocs;
 }
 
-int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr> &unsavedDocs)
+int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr>& unsavedDocs)
 {
     //QDialog dialog(this);
     QDialog dialog(
         this,
-        Qt::Dialog |
-            Qt::CustomizeWindowHint |
-            Qt::WindowTitleHint |
-            Qt::WindowCloseButtonHint
-        );
+        Qt::Dialog
+        |Qt::CustomizeWindowHint
+        |Qt::WindowTitleHint
+        |Qt::WindowCloseButtonHint);
 
     dialog.setWindowTitle(u8"Несохраненные изменения");
     dialog.setModal(true);
@@ -8266,7 +8297,7 @@ int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr> &unsavedDocs
 
     // Список файлов
     QListWidget *fileList = new QListWidget();
-    for (const Document::Ptr &doc : unsavedDocs)
+    for (const Document::Ptr& doc : unsavedDocs)
     {
         QFileInfo fileInfo(doc->filePath);
         QListWidgetItem *item = new QListWidgetItem(fileInfo.fileName());
@@ -9642,7 +9673,7 @@ QVector<ShapeBackup> MainWindow::collectBackupsForItems(const QList<QListWidgetI
         if (!gi)
             continue;
 
-        out.push_back(makeBackupFromItem(gi));
+        out.append(makeBackupFromItem(gi));
     }
     return out;
 }
@@ -10477,7 +10508,7 @@ void MainWindow::clearLinePolylineStateForDeletedItem(QGraphicsItem* item)
         _drawingPolyline = false;
     }
 
-    if (_resumeEditing && _resumeUid != 0 && uid != 0 && uid == _resumeUid)
+    if (_resumeEditing && (_resumeUid != 0) && (uid != 0) && (uid == _resumeUid))
     {
         _resumeEditing = false;
         _resumeUid = 0;
@@ -10578,7 +10609,7 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
         _vis.fillShapeWhenSelected ? QBrush(fillColor)
                                    : QBrush(Qt::transparent);
 
-    const QBrush noBrush(Qt::transparent);
+    const QBrush noBrush {Qt::transparent};
 
     if (auto* r = dynamic_cast<qgraph::Rectangle*>(item))
     {
@@ -10704,7 +10735,7 @@ bool MainWindow::handleMergeLinesClick(const QPointF& scenePos)
 
     const auto& circles = line->circles();
     const int idx = circles.indexOf(h);
-    if (idx != 0 && idx != circles.size() - 1)
+    if ((idx != 0) && (idx != circles.size() - 1))
         return false; // Нужен только конец линии
 
     if (!_mergeLineA)
@@ -10838,6 +10869,9 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
 
     struct Payload
     {
+        typedef shared_ptr<Payload> Ptr;
+        //typedef container_ptr<Payload> Ptr;
+
         ShapeBackup aBackup;
         ShapeBackup bBackup;
         QVector<QPointF> mergedPts;
@@ -10847,7 +10881,8 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
         bool numberingFromLast = false;
     };
 
-    auto payload = std::make_shared<Payload>();
+    Payload::Ptr payload = make_shared<Payload>();
+    //Payload::Ptr payload = Payload::Ptr::create();
 
     auto backupForSceneItem = [this](QGraphicsItem* gi) -> ShapeBackup
     {
@@ -11158,15 +11193,24 @@ void MainWindow::updateModeLabel()
 {
     if (!_modeLabel) return;
 
-    if (_drawingRuler || _isDrawingRuler) {
+    if (_drawingRuler || _isDrawingRuler)
+    {
         _modeLabel->setText(_isDrawingRuler
                             ? u8"Режим: линейка (измерение...)"
                             : u8"Режим: линейка");
         return;
     }
     if (_isInDrawingMode
-        || _isDrawingRectangle || _isDrawingCircle || _isDrawingLine || _isDrawingPolyline || _isDrawingPoint
-        || _drawingRectangle  || _drawingCircle  || _drawingLine  || _drawingPolyline  || _drawingPoint)
+        || _isDrawingRectangle
+        || _isDrawingCircle
+        || _isDrawingLine
+        || _isDrawingPolyline
+        || _isDrawingPoint
+        || _drawingRectangle
+        || _drawingCircle
+        || _drawingLine
+        || _drawingPolyline
+        || _drawingPoint)
     {
         QString tool = u8"фигура";
         if (_isDrawingRectangle || _drawingRectangle)
@@ -11218,7 +11262,9 @@ void MainWindow::updateModeLabel()
     _modeLabel->setText(u8"Режим: просмотр");
 }
 
-void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers mods, GraphicsView* graphView)
+void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
+                                        Qt::KeyboardModifiers mods,
+                                        GraphicsView* graphView)
 {
     Q_UNUSED(mods);
     Q_UNUSED(graphView);
@@ -11492,8 +11538,8 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardMod
     }
 
     // Закрытие полилинии по Ctrl
-    if (qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::CtrlModifier &&
-        (mods & Qt::ControlModifier))
+    if (qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::CtrlModifier
+        && (mods & Qt::ControlModifier))
     {
         //_polyline->closePolyline();
         if (_polyline && !_polyline->isClosed())
@@ -11727,9 +11773,9 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
     {
         struct Payload
         {
-            qulonglong uid = 0;
+            qulonglong uid = {0};
             QPointF    pt;
-            bool       didAdd = false;
+            bool       didAdd = {false};
         };
 
         auto payload = std::make_shared<Payload>();
@@ -11741,7 +11787,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
             auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(payload->uid));
             if (!ln) return;
 
-            const int before = ln->_circles.size();
+            const int before = ln->_circles.count();
             ln->addPoint(payload->pt, _scene);
 
             ln->setSelected(true);
