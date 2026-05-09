@@ -320,6 +320,12 @@ private:
     QString getAnnotationFilePath(const QString& imagePath) const;
 
     void raiseAllHandlesToTop();
+
+    bool isRootShapeItem(QGraphicsItem* item) const;
+    qreal originalZValueForItem(QGraphicsItem* item) const;
+    void restoreTemporaryRaisedZValues();
+    void raiseSelectedShapesTemporarily();
+
     void moveSelectedItemsToBack();
 
     bool hasUnsavedChanges() const;
@@ -736,6 +742,8 @@ private:
     QPointer<QRubberBand> _zoomRubberBand;
     QPointer<GraphicsView> _zoomRectView;
     bool _zoomRectWasInteractive = true;
+
+    QHash<qulonglong, qreal> _temporaryRaisedZValues; // Для хранения z-уровней фигур
 
     // Стабильный ключ в QGraphicsItem::data(...)
     static constexpr int _roleUid = 0x1337ABCD;

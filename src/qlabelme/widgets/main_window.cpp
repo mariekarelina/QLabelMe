@@ -3986,6 +3986,8 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
 {
     if (!current) return;
 
+    restoreTemporaryRaisedZValues();
+
     // Полный сброс состояний ручек/призрака перед сменой сцены
     clearAllHandleHoverEffects();
     hideGhost();
@@ -4232,7 +4234,7 @@ void MainWindow::onPolygonListSelectionChanged()
             ui->graphView->ensureVisible(scItem);
     }
 
-    raiseAllHandlesToTop();
+    raiseSelectedShapesTemporarily();
     updateShapeListButtons();
 
     _syncingSelection = false;
@@ -4281,7 +4283,7 @@ void MainWindow::selectAllShapes()
     _syncingSelection = false;
 
     updateCoordinateList();
-    raiseAllHandlesToTop();
+    raiseSelectedShapesTemporarily();
     _scene->update();
 }
 
@@ -4740,6 +4742,7 @@ void MainWindow::on_actDelete_triggered()
         if (msgBox.clickedButton() != btnYes)
             return;
     }
+    restoreTemporaryRaisedZValues();
 
     // Снимки для восстановления
     const QVector<ShapeBackup> backups = collectBackupsForItems(selectedItems);
@@ -5321,6 +5324,8 @@ void MainWindow::on_actUndo_triggered()
     if (!_undoGroup)
         return;
 
+    restoreTemporaryRaisedZValues();
+
     if (_undoGroup->canUndo())
         _undoGroup->undo();
 }
@@ -5329,6 +5334,8 @@ void MainWindow::on_actRedo_triggered()
 {
     if (!_undoGroup)
         return;
+
+    restoreTemporaryRaisedZValues();
 
     if (_undoGroup->canRedo())
         _undoGroup->redo();
@@ -5367,6 +5374,7 @@ void MainWindow::on_actResetAnnotation_triggered()
         if (auto* it = ui->polygonList->item(i))
             allItems.push_back(it);
     }
+    restoreTemporaryRaisedZValues();
 
     // Снимки для восстановления
     const QVector<ShapeBackup> backups = collectBackupsForItems(allItems);
@@ -7686,6 +7694,7 @@ void MainWindow::onSceneSelectionChanged()
     }
 
     updateCoordinateList();
+    raiseSelectedShapesTemporarily();
     _scene->update();
 
     updateShapeListButtons();
@@ -8195,10 +8204,114 @@ void MainWindow::raiseAllHandlesToTop()
     }
 }
 
+bool MainWindow::isRootShapeItem(QGraphicsItem* item) const
+{
+    if (!item)
+        return false;
+
+    if (item == _videoRect ||
+        item == _tempRectItem ||
+        item == _tempCircleItem ||
+        item == _tempPolyline)
+    {
+        return false;
+    }
+
+    if (item->parentItem() != nullptr)
+        return false;
+
+    return dynamic_cast<qgraph::Rectangle*>(item) ||
+           dynamic_cast<qgraph::Circle*>(item) ||
+           dynamic_cast<qgraph::Polyline*>(item) ||
+           dynamic_cast<qgraph::Line*>(item) ||
+           dynamic_cast<qgraph::Point*>(item);
+}
+
+qreal MainWindow::originalZValueForItem(QGraphicsItem* item) const
+{
+    if (!item)
+        return 0.0;
+
+    const qulonglong uid = item->data(_roleUid).toULongLong();
+    if (uid != 0 && _temporaryRaisedZValues.contains(uid))
+        return _temporaryRaisedZValues.value(uid);
+
+    return item->zValue();
+}
+
+void MainWindow::restoreTemporaryRaisedZValues()
+{
+    if (_temporaryRaisedZValues.isEmpty())
+        return;
+
+    const auto raised = _temporaryRaisedZValues;
+    _temporaryRaisedZValues.clear();
+
+    for (auto it = raised.constBegin(); it != raised.constEnd(); ++it)
+    {
+        QGraphicsItem* item = findItemByUid(it.key());
+        if (!item)
+            continue;
+
+        item->setZValue(it.value());
+    }
+
+    if (_scene)
+        _scene->update();
+}
+
+void MainWindow::raiseSelectedShapesTemporarily()
+{
+    if (!_scene)
+        return;
+
+    restoreTemporaryRaisedZValues();
+
+    QList<QGraphicsItem*> selectedRoots;
+
+    qreal maxZ = _videoRect ? _videoRect->zValue() : 0.0;
+
+    for (QGraphicsItem* item : _scene->items())
+    {
+        if (!isRootShapeItem(item))
+            continue;
+
+        maxZ = std::max(maxZ, item->zValue());
+
+        if (item->isSelected())
+            selectedRoots.append(item);
+    }
+
+    if (selectedRoots.isEmpty())
+        return;
+
+    qreal z = maxZ + 1.0;
+
+    for (QGraphicsItem* item : selectedRoots)
+    {
+        if (!item)
+            continue;
+
+        const qulonglong uid = ensureUid(item);
+        if (uid == 0)
+            continue;
+
+        _temporaryRaisedZValues.insert(uid, item->zValue());
+        item->setZValue(z++);
+    }
+
+    raiseAllHandlesToTop();
+
+    if (_scene)
+        _scene->update();
+}
+
 void MainWindow::moveSelectedItemsToBack()
 {
     if (!_scene)
         return;
+
+    restoreTemporaryRaisedZValues();
 
     QList<QGraphicsItem*> selectedRoots;
     QList<QGraphicsItem*> nonSelectedRoots;
@@ -9640,7 +9753,8 @@ ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* gi) const
         b.uid = ensureUid(gi);
 
     b.className = gi->data(0).toString();
-    b.z = gi->zValue();
+    //b.z = gi->zValue();
+    b.z = originalZValueForItem(gi);
     b.visible = gi->isVisible();
 
     if (auto* rect = dynamic_cast<qgraph::Rectangle*>(gi))
