@@ -481,6 +481,13 @@ private:
     void handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers, GraphicsView*);
     void handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers mods, GraphicsView* graphView);
 
+    // Кнопки в списке фигур
+    void moveCurrentShapeInList(int direction);
+    void movePolygonListRow(int fromRow, int toRow);
+    int polygonListRowByUid(qulonglong uid) const;
+    void updateShapeListButtons();
+    void refreshShapeListOrderRole();
+
 private:
     Ui::MainWindow* ui;
     static QUuidEx _applId;
@@ -732,6 +739,7 @@ private:
 
     // Стабильный ключ в QGraphicsItem::data(...)
     static constexpr int _roleUid = 0x1337ABCD;
+    static constexpr int _roleListOrder = 0x1337ABCE;
 
     // Счетчик уникальных id на время жизни документа
     mutable qulonglong _uidCounter = 1;

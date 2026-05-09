@@ -279,7 +279,7 @@ MainWindow::MainWindow(QWidget *parent) :
     vtb->addWidget(hSep);
 
     // Убираем старые виджеты из сетки и вставляем блок тулбаров в row 0
-    ui->gridLayout->removeWidget(ui->label_5);
+    ui->gridLayout->removeWidget(ui->figuresWidget);
     ui->gridLayout->removeWidget(ui->label);
     ui->gridLayout->removeWidget(ui->label_4);
     ui->gridLayout->removeWidget(ui->polygonList);
@@ -290,7 +290,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->gridLayout->addWidget(toolBarsBlock, 0, 0, 1, 3);
 
     // Возвращаем заголовки и списки ниже
-    ui->gridLayout->addWidget(ui->label_5, 1, 0);
+    ui->gridLayout->addWidget(ui->figuresWidget, 1, 0);
     ui->gridLayout->addWidget(ui->label,   1, 1);
     ui->gridLayout->addWidget(ui->label_4, 1, 2);
 
@@ -477,6 +477,40 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->polygonList, &QListWidget::customContextMenuRequested,
             this, &MainWindow::showPolygonListContextMenu);
 
+    ui->btnMoveShapeUp->setToolTip(QString::fromUtf8("Переместить фигуру выше"));
+    ui->btnMoveShapeDown->setToolTip(QString::fromUtf8("Переместить фигуру ниже"));
+    ui->btnDelete->setToolTip(QString::fromUtf8("Удалить выбранную фигуру"));
+
+    ui->btnMoveShapeUp->setAutoRaise(true);
+    ui->btnMoveShapeDown->setAutoRaise(true);
+    ui->btnDelete->setAutoRaise(true);
+
+    connect(ui->btnMoveShapeUp, &QToolButton::clicked,
+            this, [this]()
+    {
+        moveCurrentShapeInList(-1);
+    });
+
+    connect(ui->btnMoveShapeDown, &QToolButton::clicked,
+            this, [this]()
+    {
+        moveCurrentShapeInList(1);
+    });
+
+    connect(ui->btnDelete, &QToolButton::clicked,
+            this, &MainWindow::on_actDelete_triggered);
+
+    connect(ui->polygonList, &QListWidget::currentRowChanged,
+            this, [this](int)
+    {
+        updateShapeListButtons();
+    });
+
+    connect(ui->polygonList, &QListWidget::itemSelectionChanged,
+            this, &MainWindow::updateShapeListButtons);
+
+    updateShapeListButtons();
+
     //QLabel* pathHeader = new QLabel(this);
     //pathHeader->setAlignment(Qt::AlignCenter);
     // Добавляем заголовок над listWidget
@@ -509,7 +543,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->splitter->setSizes({INT_MAX, INT_MAX});
     // Сохраняем указатель на правую панель
-    _rightPanel = ui->splitter->widget(1); // Или другой индекс, в зависимости от структуры
+    _rightPanel = ui->splitter->widget(1);
     // Сохраняем начальные размеры сплиттера
     _savedSplitterSizes = ui->splitter->sizes();
     applyLabelFontToUi();
@@ -3659,30 +3693,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     }
     if (event->key() == Qt::Key_Delete)
     {
-        QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
-        for (QGraphicsItem* item : selectedItems)
-        {
-            // Если выделена ручка, удаляем ее владельца (фигуру), а не саму ручку
-            if (auto* h = dynamic_cast<qgraph::DragCircle*>(item))
-            {
-                if (h->parentItem())
-                    item = h->parentItem();
-            }
-
-            // Сначала убираемм связанный пункт из списка фигур
-            onSceneItemRemoved(item);
-
-            // Затем удалим со сцены и из памяти
-
-            // _scene->removeItem(item);
-            // delete item;
-            if (item)
-            {
-                if (auto sc = item->scene())
-                    sc->removeItem(item);
-                delete item;
-            }
-        }
+        on_actDelete_triggered();
         event->accept();
         return;
     }
@@ -4222,6 +4233,7 @@ void MainWindow::onPolygonListSelectionChanged()
     }
 
     raiseAllHandlesToTop();
+    updateShapeListButtons();
 
     _syncingSelection = false;
 }
@@ -4708,6 +4720,26 @@ void MainWindow::on_actDelete_triggered()
     const QList<QListWidgetItem*> selectedItems = ui->polygonList->selectedItems();
     if (selectedItems.isEmpty())
         return;
+
+    if (selectedItems.size() > 1)
+    {
+        QMessageBox msgBox(this);
+        msgBox.setWindowTitle(u8"Удаление фигур");
+        msgBox.setText(
+            QString(u8"Удалить выбранные фигуры?\nКоличество фигур: %1")
+                .arg(selectedItems.size())
+        );
+        msgBox.setIcon(QMessageBox::Question);
+
+        QPushButton* btnYes = msgBox.addButton(u8"Да", QMessageBox::AcceptRole);
+        QPushButton* btnNo = msgBox.addButton(u8"Нет", QMessageBox::RejectRole);
+        msgBox.setDefaultButton(btnNo);
+
+        msgBox.exec();
+
+        if (msgBox.clickedButton() != btnYes)
+            return;
+    }
 
     // Снимки для восстановления
     const QVector<ShapeBackup> backups = collectBackupsForItems(selectedItems);
@@ -7656,6 +7688,7 @@ void MainWindow::onSceneSelectionChanged()
     updateCoordinateList();
     _scene->update();
 
+    updateShapeListButtons();
     _syncingSelection = false;
 }
 
@@ -7984,6 +8017,7 @@ void MainWindow::renumberPolygonList()
     if (!ui || !ui->polygonList)
         return;
 
+    refreshShapeListOrderRole();
     const int count = ui->polygonList->count();
 
     for (int i = 0; i < count; ++i)
@@ -8004,6 +8038,7 @@ void MainWindow::renumberPolygonList()
         item->setText(text);
     }
 
+    updateShapeListButtons();
     if (_scene)
         _scene->update();
 }
@@ -8012,6 +8047,8 @@ void MainWindow::renumberPolygonListTextOnly()
 {
     if (!ui || !ui->polygonList)
         return;
+
+    refreshShapeListOrderRole();
 
     for (int i = 0; i < ui->polygonList->count(); ++i)
     {
@@ -8030,6 +8067,7 @@ void MainWindow::renumberPolygonListTextOnly()
             text += " [скрыто]";
         item->setText(text);
     }
+    updateShapeListButtons();
 }
 
 void MainWindow::showPolygonListContextMenu(const QPoint &pos)
@@ -11841,4 +11879,167 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
     }
     apply_PointSize_ToItem(_line);
     raiseAllHandlesToTop();
+}
+
+void MainWindow::moveCurrentShapeInList(int direction)
+{
+    if (!ui || !ui->polygonList || direction == 0)
+        return;
+
+    Document::Ptr doc = currentDocument();
+    if (!doc)
+        return;
+
+    const QList<QListWidgetItem*> selected = ui->polygonList->selectedItems();
+
+    // Перемещение вверх/вниз делаем только для одной выбранной фигуры.
+    // Удаление при этом может работать для нескольких.
+    if (selected.size() != 1)
+        return;
+
+    QListWidgetItem* currentItem = selected.first();
+    QGraphicsItem* sceneItem = sceneItemFromListItem(currentItem);
+
+    if (!sceneItem)
+        return;
+
+    const int fromRow = ui->polygonList->row(currentItem);
+    const int toRow = fromRow + direction;
+
+    if (fromRow < 0 || toRow < 0 || toRow >= ui->polygonList->count())
+        return;
+
+    const qulonglong uid = ensureUid(sceneItem);
+
+    auto redoFn = [this, uid, toRow]()
+    {
+        const int currentRow = polygonListRowByUid(uid);
+        if (currentRow < 0)
+            return;
+
+        movePolygonListRow(currentRow, toRow);
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    auto undoFn = [this, uid, fromRow]()
+    {
+        const int currentRow = polygonListRowByUid(uid);
+        if (currentRow < 0)
+            return;
+
+        movePolygonListRow(currentRow, fromRow);
+
+        if (auto d = currentDocument())
+        {
+            d->isModified = true;
+            updateFileListDisplay(d->filePath);
+        }
+    };
+
+    if (doc->_undoStack)
+        doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, u8"Перемещение фигуры в списке"));
+    else
+        redoFn();
+}
+
+void MainWindow::movePolygonListRow(int fromRow, int toRow)
+{
+    if (!ui || !ui->polygonList)
+        return;
+
+    const int count = ui->polygonList->count();
+
+    if (fromRow < 0 || fromRow >= count)
+        return;
+
+    if (toRow < 0 || toRow >= count)
+        return;
+
+    if (fromRow == toRow)
+        return;
+
+    QListWidgetItem* movedItem = nullptr;
+
+    {
+        QSignalBlocker block(ui->polygonList);
+
+        movedItem = ui->polygonList->takeItem(fromRow);
+        if (!movedItem)
+            return;
+
+        ui->polygonList->insertItem(toRow, movedItem);
+
+        ui->polygonList->clearSelection();
+        movedItem->setSelected(true);
+        ui->polygonList->setCurrentItem(movedItem);
+    }
+
+    refreshShapeListOrderRole();
+
+    onPolygonListSelectionChanged();
+    updateShapeListButtons();
+
+    if (_scene)
+        _scene->update();
+}
+
+int MainWindow::polygonListRowByUid(qulonglong uid) const
+{
+    if (!ui || !ui->polygonList || uid == 0)
+        return -1;
+
+    for (int i = 0; i < ui->polygonList->count(); ++i)
+    {
+        QListWidgetItem* listItem = ui->polygonList->item(i);
+        QGraphicsItem* sceneItem = sceneItemFromListItem(listItem);
+
+        if (!sceneItem)
+            continue;
+
+        if (sceneItem->data(_roleUid).toULongLong() == uid)
+            return i;
+    }
+
+    return -1;
+}
+
+void MainWindow::updateShapeListButtons()
+{
+    if (!ui || !ui->polygonList)
+        return;
+
+    const QList<QListWidgetItem*> selected = ui->polygonList->selectedItems();
+
+    int row = -1;
+    if (selected.size() == 1)
+        row = ui->polygonList->row(selected.first());
+
+    const int count = ui->polygonList->count();
+
+    ui->btnMoveShapeUp->setEnabled(row > 0);
+    ui->btnMoveShapeDown->setEnabled(row >= 0 && row < count - 1);
+
+    ui->btnDelete->setEnabled(!selected.isEmpty());
+}
+
+void MainWindow::refreshShapeListOrderRole()
+{
+    if (!ui || !ui->polygonList)
+        return;
+
+    for (int i = 0; i < ui->polygonList->count(); ++i)
+    {
+        QListWidgetItem* listItem = ui->polygonList->item(i);
+        QGraphicsItem* sceneItem = sceneItemFromListItem(listItem);
+
+        if (!sceneItem)
+            continue;
+
+        sceneItem->setData(_roleListOrder, i);
+    }
 }
