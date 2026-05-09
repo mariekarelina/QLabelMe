@@ -8038,19 +8038,31 @@ void MainWindow::showPolygonListContextMenu(const QPoint &pos)
     if (!item) return;
 
     QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
-    if (!sceneItem)
-        return;
+    if (!sceneItem) return;
 
     QMenu menu;
-    QAction* toggleVisibleAction =
-        menu.addAction(sceneItem->isVisible() ? "Скрыть разметку" : "Показать разметку");
-    QAction* deleteAction = menu.addAction("Удалить");
+    QAction* toggleVisibleAction = menu.addAction(
+        sceneItem->isVisible() ? u8"Скрыть разметку" : u8"Показать разметку"
+    );
+    QAction* deleteAction = menu.addAction(u8"Удалить (Del)");
 
     QAction* chosen = menu.exec(ui->polygonList->viewport()->mapToGlobal(pos));
+
     if (chosen == toggleVisibleAction)
+    {
         toggleSceneItemVisibility(sceneItem);
+    }
     else if (chosen == deleteAction)
-        removePolygonListItem(item);
+    {
+        if (!item->isSelected())
+        {
+            ui->polygonList->clearSelection();
+            item->setSelected(true);
+        }
+
+        ui->polygonList->setCurrentItem(item);
+        on_actDelete_triggered();
+    }
 }
 
 void MainWindow::updatePolygonListItemText(QListWidgetItem* item)
