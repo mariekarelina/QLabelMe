@@ -145,6 +145,7 @@ struct ShapeBackup
     bool numberingFromLast = false;
     int listRow = -1;  // Номер в правой панели
     int sceneRow = -1; // Порядок на сцене
+    int shapeNumber = -1; // Номер в списке
 };
 
 class MainWindow : public QMainWindow
@@ -494,6 +495,12 @@ private:
     void updateShapeListButtons();
     void refreshShapeListOrderRole();
 
+    // Сохранение номера фигуры
+    int nextShapeNumberForScene(QGraphicsScene* scene) const;
+    int ensureShapeNumber(QGraphicsItem* item) const;
+    QList<QGraphicsItem*> orderedShapeItemsForSave(Document::Ptr doc) const;
+    void syncZValuesWithListOrder(Document::Ptr doc);
+
 private:
     Ui::MainWindow* ui;
     static QUuidEx _applId;
@@ -748,6 +755,7 @@ private:
     // Стабильный ключ в QGraphicsItem::data(...)
     static constexpr int _roleUid = 0x1337ABCD;
     static constexpr int _roleListOrder = 0x1337ABCE;
+    static constexpr int _roleShapeNumber = 0x1337ABCF;
 
     // Счетчик уникальных id на время жизни документа
     mutable qulonglong _uidCounter = 1;

@@ -5668,7 +5668,16 @@ void MainWindow::updatePolygonListForCurrentScene()
     std::sort(roots.begin(), roots.end(),
               [](QGraphicsItem* a, QGraphicsItem* b)
     {
-        return a->zValue() < b->zValue();
+        bool aOk = false;
+        bool bOk = false;
+
+        const int aOrder = a->data(_roleListOrder).toInt(&aOk);
+        const int bOrder = b->data(_roleListOrder).toInt(&bOk);
+
+        const int av = aOk ? aOrder : std::numeric_limits<int>::max();
+        const int bv = bOk ? bOrder : std::numeric_limits<int>::max();
+
+        return av < bv;
     });
 
     for (QGraphicsItem* item : roots)
@@ -6688,240 +6697,129 @@ double MainWindow::round2(double value)
 void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 {
     if (!doc || !doc->scene || !doc->videoRect)
-    {
         return;
-    }
 
-    YamlConfig::Func saveCircles = [&](YamlConfig* conf, YAML::Node& ycircles, bool)
+    auto savePointNode = [](YamlConfig* conf,
+                            YAML::Node& parent,
+                            const char* key,
+                            const QPointF& point)
     {
-        for (QGraphicsItem* item : doc->scene->items())
-            if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
-            {
-                YAML::Node ycircle;
+        YamlConfig::Func savePoint = [point](YamlConfig* conf, YAML::Node& ypoint, bool)
+        {
+            conf->setValue(ypoint, "x", static_cast<double>(point.x()));
+            conf->setValue(ypoint, "y", static_cast<double>(point.y()));
+            return true;
+        };
 
-                QString className = circle->data(0).toString();
-                if (className.isEmpty())
-                    className = "none";
-
-                conf->setValue(ycircle, "label",  className);
-
-                QPointF center = circle->realCenter();
-                double radius = circle->realRadius();
-
-                YamlConfig::Func saveCenter = [center](YamlConfig* conf, YAML::Node& ycenter, bool)
-                {
-                    conf->setValue(ycenter, "x", static_cast<double>(center.x()));
-                    conf->setValue(ycenter, "y", static_cast<double>(center.y()));
-                    return true;
-                };
-
-                conf->setValue(ycircle, "center", saveCenter);
-                conf->setValue(ycircle, "radius", static_cast<double>(radius));
-
-                ycircles.push_back(ycircle);
-            }
-        return true;
+        conf->setValue(parent, key, savePoint);
     };
-    YamlConfig::Func savePolylines = [&](YamlConfig* conf, YAML::Node& ypolylines, bool)
+
+    auto savePointsArray = [](YamlConfig* conf,
+                              YAML::Node& parent,
+                              const QVector<QPointF>& points)
     {
-        for (QGraphicsItem* item : doc->scene->items())
-            if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
-            {
-                YAML::Node ypolyline;
-
-                QString className = polyline->data(0).toString();
-                if (className.isEmpty())
-                    className = "none";
-
-                conf->setValue(ypolyline, "label", className);
-
-                const QVector<QPointF> points = polyline->points();
-                YamlConfig::Func savePoints = [points](YamlConfig* conf, YAML::Node& ypoints, bool)
-                {
-                    for (const QPointF& point : points)
-                    {
-                        YamlConfig::Func savePoint = [point](YamlConfig* conf, YAML::Node& ypoint, bool)
-                        {
-                            conf->setValue(ypoint, "x", static_cast<double>(point.x()));
-                            conf->setValue(ypoint, "y", static_cast<double>(point.y()));
-                            return true;
-                        };
-
-                        YAML::Node ypoint;
-                        savePoint(conf, ypoint, false);
-                        ypoints.push_back(ypoint);
-                    }
-                    return true;
-                };
-                conf->setValue(ypolyline, "points", savePoints);
-                conf->setNodeStyle(ypolyline, "points", YAML::EmitterStyle::Flow);
-
-                ypolylines.push_back(ypolyline);
-            }
-
-        return true;
-    };
-    YamlConfig::Func saveRectangles = [&](YamlConfig* conf, YAML::Node& yrectangles, bool)
-    {
-        for (QGraphicsItem* item : doc->scene->items())
-            if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
-            {
-                YAML::Node yrectangle;
-
-                QString className = rect->data(0).toString();
-                if (className.isEmpty())
-                    className = "none";
-
-                conf->setValue(yrectangle, "label", className);
-
-                const QRectF sceneRect = rect->realSceneRect();
-
-                const QPointF p1 = sceneRect.topLeft();
-                const QPointF p2 = sceneRect.bottomRight();
-
-                YamlConfig::Func savePoint1 = [p1](YamlConfig* conf, YAML::Node& ypoint1, bool)
-                {
-                    conf->setValue(ypoint1, "x", static_cast<double>(p1.x()));
-                    conf->setValue(ypoint1, "y", static_cast<double>(p1.y()));
-                    return true;
-                };
-
-                YamlConfig::Func savePoint2 = [p2](YamlConfig* conf, YAML::Node& ypoint2, bool)
-                {
-                    conf->setValue(ypoint2, "x", static_cast<double>(p2.x()));
-                    conf->setValue(ypoint2, "y", static_cast<double>(p2.y()));
-                    return true;
-                };
-
-                conf->setValue(yrectangle, "point1", savePoint1);
-                conf->setValue(yrectangle, "point2", savePoint2);
-
-                yrectangles.push_back(yrectangle);
-            }
-
-        return true;
-    };
-    YamlConfig::Func savePoints = [&](YamlConfig* conf, YAML::Node& ypoints, bool)
-    {
-        for (QGraphicsItem* item : doc->scene->items())
-            if (qgraph::Point* p = dynamic_cast<qgraph::Point*>(item))
+        YamlConfig::Func savePoints = [points](YamlConfig* conf, YAML::Node& ypoints, bool)
+        {
+            for (const QPointF& point : points)
             {
                 YAML::Node ypoint;
 
-                QString className = p->data(0).toString();
-                if (className.isEmpty())
-                    className = "none";
-
-                conf->setValue(ypoint, "label", className);
-
-                const QPointF center = p->center();
-
-                YamlConfig::Func savePoint = [center](YamlConfig* conf, YAML::Node& ypointNode, bool)
-                {
-                    conf->setValue(ypointNode, "x", static_cast<double>(center.x()));
-                    conf->setValue(ypointNode, "y", static_cast<double>(center.y()));
-                    return true;
-                };
-
-                conf->setValue(ypoint, "point", savePoint);
+                conf->setValue(ypoint, "x", static_cast<double>(point.x()));
+                conf->setValue(ypoint, "y", static_cast<double>(point.y()));
 
                 ypoints.push_back(ypoint);
             }
-        return true;
+
+            return true;
+        };
+
+        conf->setValue(parent, "points", savePoints);
+        conf->setNodeStyle(parent, "points", YAML::EmitterStyle::Flow);
     };
-    YamlConfig::Func saveLines = [&](YamlConfig* conf, YAML::Node& ylines, bool)
+
+    YamlConfig::Func saveShapes = [&](YamlConfig* conf, YAML::Node& yshapes, bool)
     {
-        for (QGraphicsItem* item : doc->scene->items())
+        const QList<QGraphicsItem*> items = orderedShapeItemsForSave(doc);
+
+        for (QGraphicsItem* item : items)
+        {
+            if (!item)
+                continue;
+
+            YAML::Node yshape;
+
+            QString className = item->data(0).toString();
+            if (className.isEmpty())
+                className = "none";
+
+            conf->setValue(yshape, "number", ensureShapeNumber(item));
+            conf->setValue(yshape, "label", className);
+
+            // Важно: Line проверяем раньше Polyline.
+            // Если Line наследуется от Polyline, иначе линия сохранится как polyline.
             if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
             {
-                YAML::Node yline;
-
-                QString className = line->data(0).toString();
-                if (className.isEmpty())
-                    className = "none";
-
-                conf->setValue(yline, "label", className);
-
-                const QVector<QPointF> points = line->points();
-                YamlConfig::Func savePoints = [points](YamlConfig* conf, YAML::Node& ypoints, bool)
-                {
-                    for (const QPointF& point : points)
-                    {
-                        YamlConfig::Func savePoint = [point](YamlConfig* conf, YAML::Node& ypoint, bool)
-                        {
-                            conf->setValue(ypoint, "x", static_cast<double>(point.x()));
-                            conf->setValue(ypoint, "y", static_cast<double>(point.y()));
-                            return true;
-                        };
-
-                        YAML::Node ypoint;
-                        savePoint(conf, ypoint, false);
-                        ypoints.push_back(ypoint);
-                    }
-                    return true;
-                };
-
-                conf->setValue(yline, "points", savePoints);
-                conf->setNodeStyle(yline, "points", YAML::EmitterStyle::Flow);
-
-                ylines.push_back(yline);
+                conf->setValue(yshape, "type", QString("line"));
+                savePointsArray(conf, yshape, line->points());
             }
-        return true;
-    };
+            else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
+            {
+                conf->setValue(yshape, "type", QString("polyline"));
+                savePointsArray(conf, yshape, polyline->points());
+            }
+            else if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
+            {
+                conf->setValue(yshape, "type", QString("rectangle"));
 
-    YamlConfig::Func saveFunc = [&](YamlConfig* conf, YAML::Node& shapes, bool /*logWarn*/)
-    {
+                const QRectF sceneRect = rect->realSceneRect();
+                savePointNode(conf, yshape, "point1", sceneRect.topLeft());
+                savePointNode(conf, yshape, "point2", sceneRect.bottomRight());
+            }
+            else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
+            {
+                conf->setValue(yshape, "type", QString("circle"));
 
-        conf->setValue(shapes, "circles", saveCircles);
-        conf->setValue(shapes, "polylines", savePolylines);
-        conf->setValue(shapes, "rectangles", saveRectangles);
-        conf->setValue(shapes, "points", savePoints);
-        conf->setValue(shapes, "lines", saveLines);
+                savePointNode(conf, yshape, "center", circle->realCenter());
+                conf->setValue(yshape, "radius", static_cast<double>(circle->realRadius()));
+            }
+            else if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
+            {
+                conf->setValue(yshape, "type", QString("point"));
+                savePointNode(conf, yshape, "point", point->center());
+            }
+            else
+            {
+                continue;
+            }
+
+            yshapes.push_back(yshape);
+        }
 
         return true;
     };
 
     YamlConfig yconfig;
     yconfig.setRounding(2);
-    yconfig.setValue("shapes", saveFunc);
-    //yconfig.saveFile("/tmp/1.yaml");
-    //yconfig.saveFile("/home/marie/тестовые данные QLabelMe/фото/1.yaml");
-
-    // QFileInfo fileInfo(doc->filePath);
-    // QString yamlPath = fileInfo.path() + "/" + fileInfo.completeBaseName() + ".yaml";
-    // yconfig.saveFile(yamlPath.toStdString());
+    yconfig.setValue("shapes", saveShapes);
 
     const QString yamlPath = annotationPathFor(doc->filePath);
     // Для внешних C/STD API на Windows используем нативную кодировку ОС
     const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(yamlPath));
-    yconfig.saveFile(std::string(encoded.constData(), encoded.size()));
 
-    // После успешного сохранения обновляем отображение в списке файлов
-    if (QFile::exists(yamlPath))
+    const bool saved = yconfig.saveFile(std::string(encoded.constData(), encoded.size()));
+    if (!saved)
     {
-        // Находим соответствующий элемент в списке и убираем звездочку
-        for (int i = 0; i < ui->fileList->count(); ++i)
-        {
-            QListWidgetItem* item = ui->fileList->item(i);
-            QVariant data = item->data(Qt::UserRole);
-            if (data.canConvert<Document::Ptr>())
-            {
-                Document::Ptr itemDoc = data.value<Document::Ptr>();
-                if (itemDoc->filePath == doc->filePath)
-                {
-                    // Убираем звездочку из названия
-                    QString fileName = QFileInfo(doc->filePath).fileName();
-                    item->setText(fileName);
-                    break;
-                }
-            }
-        }
-        QListWidgetItem* item = findFileListItem(doc->filePath);
-        if (item)
-        {
-            updateFileListItemIcon(item, true);
-        }
+        log_error_m << "Ошибка при сохранении разметки:" << yamlPath;
+
+        messageBox(
+            this,
+            QMessageBox::Warning,
+            u8"Не удалось сохранить файл разметки"
+        );
+
+        return;
     }
+
     if (doc->_undoStack)
         doc->_undoStack->setClean();
 
@@ -7043,6 +6941,23 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
             delete item; // Удалит и всех детей автоматически
         }
     }
+
+    int fallbackOrder = 0;
+
+    auto finalizeOldLoadedShape = [&](QGraphicsItem* item)
+    {
+        if (!item)
+            return;
+
+        item->setData(_roleShapeNumber, fallbackOrder);
+        item->setData(_roleListOrder, fallbackOrder);
+
+        const qreal baseZ = doc->videoRect ? doc->videoRect->zValue() : 0.0;
+        item->setZValue(baseZ + 1.0 + fallbackOrder);
+
+        ++fallbackOrder;
+    };
+
     YamlConfig::Func loadCircles = [&](YamlConfig* conf, YAML::Node& ycircles, bool)
     {
         for (const YAML::Node& ycircle : ycircles)
@@ -7068,6 +6983,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
             apply_LineWidth_ToItem(circle);
             apply_PointSize_ToItem(circle);
             applyClassColorToItem(circle, label);
+            finalizeOldLoadedShape(circle);
         }
         return true;
     };
@@ -7113,6 +7029,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
             apply_PointSize_ToItem(polyline);
             apply_NumberSize_ToItem(polyline);
             applyClassColorToItem(polyline, label);
+            finalizeOldLoadedShape(polyline);
         }
         return true;
     };
@@ -7146,6 +7063,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
             apply_PointSize_ToItem(rect);
             apply_NumberSize_ToItem(rect);
             applyClassColorToItem(rect, label);
+            finalizeOldLoadedShape(rect);
         }
 
         return true;
@@ -7175,6 +7093,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
             apply_NumberSize_ToItem(p);
             apply_PointStyle_ToItem(p);
             applyClassColorToItem(p, label);
+            finalizeOldLoadedShape(p);
         }
         return true;
     };
@@ -7220,12 +7139,203 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
             apply_PointSize_ToItem(line);
             apply_NumberSize_ToItem(line);
             applyClassColorToItem(line, label);
+            finalizeOldLoadedShape(line);
         }
+        return true;
+    };
+
+    YamlConfig::Func loadShapes = [&](YamlConfig* conf, YAML::Node& yshapes, bool)
+    {
+        int order = 0;
+        const qreal baseZ = doc->videoRect ? doc->videoRect->zValue() : 0.0;
+
+        auto readPointNode = [&](const YAML::Node& parent,
+                                 const char* key,
+                                 QPointF& point) -> bool
+        {
+            if (!parent[key])
+                return false;
+
+            double x = 0.0;
+            double y = 0.0;
+
+            conf->getValue(parent[key], "x", x);
+            conf->getValue(parent[key], "y", y);
+
+            point = QPointF(x, y) + imageOffset;
+            return true;
+        };
+
+        auto readPointsArray = [&](const YAML::Node& parent,
+                                   QVector<QPointF>& points)
+        {
+            if (!parent["points"])
+                return;
+
+            for (const YAML::Node& ypoint : parent["points"])
+            {
+                double x = 0.0;
+                double y = 0.0;
+
+                conf->getValue(ypoint, "x", x);
+                conf->getValue(ypoint, "y", y);
+
+                points.append(QPointF(x, y) + imageOffset);
+            }
+        };
+
+        auto finalizeShape = [&](QGraphicsItem* item,
+                                 const YAML::Node& yshape,
+                                 const QString& label)
+        {
+            if (!item)
+                return;
+
+            int number = order;
+            if (yshape["number"])
+                conf->getValue(yshape, "number", number);
+
+            item->setData(0, label);
+            item->setData(_roleShapeNumber, number);
+            item->setData(_roleListOrder, order);
+            // Визуальный порядок восстанавливаем по порядку элементов в shapes
+            item->setZValue(baseZ + 1.0 + order);
+
+            ++order;
+        };
+
+        for (const YAML::Node& yshape : yshapes)
+        {
+            QString type;
+            QString label;
+
+            conf->getValue(yshape, "type", type);
+            conf->getValue(yshape, "label", label);
+
+            if (label.isEmpty())
+                label = "none";
+
+            QGraphicsItem* created = nullptr;
+
+            if (type == "circle")
+            {
+                QPointF center;
+                double radius = 0.0;
+
+                readPointNode(yshape, "center", center);
+                conf->getValue(yshape, "radius", radius);
+
+                qgraph::Circle* circle = new qgraph::Circle(doc->scene, center);
+                ensureUid(circle);
+                circle->setRealRadius(radius);
+
+                apply_LineWidth_ToItem(circle);
+                apply_PointSize_ToItem(circle);
+                applyClassColorToItem(circle, label);
+
+                created = circle;
+            }
+            else if (type == "polyline")
+            {
+                QVector<QPointF> points;
+                readPointsArray(yshape, points);
+
+                if (points.isEmpty())
+                    continue;
+
+                qgraph::Polyline* polyline = new qgraph::Polyline(doc->scene, points.first());
+                ensureUid(polyline);
+
+                polyline->beginBulkLoad();
+                for (int i = 1; i < points.size(); ++i)
+                    polyline->addPoint(points[i], doc->scene);
+                polyline->endBulkLoad();
+
+                polyline->closePolyline();
+                polyline->updatePath();
+
+                apply_LineWidth_ToItem(polyline);
+                apply_PointSize_ToItem(polyline);
+                apply_NumberSize_ToItem(polyline);
+                applyClassColorToItem(polyline, label);
+
+                created = polyline;
+            }
+            else if (type == "rectangle")
+            {
+                QPointF p1;
+                QPointF p2;
+
+                readPointNode(yshape, "point1", p1);
+                readPointNode(yshape, "point2", p2);
+
+                qgraph::Rectangle* rect = new qgraph::Rectangle(doc->scene);
+                ensureUid(rect);
+                rect->setRealSceneRect(QRectF(p1, p2));
+
+                apply_LineWidth_ToItem(rect);
+                apply_PointSize_ToItem(rect);
+                apply_NumberSize_ToItem(rect);
+                applyClassColorToItem(rect, label);
+
+                created = rect;
+            }
+            else if (type == "point")
+            {
+                QPointF center;
+                readPointNode(yshape, "point", center);
+
+                qgraph::Point* p = new qgraph::Point(doc->scene);
+                ensureUid(p);
+                p->setCenter(center);
+
+                apply_PointSize_ToItem(p);
+                apply_NumberSize_ToItem(p);
+                apply_PointStyle_ToItem(p);
+                applyClassColorToItem(p, label);
+
+                created = p;
+            }
+            else if (type == "line")
+            {
+                QVector<QPointF> points;
+                readPointsArray(yshape, points);
+
+                if (points.isEmpty())
+                    continue;
+
+                qgraph::Line* line = new qgraph::Line(doc->scene, points.first());
+                ensureUid(line);
+
+                line->beginBulkLoad();
+                for (int i = 1; i < points.size(); ++i)
+                    line->addPoint(points[i], doc->scene);
+                line->endBulkLoad();
+
+                line->closeLine();
+                line->updatePath();
+
+                apply_LineWidth_ToItem(line);
+                apply_PointSize_ToItem(line);
+                apply_NumberSize_ToItem(line);
+                applyClassColorToItem(line, label);
+
+                created = line;
+            }
+
+            finalizeShape(created, yshape, label);
+        }
+
+        raiseAllHandlesToTop();
+
         return true;
     };
 
     YamlConfig::Func loadFunc = [&](YamlConfig* conf, YAML::Node& shapes, bool /*logWarn*/)
     {
+        if (shapes.IsSequence())
+            return loadShapes(conf, shapes, false);
+
         conf->getValue(shapes, "circles", loadCircles);
         conf->getValue(shapes, "polylines", loadPolylines);
         conf->getValue(shapes, "rectangles", loadRectangles);
@@ -8007,6 +8117,8 @@ void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem, int row, bool nee
     if (className.isEmpty())
         return;
 
+    ensureShapeNumber(sceneItem);
+
     QListWidgetItem* listItem = new QListWidgetItem;
     listItem->setData(Qt::UserRole, QVariant::fromValue(sceneItem));
 
@@ -8027,27 +8139,12 @@ void MainWindow::renumberPolygonList()
         return;
 
     refreshShapeListOrderRole();
-    const int count = ui->polygonList->count();
 
-    for (int i = 0; i < count; ++i)
-    {
-        QListWidgetItem* item = ui->polygonList->item(i);
-        if (!item)
-            continue;
-
-        QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
-        if (!sceneItem)
-            continue;
-
-        const QString className = sceneItem->data(0).toString();
-        //item->setText(QString("%1: %2").arg(i).arg(className));
-        QString text = QString("%1: %2").arg(i).arg(className);
-        if (!sceneItem->isVisible())
-            text += " [скрыто]";
-        item->setText(text);
-    }
+    for (int i = 0; i < ui->polygonList->count(); ++i)
+        updatePolygonListItemText(ui->polygonList->item(i));
 
     updateShapeListButtons();
+
     if (_scene)
         _scene->update();
 }
@@ -8060,22 +8157,8 @@ void MainWindow::renumberPolygonListTextOnly()
     refreshShapeListOrderRole();
 
     for (int i = 0; i < ui->polygonList->count(); ++i)
-    {
-        QListWidgetItem* item = ui->polygonList->item(i);
-        if (!item)
-            continue;
+        updatePolygonListItemText(ui->polygonList->item(i));
 
-        QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
-        if (!sceneItem)
-            continue;
-
-        const QString className = sceneItem->data(0).toString();
-        //item->setText(QString("%1: %2").arg(i).arg(className));
-        QString text = QString("%1: %2").arg(i).arg(className);
-        if (!sceneItem->isVisible())
-            text += " [скрыто]";
-        item->setText(text);
-    }
     updateShapeListButtons();
 }
 
@@ -8122,9 +8205,9 @@ void MainWindow::updatePolygonListItemText(QListWidgetItem* item)
         return;
 
     const QString className = sceneItem->data(0).toString();
-    const int row = ui->polygonList->row(item);
 
-    QString text = QString("%1: %2").arg(row).arg(className);
+    const int number = ensureShapeNumber(sceneItem);
+    QString text = QString("%1: %2").arg(number).arg(className);
     if (!sceneItem->isVisible())
         text += " [скрыто]";
 
@@ -9752,6 +9835,7 @@ ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* gi) const
     if (b.uid == 0)
         b.uid = ensureUid(gi);
 
+    b.shapeNumber = ensureShapeNumber(gi);
     b.className = gi->data(0).toString();
     //b.z = gi->zValue();
     b.z = originalZValueForItem(gi);
@@ -9860,6 +9944,16 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
             ensureUid(it);
         }
     };
+    auto applyBackupNumber = [this](QGraphicsItem* it, int number)
+    {
+        if (!it)
+            return;
+
+        if (number >= 0)
+            it->setData(_roleShapeNumber, number);
+        else
+            ensureShapeNumber(it);
+    };
 
     switch (b.kind)
     {
@@ -9875,6 +9969,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
             apply_NumberSize_ToItem(rect);
             rect->setData(0, b.className);
             applyClassColorToItem(rect, b.className);
+            applyBackupNumber(rect, b.shapeNumber);
             rect->setZValue(b.z);
             rect->setVisible(b.visible);
             linkSceneItemToList(rect, b.listRow);
@@ -9891,6 +9986,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
             apply_PointSize_ToItem(c);
             c->setData(0, b.className);
             applyClassColorToItem(c, b.className);
+            applyBackupNumber(c, b.shapeNumber);
             c->setZValue(b.z);
             c->setVisible(b.visible);
             c->updateHandlePosition();
@@ -9920,6 +10016,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
 
             pl->setData(0, b.className);
             applyClassColorToItem(pl, b.className);
+            applyBackupNumber(pl, b.shapeNumber);
             pl->setZValue(b.z);
             pl->setVisible(b.visible);
             pl->updateHandlePosition();
@@ -9949,6 +10046,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
 
             ln->setData(0, b.className);
             applyClassColorToItem(ln, b.className);
+            applyBackupNumber(ln, b.shapeNumber);
             ln->setZValue(b.z);
             ln->setVisible(b.visible);
             ln->updateHandlePosition();
@@ -9967,6 +10065,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
             pt->setCenter(b.pointCenter);
             pt->setData(0, b.className);
             applyClassColorToItem(pt, b.className);
+            applyBackupNumber(pt, b.shapeNumber);
             pt->setZValue(b.z);
             pt->setVisible(b.visible);
             linkSceneItemToList(pt, b.listRow);
@@ -9987,6 +10086,9 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
 void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
 {
     if (!it) return;
+
+    if (b.shapeNumber >= 0)
+        it->setData(_roleShapeNumber, b.shapeNumber);
 
     switch (b.kind)
     {
@@ -12156,4 +12258,120 @@ void MainWindow::refreshShapeListOrderRole()
 
         sceneItem->setData(_roleListOrder, i);
     }
+}
+
+int MainWindow::nextShapeNumberForScene(QGraphicsScene* scene) const
+{
+    if (!scene)
+        return 0;
+
+    int maxNumber = -1;
+
+    for (QGraphicsItem* item : scene->items())
+    {
+        if (!isRootShapeItem(item))
+            continue;
+
+        bool ok = false;
+        const int number = item->data(_roleShapeNumber).toInt(&ok);
+
+        if (ok && number >= 0)
+            maxNumber = std::max(maxNumber, number);
+    }
+
+    return maxNumber + 1;
+}
+
+int MainWindow::ensureShapeNumber(QGraphicsItem* item) const
+{
+    if (!item)
+        return -1;
+
+    bool ok = false;
+    const int number = item->data(_roleShapeNumber).toInt(&ok);
+
+    if (ok && number >= 0)
+        return number;
+
+    const int newNumber = nextShapeNumberForScene(item->scene());
+    item->setData(_roleShapeNumber, newNumber);
+
+    return newNumber;
+}
+
+QList<QGraphicsItem*> MainWindow::orderedShapeItemsForSave(Document::Ptr doc) const
+{
+    QList<QGraphicsItem*> result;
+
+    if (!doc || !doc->scene)
+        return result;
+
+    if (doc == currentDocument() && ui && ui->polygonList)
+    {
+        for (int i = 0; i < ui->polygonList->count(); ++i)
+        {
+            QListWidgetItem* listItem = ui->polygonList->item(i);
+            QGraphicsItem* sceneItem = sceneItemFromListItem(listItem);
+
+            if (!sceneItem)
+                continue;
+
+            if (sceneItem->scene() != doc->scene)
+                continue;
+
+            if (!isRootShapeItem(sceneItem))
+                continue;
+
+            result.append(sceneItem);
+        }
+
+        return result;
+    }
+
+    for (QGraphicsItem* item : doc->scene->items())
+    {
+        if (isRootShapeItem(item))
+            result.append(item);
+    }
+
+    std::sort(result.begin(), result.end(),
+              [](QGraphicsItem* a, QGraphicsItem* b)
+    {
+        bool aOk = false;
+        bool bOk = false;
+
+        const int aOrder = a->data(_roleListOrder).toInt(&aOk);
+        const int bOrder = b->data(_roleListOrder).toInt(&bOk);
+
+        const int av = aOk ? aOrder : std::numeric_limits<int>::max();
+        const int bv = bOk ? bOrder : std::numeric_limits<int>::max();
+
+        return av < bv;
+    });
+
+    return result;
+}
+
+void MainWindow::syncZValuesWithListOrder(Document::Ptr doc)
+{
+    if (!doc || !doc->scene)
+        return;
+
+    const QList<QGraphicsItem*> items = orderedShapeItemsForSave(doc);
+
+    const qreal baseZ = doc->videoRect ? doc->videoRect->zValue() : 0.0;
+    qreal z = baseZ + 1.0;
+
+    for (QGraphicsItem* item : items)
+    {
+        if (!item)
+            continue;
+
+        item->setZValue(z++);
+    }
+
+    raiseAllHandlesToTop();
+
+    if (doc->scene)
+        doc->scene->update();
 }
