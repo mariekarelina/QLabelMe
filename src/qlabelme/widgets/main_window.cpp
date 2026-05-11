@@ -27,13 +27,13 @@
 #include "select_class.h"
 #include "settings.h"
 #include "user_guide.h"
+#include "about_program.h"
 #include "message_box.h"
 
 #include <QApplication>
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QScrollBar>
-#include <QTextEdit>
 
 // #include <QHostInfo>
 // #include <QScreen>
@@ -716,6 +716,11 @@ MainWindow::MainWindow(QWidget *parent) :
     {
         UserGuide *guide = new UserGuide(this);
         guide->show();
+    });
+    connect(ui->actAbout, &QAction::triggered, this, [this]()
+    {
+        AboutProgram *about = new AboutProgram(this);
+        about->show();
     });
 
     // Чтобы Alt работал независимо от фокуса
@@ -4815,91 +4820,6 @@ void MainWindow::on_actDelete_triggered()
         doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, u8"Удаление фигур"));
 }
 
-void MainWindow::on_actAbout_triggered()
-{
-    // Диалоговое окно
-    QDialog aboutDialog(this);
-    aboutDialog.setWindowTitle(u8"О программе QLabelMe");
-    aboutDialog.resize(600, 500);
-    aboutDialog.setMinimumSize(500, 400);
-
-    // Вкладки
-    QTabWidget *tabWidget = new QTabWidget(&aboutDialog);
-
-    // Вкладка "О программе"
-    QWidget *aboutTab = new QWidget();
-    QVBoxLayout *aboutLayout = new QVBoxLayout(aboutTab);
-
-    QLabel* titleLabel = new QLabel(u8"<b>QLabelMe<b>");
-
-    QLabel* versionLabel = new QLabel(
-        QString(u8"Версия: %1 (gitrev: %2)<br>Программа для разметки и аннотирования изображений.")
-               .arg(VERSION_PROJECT)
-               .arg(GIT_REVISION));
-    versionLabel->setWordWrap(true);
-
-    QLabel* descriptionLabel = new QLabel(
-        u8"Программа позволяет вручную создавать и редактировать аннотации с помощью графических примитивов. "
-        u8"Используется для подготовки датасетов в задачах компьютерного зрения и машинного обучения.<br><br>"
-        u8"<b>Обратная связь:</b><br>"
-        u8"https://github.com/mariekarelina/qlabelme/issues<br><br>");
-
-    descriptionLabel->setWordWrap(true);
-    descriptionLabel->setOpenExternalLinks(true);
-
-    aboutLayout->addWidget(titleLabel);
-    aboutLayout->addWidget(versionLabel);
-    aboutLayout->addWidget(descriptionLabel);
-    aboutLayout->addStretch();
-
-    // Вкладка "Компоненты"
-    QWidget* componentsTab = new QWidget();
-    QVBoxLayout *componentsLayout = new QVBoxLayout(componentsTab);
-
-    QTextEdit* componentsText = new QTextEdit();
-    componentsText->setReadOnly(true);
-    componentsText->setHtml(
-        QString(u8"<ul>"
-                u8"<li>Qt %1 - кроссплатформенный фреймворк</li>"
-                u8"</ul>")
-               .arg(QT_VERSION_STR));
-    componentsLayout->addWidget(componentsText);
-
-    // Вкладка "Авторы"
-    QWidget *authorsTab = new QWidget();
-    QVBoxLayout *authorsLayout = new QVBoxLayout(authorsTab);
-
-    QTextEdit *authorsText = new QTextEdit();
-    authorsText->setReadOnly(true);
-    authorsText->setHtml(
-        u8"<ul>"
-        u8"<li>Карелина Мария - автор, разработчик</li>"
-        u8"<li>Карелин Павел - консультант по коду и архитектуре программы</li>"
-        u8"<li>Назаровский Александр - консультант по функциональной части программы</li>"
-        u8"</ul>");
-    authorsLayout->addWidget(authorsText);
-
-    // Добавляем вкладки
-    tabWidget->addTab(aboutTab, u8"О программе");
-    tabWidget->addTab(componentsTab, u8"Компоненты");
-    tabWidget->addTab(authorsTab, u8"Авторы");
-
-    // Кнопка OK
-    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok, &aboutDialog);
-    connect(buttonBox, &QDialogButtonBox::accepted, &aboutDialog, &QDialog::accept);
-
-    // Основной layout
-    QVBoxLayout *mainLayout = new QVBoxLayout(&aboutDialog);
-    mainLayout->addWidget(tabWidget);
-    mainLayout->addWidget(buttonBox);
-
-    // Устанавливаем иконку
-    aboutDialog.setWindowIcon(QIcon(":/images/resources/qlabelme.png"));
-
-    // Показываем диалог
-    aboutDialog.exec();
-}
-
 void MainWindow::on_actSettingsApp_triggered()
 {
     auto visBackup = _vis;
@@ -5538,11 +5458,6 @@ void MainWindow::on_actScrollBars_triggered(bool checked)
 
     ui->graphView->updateGeometry();
     ui->graphView->viewport()->update();
-}
-
-void MainWindow::on_actUserGuide_triggered()
-{
-
 }
 
 void MainWindow::loadFilesFromFolder(const QString& folderPath)

@@ -212,7 +212,7 @@ private slots:
 
     void onSceneItemRemoved(QGraphicsItem* item);
     void on_actDelete_triggered();
-    void on_actAbout_triggered();
+
     void on_actSettingsApp_triggered();
     void on_actSettingsProj_triggered();
 
@@ -240,7 +240,6 @@ private slots:
     void on_actFitImageToView_triggered();
     void on_actScrollBars_triggered(bool checked);
 
-    void on_actUserGuide_triggered();
 
 private:
     Q_OBJECT

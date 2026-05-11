@@ -44,6 +44,9 @@ Product {
         name: "widgets"
         prefix: "widgets/"
         files: [
+            "about_program.cpp",
+            "about_program.h",
+            "about_program.ui",
             "graphics_view.cpp",
             "graphics_view.h",
             "handle.cpp",
