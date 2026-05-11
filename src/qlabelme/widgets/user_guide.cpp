@@ -19,7 +19,7 @@ UserGuide::UserGuide(QWidget *parent)
 {
     ui->setupUi(this);
 
-    setWindowTitle(tr("Руководство пользователя QLabelMe"));
+    setWindowTitle(u8"Руководство пользователя QLabelMe");
     setAttribute(Qt::WA_DeleteOnClose);
 
     loadGeometry();
@@ -43,7 +43,7 @@ UserGuide::UserGuide(QWidget *parent)
 
     connect(ui->buttonBox, &QDialogButtonBox::rejected,
         this, &UserGuide::reject);
-    ui->buttonBox->button(QDialogButtonBox::Close)->setText(tr("Закрыть"));
+    ui->buttonBox->button(QDialogButtonBox::Close)->setText(u8"Закрыть");
 }
 
 UserGuide::~UserGuide()
@@ -76,13 +76,13 @@ void UserGuide::buildContents()
         return it;
     };
 
-    addItem(tr("Введение"), "intro");
-    addItem(tr("Интерфейс"), "ui");
-    addItem(tr("Создание разметки"), "create");
-    addItem(tr("Редактирование"), "edit");
-    addItem(tr("Горячие клавиши"), "shortcuts");
-    addItem(tr("Управление мышью"), "mouse");
-    addItem(tr("Настройки"), "settings");
+    addItem(u8"Введение", "intro");
+    addItem(u8"Интерфейс", "ui");
+    addItem(u8"Создание разметки", "create");
+    addItem(u8"Редактирование", "edit");
+    addItem(u8"Горячие клавиши", "shortcuts");
+    addItem(u8"Управление мышью", "mouse");
+    addItem(u8"Настройки", "settings");
 
     ui->treeContents->expandAll();
     ui->treeContents->setCurrentItem(ui->treeContents->topLevelItem(0));

@@ -39,16 +39,16 @@ ProjectSettings::ProjectSettings(QWidget* parent)
       ui(new Ui::ProjectSettings)
 {
     ui->setupUi(this);
-    setWindowTitle(tr("Настройки проекта"));
+    setWindowTitle(u8"Настройки проекта");
 
     if (auto b = ui->buttonBox->button(QDialogButtonBox::Ok))
-        b->setText(tr("ОК"));
+        b->setText(u8"ОК");
 
     if (auto b = ui->buttonBox->button(QDialogButtonBox::Apply))
-        b->setText(tr("Применить"));
+        b->setText(u8"Применить");
 
     if (auto b = ui->buttonBox->button(QDialogButtonBox::Cancel))
-        b->setText(tr("Отмена"));
+        b->setText(u8"Отмена");
 
     // Всегда открываемся на первой вкладке
     if (ui->tabWidget)
@@ -306,12 +306,12 @@ void ProjectSettings::onAddClass()
     QInputDialog dlg(this);
     dlg.setModal(true);
     dlg.setInputMode(QInputDialog::TextInput);
-    dlg.setWindowTitle(tr("Новый класс"));
-    dlg.setLabelText(tr("Название класса:"));
+    dlg.setWindowTitle(u8"Новый класс");
+    dlg.setLabelText(u8"Название класса:");
     dlg.setTextValue(QString());
 
-    dlg.setOkButtonText(tr("ОК"));
-    dlg.setCancelButtonText(tr("Отмена"));
+    dlg.setOkButtonText(u8"ОК");
+    dlg.setCancelButtonText(u8"Отмена");
 
     const QSize sz(420, 160);
 
@@ -394,7 +394,7 @@ void ProjectSettings::onRemoveClass()
 
     QMessageBox box(this);
     box.setIcon(QMessageBox::Question);
-    box.setWindowTitle(tr("Удаление класса"));
+    box.setWindowTitle(u8"Удаление класса");
     box.setText(tr("Удалить класс «%1» из списка?").arg(name));
     box.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
 

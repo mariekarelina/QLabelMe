@@ -102,18 +102,20 @@ class OneSpinDialog : public QDialog {
 public:
     explicit OneSpinDialog(const QString& title,
                            const QString& label,
-                           double minV, double maxV, double step,
+                           double minValue, double maxValue, double step,
                            double value,
                            QWidget* parent=nullptr)
         : QDialog(parent)
     {
         setWindowTitle(title);
-        auto *spin = new QDoubleSpinBox; spin->setRange(minV, maxV); spin->setDecimals(1); spin->setSingleStep(step); spin->setValue(value);
-        auto *form = new QFormLayout; form->addRow(label, spin);
-        auto *btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-        QObject::connect(btns, &QDialogButtonBox::accepted, this, &QDialog::accept);
-        QObject::connect(btns, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        auto *box = new QVBoxLayout(this); box->addLayout(form); box->addWidget(btns);
+        auto* spin = new QDoubleSpinBox; spin->setRange(minValue, maxValue);
+                    spin->setDecimals(1); spin->setSingleStep(step); spin->setValue(value);
+        auto* form = new QFormLayout; form->addRow(label, spin);
+        auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+        QObject::connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+        QObject::connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+        auto* dialogLayout = new QVBoxLayout(this); dialogLayout->addLayout(form);
+                            dialogLayout->addWidget(buttonBox);
         _spin = spin;
     }
     double value() const { return _spin->value(); }
@@ -122,46 +124,51 @@ private:
 };
 
 // Идем вверх по родителям, ищем перемещаемого владельца
-static QGraphicsItem* findMovableAncestor(QGraphicsItem* it)
+static QGraphicsItem* findMovableAncestor(QGraphicsItem* item)
 {
-    for (QGraphicsItem* p = it; p; p = p->parentItem())
+    for (QGraphicsItem* currentItem = item; currentItem; currentItem = currentItem->parentItem())
     {
-        if (p->flags().testFlag(QGraphicsItem::ItemIsMovable))
-            return p;
+        if (currentItem->flags().testFlag(QGraphicsItem::ItemIsMovable))
+            return currentItem;
     }
-    return it;
+    return item;
 }
 
 // Простое сравнение геометрии снапшотов, чтобы не совершать no-op команды
-static bool sameGeometry(const ShapeBackup& a, const ShapeBackup& b)
+static bool sameGeometry(const ShapeBackup& firstBackup, const ShapeBackup& secondBackup)
 {
-    if (a.kind != b.kind)
+    if (firstBackup.kind != secondBackup.kind)
         return false;
 
-    switch (a.kind)
+    switch (firstBackup.kind)
     {
         case ShapeKind::Rectangle:
-            return a.rect == b.rect && a.visible == b.visible && a.className == b.className;
+            return firstBackup.rect == secondBackup.rect
+                && firstBackup.visible == secondBackup.visible
+                && firstBackup.className == secondBackup.className;
 
         case ShapeKind::Circle:
-            return a.circleCenter == b.circleCenter
-                && a.circleRadius == b.circleRadius
-                && a.visible == b.visible && a.className == b.className;
+            return firstBackup.circleCenter == secondBackup.circleCenter
+                && firstBackup.circleRadius == secondBackup.circleRadius
+                && firstBackup.visible == secondBackup.visible
+                && firstBackup.className == secondBackup.className;
 
         case ShapeKind::Polyline:
-            return a.points == b.points
-                && a.closed == b.closed
-                && a.visible == b.visible && a.className == b.className;
+            return firstBackup.points == secondBackup.points
+                && firstBackup.closed == secondBackup.closed
+                && firstBackup.visible == secondBackup.visible
+                && firstBackup.className == secondBackup.className;
 
         case ShapeKind::Line:
-            return a.points == b.points
-                && a.numberingFromLast == b.numberingFromLast
-                && a.visible == b.visible && a.className == b.className;
-
+            return firstBackup.points == secondBackup.points
+                && firstBackup.numberingFromLast == secondBackup.numberingFromLast
+                && firstBackup.visible == secondBackup.visible
+                && firstBackup.className == secondBackup.className;
 
         case ShapeKind::Point:
-            return a.pointCenter == b.pointCenter
-                && a.visible == b.visible && a.className == b.className;
+            return firstBackup.pointCenter == secondBackup.pointCenter
+                && firstBackup.visible == secondBackup.visible
+                && firstBackup.className == secondBackup.className;
     }
     return false;
 }
@@ -175,8 +182,6 @@ Document::Ptr Document::create(const QString& path)
 
 bool Document::loadImage()
 {
-    steady_timer timer2;
-    log_debug2_m <<  "m5 "; // << timer2.elapsed();
     pixmap = QPixmap(filePath);
     if (pixmap.isNull())
     {
@@ -194,7 +199,6 @@ bool Document::loadImage()
 
     videoRect->setPos(0, 0);
     scene->setSceneRect(QRectF(QPointF(0, 0), QSizeF(pixmap.size())));
-    log_debug2_m <<  "m6 " << timer2.elapsed();
     return true;
 }
 
@@ -319,30 +323,30 @@ MainWindow::MainWindow(QWidget *parent) :
 
 
     // Сделать подсветку одинаковой яркой, даже когда список без фокуса
-    auto fixSelectionPalette = [](QListWidget* w){
-        QPalette pal = w->palette();
-        const QColor hiA  = pal.color(QPalette::Active,   QPalette::Highlight);
-        const QColor txtA = pal.color(QPalette::Active,   QPalette::HighlightedText);
+    auto fixSelectionPalette = [](QListWidget* listWidget){
+        QPalette palette = listWidget->palette();
+        const QColor activeHighlight = palette.color(QPalette::Active, QPalette::Highlight);
+        const QColor activeHighlightedText = palette.color(QPalette::Active, QPalette::HighlightedText);
 
-        pal.setColor(QPalette::Inactive, QPalette::Highlight,       hiA);
-        pal.setColor(QPalette::Inactive, QPalette::HighlightedText, txtA);
-        pal.setColor(QPalette::Disabled, QPalette::Highlight,       hiA);
-        pal.setColor(QPalette::Disabled, QPalette::HighlightedText, txtA);
+        palette.setColor(QPalette::Inactive, QPalette::Highlight,       activeHighlight);
+        palette.setColor(QPalette::Inactive, QPalette::HighlightedText, activeHighlightedText);
+        palette.setColor(QPalette::Disabled, QPalette::Highlight,       activeHighlight);
+        palette.setColor(QPalette::Disabled, QPalette::HighlightedText, activeHighlightedText);
 
-        w->setPalette(pal);
-        if (w->viewport()) w->viewport()->setPalette(pal);
+        listWidget->setPalette(palette);
+        if (listWidget->viewport())
+            listWidget->viewport()->setPalette(palette);
     };
 
     fixSelectionPalette(ui->polygonList);
-    // fixSelectionPalette(ui->listWidget_Classes);
     fixSelectionPalette(ui->fileList);
-
 
     qRegisterMetaType<QGraphicsItem*>("QGraphicsItem*");
 
-    if (_scene) _scene->installEventFilter(this);
-    ui->graphView->viewport()->installEventFilter(this);
+    if (_scene)
+        _scene->installEventFilter(this);
 
+    ui->graphView->viewport()->installEventFilter(this);
     loadVisualStyle();
 
     bool ultraHD = false;
@@ -573,7 +577,7 @@ MainWindow::MainWindow(QWidget *parent) :
     // Приемник команд от фигур
     _scene->setProperty("classChangeReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
     _scene->setProperty("shapeDeleteReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
-    _scene->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
+    _scene->setProperty("fillShapeWhenSelected", _vstyle.fillShapeWhenSelected);
 
     // Стек и действия
     // _undoStack = std::make_unique<QUndoStack>(this);
@@ -703,11 +707,11 @@ MainWindow::MainWindow(QWidget *parent) :
         {
             _projectClassColors = colors;
 
-            for (QGraphicsItem* it : _scene->items())
+            for (QGraphicsItem* item : _scene->items())
             {
-                const QString cls = it->data(0).toString();
+                const QString cls = item->data(0).toString();
                 if (!cls.isEmpty())
-                    applyClassColorToItem(it, cls);
+                    applyClassColorToItem(item, cls);
             }
             _scene->update();
         });
@@ -740,19 +744,19 @@ MainWindow::MainWindow(QWidget *parent) :
 
     // Чтобы шорткаты работали даже при скрытом menuBar
     const auto acts = findChildren<QAction*>();
-    for (QAction* a : acts)
+    for (QAction* act : acts)
     {
-        if (!a)
+        if (!act)
             continue;
 
-        if (a->menu() != nullptr)
+        if (act->menu() != nullptr)
             continue;
 
-        if (a->shortcut().isEmpty())
+        if (act->shortcut().isEmpty())
             continue;
 
-        a->setShortcutContext(Qt::WindowShortcut);
-        this->addAction(a);
+        act->setShortcutContext(Qt::WindowShortcut);
+        this->addAction(act);
     }
 }
 
@@ -821,14 +825,14 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         {
             QGraphicsItem* item = pickItemByEdgeAt(graphView, mouseEvent->pos());
 
-            if (auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(item))
+            if (auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(item))
             {
-                ShapeBackup before = makeBackupFromItem(pl);
+                ShapeBackup before = makeBackupFromItem(polyline);
                 const qulonglong uid = before.uid;
 
-                pl->insertPoint(scenePos);
+                polyline->insertPoint(scenePos);
 
-                ShapeBackup after = makeBackupFromItem(pl);
+                ShapeBackup after = makeBackupFromItem(polyline);
                 if (!sameGeometry(before, after))
                     pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
 
@@ -842,14 +846,14 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 return;
             }
 
-            if (auto* ln = qgraphicsitem_cast<qgraph::Line*>(item))
+            if (auto* line = qgraphicsitem_cast<qgraph::Line*>(item))
             {
-                ShapeBackup before = makeBackupFromItem(ln);
+                ShapeBackup before = makeBackupFromItem(line);
                 const qulonglong uid = before.uid;
 
-                ln->insertPoint(scenePos);
+                line->insertPoint(scenePos);
 
-                ShapeBackup after = makeBackupFromItem(ln);
+                ShapeBackup after = makeBackupFromItem(line);
                 if (!sameGeometry(before, after))
                     pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
 
@@ -905,22 +909,31 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         // Находим полилинию под курсором (самую верхнюю)
         qgraph::Polyline* poly = nullptr;
         const auto itemsAtPos = graphView->scene()->items(scenePos);
-        for (QGraphicsItem* it : itemsAtPos) {
-            if (auto* p = dynamic_cast<qgraph::Polyline*>(it)) { poly = p; break; }
+        for (QGraphicsItem* item : itemsAtPos)
+        {
+            if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+            {
+                poly = polyline;
+                break;
+            }
         }
         if (!poly) return;
 
         // Ищем ближайшую точку
         DragCircle* nearest = nullptr;
         qreal bestDist2 = 10.0 * 10.0; // радиус 10 px
-        for (DragCircle* c : poly->circles()) {
-            const QPointF p = c->scenePos();
-            const qreal dx = p.x() - scenePos.x();
-            const qreal dy = p.y() - scenePos.y();
+        for (DragCircle* circles : poly->circles())
+        {
+            const QPointF polyline = circles->scenePos();
+            const qreal dx = polyline.x() - scenePos.x();
+            const qreal dy = polyline.y() - scenePos.y();
             const qreal d2 = dx*dx + dy*dy;
-            if (d2 < bestDist2) { bestDist2 = d2; nearest = c; }
+            if (d2 < bestDist2)
+            {
+                bestDist2 = d2;
+                nearest = circles;
+            }
         }
-
         if (nearest)
         {
             nearest->setUserHidden(!nearest->isUserHidden());
@@ -949,7 +962,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 _rulerText = nullptr;
             }
 
-            QPen pen(_vis.rulerColor);
+            QPen pen(_vstyle.rulerColor);
             pen.setWidthF(2.0);
             pen.setStyle(Qt::DotLine);
             pen.setCapStyle(Qt::RoundCap);
@@ -960,7 +973,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             _rulerLine->setZValue(1000);
 
             _rulerText = _scene->addText(QStringLiteral("0"));
-            _rulerText->setDefaultTextColor(_vis.rulerColor);
+            _rulerText->setDefaultTextColor(_vstyle.rulerColor);
             // Масштабируем размер текста от размера изображения
             if (_videoRect)
             {
@@ -987,8 +1000,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
         QGraphicsItem* selectionItem = clickedItem;
 
-        if (auto* h = qgraphicsitem_cast<qgraph::DragCircle*>(selectionItem))
-            selectionItem = h->parentItem();
+        if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(selectionItem))
+            selectionItem = handle->parentItem();
 
         if (selectionItem && selectionItem != _videoRect)
             selectionItem = findMovableAncestor(selectionItem);
@@ -1026,10 +1039,10 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 // то сохраняем групповое выделение для последующего перетаскивания
                 if (!(selectedNow.size() > 1 && selectionItem->isSelected()))
                 {
-                    for (QGraphicsItem* it : selectedNow)
+                    for (QGraphicsItem* item : selectedNow)
                     {
-                        if (it && it != selectionItem)
-                            it->setSelected(false);
+                        if (item && (item != selectionItem))
+                            item->setSelected(false);
                     }
                     selectionItem->setSelected(true);
                 }
@@ -1038,10 +1051,10 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         else if (!(mouseEvent->modifiers() & Qt::ControlModifier))
         {
             const QList<QGraphicsItem*> selectedNow = _scene->selectedItems();
-            for (QGraphicsItem* it : selectedNow)
+            for (QGraphicsItem* item : selectedNow)
             {
-                if (it)
-                    it->setSelected(false);
+                if (item)
+                    item->setSelected(false);
             }
         }
 
@@ -1095,12 +1108,12 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             {
                 if (selectionItem && selectionItem != _videoRect)
                 {
-                    QGraphicsItem* mov = findMovableAncestor(selectionItem);
+                    QGraphicsItem* movableItem = findMovableAncestor(selectionItem);
 
-                    if (mov && mov != _videoRect &&
-                        mov->flags().testFlag(QGraphicsItem::ItemIsMovable))
+                    if (movableItem && (movableItem != _videoRect)
+                        && movableItem->flags().testFlag(QGraphicsItem::ItemIsMovable))
                     {
-                        _movingItem = mov;
+                        _movingItem = movableItem;
                         _moveBeforeSnap = makeBackupFromItem(_movingItem);
                         _moveHadChanges = false;
                         _moveInProgress = true;
@@ -1119,16 +1132,16 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                         _movePressScenePos = scenePos;
 
                         const QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
-                        if (selectedItems.size() > 1 && mov->isSelected())
+                        if (selectedItems.size() > 1 && movableItem->isSelected())
                         {
                             _moveIsGroup = true;
 
-                            for (QGraphicsItem* sel : selectedItems)
+                            for (QGraphicsItem* selectedItem : selectedItems)
                             {
-                                if (!sel)
+                                if (!selectedItem)
                                     continue;
 
-                                QGraphicsItem* root = findMovableAncestor(sel);
+                                QGraphicsItem* root = findMovableAncestor(selectedItem);
                                 if (!root)
                                     continue;
 
@@ -1178,13 +1191,13 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             {
                 _currCircle = new QGraphicsEllipseItem();
                 QPen pen;
-                pen.setWidthF(_vis.lineWidth);
-                pen.setColor(_vis.circleLineColor);
+                pen.setWidthF(_vstyle.lineWidth);
+                pen.setColor(_vstyle.circleLineColor);
                 pen.setCosmetic(true);
                 _currCircle->setPen(pen);
-                if (_vis.fillShapeWhenSelected)
+                if (_vstyle.fillShapeWhenSelected)
                 {
-                    QColor fill = _vis.circleLineColor;
+                    QColor fill = _vstyle.circleLineColor;
                     fill.setAlpha(60);
                     _currCircle->setBrush(QBrush(fill));
                 }
@@ -1222,8 +1235,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 _currCircleCrossH->setZValue(1e9);
             }
             QPen pen;
-            pen.setWidthF(_vis.lineWidth);
-            pen.setColor(_vis.circleLineColor);
+            pen.setWidthF(_vstyle.lineWidth);
+            pen.setColor(_vstyle.circleLineColor);
             pen.setCosmetic(true);
             _currCircleCrossV->setPen(pen);
             _currCircleCrossH->setPen(pen);
@@ -1273,13 +1286,13 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             {
                 _currRectangle = new QGraphicsRectItem();
                 QPen pen;
-                pen.setWidthF(_vis.lineWidth);
-                pen.setColor(_vis.rectangleLineColor);
+                pen.setWidthF(_vstyle.lineWidth);
+                pen.setColor(_vstyle.rectangleLineColor);
                 pen.setCosmetic(true);
                 _currRectangle->setPen(pen);
-                if (_vis.fillShapeWhenSelected)
+                if (_vstyle.fillShapeWhenSelected)
                 {
-                    QColor fill = _vis.rectangleLineColor;
+                    QColor fill = _vstyle.rectangleLineColor;
                     fill.setAlpha(60);
                     _currRectangle->setBrush(QBrush(fill));
                 }
@@ -1332,8 +1345,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 applyClassColorToItem(_currPoint, selectedClass);
                 linkSceneItemToList(_currPoint);
 
-                ShapeBackup b = makeBackupFromItem(_currPoint);
-                pushAdoptExistingShapeCommand(_currPoint, b, u8"Добавление точки");
+                ShapeBackup backup = makeBackupFromItem(_currPoint);
+                pushAdoptExistingShapeCommand(_currPoint, backup, u8"Добавление точки");
             }
         }
 
@@ -1394,7 +1407,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 _rulerText = nullptr;
             }
 
-            QPen pen(_vis.rulerColor);
+            QPen pen(_vstyle.rulerColor);
             pen.setWidthF(2.0);
             pen.setStyle(Qt::DotLine);
             pen.setCapStyle(Qt::RoundCap);
@@ -1406,16 +1419,16 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
             // Текст с расстоянием
             _rulerText = _scene->addText(QStringLiteral("0"));
-            _rulerText->setDefaultTextColor(_vis.rulerColor);
+            _rulerText->setDefaultTextColor(_vstyle.rulerColor);
             // Масштабируем размер текста от размера изображения
             if (_videoRect)
             {
                 const QSize imgSize = _videoRect->pixmap().size();
                 const int maxSide = std::max(imgSize.width(), imgSize.height());
 
-                QFont f = _rulerText->font();
-                f.setPointSizeF(std::max(6.0, maxSide / 200.0));
-                _rulerText->setFont(f);
+                QFont rulerTextFont = _rulerText->font();
+                rulerTextFont.setPointSizeF(std::max(6.0, maxSide / 200.0));
+                _rulerText->setFont(rulerTextFont);
             }
             _rulerText->setZValue(1001);
             _rulerText->setPos(_rulerStartPoint);
@@ -1593,23 +1606,6 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
 
     if (mouseEvent->buttons() & Qt::LeftButton)
     {
-        // QPointF delta = graphView->mapToScene(mouseEvent->pos()) -
-        //                 graphView->mapToScene(_lastMousePos);
-
-        // // Shift-перетаскивание только фото
-        // if (_shiftImageDragging)
-        // {
-        //     if (_videoRect)
-        //         _videoRect->moveBy(delta.x(), delta.y());
-
-        //     updateAllPointNumbers();
-        //     _scene->update();
-        //     ui->graphView->viewport()->update();
-
-        //     _lastMousePos = mouseEvent->pos();
-        //     mouseEvent->accept();
-        //     return; // чтобы не сработал _isDraggingImage ниже
-        // }
         if (_isDraggingImage)
         {
             const QPoint deltaView = mouseEvent->pos() - _lastMousePos;
@@ -2036,15 +2032,16 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                     auto redoFn = [this, uid, cls]()
                     {
-                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                        if (!pl) return;
+                        auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                        if (!polyline)
+                            return;
 
-                        pl->setClosed(true, true);
-                        pl->setFlag(QGraphicsItem::ItemIsMovable, true);
+                        polyline->setClosed(true, true);
+                        polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
 
-                        pl->setData(0, cls);
-                        applyClassColorToItem(pl, cls);
-                        linkSceneItemToList(pl);
+                        polyline->setData(0, cls);
+                        applyClassColorToItem(polyline, cls);
+                        linkSceneItemToList(polyline);
 
                         if (_polyline && ensureUid(_polyline) == uid)
                             _polyline = nullptr;
@@ -2063,22 +2060,23 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                     auto undoFn = [this, uid]()
                     {
-                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                        if (!pl) return;
+                        auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                        if (!polyline)
+                            return;
 
-                        pl->setClosed(false, false);
-                        pl->setFlag(QGraphicsItem::ItemIsMovable, false);
+                        polyline->setClosed(false, false);
+                        polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
                         _drawingPolyline = true;
-                        _polyline = pl;
+                        _polyline = polyline;
                         updateModeLabel();
 
                         _resumeEditing = true;
                         _resumeUid = uid;
 
-                        pl->setSelected(true);
-                        pl->setFocus();
+                        polyline->setSelected(true);
+                        polyline->setFocus();
 
-                        removeListEntryBySceneItem(pl);
+                        removeListEntryBySceneItem(polyline);
 
                         if (auto doc = currentDocument())
                         {
@@ -2088,8 +2086,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                         raiseAllHandlesToTop();
                     };
-                    if (QUndoStack* st = activeUndoStack())
-                        st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
+                    if (QUndoStack* stack = activeUndoStack())
+                        stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
                     else
                         redoFn();
                 }
@@ -2105,18 +2103,19 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
             auto redoFn = [this, uid, cls]()
             {
-                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                if (!pl) return;
+                auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                if (!polyline)
+                    return;
 
-                pl->setClosed(true, false);
-                pl->setFlag(QGraphicsItem::ItemIsMovable, true);
+                polyline->setClosed(true, false);
+                polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                 if (!cls.isEmpty())
                 {
-                    pl->setData(0, cls);
-                    applyClassColorToItem(pl, cls);
+                    polyline->setData(0, cls);
+                    applyClassColorToItem(polyline, cls);
                 }
-                linkSceneItemToList(pl);
+                linkSceneItemToList(polyline);
 
                 if (_polyline && ensureUid(_polyline) == uid)
                     _polyline = nullptr;
@@ -2136,23 +2135,24 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
             auto undoFn = [this, uid]()
             {
-                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                if (!pl) return;
+                auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                if (!polyline)
+                    return;
 
-                pl->setClosed(false, false);
-                pl->setFlag(QGraphicsItem::ItemIsMovable, false);
+                polyline->setClosed(false, false);
+                polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                 _drawingPolyline = true;
-                _polyline = pl;
+                _polyline = polyline;
                 updateModeLabel();
 
                 _resumeEditing = true;
                 _resumeUid = uid;
 
-                pl->setSelected(true);
-                pl->setFocus();
+                polyline->setSelected(true);
+                polyline->setFocus();
 
-                removeListEntryBySceneItem(pl);
+                removeListEntryBySceneItem(polyline);
 
                 if (auto doc = currentDocument())
                 {
@@ -2162,8 +2162,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 raiseAllHandlesToTop();
             };
 
-            if (QUndoStack* st = activeUndoStack())
-                st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
+            if (QUndoStack* stack = activeUndoStack())
+                stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
             else
                 redoFn();
         }
@@ -2218,15 +2218,16 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                     auto redoFn = [this, uid, cls]()
                     {
-                        auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                        if (!ln) return;
+                        auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        if (!line)
+                            return;
 
-                        ln->setClosed(true, false);
-                        ln->setFlag(QGraphicsItem::ItemIsMovable, true);
+                        line->setClosed(true, false);
+                        line->setFlag(QGraphicsItem::ItemIsMovable, true);
 
-                        ln->setData(0, cls);
-                        applyClassColorToItem(ln, cls);
-                        linkSceneItemToList(ln);
+                        line->setData(0, cls);
+                        applyClassColorToItem(line, cls);
+                        linkSceneItemToList(line);
 
                         if (_line && ensureUid(_line) == uid)
                             _line = nullptr;
@@ -2246,23 +2247,24 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                     auto undoFn = [this, uid]()
                     {
-                        auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                        if (!ln) return;
+                        auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        if (!line)
+                            return;
 
-                        ln->setClosed(false, false);
-                        ln->setFlag(QGraphicsItem::ItemIsMovable, false);
+                        line->setClosed(false, false);
+                        line->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                         _drawingLine = true;
-                        _line = ln;
+                        _line = line;
                         updateModeLabel();
 
                         _resumeEditing = true;
                         _resumeUid = uid;
 
-                        ln->setSelected(true);
-                        ln->setFocus();
+                        line->setSelected(true);
+                        line->setFocus();
 
-                        removeListEntryBySceneItem(ln);
+                        removeListEntryBySceneItem(line);
 
                         if (auto doc = currentDocument())
                         {
@@ -2272,8 +2274,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                         raiseAllHandlesToTop();
                     };
 
-                    if (QUndoStack* st = activeUndoStack())
-                        st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
+                    if (QUndoStack* stack = activeUndoStack())
+                        stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
                     else
                         redoFn();
                 }
@@ -2289,18 +2291,19 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
             auto redoFn = [this, uid, cls]()
             {
-                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                if (!ln) return;
+                auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                if (!line)
+                    return;
 
-                ln->setClosed(true, false);
-                ln->setFlag(QGraphicsItem::ItemIsMovable, true);
+                line->setClosed(true, false);
+                line->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                 if (!cls.isEmpty())
                 {
-                    ln->setData(0, cls);
-                    applyClassColorToItem(ln, cls);
+                    line->setData(0, cls);
+                    applyClassColorToItem(line, cls);
                 }
-                linkSceneItemToList(ln);
+                linkSceneItemToList(line);
 
                 if (_line && ensureUid(_line) == uid)
                     _line = nullptr;
@@ -2320,23 +2323,24 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
             auto undoFn = [this, uid]()
             {
-                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                if (!ln) return;
+                auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                if (!line)
+                    return;
 
-                ln->setClosed(false, false);
-                ln->setFlag(QGraphicsItem::ItemIsMovable, false);
+                line->setClosed(false, false);
+                line->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                 _drawingLine = true;
-                _line = ln;
+                _line = line;
                 updateModeLabel();
 
                 _resumeEditing = true;
                 _resumeUid = uid;
 
-                ln->setSelected(true);
-                ln->setFocus();
+                line->setSelected(true);
+                line->setFocus();
 
-                removeListEntryBySceneItem(ln);
+                removeListEntryBySceneItem(line);
 
                 if (auto doc = currentDocument())
                 {
@@ -2346,8 +2350,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 raiseAllHandlesToTop();
             };
 
-            if (QUndoStack* st = activeUndoStack())
-                st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
+            if (QUndoStack* stack = activeUndoStack())
+                stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
             else
                 redoFn();
         }
@@ -2454,17 +2458,20 @@ void MainWindow::changeClassByUid(qulonglong uid)
 
     QGraphicsItem* target = nullptr;
 
-    for (QGraphicsItem* it : _scene->items())
+    for (QGraphicsItem* item : _scene->items())
     {
-        if (!it || it == _videoRect || it == _tempRectItem
-            || it == _tempCircleItem || it == _tempPolyline)
+        if ((!item)
+            || (item == _videoRect)
+            || (item == _tempRectItem)
+            || (item == _tempCircleItem)
+            || (item == _tempPolyline))
         {
             continue;
         }
 
-        if (it->data(_roleUid).toULongLong() == uid)
+        if (item->data(_roleUid).toULongLong() == uid)
         {
-            target = it;
+            target = item;
             break;
         }
     }
@@ -2504,19 +2511,19 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
         if (!listItem)
             continue;
 
-        QGraphicsItem* sel = listItem->data(Qt::UserRole).value<QGraphicsItem*>();
-        if (!sel)
+        QGraphicsItem* selectedSceneItem = listItem->data(Qt::UserRole).value<QGraphicsItem*>();
+        if (!selectedSceneItem)
             continue;
 
-        if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(sel))
-            sel = handle->parentItem();
+        if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(selectedSceneItem))
+            selectedSceneItem = handle->parentItem();
 
-        sel = findMovableAncestor(sel);
+        selectedSceneItem = findMovableAncestor(selectedSceneItem);
 
-        if (!sel || sel == _videoRect)
+        if (!selectedSceneItem || selectedSceneItem == _videoRect)
             continue;
 
-        if (sel == item)
+        if (selectedSceneItem == item)
             clickedItemIsInListSelection = true;
     }
 
@@ -2527,20 +2534,20 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
             if (!listItem)
                 continue;
 
-            QGraphicsItem* sel = listItem->data(Qt::UserRole).value<QGraphicsItem*>();
-            if (!sel)
+            QGraphicsItem* selectedSceneItem = listItem->data(Qt::UserRole).value<QGraphicsItem*>();
+            if (!selectedSceneItem)
                 continue;
 
-            if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(sel))
-                sel = handle->parentItem();
+            if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(selectedSceneItem))
+                selectedSceneItem = handle->parentItem();
 
-            sel = findMovableAncestor(sel);
+            selectedSceneItem = findMovableAncestor(selectedSceneItem);
 
-            if (!sel || sel == _videoRect)
+            if (!selectedSceneItem || selectedSceneItem == _videoRect)
                 continue;
 
-            if (!targets.contains(sel))
-                targets.append(sel);
+            if (!targets.contains(selectedSceneItem))
+                targets.append(selectedSceneItem);
         }
     }
     else
@@ -2755,15 +2762,16 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                     auto redoFn = [this, uid, cls]()
                                     {
-                                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                                        if (!pl) return;
+                                        auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                        if (!polyline)
+                                            return;
 
-                                        pl->setClosed(true, true);
-                                        pl->setFlag(QGraphicsItem::ItemIsMovable, true);
+                                        polyline->setClosed(true, true);
+                                        polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
 
-                                        pl->setData(0, cls);
-                                        applyClassColorToItem(pl, cls);
-                                        linkSceneItemToList(pl);
+                                        polyline->setData(0, cls);
+                                        applyClassColorToItem(polyline, cls);
+                                        linkSceneItemToList(polyline);
 
                                         if (_polyline && ensureUid(_polyline) == uid)
                                             _polyline = nullptr;
@@ -2782,23 +2790,23 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                     auto undoFn = [this, uid]()
                                     {
-                                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                                        if (!pl) return;
+                                        auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                        if (!polyline) return;
 
-                                        pl->setClosed(false, false);
-                                        pl->setFlag(QGraphicsItem::ItemIsMovable, false);
+                                        polyline->setClosed(false, false);
+                                        polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                                         _drawingPolyline = true;
-                                        _polyline = pl;
+                                        _polyline = polyline;
                                         updateModeLabel();
 
                                         _resumeEditing = true;
                                         _resumeUid = uid;
 
-                                        pl->setSelected(true);
-                                        pl->setFocus();
+                                        polyline->setSelected(true);
+                                        polyline->setFocus();
 
-                                        removeListEntryBySceneItem(pl);
+                                        removeListEntryBySceneItem(polyline);
 
                                         if (auto doc = currentDocument())
                                         {
@@ -2808,8 +2816,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                         raiseAllHandlesToTop();
                                     };
-                                    if (QUndoStack* st = activeUndoStack())
-                                        st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
+                                    if (QUndoStack* stack = activeUndoStack())
+                                        stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
                                     else
                                         redoFn();
 
@@ -2826,18 +2834,19 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             auto redoFn = [this, uid, cls]()
                             {
-                                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                                if (!pl) return;
+                                auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                if (!polyline)
+                                    return;
 
-                                pl->setClosed(true, false);
-                                pl->setFlag(QGraphicsItem::ItemIsMovable, true);
+                                polyline->setClosed(true, false);
+                                polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                                 if (!cls.isEmpty())
                                 {
-                                    pl->setData(0, cls);
-                                    applyClassColorToItem(pl, cls);
+                                    polyline->setData(0, cls);
+                                    applyClassColorToItem(polyline, cls);
                                 }
-                                linkSceneItemToList(pl);
+                                linkSceneItemToList(polyline);
 
                                 if (_polyline && ensureUid(_polyline) == uid)
                                     _polyline = nullptr;
@@ -2857,23 +2866,24 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             auto undoFn = [this, uid]()
                             {
-                                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                                if (!pl) return;
+                                auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                if (!polyline)
+                                    return;
 
-                                pl->setClosed(false, false);
-                                pl->setFlag(QGraphicsItem::ItemIsMovable, false);
+                                polyline->setClosed(false, false);
+                                polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                                 _drawingPolyline = true;
-                                _polyline = pl;
+                                _polyline = polyline;
                                 updateModeLabel();
 
                                 _resumeEditing = true;
                                 _resumeUid = uid;
 
-                                pl->setSelected(true);
-                                pl->setFocus();
+                                polyline->setSelected(true);
+                                polyline->setFocus();
 
-                                removeListEntryBySceneItem(pl);
+                                removeListEntryBySceneItem(polyline);
 
                                 if (auto doc = currentDocument())
                                 {
@@ -2883,8 +2893,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                 raiseAllHandlesToTop();
                             };
 
-                            if (QUndoStack* st = activeUndoStack())
-                                st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
+                            if (QUndoStack* stack = activeUndoStack())
+                                stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
                             else
                                 redoFn();
                         }
@@ -3540,9 +3550,9 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         // Ищем ближайший сегмент
                         for (int i = 0; i < n; ++i)
                         {
-                            const QPointF& a = before.points[i];
-                            const QPointF& b = before.points[(i + 1) % n];
-                            const double d2 = dist2PointToSegment(scenePos, a, b);
+                            const QPointF& firstPt = before.points[i];
+                            const QPointF& secondPt = before.points[(i + 1) % n];
+                            const double d2 = dist2PointToSegment(scenePos, firstPt, secondPt);
                             if (d2 < bestD2)
                             {
                                 bestD2 = d2;
@@ -4106,7 +4116,7 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem 
     {
         _scene->setProperty("classChangeReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
         _scene->setProperty("shapeDeleteReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
-        _scene->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
+        _scene->setProperty("fillShapeWhenSelected", _vstyle.fillShapeWhenSelected);
     }
 
     if (_videoRect && !_videoRect->pixmap().isNull())
@@ -4202,23 +4212,23 @@ void MainWindow::onPolygonListSelectionChanged()
     {
         QSignalBlocker blockScene(_scene);
 
-        for (QGraphicsItem* it : _scene->items())
+        for (QGraphicsItem* item : _scene->items())
         {
-            if (!it)
+            if (!item)
                 continue;
 
-            if (it == _videoRect ||
-                it == _tempRectItem ||
-                it == _tempCircleItem ||
-                it == _tempPolyline)
+            if (item == _videoRect
+                || item == _tempRectItem
+                || item == _tempCircleItem
+                || item == _tempPolyline)
             {
                 continue;
             }
 
-            if (it->parentItem() != nullptr)
+            if (item->parentItem() != nullptr)
                 continue;
 
-            it->setSelected(false);
+            item->setSelected(false);
         }
 
         for (auto* li : selected)
@@ -4258,23 +4268,23 @@ void MainWindow::selectAllShapes()
 
         ui->polygonList->clearSelection();
 
-        for (QGraphicsItem* it : _scene->items())
+        for (QGraphicsItem* item : _scene->items())
         {
-            if (!it)
+            if (!item)
                 continue;
 
-            if (it == _videoRect ||
-                it == _tempRectItem ||
-                it == _tempCircleItem ||
-                it == _tempPolyline)
+            if (item == _videoRect
+                || item == _tempRectItem
+                || item == _tempCircleItem
+                || item == _tempPolyline)
             {
                 continue;
             }
 
-            if (it->parentItem() != nullptr)
+            if (item->parentItem() != nullptr)
                 continue;
 
-            it->setSelected(true);
+            item->setSelected(true);
         }
 
         for (int i = 0; i < ui->polygonList->count(); ++i)
@@ -4428,15 +4438,16 @@ void MainWindow::on_actClosePolyline_triggered()
 
                     auto redoFn = [this, uid, cls]()
                     {
-                        auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                        if (!ln) return;
+                        auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        if (!line)
+                            return;
 
-                        ln->setClosed(true, false);
-                        ln->setFlag(QGraphicsItem::ItemIsMovable, true);
+                        line->setClosed(true, false);
+                        line->setFlag(QGraphicsItem::ItemIsMovable, true);
 
-                        ln->setData(0, cls);
-                        applyClassColorToItem(ln, cls);
-                        linkSceneItemToList(ln);
+                        line->setData(0, cls);
+                        applyClassColorToItem(line, cls);
+                        linkSceneItemToList(line);
 
                         if (_line && ensureUid(_line) == uid)
                             _line = nullptr;
@@ -4456,22 +4467,23 @@ void MainWindow::on_actClosePolyline_triggered()
 
                     auto undoFn = [this, uid]()
                     {
-                        auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                        if (!ln) return;
+                        auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        if (!line)
+                            return;
 
-                        ln->setClosed(false, false);
-                        ln->setFlag(QGraphicsItem::ItemIsMovable, false);
+                        line->setClosed(false, false);
+                        line->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                         _drawingLine = true;
-                        _line = ln;
+                        _line = line;
                         _resumeEditing = true;
                         _resumeUid = uid;
                         updateModeLabel();
 
-                        ln->setSelected(true);
-                        ln->setFocus();
+                        line->setSelected(true);
+                        line->setFocus();
 
-                        removeListEntryBySceneItem(ln);
+                        removeListEntryBySceneItem(line);
 
                         if (auto doc = currentDocument())
                         {
@@ -4481,8 +4493,8 @@ void MainWindow::on_actClosePolyline_triggered()
                         raiseAllHandlesToTop();
                     };
 
-                    if (QUndoStack* st = activeUndoStack())
-                        st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
+                    if (QUndoStack* stack = activeUndoStack())
+                        stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
                     else
                         redoFn();
                 }
@@ -4498,18 +4510,18 @@ void MainWindow::on_actClosePolyline_triggered()
 
             auto redoFn = [this, uid, cls]()
             {
-                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                if (!ln) return;
+                auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                if (!line) return;
 
-                ln->setClosed(true, false);
-                ln->setFlag(QGraphicsItem::ItemIsMovable, true);
+                line->setClosed(true, false);
+                line->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                 if (!cls.isEmpty())
                 {
-                    ln->setData(0, cls);
-                    applyClassColorToItem(ln, cls);
+                    line->setData(0, cls);
+                    applyClassColorToItem(line, cls);
                 }
-                linkSceneItemToList(ln);
+                linkSceneItemToList(line);
 
                 if (_line && ensureUid(_line) == uid)
                     _line = nullptr;
@@ -4529,23 +4541,23 @@ void MainWindow::on_actClosePolyline_triggered()
 
             auto undoFn = [this, uid]()
             {
-                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                if (!ln) return;
+                auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                if (!line) return;
 
-                ln->setClosed(false, false);
-                ln->setFlag(QGraphicsItem::ItemIsMovable, false);
+                line->setClosed(false, false);
+                line->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                 _drawingLine = true;
-                _line = ln;
+                _line = line;
 
                 _resumeEditing = true;
                 _resumeUid = uid;
                 updateModeLabel();
 
-                ln->setSelected(true);
-                ln->setFocus();
+                line->setSelected(true);
+                line->setFocus();
 
-                removeListEntryBySceneItem(ln);
+                removeListEntryBySceneItem(line);
 
                 if (auto doc = currentDocument())
                 {
@@ -4555,8 +4567,8 @@ void MainWindow::on_actClosePolyline_triggered()
                 raiseAllHandlesToTop();
             };
 
-            if (QUndoStack* st = activeUndoStack())
-                st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
+            if (QUndoStack* stack = activeUndoStack())
+                stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
             else
                 redoFn();
         }
@@ -4785,10 +4797,10 @@ void MainWindow::on_actDelete_triggered()
             }
         }
 
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
@@ -4809,10 +4821,10 @@ void MainWindow::on_actDelete_triggered()
             Q_UNUSED(created);
         }
 
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
@@ -4822,7 +4834,7 @@ void MainWindow::on_actDelete_triggered()
 
 void MainWindow::on_actSettingsApp_triggered()
 {
-    auto visBackup = _vis;
+    auto visualStyleBackup = _vstyle;
     bool wasApplied = false;
 
     Settings dlg(this);
@@ -4847,29 +4859,29 @@ void MainWindow::on_actSettingsApp_triggered()
     }
 
     Settings::Values init;
-    init.lineWidth         = _vis.lineWidth;
-    init.handleSize        = _vis.handleSize;
-    init.numberFontPt      = _vis.numberFontPt;
-    init.pointSize         = _vis.pointSize;
-    init.showNumbers = _vis.showNumbers;
-    init.showSelectionFrame = _vis.showSelectionFrame;
-    init.fillShapeWhenSelected = _vis.fillShapeWhenSelected;
+    init.lineWidth         = _vstyle.lineWidth;
+    init.handleSize        = _vstyle.handleSize;
+    init.numberFontPt      = _vstyle.numberFontPt;
+    init.pointSize         = _vstyle.pointSize;
+    init.showNumbers = _vstyle.showNumbers;
+    init.showSelectionFrame = _vstyle.showSelectionFrame;
+    init.fillShapeWhenSelected = _vstyle.fillShapeWhenSelected;
 
-    init.nodeColor         = _vis.handleColor;           // «Цвет узла»
-    init.nodeSelectedColor = _vis.selectedHandleColor;   // «Цвет выбранного узла»
-    init.numberColor       = _vis.numberColor;           // «Цвет нумерации»
-    init.numberBgColor     = _vis.numberBgColor;         // «Фон нумерации»
-    init.rectLineColor     = _vis.rectangleLineColor;    // «Линии прямоугольника»
-    init.circleLineColor   = _vis.circleLineColor;       // «Линии окружности»
-    init.polylineLineColor = _vis.polylineLineColor;     // «Линии полилинии»
-    init.lineLineColor     = _vis.lineLineColor;
-    init.pointColor        = _vis.pointColor;
-    init.rulerColor        = _vis.rulerColor;
+    init.nodeColor         = _vstyle.handleColor;           // «Цвет узла»
+    init.nodeSelectedColor = _vstyle.selectedHandleColor;   // «Цвет выбранного узла»
+    init.numberColor       = _vstyle.numberColor;           // «Цвет нумерации»
+    init.numberBgColor     = _vstyle.numberBgColor;         // «Фон нумерации»
+    init.rectLineColor     = _vstyle.rectangleLineColor;    // «Линии прямоугольника»
+    init.circleLineColor   = _vstyle.circleLineColor;       // «Линии окружности»
+    init.polylineLineColor = _vstyle.polylineLineColor;     // «Линии полилинии»
+    init.lineLineColor     = _vstyle.lineLineColor;
+    init.pointColor        = _vstyle.pointColor;
+    init.rulerColor        = _vstyle.rulerColor;
 
     init.closePolyline = _polylineCloseMode;    // Текущий режим замыкания
     init.finishLine    = _lineFinishMode;       // Текущий режим завершения рисования линии
-    init.labelFontPt   = _vis.labelFontPt;      // Размер и шрифт
-    init.labelFont     = _vis.labelFont;
+    init.labelFontPt   = _vstyle.labelFontPt;      // Размер и шрифт
+    init.labelFont     = _vstyle.labelFont;
 
     init.handlePickRadius = _ghostPickRadius;
     init.edgePickRadius = _edgePickRadius;
@@ -4884,50 +4896,50 @@ void MainWindow::on_actSettingsApp_triggered()
     //             [this](const Settings::Values& v)
     // {
     connect(&dlg, &Settings::settingsApplied, this,
-            [this, &visBackup, &wasApplied](const Settings::Values& v)
+            [this, &visualStyleBackup, &wasApplied](const Settings::Values& v)
     {
         wasApplied = true;
         // 1) Обновляем визуальные настройки из v
-        _vis.lineWidth = v.lineWidth;
-        _vis.handleSize = v.handleSize;
+        _vstyle.lineWidth = v.lineWidth;
+        _vstyle.handleSize = v.handleSize;
         _ghostPickRadius = v.handlePickRadius;
         _edgePickRadius  = v.edgePickRadius;
-        _vis.numberFontPt = v.numberFontPt;
-        _vis.showNumbers = v.showNumbers;
-        _vis.showSelectionFrame = v.showSelectionFrame;
-        _vis.fillShapeWhenSelected = v.fillShapeWhenSelected;
-        _vis.pointSize = v.pointSize;
+        _vstyle.numberFontPt = v.numberFontPt;
+        _vstyle.showNumbers = v.showNumbers;
+        _vstyle.showSelectionFrame = v.showSelectionFrame;
+        _vstyle.fillShapeWhenSelected = v.fillShapeWhenSelected;
+        _vstyle.pointSize = v.pointSize;
 
         forEachScene([this](QGraphicsScene* sc)
         {
             if (!sc)
                 return;
 
-            sc->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
+            sc->setProperty("fillShapeWhenSelected", _vstyle.fillShapeWhenSelected);
         });
 
-        _vis.handleColor = v.nodeColor;
-        _vis.selectedHandleColor = v.nodeSelectedColor;
-        _vis.numberColor = v.numberColor;
-        _vis.numberBgColor = v.numberBgColor;
-        _vis.rectangleLineColor = v.rectLineColor;
-        _vis.circleLineColor = v.circleLineColor;
-        _vis.polylineLineColor = v.polylineLineColor;
-        _vis.lineLineColor = v.lineLineColor;
-        _vis.pointColor = v.pointColor;
-        _vis.pointOutlineWidth = v.pointOutlineWidth;
-        _vis.labelFontPt = v.labelFontPt;
-        _vis.labelFont = v.labelFont;
-        _vis.rulerColor = v.rulerColor;
+        _vstyle.handleColor = v.nodeColor;
+        _vstyle.selectedHandleColor = v.nodeSelectedColor;
+        _vstyle.numberColor = v.numberColor;
+        _vstyle.numberBgColor = v.numberBgColor;
+        _vstyle.rectangleLineColor = v.rectLineColor;
+        _vstyle.circleLineColor = v.circleLineColor;
+        _vstyle.polylineLineColor = v.polylineLineColor;
+        _vstyle.lineLineColor = v.lineLineColor;
+        _vstyle.pointColor = v.pointColor;
+        _vstyle.pointOutlineWidth = v.pointOutlineWidth;
+        _vstyle.labelFontPt = v.labelFontPt;
+        _vstyle.labelFont = v.labelFont;
+        _vstyle.rulerColor = v.rulerColor;
         if (_rulerLine)
         {
             QPen pen = _rulerLine->pen();
-            pen.setColor(_vis.rulerColor);
+            pen.setColor(_vstyle.rulerColor);
             _rulerLine->setPen(pen);
         }
         if (_rulerText)
         {
-            _rulerText->setDefaultTextColor(_vis.rulerColor);
+            _rulerText->setDefaultTextColor(_vstyle.rulerColor);
         }
         if (_scene)
             _scene->update();
@@ -4943,25 +4955,25 @@ void MainWindow::on_actSettingsApp_triggered()
             if (!sc)
                 return;
 
-            for (QGraphicsItem* it : sc->items())
+            for (QGraphicsItem* item : sc->items())
             {
-                if (!it)
+                if (!item)
                     continue;
 
-                if (it == _videoRect ||
-                    it == _tempRectItem ||
-                    it == _tempCircleItem ||
-                    it == _tempPolyline)
+                if (item == _videoRect
+                    || item == _tempRectItem
+                    || item == _tempCircleItem
+                    || item == _tempPolyline)
                 {
                     continue;
                 }
 
-                if (it->parentItem() != nullptr)
+                if (item->parentItem() != nullptr)
                     continue;
 
-                const QString cls = it->data(0).toString();
+                const QString cls = item->data(0).toString();
                 if (!cls.isEmpty())
-                    applyClassColorToItem(it, cls);
+                    applyClassColorToItem(item, cls);
             }
 
             sc->update();
@@ -4991,14 +5003,14 @@ void MainWindow::on_actSettingsApp_triggered()
         config::base().setValue("view.keep_image_scale_per_image", v.keepImageScale);
         config::base().setValue("ui.keep_menu_visibility", v.keepMenuBarVisibility);
         config::base().saveFile();
-        visBackup = _vis;
+        visualStyleBackup = _vstyle;
 
         forEachScene([this](QGraphicsScene* sc)
         {
             if (!sc)
                 return;
 
-            sc->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
+            sc->setProperty("fillShapeWhenSelected", _vstyle.fillShapeWhenSelected);
         });
     });
 
@@ -5013,7 +5025,7 @@ void MainWindow::on_actSettingsApp_triggered()
 
     if (rc == QDialog::Rejected)
     {
-        _vis = visBackup;
+        _vstyle = visualStyleBackup;
         saveVisualStyle();
         apply_LineWidth_ToScene(nullptr);
         apply_PointSize_ToScene(nullptr);
@@ -5036,25 +5048,25 @@ void MainWindow::on_actSettingsApp_triggered()
             if (!sc)
                 return;
 
-            for (QGraphicsItem* it : sc->items())
+            for (QGraphicsItem* item : sc->items())
             {
-                if (!it)
+                if (!item)
                     continue;
 
-                if (it == _videoRect ||
-                    it == _tempRectItem ||
-                    it == _tempCircleItem ||
-                    it == _tempPolyline)
+                if (item == _videoRect
+                    || item == _tempRectItem
+                    || item == _tempCircleItem
+                    || item == _tempPolyline)
                 {
                     continue;
                 }
 
-                if (it->parentItem() != nullptr)
+                if (item->parentItem() != nullptr)
                     continue;
 
-                const QString cls = it->data(0).toString();
+                const QString cls = item->data(0).toString();
                 if (!cls.isEmpty())
-                    applyClassColorToItem(it, cls);
+                    applyClassColorToItem(item, cls);
             }
 
             sc->update();
@@ -5332,10 +5344,10 @@ void MainWindow::on_actResetAnnotation_triggered()
             }
         }
 
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
@@ -5348,10 +5360,10 @@ void MainWindow::on_actResetAnnotation_triggered()
             Q_UNUSED(created);
         }
 
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
@@ -5521,19 +5533,19 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
         doc->_undoStack = std::make_unique<QUndoStack>();      // без родителя, владеем unique_ptr
         _undoGroup->addStack(doc->_undoStack.get());           // группа будет переключать активный
 
-        QUndoStack* st = doc->_undoStack.get();
-        QObject::connect(st, &QUndoStack::indexChanged, this, [this, st](int){
+        QUndoStack* stack = doc->_undoStack.get();
+        QObject::connect(stack, &QUndoStack::indexChanged, this, [this, stack](int){
             if (_loadingNow) return;
 
             // реагируем только если этот стек активен у группы
-            if (_undoGroup && _undoGroup->activeStack() != st) return;
+            if (_undoGroup && (_undoGroup->activeStack() != stack)) return;
 
-            if (auto d = currentDocument())
+            if (auto doc = currentDocument())
             {
                 // Если стек в состоянии <пусто>, считаем файл неизмененным
-                const bool clean = st->isClean();
-                d->isModified = !clean;
-                updateFileListDisplay(d->filePath);
+                const bool clean = stack->isClean();
+                doc->isModified = !clean;
+                updateFileListDisplay(doc->filePath);
             }
         });
 
@@ -5761,60 +5773,60 @@ void MainWindow::writeShapesJsonToClipboard(const QJsonObject& json) const
 
         if (type == "circle")
         {
-            Circle c;
-            c.label  = label;
-            c.x  = o["x"].toDouble();
-            c.y = o["y"].toDouble();
-            c.radius = o["radius"].toDouble();
-            circles.append(c);
+            Circle circle;
+            circle.label  = label;
+            circle.x = o["x"].toDouble();
+            circle.y = o["y"].toDouble();
+            circle.radius = o["radius"].toDouble();
+            circles.append(circle);
         }
         else if (type == "rectangle")
         {
-            Rectangle r;
-            r.label = label;
+            Rectangle rect;
+            rect.label = label;
             double x = o["x"].toDouble();
             double y = o["y"].toDouble();
             double w = o["width"].toDouble();
             double h = o["height"].toDouble();
-            r.x1 = x;
-            r.y1 = y;
-            r.x2 = x + w;
-            r.y2 = y + h;
-            rectangles.append(r);
+            rect.x1 = x;
+            rect.y1 = y;
+            rect.x2 = x + w;
+            rect.y2 = y + h;
+            rectangles.append(rect);
         }
         else if (type == "polyline")
         {
-            Polyline pl;
-            pl.label = label;
+            Polyline polyline;
+            polyline.label = label;
             QJsonArray pts = o["points"].toArray();
             for (const QJsonValue& pv : pts)
             {
                 QJsonObject po = pv.toObject();
-                pl.points.append(QPointF(po["x"].toDouble(),
+                polyline.points.append(QPointF(po["x"].toDouble(),
                                          po["y"].toDouble()));
             }
-            polylines.append(pl);
+            polylines.append(polyline);
         }
         else if (type == "line")
         {
-            Line ln;
-            ln.label = label;
+            Line line;
+            line.label = label;
             QJsonArray pts = o["points"].toArray();
             for (const QJsonValue& pv : pts)
             {
                 QJsonObject po = pv.toObject();
-                ln.points.append(QPointF(po["x"].toDouble(),
+                line.points.append(QPointF(po["x"].toDouble(),
                                          po["y"].toDouble()));
             }
-            lines.append(ln);
+            lines.append(line);
         }
         else if (type == "point")
         {
-            Point p;
-            p.label = label;
-            p.x     = o["x"].toDouble();
-            p.y     = o["y"].toDouble();
-            points.append(p);
+            Point point;
+            point.label = label;
+            point.x = o["x"].toDouble();
+            point.y = o["y"].toDouble();
+            points.append(point);
         }
     }
 
@@ -5841,15 +5853,15 @@ void MainWindow::writeShapesJsonToClipboard(const QJsonObject& json) const
         if (!polylines.isEmpty())
         {
             out << "  polylines:\n";
-            for (const Polyline& pl : polylines)
+            for (const Polyline& polyline : polylines)
             {
-                out << "    - label: " << pl.label << "\n";
+                out << "    - label: " << polyline.label << "\n";
                 out << "      points: [";
-                for (int i = 0; i < pl.points.size(); ++i)
+                for (int i = 0; i < polyline.points.size(); ++i)
                 {
-                    const QPointF& p = pl.points[i];
-                    int px = static_cast<int>(std::round(p.x()));
-                    int py = static_cast<int>(std::round(p.y()));
+                    const QPointF& point = polyline.points[i];
+                    int px = static_cast<int>(std::round(point.x()));
+                    int py = static_cast<int>(std::round(point.y()));
                     if (i > 0)
                         out << ", ";
                     out << "{x: " << px << ", y: " << py << "}";
@@ -6405,10 +6417,10 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     // После вставки активными должны стать именно новые фигуры
     const QList<QGraphicsItem*> selectedBeforePaste = scene->selectedItems();
-    for (QGraphicsItem* it : selectedBeforePaste)
+    for (QGraphicsItem* item : selectedBeforePaste)
     {
-        if (it)
-            it->setSelected(false);
+        if (item)
+            item->setSelected(false);
     }
 
     for (QGraphicsItem* item : newItems)
@@ -7568,25 +7580,25 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
         if (!sc)
             return;
 
-        for (QGraphicsItem* it : sc->items())
+        for (QGraphicsItem* item : sc->items())
         {
-            if (!it)
+            if (!item)
                 continue;
 
-            if (it == _videoRect ||
-                it == _tempRectItem ||
-                it == _tempCircleItem ||
-                it == _tempPolyline)
+            if (item == _videoRect
+                || item == _tempRectItem
+                || item == _tempCircleItem
+                || item == _tempPolyline)
             {
                 continue;
             }
 
-            if (it->parentItem() != nullptr)
+            if (item->parentItem() != nullptr)
                 continue;
 
-            const QString cls = it->data(0).toString();
+            const QString cls = item->data(0).toString();
             if (!cls.isEmpty())
-                applyClassColorToItem(it, cls);
+                applyClassColorToItem(item, cls);
         }
 
         sc->update();
@@ -7663,25 +7675,25 @@ void MainWindow::onSceneSelectionChanged()
     _syncingSelection = true;
 
     // Обновляем цвета/заливку всех фигур с учетом текущего выделения
-    for (QGraphicsItem* it : _scene->items())
+    for (QGraphicsItem* item : _scene->items())
     {
-        if (!it)
+        if (!item)
             continue;
 
-        if (it == _videoRect ||
-            it == _tempRectItem ||
-            it == _tempCircleItem ||
-            it == _tempPolyline)
+        if (item == _videoRect
+            || item == _tempRectItem
+            || item == _tempCircleItem
+            || item == _tempPolyline)
         {
             continue;
         }
 
-        if (it->parentItem() != nullptr)
+        if (item->parentItem() != nullptr)
             continue;
 
-        const QString cls = it->data(0).toString();
+        const QString cls = item->data(0).toString();
         if (!cls.isEmpty())
-            applyClassColorToItem(it, cls);
+            applyClassColorToItem(item, cls);
     }
 
     {
@@ -8351,12 +8363,12 @@ void MainWindow::moveSelectedItemsToBack()
     if (selectedRoots.isEmpty())
         return;
 
-    auto byZ = [](QGraphicsItem* a, QGraphicsItem* b)
+    auto byZ = [](QGraphicsItem* firstItem, QGraphicsItem* secondItem)
     {
-        if (qFuzzyCompare(a->zValue(), b->zValue()))
-            return a < b;
+        if (qFuzzyCompare(firstItem->zValue(), secondItem->zValue()))
+            return firstItem < secondItem;
 
-        return a->zValue() < b->zValue();
+        return firstItem->zValue() < secondItem->zValue();
     };
 
     std::sort(selectedRoots.begin(), selectedRoots.end(), byZ);
@@ -8617,7 +8629,7 @@ void MainWindow::showGhostOver(qgraph::DragCircle* target, const QPointF& sceneP
     _ghostTarget = target;
     _ghostActive = true;
 
-    QColor ghostColor = _vis.selectedHandleColor;
+    QColor ghostColor = _vstyle.selectedHandleColor;
     _ghostHandle->setRect(target->baseRect());
     _ghostHandle->setPen (target->basePen());
     _ghostHandle->setBrush(QBrush(ghostColor));
@@ -8708,7 +8720,7 @@ void MainWindow::setGhostStyleHover()
     const QSizeF newSize(base.size() * scale);
     const QRectF newRect(QPointF(-newSize.width()/2.0, -newSize.height()/2.0), newSize);
 
-    QColor ghostColor = _vis.selectedHandleColor;
+    QColor ghostColor = _vstyle.selectedHandleColor;
     _ghostHandle->setRect(newRect);
     _ghostHandle->setPen(QPen(Qt::black, 1));
     _ghostHandle->setBrush(QBrush(ghostColor));
@@ -8876,29 +8888,29 @@ QGraphicsItem* MainWindow::pickItemByEdgeAt(GraphicsView* view, const QPoint& vi
     const QList<QGraphicsItem*> items =
         _scene->items(probe, Qt::IntersectsItemBoundingRect, Qt::DescendingOrder);
 
-    for (QGraphicsItem* it : items)
+    for (QGraphicsItem* item : items)
     {
-        if (!it || !it->isVisible() || !it->scene())
+        if (!item || !item->isVisible() || !item->scene())
             continue;
 
-        if (it == _videoRect)
+        if (item == _videoRect)
             continue;
 
-        if (qgraphicsitem_cast<qgraph::DragCircle*>(it))
+        if (qgraphicsitem_cast<qgraph::DragCircle*>(item))
             continue;
 
         // Берем только фигуры
         const bool isShape =
-                (dynamic_cast<qgraph::Polyline*>(it)  != nullptr) ||
-                (dynamic_cast<qgraph::Line*>(it)      != nullptr) ||
-                (dynamic_cast<qgraph::Rectangle*>(it) != nullptr) ||
-                (dynamic_cast<qgraph::Circle*>(it)    != nullptr);
+                (dynamic_cast<qgraph::Polyline*>(item)  != nullptr)
+                || (dynamic_cast<qgraph::Line*>(item)      != nullptr)
+                || (dynamic_cast<qgraph::Rectangle*>(item) != nullptr)
+                || (dynamic_cast<qgraph::Circle*>(item)    != nullptr);
 
         if (!isShape)
             continue;
 
-        const QPointF pLocal  = it->mapFromScene(scenePos);
-        const QPointF pLocal2 = it->mapFromScene(scenePos + QPointF(radiusScene, 0));
+        const QPointF pLocal  = item->mapFromScene(scenePos);
+        const QPointF pLocal2 = item->mapFromScene(scenePos + QPointF(radiusScene, 0));
         const qreal radiusLocal = QLineF(pLocal, pLocal2).length();
         if (radiusLocal <= 0.0)
             continue;
@@ -8908,32 +8920,32 @@ QGraphicsItem* MainWindow::pickItemByEdgeAt(GraphicsView* view, const QPoint& vi
         stroker.setCapStyle(Qt::RoundCap);
         stroker.setJoinStyle(Qt::RoundJoin);
 
-        const QPainterPath hit = stroker.createStroke(it->shape());
+        const QPainterPath hit = stroker.createStroke(item->shape());
         if (hit.contains(pLocal))
-            return it;
+            return item;
     }
 
     return nullptr;
 }
 
-void MainWindow::startHandleDrag(qgraph::DragCircle* h, const QPointF& scenePos)
+void MainWindow::startHandleDrag(qgraph::DragCircle* handle, const QPointF& scenePos)
 {    
     _m_isDraggingHandle = true;
-    _m_dragHandle = h;
+    _m_dragHandle = handle;
     _handleDragging = true; // Начало перетаскивания ручки
     updateModeLabel();
 
     // UNDO: запомним владельца и снимок "до"
-    _handleEditedItem = h ? h->parentItem() : nullptr;
+    _handleEditedItem = handle ? handle->parentItem() : nullptr;
     _handleDragHadChanges = false;
     if (_handleEditedItem)
     {
         _handleBeforeSnap = makeBackupFromItem(_handleEditedItem);
     }
 
-    const QPointF handleCenter = h->sceneBoundingRect().center();
+    const QPointF handleCenter = handle->sceneBoundingRect().center();
     _m_pressLocalOffset = scenePos - handleCenter;
-    h->setHoverStyle(true);
+    handle->setHoverStyle(true);
 }
 
 void MainWindow::updateHandleDrag(const QPointF& scenePos)
@@ -9001,17 +9013,17 @@ void MainWindow::clearAllHandleHoverEffects()
     hideGhost();
 }
 
-void MainWindow::showGhostFor(qgraph::DragCircle* h)
+void MainWindow::showGhostFor(qgraph::DragCircle* handle)
 {
-    if (!h) return;
+    if (!handle) return;
     ensureGhostAllocated();
 
-    _ghostTarget = h;
+    _ghostTarget = handle;
     _ghostHover  = true;
     _ghostActive = false;
 
     // Для круга используем специальную логику позиционирования
-    if (auto* circle = dynamic_cast<qgraph::Circle*>(h->parentItem()))
+    if (auto* circle = dynamic_cast<qgraph::Circle*>(handle->parentItem()))
     {
         // Получаем позицию курсора в сцене
         QPointF cursorPos = ui->graphView->mapToScene(ui->graphView->mapFromGlobal(QCursor::pos()));
@@ -9023,7 +9035,7 @@ void MainWindow::showGhostFor(qgraph::DragCircle* h)
             // Обновляем позицию реальной ручки
             circle->updateHandlePosition(cursorPos);
 
-            const QPointF sceneHandlePos = h->scenePos();
+            const QPointF sceneHandlePos = handle->scenePos();
             _ghostHandle->setPos(sceneHandlePos);
             _ghostHandle->setVisible(true);
         }
@@ -9037,18 +9049,18 @@ void MainWindow::showGhostFor(qgraph::DragCircle* h)
     else
     {
         // Для других фигур используем старую логику
-        const QPointF centerScene = h->sceneBoundingRect().center();
+        const QPointF centerScene = handle->sceneBoundingRect().center();
         _ghostHandle->setPos(centerScene - _ghostHandle->rect().center());
     }
 
-    const QPointF centerScene = h->sceneBoundingRect().center();
+    const QPointF centerScene = handle->sceneBoundingRect().center();
     const QRectF base = _ghostTarget->baseRect();
     const qreal scale = 1.5;
     //const qreal scale = 1;
     const QSizeF newSize(base.size() * scale);
     const QRectF newRect(QPointF(-newSize.width()/2.0, -newSize.height()/2.0), newSize);
 
-    QColor ghostColor = _vis.selectedHandleColor;
+    QColor ghostColor = _vstyle.selectedHandleColor;
     _ghostHandle->setRect(newRect);
     _ghostHandle->setPen(QPen(Qt::black, 1));
     _ghostHandle->setBrush(QBrush(ghostColor));
@@ -9095,11 +9107,11 @@ void MainWindow::updateAllPointNumbers()
 void MainWindow::loadVisualStyle()
 {
     // Устанавливаем значения по умолчанию, если они не найдены в конфиге
-    if (!config::base().getValue("graphics.line_width", _vis.lineWidth))
-        _vis.lineWidth = 2.0;
+    if (!config::base().getValue("graphics.line_width", _vstyle.lineWidth))
+        _vstyle.lineWidth = 2.0;
 
-    if (!config::base().getValue("graphics.handle_size", _vis.handleSize))
-        _vis.handleSize = 10.0;
+    if (!config::base().getValue("graphics.handle_size", _vstyle.handleSize))
+        _vstyle.handleSize = 10.0;
 
     if (!config::base().getValue("graphics.handle_pick_radius", _ghostPickRadius))
         _ghostPickRadius = 6.0;
@@ -9107,85 +9119,84 @@ void MainWindow::loadVisualStyle()
     if (!config::base().getValue("graphics.edge_pick_radius", _edgePickRadius))
         _edgePickRadius = 8.0;
 
-    if (!config::base().getValue("graphics.number_font_pt", _vis.numberFontPt))
-        _vis.numberFontPt = 10.0;
+    if (!config::base().getValue("graphics.number_font_pt", _vstyle.numberFontPt))
+        _vstyle.numberFontPt = 10.0;
 
-    if (!config::base().getValue("graphics.show_numbers", _vis.showNumbers))
-        _vis.showNumbers = false;
+    if (!config::base().getValue("graphics.show_numbers", _vstyle.showNumbers))
+        _vstyle.showNumbers = false;
 
-    if (!config::base().getValue("graphics.show_selection_frame", _vis.showSelectionFrame))
-        _vis.showSelectionFrame = false;
+    if (!config::base().getValue("graphics.show_selection_frame", _vstyle.showSelectionFrame))
+        _vstyle.showSelectionFrame = false;
 
-    if (!config::base().getValue("graphics.fill_shape_when_selected", _vis.fillShapeWhenSelected))
-        _vis.fillShapeWhenSelected = true;
+    if (!config::base().getValue("graphics.fill_shape_when_selected", _vstyle.fillShapeWhenSelected))
+        _vstyle.fillShapeWhenSelected = true;
 
-    if (!config::base().getValue("graphics.point_size", _vis.pointSize))
-        _vis.pointSize = 6;
+    if (!config::base().getValue("graphics.point_size", _vstyle.pointSize))
+        _vstyle.pointSize = 6;
 
     // Загружаем цвета
     QString colorStr;
     if (config::base().getValue("graphics.handle_color", colorStr))
-        _vis.handleColor = QColor(colorStr);
+        _vstyle.handleColor = QColor(colorStr);
     else
-        _vis.handleColor = Qt::red;
+        _vstyle.handleColor = Qt::red;
 
     if (config::base().getValue("graphics.number_color", colorStr))
-        _vis.numberColor = QColor(colorStr);
+        _vstyle.numberColor = QColor(colorStr);
     else
-        _vis.numberColor = Qt::white;
+        _vstyle.numberColor = Qt::white;
 
     if (config::base().getValue("graphics.number_bg_color", colorStr))
-        _vis.numberBgColor = QColor(colorStr);
+        _vstyle.numberBgColor = QColor(colorStr);
     else
-        _vis.numberBgColor = QColor(0, 0, 0, 180);
+        _vstyle.numberBgColor = QColor(0, 0, 0, 180);
 
     // Загружаем цвета линий
     if (config::base().getValue("graphics.colors.rectangle", colorStr))
-        _vis.rectangleLineColor = QColor(colorStr);
+        _vstyle.rectangleLineColor = QColor(colorStr);
     else
-        _vis.rectangleLineColor = Qt::green;
+        _vstyle.rectangleLineColor = Qt::green;
 
     if (config::base().getValue("graphics.colors.circle", colorStr))
-        _vis.circleLineColor = QColor(colorStr);
+        _vstyle.circleLineColor = QColor(colorStr);
     else
-        _vis.circleLineColor = Qt::red;
+        _vstyle.circleLineColor = Qt::red;
 
     if (config::base().getValue("graphics.colors.polyline", colorStr))
-        _vis.polylineLineColor = QColor(colorStr);
+        _vstyle.polylineLineColor = QColor(colorStr);
     else
-        _vis.polylineLineColor = Qt::blue;
+        _vstyle.polylineLineColor = Qt::blue;
 
     if (config::base().getValue("graphics.all.selected_handle_color", colorStr))
-        _vis.selectedHandleColor = QColor(colorStr);
+        _vstyle.selectedHandleColor = QColor(colorStr);
     else
-        _vis.selectedHandleColor = Qt::yellow;
+        _vstyle.selectedHandleColor = Qt::yellow;
 
     if (config::base().getValue("graphics.colors.line", colorStr))
-        _vis.lineLineColor = QColor(colorStr);
+        _vstyle.lineLineColor = QColor(colorStr);
 
     if (config::base().getValue("graphics.colors.point", colorStr))
-        _vis.pointColor = QColor(colorStr);
+        _vstyle.pointColor = QColor(colorStr);
 
     if (config::base().getValue("graphics.colors.ruler", colorStr))
-        _vis.rulerColor = QColor(colorStr);
+        _vstyle.rulerColor = QColor(colorStr);
     else
-        _vis.rulerColor = QColor(200, 200, 200);
+        _vstyle.rulerColor = QColor(200, 200, 200);
 
     int ow = 1;
     if (config::base().getValue("graphics.point.outline_width", ow))
-        _vis.pointOutlineWidth = ow;
+        _vstyle.pointOutlineWidth = ow;
     else
-        _vis.pointOutlineWidth = 1;
+        _vstyle.pointOutlineWidth = 1;
 
-    //config::base().getValue("vis.all.label_font_pt", _vis.labelFontPt);
-    if (!config::base().getValue("graphics.label_font_pt", _vis.labelFontPt))
-        _vis.labelFontPt = 0;
+    if (!config::base().getValue("graphics.label_font_pt", _vstyle.labelFontPt))
+        _vstyle.labelFontPt = 0;
 
     QString font;
     if (config::base().getValue("graphics.label_font_family", font))
-        _vis.labelFont = font;
+        _vstyle.labelFont = font;
     else
-        _vis.labelFont.clear();
+        _vstyle.labelFont.clear();
 
 
     applyStyle_AllDocuments();
@@ -9193,33 +9204,32 @@ void MainWindow::loadVisualStyle()
 
 void MainWindow::saveVisualStyle() const
 {
-    config::base().setValue("graphics.line_width", _vis.lineWidth);
-    config::base().setValue("graphics.handle_size", _vis.handleSize);
+    config::base().setValue("graphics.line_width", _vstyle.lineWidth);
+    config::base().setValue("graphics.handle_size", _vstyle.handleSize);
     config::base().setValue("graphics.handle_pick_radius", _ghostPickRadius);
     config::base().setValue("graphics.edge_pick_radius", _edgePickRadius);
-    config::base().setValue("graphics.number_font_pt", _vis.numberFontPt);
-    config::base().setValue("graphics.show_numbers", _vis.showNumbers);
-    config::base().setValue("graphics.show_selection_frame", _vis.showSelectionFrame);
-    config::base().setValue("graphics.point_size", _vis.pointSize);
-    config::base().setValue("graphics.handle_color", _vis.handleColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.selected_handle_color", _vis.selectedHandleColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.number_color", _vis.numberColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.number_bg_color", _vis.numberBgColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.rectangle", _vis.rectangleLineColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.circle", _vis.circleLineColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.polyline", _vis.polylineLineColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.line",  _vis.lineLineColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.point", _vis.pointColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.ruler", _vis.rulerColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.point.outline_width", _vis.pointOutlineWidth);
-    config::base().setValue("graphics.fill_shape_when_selected", _vis.fillShapeWhenSelected);
-    // config::base().setValue("vis.all.label_font_pt", _vis.labelFontPt);
-    // config::base().setValue("vis.all.label_font_family", _vis.labelFont);
-    if (_vis.labelFontPt > 0)
-        config::base().setValue("graphics.label_font_pt", _vis.labelFontPt);
+    config::base().setValue("graphics.number_font_pt", _vstyle.numberFontPt);
+    config::base().setValue("graphics.show_numbers", _vstyle.showNumbers);
+    config::base().setValue("graphics.show_selection_frame", _vstyle.showSelectionFrame);
+    config::base().setValue("graphics.point_size", _vstyle.pointSize);
+    config::base().setValue("graphics.handle_color", _vstyle.handleColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.selected_handle_color", _vstyle.selectedHandleColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.number_color", _vstyle.numberColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.number_bg_color", _vstyle.numberBgColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.rectangle", _vstyle.rectangleLineColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.circle", _vstyle.circleLineColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.polyline", _vstyle.polylineLineColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.line",  _vstyle.lineLineColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.point", _vstyle.pointColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.colors.ruler", _vstyle.rulerColor.name(QColor::HexArgb));
+    config::base().setValue("graphics.point.outline_width", _vstyle.pointOutlineWidth);
+    config::base().setValue("graphics.fill_shape_when_selected", _vstyle.fillShapeWhenSelected);
 
-    if (!_vis.labelFont.isEmpty())
-        config::base().setValue("graphics.label_font_family", _vis.labelFont);
+    if (_vstyle.labelFontPt > 0)
+        config::base().setValue("graphics.label_font_pt", _vstyle.labelFontPt);
+
+    if (!_vstyle.labelFont.isEmpty())
+        config::base().setValue("graphics.label_font_family", _vstyle.labelFont);
 }
 
 void MainWindow::applyStyle_AllDocuments()
@@ -9230,7 +9240,7 @@ void MainWindow::applyStyle_AllDocuments()
         if (!doc || !doc->scene)
             continue;
 
-        doc->scene->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
+        doc->scene->setProperty("fillShapeWhenSelected", _vstyle.fillShapeWhenSelected);
 
         apply_LineWidth_ToScene(doc->scene);
         apply_PointSize_ToScene(doc->scene);
@@ -9249,7 +9259,7 @@ void MainWindow::applyStyle_AllDocuments()
     }
     if (_scene)
     {
-        _scene->setProperty("fillShapeWhenSelected", _vis.fillShapeWhenSelected);
+        _scene->setProperty("fillShapeWhenSelected", _vstyle.fillShapeWhenSelected);
 
         apply_LineWidth_ToScene(_scene);
         apply_PointSize_ToScene(_scene);
@@ -9268,7 +9278,7 @@ void MainWindow::applyStyle_AllDocuments()
     }
 }
 
-void MainWindow::forEachScene(std::function<void(QGraphicsScene*)> fn)
+void MainWindow::forEachScene(std::function<void(QGraphicsScene*)> sceneHandler)
 {
     for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
     {
@@ -9276,39 +9286,39 @@ void MainWindow::forEachScene(std::function<void(QGraphicsScene*)> fn)
         if (!doc) continue;
         auto *sc = doc->scene;
         if (!sc) continue;
-        fn(sc);
+        sceneHandler(sc);
     }
 }
 
-void MainWindow::apply_LineWidth_ToScene(QGraphicsScene* sc)
+void MainWindow::apply_LineWidth_ToScene(QGraphicsScene* scene)
 {
-    if (!sc)
+    if (!scene)
     {
         forEachScene([this](QGraphicsScene* scene){
-            for (auto *it : scene->items()) apply_LineWidth_ToItem(it);
+            for (auto *item : scene->items()) apply_LineWidth_ToItem(item);
             scene->update();
         });
         return;
     }
-    for (auto *it : sc->items()) apply_LineWidth_ToItem(it);
-    sc->update();
+    for (auto *it : scene->items()) apply_LineWidth_ToItem(it);
+    scene->update();
 }
 
-void MainWindow::apply_PointSize_ToScene(QGraphicsScene* sc)
+void MainWindow::apply_PointSize_ToScene(QGraphicsScene* scene)
 {
-    if (!sc)
+    if (!scene)
     {
         forEachScene([this](QGraphicsScene* scene){
-            for (auto *it : scene->items()) apply_PointSize_ToItem(it);
+            for (auto *item : scene->items()) apply_PointSize_ToItem(item);
             scene->update();
         });
         return;
     }
-    for (auto *it : sc->items()) apply_PointSize_ToItem(it);
-    sc->update();
+    for (auto *it : scene->items()) apply_PointSize_ToItem(it);
+    scene->update();
 }
 
-void MainWindow::apply_NumberSize_ToScene(QGraphicsScene* sc)
+void MainWindow::apply_NumberSize_ToScene(QGraphicsScene* scene)
 {
     auto applyForScene = [this](QGraphicsScene* scene)
     {
@@ -9319,7 +9329,7 @@ void MainWindow::apply_NumberSize_ToScene(QGraphicsScene* sc)
             apply_NumberSize_ToItem(it);
         scene->update();
     };
-    if (!sc)
+    if (!scene)
     {
         forEachScene([&](QGraphicsScene* scene){
             applyForScene(scene);
@@ -9327,90 +9337,88 @@ void MainWindow::apply_NumberSize_ToScene(QGraphicsScene* sc)
         return;
     }
 
-    applyForScene(sc);
+    applyForScene(scene);
 }
 
-void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
+void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* item)
 {
-    if (!it) return;
-    const auto w = _vis.lineWidth;
+    if (!item)
+        return;
 
-    if (auto r = dynamic_cast<qgraph::Rectangle*>(it))
+    const auto w = _vstyle.lineWidth;
+
+    if (auto r = dynamic_cast<qgraph::Rectangle*>(item))
     {
         QPen p=r->pen();
         p.setWidthF(w);
-        //p.setColor(_vis.rectangleLineColor);
         p.setCosmetic(true);
 
         const QString cls = r->data(0).toString();
         const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vis.rectangleLineColor);
+        p.setColor(cc.isValid() ? cc : _vstyle.rectangleLineColor);
 
         r->setPen(p);
         return;
     }
-    if (auto c = dynamic_cast<qgraph::Circle*>(it))
+    if (auto c = dynamic_cast<qgraph::Circle*>(item))
     {
         QPen p=c->pen();
         p.setWidthF(w);
-        //p.setColor(_vis.circleLineColor);
         p.setCosmetic(true);
 
         const QString cls = c->data(0).toString();
         const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vis.circleLineColor);
+        p.setColor(cc.isValid() ? cc : _vstyle.circleLineColor);
 
         c->setPen(p);
         c->applyLineStyle(w);
-        c->setGlobalSelectionRectVisible(_vis.showSelectionFrame);
+        c->setGlobalSelectionRectVisible(_vstyle.showSelectionFrame);
         return;
     }
-    if (auto pl= dynamic_cast<qgraph::Polyline*>(it))
+    if (auto pl= dynamic_cast<qgraph::Polyline*>(item))
     {
         QPen p=pl->pen();
         p.setWidthF(w);
-        //p.setColor(_vis.polylineLineColor);
         p.setCosmetic(true);
 
         const QString cls = pl->data(0).toString();
         const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vis.polylineLineColor);
+        p.setColor(cc.isValid() ? cc : _vstyle.polylineLineColor);
 
         pl->setPen(p);
-        pl->setGlobalSelectionRectVisible(_vis.showSelectionFrame);
+        pl->setGlobalSelectionRectVisible(_vstyle.showSelectionFrame);
         return;
     }
-    if (auto l = dynamic_cast<qgraph::Line*>(it))
+    if (auto l = dynamic_cast<qgraph::Line*>(item))
     {
         QPen p = l->pen();
-        p.setWidthF(_vis.lineWidth);
-        //p.setColor(_vis.lineLineColor);
+        p.setWidthF(_vstyle.lineWidth);
         p.setCosmetic(true);
 
         const QString cls = l->data(0).toString();
         const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vis.lineLineColor);
+        p.setColor(cc.isValid() ? cc : _vstyle.lineLineColor);
 
         l->setPen(p);
-        l->setGlobalSelectionRectVisible(_vis.showSelectionFrame);
+        l->setGlobalSelectionRectVisible(_vstyle.showSelectionFrame);
         return;
     }
-    if (auto pnt = dynamic_cast<qgraph::Point*>(it))
+    if (auto pnt = dynamic_cast<qgraph::Point*>(item))
     {
         QPen p = pnt->pen();
-        p.setWidthF(_vis.pointOutlineWidth); // Отдельная толщина для точки
+        p.setWidthF(_vstyle.pointOutlineWidth); // Отдельная толщина для точки
         p.setCosmetic(true);
 
         const QString cls = pnt->data(0).toString();
         const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vis.pointOutlineWidth);
+        p.setColor(cc.isValid() ? cc : _vstyle.pointOutlineWidth);
 
         pnt->setPen(p);
         return;
     }
 
     // Базовые Qt‑элементы
-    if (auto l = qgraphicsitem_cast<QGraphicsLineItem*>(it))
+    if (auto l = qgraphicsitem_cast<QGraphicsLineItem*>(item))
     {
         QPen p=l->pen();
         p.setWidthF(w);
@@ -9419,7 +9427,7 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
         return;
     }
 
-    if (auto pth=qgraphicsitem_cast<QGraphicsPathItem*>(it))
+    if (auto pth=qgraphicsitem_cast<QGraphicsPathItem*>(item))
     {
         QPen p=pth->pen();
         p.setWidthF(w);
@@ -9427,7 +9435,7 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
         pth->setPen(p);
         return;
     }
-    if (auto el = qgraphicsitem_cast<QGraphicsEllipseItem*>(it))
+    if (auto el = qgraphicsitem_cast<QGraphicsEllipseItem*>(item))
     {
         QPen p=el->pen();
         p.setWidthF(w);
@@ -9435,7 +9443,7 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
         el->setPen(p);
         return;
     }
-    if (auto rc = qgraphicsitem_cast<QGraphicsRectItem*>(it))
+    if (auto rc = qgraphicsitem_cast<QGraphicsRectItem*>(item))
     {
         QPen p=rc->pen();
         p.setWidthF(w);
@@ -9445,49 +9453,52 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* it)
     }
 }
 
-void MainWindow::apply_PointSize_ToItem(QGraphicsItem* it)
+void MainWindow::apply_PointSize_ToItem(QGraphicsItem* item)
 {
-    if (!it) return;
+    if (!item)
+        return;
+
     // Ручки обычно лежат детьми нужной фигуры
-    for (QGraphicsItem* ch : it->childItems())
+    for (QGraphicsItem* ch : item->childItems())
     {
         if (auto h = dynamic_cast<qgraph::DragCircle*>(ch))
         {
-            const bool isPoint = (dynamic_cast<qgraph::Point*>(it) != nullptr);
+            const bool isPoint = (dynamic_cast<qgraph::Point*>(item) != nullptr);
 
             // Размер узла для Point должен следовать размеру точки
-            const qreal pointHandleSize = std::max<qreal>(_vis.pointSize, 4.0);
+            const qreal pointHandleSize = std::max<qreal>(_vstyle.pointSize, 4.0);
 
-            h->setBaseStyle(_vis.handleColor, isPoint ? pointHandleSize : _vis.handleSize);
+            h->setBaseStyle(_vstyle.handleColor, isPoint ? pointHandleSize : _vstyle.handleSize);
             h->setInteractionRadius(_ghostPickRadius);
-            h->setSelectedHandleColor(_vis.selectedHandleColor);
+            h->setSelectedHandleColor(_vstyle.selectedHandleColor);
             h->restoreBaseStyle();
             qgraph::DragCircle::rememberCurrentAsBase(h);
         }
     }
 }
 
-void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* it)
+void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* item)
 {
-    if (!it) return;
+    if (!item)
+        return;
 
     // Для классов фигур
-    if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(it))
+    if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
     {
-        rectangle->setGlobalPointNumbersVisible(_vis.showNumbers);
-        rectangle->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
+        rectangle->setGlobalPointNumbersVisible(_vstyle.showNumbers);
+        rectangle->applyNumberStyle(_vstyle.numberFontPt, _vstyle.numberColor, _vstyle.numberBgColor);
         return;
     }
-    if (auto* polyline = dynamic_cast<qgraph::Polyline*>(it))
+    if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
     {
-        polyline->setGlobalPointNumbersVisible(_vis.showNumbers);
-        polyline->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
+        polyline->setGlobalPointNumbersVisible(_vstyle.showNumbers);
+        polyline->applyNumberStyle(_vstyle.numberFontPt, _vstyle.numberColor, _vstyle.numberBgColor);
         return;
     }
-    if (auto* line = dynamic_cast<qgraph::Line*>(it))
+    if (auto* line = dynamic_cast<qgraph::Line*>(item))
     {
-        line->setGlobalPointNumbersVisible(_vis.showNumbers);
-        line->applyNumberStyle(_vis.numberFontPt, _vis.numberColor, _vis.numberBgColor);
+        line->setGlobalPointNumbersVisible(_vstyle.showNumbers);
+        line->applyNumberStyle(_vstyle.numberFontPt, _vstyle.numberColor, _vstyle.numberBgColor);
         return;
     }
 
@@ -9495,7 +9506,7 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* it)
     QVector<QGraphicsSimpleTextItem*> texts;
     QVector<QGraphicsRectItem*> backgrounds;
 
-    for (QGraphicsItem* ch : it->childItems())
+    for (QGraphicsItem* ch : item->childItems())
     {
         if (auto t = dynamic_cast<QGraphicsSimpleTextItem*>(ch))
         {
@@ -9521,7 +9532,7 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* it)
         if (!t) continue;
 
         QFont f = t->font();
-        f.setPointSizeF(_vis.numberFontPt);
+        f.setPointSizeF(_vstyle.numberFontPt);
         t->setFont(f);
         t->setBrush(Qt::white);
         t->setPen(Qt::NoPen);
@@ -9562,20 +9573,20 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* it)
     }
 }
 
-void MainWindow::apply_PointStyle_ToItem(QGraphicsItem* it)
+void MainWindow::apply_PointStyle_ToItem(QGraphicsItem* item)
 {
-    if (!it)
+    if (!item)
         return;
 
-    if (auto* p = dynamic_cast<qgraph::Point*>(it))
+    if (auto* p = dynamic_cast<qgraph::Point*>(item))
     {
 
         const QString cls = p->data(0).toString();
         const QColor cc = classColorFor(cls);
-        const QColor color = cc.isValid() ? cc : _vis.pointColor;
+        const QColor color = cc.isValid() ? cc : _vstyle.pointColor;
 
-        const qreal diam = std::max(2, _vis.pointSize);
-        p->setDotStyle(color, diam, _vis.handleSize);
+        const qreal diam = std::max(2, _vstyle.pointSize);
+        p->setDotStyle(color, diam, _vstyle.handleSize);
     }
 }
 
@@ -9587,11 +9598,11 @@ void MainWindow::applyLabelFontToUi()
     // Берем текущий шрифт правой зоны как базовый
     QFont f = ui->splitter->font();
 
-    if (!_vis.labelFont.isEmpty())
-        f.setFamily(_vis.labelFont);
+    if (!_vstyle.labelFont.isEmpty())
+        f.setFamily(_vstyle.labelFont);
 
-    if (_vis.labelFontPt > 0)
-        f.setPointSize(_vis.labelFontPt);
+    if (_vstyle.labelFontPt > 0)
+        f.setPointSize(_vstyle.labelFontPt);
 
     // Применяем ко всей правой панели
     ui->splitter->setFont(f);
@@ -9618,37 +9629,32 @@ void MainWindow::updateLineColorsForScene(QGraphicsScene* scene)
         if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
         {
             QPen pen = rect->pen();
-            //pen.setColor(_vis.rectangleLineColor);
-            pen.setColor(hasClassColor ? classC : _vis.rectangleLineColor);
+            pen.setColor(hasClassColor ? classC : _vstyle.rectangleLineColor);
             rect->setPen(pen);
         }
         else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
         {
             QPen pen = circle->pen();
-            //pen.setColor(_vis.circleLineColor);
-            pen.setColor(hasClassColor ? classC : _vis.circleLineColor);
+            pen.setColor(hasClassColor ? classC : _vstyle.circleLineColor);
             circle->setPen(pen);
         }
         else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             QPen pen = polyline->pen();
-            //pen.setColor(_vis.polylineLineColor);
-            pen.setColor(hasClassColor ? classC : _vis.polylineLineColor);
+            pen.setColor(hasClassColor ? classC : _vstyle.polylineLineColor);
             polyline->setPen(pen);
         }
         else if (auto* line = dynamic_cast<qgraph::Line*>(item))
         {
             QPen pen = line->pen();
-            //pen.setColor(_vis.lineLineColor);
-            pen.setColor(hasClassColor ? classC : _vis.lineLineColor);
+            pen.setColor(hasClassColor ? classC : _vstyle.lineLineColor);
             line->setPen(pen);
         }
         else if (auto* point = dynamic_cast<qgraph::Point*>(item))
         {
             QPen pen = point->pen();
-            //pen.setColor(_vis.pointColor);
-            pen.setColor(hasClassColor ? classC : _vis.pointColor);
-            pen.setWidthF(_vis.pointOutlineWidth);
+            pen.setColor(hasClassColor ? classC : _vstyle.pointColor);
+            pen.setWidthF(_vstyle.pointOutlineWidth);
             pen.setCosmetic(true);
             point->setPen(pen);
         }
@@ -9656,28 +9662,28 @@ void MainWindow::updateLineColorsForScene(QGraphicsScene* scene)
     scene->update();
 }
 
-void MainWindow::applyZoom(qreal z)
+void MainWindow::applyZoom(qreal zoomFactor)
 {
     if (!ui->graphView) return;
 
     // Ограничим диапазон
-    if (z < _kMinZoom)
-        z = _kMinZoom;
-    if (z > _kMaxZoom)
-        z = _kMaxZoom;
+    if (zoomFactor < _kMinZoom)
+        zoomFactor = _kMinZoom;
+    if (zoomFactor > _kMaxZoom)
+        zoomFactor = _kMaxZoom;
 
     // Сохраним текущий центр сцены, чтобы картинка не «уезжала»
     const QPointF centerScene =
         ui->graphView->mapToScene(ui->graphView->viewport()->rect().center());
 
     QTransform t;
-    t.scale(z, z);
+    t.scale(zoomFactor, zoomFactor);
     ui->graphView->setTransform(t);
 
     // Вернем центр
     ui->graphView->centerOn(centerScene);
 
-    _m_zoom = z;
+    _m_zoom = zoomFactor;
 
     if (auto doc = currentDocument())
     {
@@ -9730,96 +9736,98 @@ void MainWindow::applyFinishLine()
 
 QUndoStack* MainWindow::activeUndoStack() const
 {
-    if (!_undoGroup) return nullptr;
-    if (QUndoStack* st = _undoGroup->activeStack()) return st;
+    if (!_undoGroup)
+        return nullptr;
+
+    if (QUndoStack* stack = _undoGroup->activeStack())
+        return stack;
 
     // Запасной вариант - стек текущего документа
-    if (auto d = currentDocument())
-        return d->_undoStack ? d->_undoStack.get() : nullptr;
+    if (auto doc = currentDocument())
+        return doc->_undoStack ? doc->_undoStack.get() : nullptr;
 
     return nullptr;
 }
 
-ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* gi) const
+ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* graphicsItem) const
 {
-    ShapeBackup b{};
-    if (!gi)
-        return b;
+    ShapeBackup backup{};
 
-    b.uid = gi->data(_roleUid).toULongLong();
-    if (b.uid == 0)
-        b.uid = ensureUid(gi);
+    if (!graphicsItem)
+        return backup;
 
-    b.shapeNumber = ensureShapeNumber(gi);
-    b.className = gi->data(0).toString();
-    //b.z = gi->zValue();
-    b.z = originalZValueForItem(gi);
-    b.visible = gi->isVisible();
+    backup.uid = graphicsItem->data(_roleUid).toULongLong();
+    if (backup.uid == 0)
+        backup.uid = ensureUid(graphicsItem);
 
-    if (auto* rect = dynamic_cast<qgraph::Rectangle*>(gi))
+    backup.shapeNumber = ensureShapeNumber(graphicsItem);
+    backup.className = graphicsItem->data(0).toString();
+    backup.zValue = originalZValueForItem(graphicsItem);
+    backup.visible = graphicsItem->isVisible();
+
+    if (auto* rect = dynamic_cast<qgraph::Rectangle*>(graphicsItem))
     {
-        b.kind = ShapeKind::Rectangle;
-        //b.rect = rect->sceneBoundingRect();
-        b.rect = rect->mapRectToScene(rect->rect());
+        backup.kind = ShapeKind::Rectangle;
+        backup.rect = rect->mapRectToScene(rect->rect());
     }
-    else if (auto* c = dynamic_cast<qgraph::Circle*>(gi))
+    else if (auto* circle = dynamic_cast<qgraph::Circle*>(graphicsItem))
     {
-        b.kind = ShapeKind::Circle;
-        b.circleCenter = c->center();
-        b.circleRadius = c->realRadius();
+        backup.kind = ShapeKind::Circle;
+        backup.circleCenter = circle->center();
+        backup.circleRadius = circle->realRadius();
     }
-    else if (auto* pl = dynamic_cast<qgraph::Polyline*>(gi))
+    else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(graphicsItem))
     {
-        b.kind  = ShapeKind::Polyline;
-        b.points = pl->points();
-        b.closed = pl->isClosed();
+        backup.kind  = ShapeKind::Polyline;
+        backup.points = polyline->points();
+        backup.closed = polyline->isClosed();
     }
-    else if (auto* ln = dynamic_cast<qgraph::Line*>(gi))
+    else if (auto* line = dynamic_cast<qgraph::Line*>(graphicsItem))
     {
-        b.kind  = ShapeKind::Line;
-        b.points = ln->points();
-        b.closed = ln->isClosed();
-        b.numberingFromLast = ln->isNumberingFromLast();
+        backup.kind  = ShapeKind::Line;
+        backup.points = line->points();
+        backup.closed = line->isClosed();
+        backup.numberingFromLast = line->isNumberingFromLast();
     }
-    else if (auto* p = dynamic_cast<qgraph::Point*>(gi))
+    else if (auto* point = dynamic_cast<qgraph::Point*>(graphicsItem))
     {
-        b.kind = ShapeKind::Point;
-        b.pointCenter = p->center();
+        backup.kind = ShapeKind::Point;
+        backup.pointCenter = point->center();
     }
 
-    b.listRow = -1;
-    if (ui && ui->polygonList && gi)
+    backup.listRow = -1;
+    if (ui && ui->polygonList && graphicsItem)
     {
         for (int i = 0; i < ui->polygonList->count(); ++i)
         {
-            QListWidgetItem* li = ui->polygonList->item(i);
-            if (!li)
+            QListWidgetItem* listWidget = ui->polygonList->item(i);
+            if (!listWidget)
                 continue;
 
-            if (li->data(Qt::UserRole).value<QGraphicsItem*>() == gi)
+            if (listWidget->data(Qt::UserRole).value<QGraphicsItem*>() == graphicsItem)
             {
-                b.listRow = i;
+                backup.listRow = i;
                 break;
             }
         }
     }
-    b.sceneRow = -1;
-    if (ui && ui->polygonList && gi)
+    backup.sceneRow = -1;
+    if (ui && ui->polygonList && graphicsItem)
     {
         for (int i = 0; i < ui->polygonList->count(); ++i)
         {
-            QListWidgetItem* li = ui->polygonList->item(i);
-            if (!li)
+            QListWidgetItem* listWidget = ui->polygonList->item(i);
+            if (!listWidget)
                 continue;
 
-            if (li->data(Qt::UserRole).value<QGraphicsItem*>() == gi)
+            if (listWidget->data(Qt::UserRole).value<QGraphicsItem*>() == graphicsItem)
             {
-                b.sceneRow = i;
+                backup.sceneRow = i;
                 break;
             }
         }
     }
-    return b;
+    return backup;
 }
 
 QVector<ShapeBackup> MainWindow::collectBackupsForItems(const QList<QListWidgetItem*>& listItems) const
@@ -9841,150 +9849,151 @@ QVector<ShapeBackup> MainWindow::collectBackupsForItems(const QList<QListWidgetI
     return out;
 }
 
-QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
+QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& backup)
 {
     QGraphicsItem* created = nullptr;
 
-    auto applyBackupUid = [this](QGraphicsItem* it, qulonglong uid)
+    auto applyBackupUid = [this](QGraphicsItem* item, qulonglong uid)
     {
-        if (!it) return;
+        if (!item)
+            return;
+
         if (uid != 0)
         {
-            it->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
+            item->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
             if (uid >= _uidCounter)
                 _uidCounter = uid + 1;
         }
         else
-        {
-            ensureUid(it);
-        }
+            ensureUid(item);
     };
-    auto applyBackupNumber = [this](QGraphicsItem* it, int number)
+    auto applyBackupNumber = [this](QGraphicsItem* item, int number)
     {
-        if (!it)
+        if (!item)
             return;
 
         if (number >= 0)
-            it->setData(_roleShapeNumber, number);
+            item->setData(_roleShapeNumber, number);
         else
-            ensureShapeNumber(it);
+            ensureShapeNumber(item);
     };
 
-    switch (b.kind)
+    switch (backup.kind)
     {
         case ShapeKind::Rectangle:
         {
             auto* rect = new qgraph::Rectangle(_scene);
-            //ensureUid(rect);
-            applyBackupUid(rect, b.uid);
-            rect->setRealSceneRect(b.rect);
+
+            applyBackupUid(rect, backup.uid);
+            rect->setRealSceneRect(backup.rect);
             rect->updatePointNumbers();
             apply_LineWidth_ToItem(rect);
             apply_PointSize_ToItem(rect);
             apply_NumberSize_ToItem(rect);
-            rect->setData(0, b.className);
-            applyClassColorToItem(rect, b.className);
-            applyBackupNumber(rect, b.shapeNumber);
-            rect->setZValue(b.z);
-            rect->setVisible(b.visible);
-            linkSceneItemToList(rect, b.listRow);
+            rect->setData(0, backup.className);
+            applyClassColorToItem(rect, backup.className);
+            applyBackupNumber(rect, backup.shapeNumber);
+            rect->setZValue(backup.zValue);
+            rect->setVisible(backup.visible);
+            linkSceneItemToList(rect, backup.listRow);
             created = rect;
             break;
         }
         case ShapeKind::Circle:
         {
-            auto* c = new qgraph::Circle(_scene, b.circleCenter);
-            //ensureUid(c);
-            applyBackupUid(c, b.uid);
-            c->setRealRadius(b.circleRadius);
-            apply_LineWidth_ToItem(c);
-            apply_PointSize_ToItem(c);
-            c->setData(0, b.className);
-            applyClassColorToItem(c, b.className);
-            applyBackupNumber(c, b.shapeNumber);
-            c->setZValue(b.z);
-            c->setVisible(b.visible);
-            c->updateHandlePosition();
-            linkSceneItemToList(c, b.listRow);
-            created = c;
+            auto* circle = new qgraph::Circle(_scene, backup.circleCenter);
+
+            applyBackupUid(circle, backup.uid);
+            circle->setRealRadius(backup.circleRadius);
+            apply_LineWidth_ToItem(circle);
+            apply_PointSize_ToItem(circle);
+            circle->setData(0, backup.className);
+            applyClassColorToItem(circle, backup.className);
+            applyBackupNumber(circle, backup.shapeNumber);
+            circle->setZValue(backup.zValue);
+            circle->setVisible(backup.visible);
+            circle->updateHandlePosition();
+            linkSceneItemToList(circle, backup.listRow);
+            created = circle;
             break;
         }
         case ShapeKind::Polyline:
         {
-            if (b.points.isEmpty())
+            if (backup.points.isEmpty())
                 break;
-            auto* pl = new qgraph::Polyline(_scene, b.points.front());
-            //ensureUid(pl);
-            applyBackupUid(pl, b.uid);
 
-            pl->beginBulkLoad();
-            for (int i = 1; i < b.points.size(); ++i)
-                pl->addPoint(b.points[i], _scene);
-            pl->endBulkLoad();
+            auto* polyline = new qgraph::Polyline(_scene, backup.points.front());
 
-            if (b.closed)
-                pl->closePolyline();
+            applyBackupUid(polyline, backup.uid);
+            polyline->beginBulkLoad();
+            for (int i = 1; i < backup.points.size(); ++i)
+                polyline->addPoint(backup.points[i], _scene);
 
-            apply_LineWidth_ToItem(pl);
-            apply_PointSize_ToItem(pl);
-            apply_NumberSize_ToItem(pl);
+            polyline->endBulkLoad();
 
-            pl->setData(0, b.className);
-            applyClassColorToItem(pl, b.className);
-            applyBackupNumber(pl, b.shapeNumber);
-            pl->setZValue(b.z);
-            pl->setVisible(b.visible);
-            pl->updateHandlePosition();
-            linkSceneItemToList(pl, b.listRow);
-            created = pl;
+            if (backup.closed)
+                polyline->closePolyline();
+
+            apply_LineWidth_ToItem(polyline);
+            apply_PointSize_ToItem(polyline);
+            apply_NumberSize_ToItem(polyline);
+
+            polyline->setData(0, backup.className);
+            applyClassColorToItem(polyline, backup.className);
+            applyBackupNumber(polyline, backup.shapeNumber);
+            polyline->setZValue(backup.zValue);
+            polyline->setVisible(backup.visible);
+            polyline->updateHandlePosition();
+            linkSceneItemToList(polyline, backup.listRow);
+            created = polyline;
             break;
         }
         case ShapeKind::Line:
         {
-            if (b.points.isEmpty())
+            if (backup.points.isEmpty())
                 break;
-            auto* ln = new qgraph::Line(_scene, b.points.front());
-            //ensureUid(ln);
-            applyBackupUid(ln, b.uid);
+            auto* line = new qgraph::Line(_scene, backup.points.front());
+            applyBackupUid(line, backup.uid);
 
-            ln->beginBulkLoad();
-            for (int i = 1; i < b.points.size(); ++i)
-                ln->addPoint(b.points[i], _scene);
-            ln->endBulkLoad();
+            line->beginBulkLoad();
+            for (int i = 1; i < backup.points.size(); ++i)
+                line->addPoint(backup.points[i], _scene);
 
-            if (b.closed)
-                ln->closeLine();
+            line->endBulkLoad();
 
-            apply_LineWidth_ToItem(ln);
-            apply_PointSize_ToItem(ln);
-            apply_NumberSize_ToItem(ln);
+            if (backup.closed)
+                line->closeLine();
 
-            ln->setData(0, b.className);
-            applyClassColorToItem(ln, b.className);
-            applyBackupNumber(ln, b.shapeNumber);
-            ln->setZValue(b.z);
-            ln->setVisible(b.visible);
-            ln->updateHandlePosition();
-            linkSceneItemToList(ln, b.listRow);
-            created = ln;
+            apply_LineWidth_ToItem(line);
+            apply_PointSize_ToItem(line);
+            apply_NumberSize_ToItem(line);
+
+            line->setData(0, backup.className);
+            applyClassColorToItem(line, backup.className);
+            applyBackupNumber(line, backup.shapeNumber);
+            line->setZValue(backup.zValue);
+            line->setVisible(backup.visible);
+            line->updateHandlePosition();
+            linkSceneItemToList(line, backup.listRow);
+            created = line;
             break;
         }
         case ShapeKind::Point:
         {
-            auto* pt = new qgraph::Point(_scene);
-            //ensureUid(pt);
-            applyBackupUid(pt, b.uid);
-            apply_PointSize_ToItem(pt);
-            apply_NumberSize_ToItem(pt);
-            apply_PointStyle_ToItem(pt);
-            pt->setCenter(b.pointCenter);
-            pt->setData(0, b.className);
-            applyClassColorToItem(pt, b.className);
-            applyBackupNumber(pt, b.shapeNumber);
-            pt->setZValue(b.z);
-            pt->setVisible(b.visible);
-            linkSceneItemToList(pt, b.listRow);
-            created = pt;
+            auto* point = new qgraph::Point(_scene);
+
+            applyBackupUid(point, backup.uid);
+            apply_PointSize_ToItem(point);
+            apply_NumberSize_ToItem(point);
+            apply_PointStyle_ToItem(point);
+            point->setCenter(backup.pointCenter);
+            point->setData(0, backup.className);
+            applyClassColorToItem(point, backup.className);
+            applyBackupNumber(point, backup.shapeNumber);
+            point->setZValue(backup.zValue);
+            point->setVisible(backup.visible);
+            linkSceneItemToList(point, backup.listRow);
+            created = point;
             break;
         }
     }
@@ -9993,103 +10002,104 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& b)
         created->setFocus();
 
     if (created)
-        created->setData(_roleUid, QVariant::fromValue<qulonglong>(b.uid));
+        created->setData(_roleUid, QVariant::fromValue<qulonglong>(backup.uid));
 
     return created;
 }
 
-void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
+void MainWindow::applyBackupToExisting(QGraphicsItem* item, const ShapeBackup& backup)
 {
-    if (!it) return;
+    if (!item)
+        return;
 
-    if (b.shapeNumber >= 0)
-        it->setData(_roleShapeNumber, b.shapeNumber);
+    if (backup.shapeNumber >= 0)
+        item->setData(_roleShapeNumber, backup.shapeNumber);
 
-    switch (b.kind)
+    switch (backup.kind)
     {
         case ShapeKind::Rectangle:
-            if (auto* r = qgraphicsitem_cast<qgraph::Rectangle*>(it))
+            if (auto* rect = qgraphicsitem_cast<qgraph::Rectangle*>(item))
             {
-                r->setRealSceneRect(b.rect);
-                r->updatePointNumbers();
-                apply_LineWidth_ToItem(r);
-                apply_PointSize_ToItem(r);
-                apply_NumberSize_ToItem(r);
-                r->setData(0, b.className);
-                applyClassColorToItem(r, b.className);
-                r->setZValue(b.z);
-                r->setVisible(b.visible);
-                r->updateHandlePosition();
+                rect->setRealSceneRect(backup.rect);
+                rect->updatePointNumbers();
+                apply_LineWidth_ToItem(rect);
+                apply_PointSize_ToItem(rect);
+                apply_NumberSize_ToItem(rect);
+                rect->setData(0, backup.className);
+                applyClassColorToItem(rect, backup.className);
+                rect->setZValue(backup.zValue);
+                rect->setVisible(backup.visible);
+                rect->updateHandlePosition();
             }
             break;
 
         case ShapeKind::Circle:
-            if (auto* c = qgraphicsitem_cast<qgraph::Circle*>(it))
+            if (auto* circle = qgraphicsitem_cast<qgraph::Circle*>(item))
             {
-                c->setRealRadius(b.circleRadius);
-                apply_LineWidth_ToItem(c);
-                apply_PointSize_ToItem(c);
-                c->setData(0, b.className);
-                applyClassColorToItem(c, b.className);
-                c->setZValue(b.z);
-                c->setVisible(b.visible);
+                circle->setRealRadius(backup.circleRadius);
+                apply_LineWidth_ToItem(circle);
+                apply_PointSize_ToItem(circle);
+                circle->setData(0, backup.className);
+                applyClassColorToItem(circle, backup.className);
+                circle->setZValue(backup.zValue);
+                circle->setVisible(backup.visible);
 
-                const QPointF cur = c->sceneBoundingRect().center();
-                const QPointF dst = QPointF(b.circleCenter);
+                const QPointF cur = circle->sceneBoundingRect().center();
+                const QPointF dst = QPointF(backup.circleCenter);
                 const QPointF d = dst - cur;
                 if (!qFuzzyIsNull(d.x()) || !qFuzzyIsNull(d.y()))
-                    c->moveBy(d.x(), d.y());
+                    circle->moveBy(d.x(), d.y());
 
-                c->updateHandlePosition();
+                circle->updateHandlePosition();
             }
             break;
 
         case ShapeKind::Polyline:
         {
-            if (auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(it))
+            if (auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(item))
             {
                 // Полная замена узлов из снапшота
-                pl->replaceScenePoints(b.points, b.closed);
-                pl->setData(0, b.className);
-                pl->setVisible(b.visible);
-                pl->setZValue(b.z);
-                apply_LineWidth_ToItem(pl);
-                apply_PointSize_ToItem(pl);
-                apply_NumberSize_ToItem(pl);
-                applyClassColorToItem(pl, b.className);
+                polyline->replaceScenePoints(backup.points, backup.closed);
+                polyline->setData(0, backup.className);
+                polyline->setVisible(backup.visible);
+                polyline->setZValue(backup.zValue);
+                apply_LineWidth_ToItem(polyline);
+                apply_PointSize_ToItem(polyline);
+                apply_NumberSize_ToItem(polyline);
+                applyClassColorToItem(polyline, backup.className);
             }
             break;
         }
 
         case ShapeKind::Line:
         {
-            if (auto* ln = qgraphicsitem_cast<qgraph::Line*>(it))
+            if (auto* line = qgraphicsitem_cast<qgraph::Line*>(item))
             {
 
-                ln->replaceScenePoints(b.points, b.closed);
-                ln->setNumberingFromLast(b.numberingFromLast);
-                ln->setData(0, b.className);
-                ln->setVisible(b.visible);
-                ln->setZValue(b.z);
-                apply_LineWidth_ToItem(ln);
-                apply_PointSize_ToItem(ln);
-                apply_NumberSize_ToItem(ln);
-                applyClassColorToItem(ln, b.className);
+                line->replaceScenePoints(backup.points, backup.closed);
+                line->setNumberingFromLast(backup.numberingFromLast);
+                line->setData(0, backup.className);
+                line->setVisible(backup.visible);
+                line->setZValue(backup.zValue);
+                apply_LineWidth_ToItem(line);
+                apply_PointSize_ToItem(line);
+                apply_NumberSize_ToItem(line);
+                applyClassColorToItem(line, backup.className);
             }
             break;
         }
         case ShapeKind::Point:
-            if (auto* pt = qgraphicsitem_cast<qgraph::Point*>(it))
+            if (auto* point = qgraphicsitem_cast<qgraph::Point*>(item))
             {
-                apply_PointStyle_ToItem(pt);
-                apply_PointSize_ToItem(pt);
-                apply_NumberSize_ToItem(pt);
-                pt->setCenter(b.pointCenter);
-                pt->setData(0, b.className);
-                applyClassColorToItem(pt, b.className);
-                pt->setZValue(b.z);
-                pt->setVisible(b.visible);
-                pt->updateHandlePosition();
+                apply_PointStyle_ToItem(point);
+                apply_PointSize_ToItem(point);
+                apply_NumberSize_ToItem(point);
+                point->setCenter(backup.pointCenter);
+                point->setData(0, backup.className);
+                applyClassColorToItem(point, backup.className);
+                point->setZValue(backup.zValue);
+                point->setVisible(backup.visible);
+                point->updateHandlePosition();
             }
             break;
     }
@@ -10104,7 +10114,7 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
             if (!li)
                 continue;
 
-            if (li->data(Qt::UserRole).value<QGraphicsItem*>() == it)
+            if (li->data(Qt::UserRole).value<QGraphicsItem*>() == item)
             {
                 currentRow = i;
                 currentItem = li;
@@ -10112,13 +10122,13 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* it, const ShapeBackup& b)
             }
         }
 
-        if (!currentItem && !b.className.isEmpty())
+        if (!currentItem && !backup.className.isEmpty())
         {
-            linkSceneItemToList(it, b.listRow);
+            linkSceneItemToList(item, backup.listRow);
         }
         else if (currentItem)
         {
-            const int targetRow = (b.listRow < 0) ? currentRow : b.listRow;
+            const int targetRow = (backup.listRow < 0) ? currentRow : backup.listRow;
             if (targetRow != currentRow &&
                 targetRow >= 0 &&
                 targetRow < ui->polygonList->count())
@@ -10137,13 +10147,13 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
 {
     struct Payload
     {
-        ShapeBackup b;
+        ShapeBackup backup;
         qulonglong  uid = 0;
         bool skipFirstRedo = false;
     };
 
     auto payload = std::make_shared<Payload>();
-    payload->b = backup;
+    payload->backup = backup;
 
     // Берем uid из снапшота или с самого объекта
     qulonglong uid = backup.uid;
@@ -10166,10 +10176,10 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
         {
             payload->skipFirstRedo = false;
 
-            if (auto d = currentDocument())
+            if (auto doc = currentDocument())
             {
-                d->isModified = true;
-                updateFileListDisplay(d->filePath);
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
             }
             return;
         }
@@ -10179,12 +10189,12 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
         if (item)
         {
             // Фигура есть - просто приводим ее к состоянию из снапшота
-            applyBackupToExisting(item, payload->b);
+            applyBackupToExisting(item, payload->backup);
         }
         else
         {
             // Фигуры нет - создаем по снапшоту
-            QGraphicsItem* created = recreateFromBackup(payload->b);
+            QGraphicsItem* created = recreateFromBackup(payload->backup);
             if (created && payload->uid != 0)
             {
                 created->setData(_roleUid,
@@ -10192,10 +10202,10 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
             }
         }
 
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
@@ -10206,34 +10216,34 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
 
         if (QGraphicsItem* item = findItemByUid(payload->uid))
         {
-            if (auto sc = item->scene())
-                sc->removeItem(item);
+            if (auto scene = item->scene())
+                scene->removeItem(item);
             removeListEntryBySceneItem(item);
             clearLinePolylineStateForDeletedItem(item);
             delete item;
         }
 
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
-    if (auto* st = activeUndoStack())
-        st->push(new LambdaCommand(redoFn, undoFn, description));
+    if (auto* stack = activeUndoStack())
+        stack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
 void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString& description)
 {
     struct Payload
     {
-        ShapeBackup  b;
-        qulonglong   uid = 0;
+        ShapeBackup backup;
+        qulonglong  uid = 0;
     };
 
     auto payload = std::make_shared<Payload>();
-    payload->b   = backup;
+    payload->backup = backup;
     payload->uid = backup.uid;
 
     auto redoFn = [this, payload]()
@@ -10246,22 +10256,22 @@ void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString
         if (it)
         {
             // Фигура уже есть
-            applyBackupToExisting(it, payload->b);
+            applyBackupToExisting(it, payload->backup);
         }
         else
         {
             // Фигуры нет, создаем по снапшоту
-            it = recreateFromBackup(payload->b);
+            it = recreateFromBackup(payload->backup);
             if (it && payload->uid != 0)
             {
                 it->setData(_roleUid, QVariant::fromValue<qulonglong>(payload->uid));
             }
         }
 
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
@@ -10270,23 +10280,23 @@ void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString
         if (payload->uid == 0)
             return;
 
-        if (QGraphicsItem* it = findItemByUid(payload->uid))
+        if (QGraphicsItem* item = findItemByUid(payload->uid))
         {
-            _scene->removeItem(it);
-            removeListEntryBySceneItem(it);
-            clearLinePolylineStateForDeletedItem(it);
-            delete it;
+            _scene->removeItem(item);
+            removeListEntryBySceneItem(item);
+            clearLinePolylineStateForDeletedItem(item);
+            delete item;
         }
 
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
-    if (auto* st = activeUndoStack())
-        st->push(new LambdaCommand(redoFn, undoFn, description));
+    if (auto* stack = activeUndoStack())
+        stack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
 void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
@@ -10302,23 +10312,23 @@ void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
         bool skipFirstRedo = false;
     };
 
-    auto p = std::make_shared<Payload>();
-    p->before = before;
-    p->after  = after;
+    auto payload = std::make_shared<Payload>();
+    payload->before = before;
+    payload->after  = after;
 
     qulonglong uid = 0;
     if (item)
         uid = item->data(_roleUid).toULongLong();
     if (uid == 0 && item)
         uid = ensureUid(item);
-    p->uid = uid;
+    payload->uid = uid;
 
     auto apply = [this](qulonglong uid, const ShapeBackup& snap)
     {
-        QGraphicsItem* it = findItemByUid(uid);
-        if (it)
+        QGraphicsItem* item = findItemByUid(uid);
+        if (item)
         {
-            applyBackupToExisting(it, snap);
+            applyBackupToExisting(item, snap);
             return true;
         }
         QGraphicsItem* created = recreateFromBackup(snap);
@@ -10330,28 +10340,28 @@ void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
         return false;
     };
 
-    auto redoFn = [this, p, apply]()
+    auto redoFn = [this, payload, apply]()
     {
-        apply(p->uid, p->after);
-        if (auto d = currentDocument())
+        apply(payload->uid, payload->after);
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
-    auto undoFn = [this, p, apply]()
+    auto undoFn = [this, payload, apply]()
     {
-        apply(p->uid, p->before);
-        if (auto d = currentDocument())
+        apply(payload->uid, payload->before);
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
-    if (auto* st = activeUndoStack())
-        st->push(new LambdaCommand(redoFn, undoFn, description));
+    if (auto* stack = activeUndoStack())
+        stack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
 void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
@@ -10366,9 +10376,9 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
         qulonglong uid = 0;
     };
 
-    auto p = std::make_shared<Payload>();
-    p->before = before;
-    p->after  = after;
+    auto payload = std::make_shared<Payload>();
+    payload->before = before;
+    payload->after = after;
 
     // Сохраняем uid
     qulonglong uid = 0;
@@ -10376,15 +10386,15 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
         uid = item->data(_roleUid).toULongLong();
     if (uid == 0 && item)
         uid = ensureUid(item);
-    p->uid = uid;
+    payload->uid = uid;
 
     // Найти актуальный item по uid; если нет - пересоздать из снапшота
     auto apply = [this](qulonglong uid, const ShapeBackup& snap)
     {
-        QGraphicsItem* it = findItemByUid(uid);
-        if (it)
+        QGraphicsItem* item = findItemByUid(uid);
+        if (item)
         {
-            applyBackupToExisting(it, snap);
+            applyBackupToExisting(item, snap);
             return true;
         }
         // Не нашли - пересоздаем (и привязываем тот же uid)
@@ -10397,28 +10407,28 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
         return false;
     };
 
-    auto redoFn = [this, p, apply]()
+    auto redoFn = [this, payload, apply]()
     {
-        apply(p->uid, p->after);
-        if (auto d = currentDocument())
+        apply(payload->uid, payload->after);
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
-    auto undoFn = [this, p, apply]()
+    auto undoFn = [this, payload, apply]()
     {
-        apply(p->uid, p->before);
-        if (auto d = currentDocument())
+        apply(payload->uid, payload->before);
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
-    if (auto* st = activeUndoStack())
-        st->push(new LambdaCommand(redoFn, undoFn, description));
+    if (auto* stack = activeUndoStack())
+        stack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
 void MainWindow::pushModifyShapeCommand(qulonglong uid,
@@ -10446,29 +10456,29 @@ void MainWindow::pushModifyShapeCommand(qulonglong uid,
     // Если фигуру не нашли - просто no-op, без пересоздания.
     auto applySnap = [this](qulonglong uid, const ShapeBackup& snap)
     {
-        if (QGraphicsItem* it = findItemByUid(uid))
+        if (QGraphicsItem* item = findItemByUid(uid))
         {
-            applyBackupToExisting(it, snap);
+            applyBackupToExisting(item, snap);
         }
     };
 
     auto redoFn = [this, payload, applySnap]()
     {
         applySnap(payload->uid, payload->after);
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
     auto undoFn = [this, payload, applySnap]()
     {
         applySnap(payload->uid, payload->before);
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
@@ -10492,9 +10502,9 @@ void MainWindow::pushMoveImageCommand(const QPointF& before,
         QPointF after;
     };
 
-    auto payload   = std::make_shared<Payload>();
+    auto payload = std::make_shared<Payload>();
     payload->before = before;
-    payload->after  = after;
+    payload->after = after;
 
     auto applyPos = [this](const QPointF& pos)
     {
@@ -10505,20 +10515,20 @@ void MainWindow::pushMoveImageCommand(const QPointF& before,
     auto redoFn = [this, payload, applyPos]()
     {
         applyPos(payload->after);
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
     auto undoFn = [this, payload, applyPos]()
     {
         applyPos(payload->before);
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
@@ -10554,13 +10564,14 @@ void MainWindow::pushReplaceShapeCommand(qulonglong uid,
         if (!uid)
             return;
 
-        if (QGraphicsItem* it = findItemByUid(uid))
+        if (QGraphicsItem* item = findItemByUid(uid))
         {
-            if (auto sc = it->scene())
-                sc->removeItem(it);
-            removeListEntryBySceneItem(it);
-            clearLinePolylineStateForDeletedItem(it);
-            delete it;
+            if (auto sc = item->scene())
+                sc->removeItem(item);
+
+            removeListEntryBySceneItem(item);
+            clearLinePolylineStateForDeletedItem(item);
+            delete item;
         }
 
         QGraphicsItem* created = recreateFromBackup(snap);
@@ -10571,20 +10582,20 @@ void MainWindow::pushReplaceShapeCommand(qulonglong uid,
     auto redoFn = [this, p, replaceBySnap]()
     {
         replaceBySnap(p->uid, p->after);
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
     auto undoFn = [this, p, replaceBySnap]()
     {
         replaceBySnap(p->uid, p->before);
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
@@ -10629,11 +10640,11 @@ void MainWindow::removeListEntryBySceneItem(QGraphicsItem* sceneItem)
     }
 }
 
-QGraphicsItem* MainWindow::sceneItemFromListItem(const QListWidgetItem* it)
+QGraphicsItem* MainWindow::sceneItemFromListItem(const QListWidgetItem* listItem)
 {
-    if (!it)
+    if (!listItem)
         return nullptr;
-    return it->data(Qt::UserRole).value<QGraphicsItem*>();
+    return listItem->data(Qt::UserRole).value<QGraphicsItem*>();
 }
 
 QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
@@ -10642,26 +10653,26 @@ QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
         return nullptr;
 
     const auto itemsList = _scene->items();
-    for (QGraphicsItem* it : itemsList)
+    for (QGraphicsItem* item : itemsList)
     {
-        if (!it)
+        if (!item)
             continue;
 
-        if (it->data(_roleUid).toULongLong() == uid)
-            return it;
+        if (item->data(_roleUid).toULongLong() == uid)
+            return item;
     }
     return nullptr;
 }
 
-qulonglong MainWindow::ensureUid(QGraphicsItem* it) const
+qulonglong MainWindow::ensureUid(QGraphicsItem* item) const
 {
-    if (!it)
+    if (!item)
         return 0;
-    QVariant v = it->data(_roleUid);
+    QVariant v = item->data(_roleUid);
     if (!v.isNull())
         return v.toULongLong();
     qulonglong uid = _uidCounter++;
-    it->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
+    item->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
     return uid;
 }
 
@@ -10771,15 +10782,15 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
 
     QColor lineColor;
     if (dynamic_cast<qgraph::Rectangle*>(item))
-        lineColor = classColor.isValid() ? classColor : _vis.rectangleLineColor;
+        lineColor = classColor.isValid() ? classColor : _vstyle.rectangleLineColor;
     else if (dynamic_cast<qgraph::Circle*>(item))
-        lineColor = classColor.isValid() ? classColor : _vis.circleLineColor;
+        lineColor = classColor.isValid() ? classColor : _vstyle.circleLineColor;
     else if (dynamic_cast<qgraph::Polyline*>(item))
-        lineColor = classColor.isValid() ? classColor : _vis.polylineLineColor;
+        lineColor = classColor.isValid() ? classColor : _vstyle.polylineLineColor;
     else if (dynamic_cast<qgraph::Line*>(item))
-        lineColor = classColor.isValid() ? classColor : _vis.lineLineColor;
+        lineColor = classColor.isValid() ? classColor : _vstyle.lineLineColor;
     else if (dynamic_cast<qgraph::Point*>(item))
-        lineColor = classColor.isValid() ? classColor : _vis.pointColor;
+        lineColor = classColor.isValid() ? classColor : _vstyle.pointColor;
     else
         return;
 
@@ -10787,7 +10798,7 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
     fillColor.setAlpha(60);
 
     const QBrush fillBrush =
-        _vis.fillShapeWhenSelected ? QBrush(fillColor)
+        _vstyle.fillShapeWhenSelected ? QBrush(fillColor)
                                    : QBrush(Qt::transparent);
 
     const QBrush noBrush {Qt::transparent};
@@ -10796,7 +10807,7 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
     {
         QPen p = r->pen();
         p.setColor(lineColor);
-        p.setWidthF(_vis.lineWidth);
+        p.setWidthF(_vstyle.lineWidth);
         p.setCosmetic(true);
         r->setPen(p);
 
@@ -10808,7 +10819,7 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
     {
         QPen p = cir->pen();
         p.setColor(lineColor);
-        p.setWidthF(_vis.lineWidth);
+        p.setWidthF(_vstyle.lineWidth);
         p.setCosmetic(true);
         cir->setPen(p);
 
@@ -10820,7 +10831,7 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
             {
                 QPen cp = li->pen();
                 cp.setColor(lineColor);
-                cp.setWidthF(_vis.lineWidth);
+                cp.setWidthF(_vstyle.lineWidth);
                 cp.setCosmetic(true);
                 li->setPen(cp);
             }
@@ -10828,34 +10839,34 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
         return;
     }
 
-    if (auto* pl = dynamic_cast<qgraph::Polyline*>(item))
+    if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
     {
-        QPen p = pl->pen();
-        p.setColor(lineColor);
-        p.setWidthF(_vis.lineWidth);
-        p.setCosmetic(true);
-        pl->setPen(p);
+        QPen pen = polyline->pen();
+        pen.setColor(lineColor);
+        pen.setWidthF(_vstyle.lineWidth);
+        pen.setCosmetic(true);
+        polyline->setPen(pen);
 
-        pl->setBrush(pl->isSelected() ? fillBrush : noBrush);
+        polyline->setBrush(polyline->isSelected() ? fillBrush : noBrush);
         return;
     }
 
-    if (auto* l = dynamic_cast<qgraph::Line*>(item))
+    if (auto* line = dynamic_cast<qgraph::Line*>(item))
     {
-        QPen p = l->pen();
-        p.setColor(lineColor);
-        p.setWidthF(_vis.lineWidth);
-        p.setCosmetic(true);
-        l->setPen(p);
+        QPen pen = line->pen();
+        pen.setColor(lineColor);
+        pen.setWidthF(_vstyle.lineWidth);
+        pen.setCosmetic(true);
+        line->setPen(pen);
 
-        l->setBrush(l->isSelected() ? fillBrush : noBrush);
+        line->setBrush(line->isSelected() ? fillBrush : noBrush);
         return;
     }
 
-    if (auto* pnt = dynamic_cast<qgraph::Point*>(item))
+    if (auto* point = dynamic_cast<qgraph::Point*>(item))
     {
-        const qreal diam = std::max(2, _vis.pointSize);
-        pnt->setDotStyle(lineColor, diam, _vis.handleSize);
+        const qreal diam = std::max(2, _vstyle.pointSize);
+        point->setDotStyle(lineColor, diam, _vstyle.handleSize);
         return;
     }
 }
@@ -10939,87 +10950,94 @@ bool MainWindow::handleMergeLinesClick(const QPointF& scenePos)
     return ok ? true : true;
 }
 
-bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, int bIdx)
+bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line* lineB, int indexB)
 {
     auto doc = currentDocument();
-    if (!doc || !doc->_undoStack || !a || !b)
+    if (!doc || !doc->_undoStack || !lineA || !lineB)
         return false;
-    if (a == b)
+
+    if (lineA == lineB)
         return false;
 
     // Только концы
-    const int aLast = a->circles().size() - 1;
-    const int bLast = b->circles().size() - 1;
+    const int aLast = lineA->circles().size() - 1;
+    const int bLast = lineB->circles().size() - 1;
 
-    if (!((aIdx == 0) || (aIdx == aLast)))
+    if (!((indexA == 0) || (indexA == aLast)))
         return false;
 
-    if (!((bIdx == 0) || (bIdx == bLast)))
+    if (!((indexB == 0) || (indexB == bLast)))
         return false;
 
     // Класс должен совпадать
-    const QString la = a->data(0).toString();
-    const QString lb = b->data(0).toString();
-    if (!la.isEmpty() && !lb.isEmpty() && la != lb)
+    const QString labelA = lineA->data(0).toString();
+    const QString labelB = lineB->data(0).toString();
+    if (!labelA.isEmpty()
+        && !labelB.isEmpty()
+        && labelA != labelB)
     {
         messageBox(
             this,
             QMessageBox::Warning,
-            QString(u8"Нельзя объединить линии разных классов:\n\"%1\" и \"%2\".").arg(la, lb)
+            QString(u8"Нельзя объединить линии разных классов:\n\"%1\" и \"%2\".").arg(labelA, labelB)
         );
         return false;
     }
-    const QString outLabel = !la.isEmpty() ? la : lb;
+    const QString outLabel = !labelA.isEmpty() ? labelA : labelB;
 
     // Собираем точки
-    QVector<QPointF> pa = a->points();
-    QVector<QPointF> pb = b->points();
+    QVector<QPointF> pointsA = lineA->points();
+    QVector<QPointF> pointsB = lineB->points();
 
-    if (pa.size() < 2 || pb.size() < 2)
+    if (pointsA.size() < 2 || pointsB.size() < 2)
         return false;
 
     // Разворачиваем так, чтобы выбранный конец A стал последним,
     // а выбранный конец B стал первым.
-    if (aIdx == 0)
-        std::reverse(pa.begin(), pa.end());
-    if (bIdx == bLast)
-        std::reverse(pb.begin(), pb.end());
+    if (indexA == 0)
+        std::reverse(pointsA.begin(), pointsA.end());
+    if (indexB == bLast)
+        std::reverse(pointsB.begin(), pointsB.end());
 
     // Склейка + удаление дубликата в месте стыка
     QVector<QPointF> merged;
-    merged.reserve(pa.size() + pb.size());
-    merged += pa;
+    merged.reserve(pointsA.size() + pointsB.size());
+    merged += pointsA;
 
     const QPointF lastA = merged.last();
-    const QPointF firstB = pb.first();
+    const QPointF firstB = pointsB.first();
 
     const qreal eps = 2.0;
     if (QLineF(lastA, firstB).length() < eps)
     {
         // Не добавляем первый узел B
-        for (int i = 1; i < pb.size(); ++i)
-            merged.push_back(pb[i]);
+        for (int i = 1; i < pointsB.size(); ++i)
+            merged.push_back(pointsB[i]);
     }
     else
     {
-        merged += pb;
+        merged += pointsB;
     }
 
     if (merged.size() < 2)
         return false;
 
-    auto rotateToIndex = [](QVector<QPointF>& pts, int k)
+    auto rotateToIndex = [](QVector<QPointF>& points, int k)
     {
-        if (pts.isEmpty()) return;
-        k %= pts.size();
-        if (k < 0) k += pts.size();
-        if (k == 0) return;
+        if (points.isEmpty())
+            return;
+
+        k %= points.size();
+        if (k < 0)
+            k += points.size();
+        if (k == 0)
+            return;
 
         QVector<QPointF> tmp;
-        tmp.reserve(pts.size());
-        for (int i = 0; i < pts.size(); ++i)
-            tmp.push_back(pts[(k + i) % pts.size()]);
-        pts = std::move(tmp);
+        tmp.reserve(points.size());
+        for (int i = 0; i < points.size(); ++i)
+            tmp.push_back(points[(k + i) % points.size()]);
+        points = std::move(tmp);
     };
 
     // Нормализация нумерации
@@ -11067,30 +11085,31 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
 
     auto backupForSceneItem = [this](QGraphicsItem* gi) -> ShapeBackup
     {
-        ShapeBackup b{};
-        b.uid = gi->data(_roleUid).toULongLong();
-        if (b.uid == 0) b.uid = ensureUid(gi);
-        b.className = gi->data(0).toString();
-        b.z = gi->zValue();
-        b.visible = gi->isVisible();
+        ShapeBackup backup{};
+        backup.uid = gi->data(_roleUid).toULongLong();
+        if (backup.uid == 0)
+            backup.uid = ensureUid(gi);
+        backup.className = gi->data(0).toString();
+        backup.zValue = gi->zValue();
+        backup.visible = gi->isVisible();
 
-        if (auto* ln = dynamic_cast<qgraph::Line*>(gi))
+        if (auto* line = dynamic_cast<qgraph::Line*>(gi))
         {
-            b.kind = ShapeKind::Line;
-            b.points = ln->points();
-            b.closed = false;
+            backup.kind = ShapeKind::Line;
+            backup.points = line->points();
+            backup.closed = false;
         }
-        return b;
+        return backup;
     };
 
     payload->numberingFromLast = numberingFromLast;
-    payload->aBackup = backupForSceneItem(a);
-    payload->bBackup = backupForSceneItem(b);
+    payload->aBackup = backupForSceneItem(lineA);
+    payload->bBackup = backupForSceneItem(lineB);
     payload->mergedPts = merged;
     payload->label = outLabel;
-    payload->z = qMax(a->zValue(), b->zValue());
+    payload->z = qMax(lineA->zValue(), lineB->zValue());
 
-    payload->mergedUid = _uidCounter++; // Резервируем uid
+    payload->mergedUid = ++_uidCounter; // Резервируем uid
 
     auto redoFn = [this, payload]()
     {
@@ -11110,28 +11129,28 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
         if (payload->mergedPts.isEmpty())
             return;
 
-        auto* ln = new qgraph::Line(_scene, payload->mergedPts.front());
-        ln->setData(_roleUid, QVariant::fromValue<qulonglong>(payload->mergedUid));
+        auto* line = new qgraph::Line(_scene, payload->mergedPts.front());
+        line->setData(_roleUid, QVariant::fromValue<qulonglong>(payload->mergedUid));
 
         for (int i = 1; i < payload->mergedPts.size(); ++i)
-            ln->addPoint(payload->mergedPts[i], _scene);
-        ln->setNumberingFromLast(payload->numberingFromLast);
+            line->addPoint(payload->mergedPts[i], _scene);
+        line->setNumberingFromLast(payload->numberingFromLast);
 
-        apply_LineWidth_ToItem(ln);
-        apply_PointSize_ToItem(ln);
-        apply_NumberSize_ToItem(ln);
+        apply_LineWidth_ToItem(line);
+        apply_PointSize_ToItem(line);
+        apply_NumberSize_ToItem(line);
 
-        ln->setData(0, payload->label);
-        applyClassColorToItem(ln, payload->label);
-        ln->setZValue(payload->z);
-        ln->setVisible(true);
-        ln->updateHandlePosition();
-        linkSceneItemToList(ln);
+        line->setData(0, payload->label);
+        applyClassColorToItem(line, payload->label);
+        line->setZValue(payload->z);
+        line->setVisible(true);
+        line->updateHandlePosition();
+        linkSceneItemToList(line);
 
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
@@ -11152,10 +11171,10 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
         recreateFromBackup(payload->aBackup);
         recreateFromBackup(payload->bBackup);
 
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
@@ -11163,13 +11182,13 @@ bool MainWindow::performMergeLines(qgraph::Line* a, int aIdx, qgraph::Line* b, i
     return true;
 }
 
-bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePos)
+bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scenePos)
 {
     auto doc = currentDocument();
-    if (!doc || !doc->_undoStack || !ln)
+    if (!doc || !doc->_undoStack || !line)
         return false;
 
-    ShapeBackup before = makeBackupFromItem(ln);
+    ShapeBackup before = makeBackupFromItem(line);
     const int n = before.points.size();
     if (n < 4)
     {
@@ -11205,9 +11224,9 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePo
     double bestD2 = std::numeric_limits<double>::infinity();
     for (int i = 0; i < n - 1; ++i)
     {
-        const QPointF& a = before.points[i];
-        const QPointF& b = before.points[i + 1];
-        const double d2 = dist2PointToSegment(scenePos, a, b);
+        const QPointF& firstPt = before.points[i];
+        const QPointF& secondPt = before.points[i + 1];
+        const double d2 = dist2PointToSegment(scenePos, firstPt, secondPt);
         if (d2 < bestD2)
         {
             bestD2 = d2;
@@ -11233,7 +11252,7 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePo
         QVector<QPointF> pts1;
         QVector<QPointF> pts2;
         QString label;
-        qreal z = 0.0;
+        qreal zValue = 0.0;
         bool visible = true;
         bool numberingFromLast = false;
         qulonglong uid1 = 0;
@@ -11243,7 +11262,7 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePo
     auto payload = std::make_shared<Payload>();
     payload->oldBackup = before;
     payload->label = before.className;
-    payload->z = before.z;
+    payload->zValue = before.zValue;
     payload->visible = before.visible;
     payload->numberingFromLast = before.numberingFromLast;
 
@@ -11276,32 +11295,32 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePo
         {
             if (pts.size() < 2) return;
 
-            auto* ln = new qgraph::Line(_scene, pts.front());
-            ln->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
+            auto* line = new qgraph::Line(_scene, pts.front());
+            line->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
             for (int i = 1; i < pts.size(); ++i)
-                ln->addPoint(pts[i], _scene);
+                line->addPoint(pts[i], _scene);
 
-            ln->setNumberingFromLast(payload->numberingFromLast);
+            line->setNumberingFromLast(payload->numberingFromLast);
 
-            apply_LineWidth_ToItem(ln);
-            apply_PointSize_ToItem(ln);
-            apply_NumberSize_ToItem(ln);
+            apply_LineWidth_ToItem(line);
+            apply_PointSize_ToItem(line);
+            apply_NumberSize_ToItem(line);
 
-            ln->setData(0, payload->label);
-            applyClassColorToItem(ln, payload->label);
-            ln->setZValue(payload->z);
-            ln->setVisible(payload->visible);
-            ln->updateHandlePosition();
-            linkSceneItemToList(ln);
+            line->setData(0, payload->label);
+            applyClassColorToItem(line, payload->label);
+            line->setZValue(payload->zValue);
+            line->setVisible(payload->visible);
+            line->updateHandlePosition();
+            linkSceneItemToList(line);
         };
 
         makeLine(payload->pts1, payload->uid1);
         makeLine(payload->pts2, payload->uid2);
 
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
@@ -11323,10 +11342,10 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePo
         // Восстановить старую
         recreateFromBackup(payload->oldBackup);
 
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
@@ -11335,39 +11354,44 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* ln, const QPointF& scenePo
 }
 
 // Формула шнуровки
-double MainWindow::signedArea2(const QVector<QPointF>& pts)
+double MainWindow::signedArea2(const QVector<QPointF>& points)
 {
     // Удвоенная ориентированная площадь для замкнутого контура
     // Без дублирования первой точки в конце
-    const int n = pts.size();
-    if (n < 3) return 0.0;
+    const int n = points.size();
+    if (n < 3)
+        return 0.0;
 
     double s = 0.0;
     for (int i = 0; i < n; ++i)
     {
-        const QPointF& a = pts[i];
-        const QPointF& b = pts[(i + 1) % n];
+        const QPointF& a = points[i];
+        const QPointF& b = points[(i + 1) % n];
         s += (double)a.x() * (double)b.y() - (double)b.x() * (double)a.y();
     }
     return s;
 }
 
-int MainWindow::topLeftIndex(const QVector<QPointF>& pts)
+int MainWindow::topLeftIndex(const QVector<QPointF>& points)
 {
-    if (pts.isEmpty()) return -1;
+    if (points.isEmpty()) return -1;
     int best = 0;
-    for (int i = 1; i < pts.size(); ++i)
-        if (isBetterTopLeft(pts[i], pts[best]))
+    for (int i = 1; i < points.size(); ++i)
+        if (isBetterTopLeft(points[i], points[best]))
             best = i;
     return best;
 }
 
-bool MainWindow::isBetterTopLeft(const QPointF& a, const QPointF& b)
+bool MainWindow::isBetterTopLeft(const QPointF& firstPoint, const QPointF& secondPoint)
 {
     // “верхний-левый”: меньше y, при равных y - меньше x
-    if (a.y() < b.y()) return true;
-    if (a.y() > b.y()) return false;
-    return a.x() < b.x();
+    if (firstPoint.y() < secondPoint.y())
+        return true;
+
+    if (firstPoint.y() > secondPoint.y())
+        return false;
+
+    return firstPoint.x() < secondPoint.x();
 }
 
 void MainWindow::updateModeLabel()
@@ -11513,15 +11537,16 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
                             auto redoFn = [this, uid, cls]()
                             {
-                                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                                if (!pl) return;
+                                auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                if (!polyline)
+                                    return;
 
-                                pl->setClosed(true, false);
-                                pl->setFlag(QGraphicsItem::ItemIsMovable, true);
+                                polyline->setClosed(true, false);
+                                polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
 
-                                pl->setData(0, cls);
-                                applyClassColorToItem(pl, cls);
-                                linkSceneItemToList(pl);
+                                polyline->setData(0, cls);
+                                applyClassColorToItem(polyline, cls);
+                                linkSceneItemToList(polyline);
 
                                 if (_polyline && ensureUid(_polyline) == uid)
                                     _polyline = nullptr;
@@ -11540,23 +11565,24 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
                             auto undoFn = [this, uid]()
                             {
-                                auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                                if (!pl) return;
+                                auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                if (!polyline)
+                                    return;
 
-                                pl->setClosed(false, false);
-                                pl->setFlag(QGraphicsItem::ItemIsMovable, false);
+                                polyline->setClosed(false, false);
+                                polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                                 _drawingPolyline = true;
-                                _polyline = pl;
+                                _polyline = polyline;
                                 updateModeLabel();
 
                                 _resumeEditing = true;
                                 _resumeUid = uid;
 
-                                pl->setSelected(true);
-                                pl->setFocus();
+                                polyline->setSelected(true);
+                                polyline->setFocus();
 
-                                removeListEntryBySceneItem(pl);
+                                removeListEntryBySceneItem(polyline);
 
                                 if (auto doc = currentDocument())
                                 {
@@ -11566,8 +11592,8 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
                                 raiseAllHandlesToTop();
                             };
-                            if (QUndoStack* st = activeUndoStack())
-                                st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
+                            if (QUndoStack* stack = activeUndoStack())
+                                stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
                             else
                                 redoFn();
                         }
@@ -11582,18 +11608,19 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
                     auto redoFn = [this, uid, cls]()
                     {
-                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                        if (!pl) return;
+                        auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                        if (!polyline)
+                            return;
 
-                        pl->setClosed(true, false);
-                        pl->setFlag(QGraphicsItem::ItemIsMovable, true);
+                        polyline->setClosed(true, false);
+                        polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                         if (!cls.isEmpty())
                         {
-                            pl->setData(0, cls);
-                            applyClassColorToItem(pl, cls);
+                            polyline->setData(0, cls);
+                            applyClassColorToItem(polyline, cls);
                         }
-                        linkSceneItemToList(pl);
+                        linkSceneItemToList(polyline);
 
                         if (_polyline && ensureUid(_polyline) == uid)
                             _polyline = nullptr;
@@ -11613,23 +11640,24 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
                     auto undoFn = [this, uid]()
                     {
-                        auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
-                        if (!pl) return;
+                        auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                        if (!polyline)
+                            return;
 
-                        pl->setClosed(false, false);
-                        pl->setFlag(QGraphicsItem::ItemIsMovable, false);
+                        polyline->setClosed(false, false);
+                        polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                         _drawingPolyline = true;
-                        _polyline = pl;
+                        _polyline = polyline;
                         updateModeLabel();
 
                         _resumeEditing = true;
                         _resumeUid = uid;
 
-                        pl->setSelected(true);
-                        pl->setFocus();
+                        polyline->setSelected(true);
+                        polyline->setFocus();
 
-                        removeListEntryBySceneItem(pl);
+                        removeListEntryBySceneItem(polyline);
 
                         if (auto doc = currentDocument())
                         {
@@ -11639,8 +11667,8 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
                         raiseAllHandlesToTop();
                     };
 
-                    if (QUndoStack* st = activeUndoStack())
-                        st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
+                    if (QUndoStack* stack = activeUndoStack())
+                        stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
                     else
                         redoFn();
                 }
@@ -11665,7 +11693,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
     {
         // Ничего
     }
-    else if (QUndoStack* st = activeUndoStack())
+    else if (QUndoStack* stack = activeUndoStack())
     {
         struct Payload
         {
@@ -11680,42 +11708,44 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
         auto redoFn = [this, payload]()
         {
-            auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(payload->uid));
-            if (!pl) return;
+            auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(payload->uid));
+            if (!polyline)
+                return;
 
-            const int before = pl->_circles.size();
-            pl->addPoint(payload->pt, _scene);
+            const int before = polyline->_circles.size();
+            polyline->addPoint(payload->pt, _scene);
 
-            pl->setFlag(QGraphicsItem::ItemIsMovable, false);
-            pl->setSelected(true);
-            pl->setFocus();
-            pl->updatePointNumbers();
+            polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
+            polyline->setSelected(true);
+            polyline->setFocus();
+            polyline->updatePointNumbers();
 
-            payload->didAdd = (pl->_circles.size() > before);
+            payload->didAdd = (polyline->_circles.size() > before);
 
-            if (auto d = currentDocument())
+            if (auto doc = currentDocument())
             {
-                d->isModified = true;
-                updateFileListDisplay(d->filePath);
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
             }
         };
 
         auto undoFn = [this, payload]()
         {
-            auto* pl = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(payload->uid));
-            if (!pl) return;
+            auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(payload->uid));
+            if (!polyline)
+                return;
 
             if (payload->didAdd)
-                pl->removeLastPointForce(true);
+                polyline->removeLastPointForce(true);
 
-            if (auto d = currentDocument())
+            if (auto doc = currentDocument())
             {
-                d->isModified = true;
-                updateFileListDisplay(d->filePath);
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
             }
         };
 
-        st->push(new LambdaCommand(redoFn, undoFn, u8"Узел полилинии"));
+        stack->push(new LambdaCommand(redoFn, undoFn, u8"Узел полилинии"));
     }
 
     // Закрытие полилинии по Ctrl
@@ -11798,14 +11828,14 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
                             auto redoFn = [this, uid, cls]()
                             {
-                                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                                if (!ln) return;
+                                auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                                if (!line) return;
 
-                                ln->setClosed(true, false);
-                                ln->setFlag(QGraphicsItem::ItemIsMovable, true);
-                                ln->setData(0, cls);
-                                applyClassColorToItem(ln, cls);
-                                linkSceneItemToList(ln);
+                                line->setClosed(true, false);
+                                line->setFlag(QGraphicsItem::ItemIsMovable, true);
+                                line->setData(0, cls);
+                                applyClassColorToItem(line, cls);
+                                linkSceneItemToList(line);
 
                                 if (_line && ensureUid(_line) == uid)
                                     _line = nullptr;
@@ -11825,23 +11855,23 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
                             auto undoFn = [this, uid]()
                             {
-                                auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                                if (!ln) return;
+                                auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                                if (!line) return;
 
-                                ln->setClosed(false, false);
-                                ln->setFlag(QGraphicsItem::ItemIsMovable, false);
+                                line->setClosed(false, false);
+                                line->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                                 _drawingLine = true;
-                                _line = ln;
+                                _line = line;
                                 updateModeLabel();
 
                                 _resumeEditing = true;
                                 _resumeUid = uid;
 
-                                ln->setSelected(true);
-                                ln->setFocus();
+                                line->setSelected(true);
+                                line->setFocus();
 
-                                removeListEntryBySceneItem(ln);
+                                removeListEntryBySceneItem(line);
 
                                 if (auto doc = currentDocument())
                                 {
@@ -11851,8 +11881,8 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                                 raiseAllHandlesToTop();
                             };
 
-                            if (QUndoStack* st = activeUndoStack())
-                                st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
+                            if (QUndoStack* stack = activeUndoStack())
+                                stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
                             else
                                 redoFn();
 
@@ -11869,18 +11899,18 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
                     auto redoFn = [this, uid, cls]()
                     {
-                        auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                        if (!ln) return;
+                        auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        if (!line) return;
 
-                        ln->setClosed(true, false);
-                        ln->setFlag(QGraphicsItem::ItemIsMovable, true);
+                        line->setClosed(true, false);
+                        line->setFlag(QGraphicsItem::ItemIsMovable, true);
 
                         if (!cls.isEmpty())
                         {
-                            ln->setData(0, cls);
-                            applyClassColorToItem(ln, cls);
+                            line->setData(0, cls);
+                            applyClassColorToItem(line, cls);
                         }
-                        linkSceneItemToList(ln);
+                        linkSceneItemToList(line);
 
                         if (_line && ensureUid(_line) == uid)
                             _line = nullptr;
@@ -11900,23 +11930,23 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
                     auto undoFn = [this, uid]()
                     {
-                        auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
-                        if (!ln) return;
+                        auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        if (!line) return;
 
-                        ln->setClosed(false, false);
-                        ln->setFlag(QGraphicsItem::ItemIsMovable, false);
+                        line->setClosed(false, false);
+                        line->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                         _drawingLine = true;
-                        _line = ln;
+                        _line = line;
                         updateModeLabel();
 
                         _resumeEditing = true;
                         _resumeUid = uid;
 
-                        ln->setSelected(true);
-                        ln->setFocus();
+                        line->setSelected(true);
+                        line->setFocus();
 
-                        removeListEntryBySceneItem(ln);
+                        removeListEntryBySceneItem(line);
 
                         if (auto doc = currentDocument())
                         {
@@ -11926,8 +11956,8 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                         raiseAllHandlesToTop();
                     };
 
-                    if (QUndoStack* st = activeUndoStack())
-                        st->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
+                    if (QUndoStack* stack = activeUndoStack())
+                        stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
                     else
                         redoFn();
                 }
@@ -11950,7 +11980,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
     {
         // Ничего
     }
-    else if (QUndoStack* st = activeUndoStack())
+    else if (QUndoStack* stack = activeUndoStack())
     {
         struct Payload
         {
@@ -11965,41 +11995,41 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
         auto redoFn = [this, payload]()
         {
-            auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(payload->uid));
-            if (!ln) return;
+            auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(payload->uid));
+            if (!line) return;
 
-            const int before = ln->_circles.count();
-            ln->addPoint(payload->pt, _scene);
+            const int before = line->_circles.count();
+            line->addPoint(payload->pt, _scene);
 
-            ln->setSelected(true);
-            ln->setFocus();
-            ln->updatePointNumbers();
+            line->setSelected(true);
+            line->setFocus();
+            line->updatePointNumbers();
 
-            payload->didAdd = (ln->_circles.size() > before);
+            payload->didAdd = (line->_circles.size() > before);
 
-            if (auto d = currentDocument())
+            if (auto doc = currentDocument())
             {
-                d->isModified = true;
-                updateFileListDisplay(d->filePath);
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
             }
         };
 
         auto undoFn = [this, payload]()
         {
-            auto* ln = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(payload->uid));
-            if (!ln) return;
+            auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(payload->uid));
+            if (!line) return;
 
             if (payload->didAdd)
-                ln->removeLastPointForce(true);
+                line->removeLastPointForce(true);
 
-            if (auto d = currentDocument())
+            if (auto doc = currentDocument())
             {
-                d->isModified = true;
-                updateFileListDisplay(d->filePath);
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
             }
         };
 
-        st->push(new LambdaCommand(redoFn, undoFn, u8"Узел линии"));
+        stack->push(new LambdaCommand(redoFn, undoFn, u8"Узел линии"));
     }
 
     // Завершение линии по Ctrl
@@ -12050,10 +12080,10 @@ void MainWindow::moveCurrentShapeInList(int direction)
 
         movePolygonListRow(currentRow, toRow);
 
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 
@@ -12065,10 +12095,10 @@ void MainWindow::moveCurrentShapeInList(int direction)
 
         movePolygonListRow(currentRow, fromRow);
 
-        if (auto d = currentDocument())
+        if (auto doc = currentDocument())
         {
-            d->isModified = true;
-            updateFileListDisplay(d->filePath);
+            doc->isModified = true;
+            updateFileListDisplay(doc->filePath);
         }
     };
 

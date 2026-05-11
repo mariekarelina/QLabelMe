@@ -19,9 +19,9 @@ Settings::Settings(QWidget *parent)
 {
     ui->setupUi(this);
 
-    ui->buttonBox->button(QDialogButtonBox::Ok)->setText(tr("ОК"));
-    ui->buttonBox->button(QDialogButtonBox::Apply)->setText(tr("Применить"));
-    ui->buttonBox->button(QDialogButtonBox::Cancel)->setText(tr("Отмена"));
+    ui->buttonBox->button(QDialogButtonBox::Ok)->setText(u8"ОК");
+    ui->buttonBox->button(QDialogButtonBox::Apply)->setText(u8"Применить");
+    ui->buttonBox->button(QDialogButtonBox::Cancel)->setText(u8"Отмена");
 
     ui->labelFontValue->setStyleSheet("font-weight: bold;");
 
