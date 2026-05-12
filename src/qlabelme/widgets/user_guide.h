@@ -9,7 +9,7 @@ class UserGuide : public QDialog
     Q_OBJECT
 
 public:
-    explicit UserGuide(QWidget *parent = nullptr);
+    explicit UserGuide(QWidget* parent = nullptr);
     ~UserGuide();
 
 protected:
@@ -26,5 +26,5 @@ private:
     void saveGeometry() const;
 
 private:
-    Ui::UserGuide *ui;
+    Ui::UserGuide* ui;
 };

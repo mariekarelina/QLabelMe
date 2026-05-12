@@ -341,7 +341,7 @@ void ProjectSettings::onAddClass()
         messageBox(
             this,
             QMessageBox::Information,
-            u8"Имя класса не должно быть пустым."
+            u8"Имя класса не должно быть пустым"
         );
         return;
     }
@@ -358,7 +358,7 @@ void ProjectSettings::onAddClass()
         messageBox(
             this,
             QMessageBox::Information,
-            u8"Класс с таким именем уже существует."
+            u8"Класс с таким именем уже существует"
         );
         return;
     }
@@ -395,11 +395,11 @@ void ProjectSettings::onRemoveClass()
     QMessageBox box(this);
     box.setIcon(QMessageBox::Question);
     box.setWindowTitle(u8"Удаление класса");
-    box.setText(tr("Удалить класс «%1» из списка?").arg(name));
+    box.setText(QString::fromUtf8("Удалить класс «%1» из списка?").arg(name));
     box.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
 
-    if (auto b = box.button(QMessageBox::Yes)) b->setText(tr("Да"));
-    if (auto b = box.button(QMessageBox::No))  b->setText(tr("Нет"));
+    if (auto b = box.button(QMessageBox::Yes)) b->setText(u8"Да");
+    if (auto b = box.button(QMessageBox::No))  b->setText(u8"Нет");
 
     const QSize sz(380, 160);
     box.resize(sz);
@@ -456,11 +456,11 @@ void ProjectSettings::onEditClass()
     QInputDialog dlg(this);
     dlg.setModal(true);
     dlg.setInputMode(QInputDialog::TextInput);
-    dlg.setWindowTitle(tr("Редактировать класс"));
-    dlg.setLabelText(tr("Новое имя для «%1»:").arg(oldName));
+    dlg.setWindowTitle(u8"Редактировать класс");
+    dlg.setLabelText(QString::fromUtf8("Новое имя для «%1»:").arg(oldName));
     dlg.setTextValue(oldName);
-    dlg.setOkButtonText(tr("ОК"));
-    dlg.setCancelButtonText(tr("Отмена"));
+    dlg.setOkButtonText(u8"ОК");
+    dlg.setCancelButtonText(u8"Отмена");
 
     const QSize sz(420, 160);
 
@@ -489,7 +489,7 @@ void ProjectSettings::onEditClass()
         messageBox(
             this,
             QMessageBox::Information,
-            u8"Имя класса не должно быть пустым."
+            u8"Имя класса не должно быть пустым"
         );
         return;
     }
@@ -502,7 +502,7 @@ void ProjectSettings::onEditClass()
         messageBox(
             this,
             QMessageBox::Information,
-            u8"Класс с таким именем уже существует."
+            u8"Класс с таким именем уже существует"
         );
         return;
     }

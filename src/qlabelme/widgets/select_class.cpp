@@ -2,7 +2,7 @@
 #include "ui_select_class.h"
 
 
-SelectClass::SelectClass(const QStringList &classes, QWidget *parent)
+SelectClass::SelectClass(const QStringList &classes, QWidget* parent)
     : QDialog(parent),
       ui(new Ui::SelectClass)
 {

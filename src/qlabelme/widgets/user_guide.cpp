@@ -13,7 +13,7 @@
 #include <QSplitter>
 
 
-UserGuide::UserGuide(QWidget *parent)
+UserGuide::UserGuide(QWidget* parent)
     : QDialog(parent),
       ui(new Ui::UserGuide)
 {

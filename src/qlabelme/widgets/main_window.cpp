@@ -202,7 +202,7 @@ bool Document::loadImage()
     return true;
 }
 
-MainWindow::MainWindow(QWidget *parent) :
+MainWindow::MainWindow(QWidget* parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
     _scene(new QGraphicsScene(this))
@@ -718,12 +718,12 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(ui->actUserGuide, &QAction::triggered, this, [this]()
     {
-        UserGuide *guide = new UserGuide(this);
+        UserGuide* guide = new UserGuide(this);
         guide->show();
     });
     connect(ui->actAbout, &QAction::triggered, this, [this]()
     {
-        AboutProgram *about = new AboutProgram(this);
+        AboutProgram* about = new AboutProgram(this);
         about->show();
     });
 
@@ -3654,7 +3654,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
     return QMainWindow::eventFilter(obj, event);
 }
 
-void MainWindow::keyPressEvent(QKeyEvent *event)
+void MainWindow::keyPressEvent(QKeyEvent* event)
 {
     if (event->modifiers() & Qt::ControlModifier)
     {
@@ -3997,7 +3997,7 @@ void MainWindow::fitImageToView()
     ui->graphView->viewport()->update();
 }
 
-void MainWindow::fileList_ItemChanged(QListWidgetItem *current, QListWidgetItem *previous)
+void MainWindow::fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem* previous)
 {
     if (!current) return;
 
@@ -4605,9 +4605,9 @@ void MainWindow::resizeEvent(QResizeEvent* event)
     QMainWindow::resizeEvent(event);
 }
 
-void MainWindow::onCheckBoxPolygonLabel(QAbstractButton *button)
+void MainWindow::onCheckBoxPolygonLabel(QAbstractButton* button)
 {
-    QCheckBox *checkBox = qobject_cast<QCheckBox*>(button);
+    QCheckBox* checkBox = qobject_cast<QCheckBox*>(button);
     if (checkBox)
     {
         QString selectedText = checkBox->property("itemText").toString();
@@ -5396,7 +5396,7 @@ void MainWindow::on_actRestoreAnnotation_triggered()
     {
         QMessageBox msgBox(this);
         msgBox.setWindowTitle(u8"Восстановить разметку");
-        msgBox.setText(u8"Восстановить разметку из файла .yaml?\nВсе несохранённые изменения будут потеряны.");
+        msgBox.setText(u8"Восстановить разметку из файла .yaml?\nВсе несохранённые изменения будут потеряны");
         msgBox.setIcon(QMessageBox::Question);
 
         QPushButton* btnYes = msgBox.addButton(u8"Да",  QMessageBox::AcceptRole);
@@ -8463,17 +8463,17 @@ int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr>& unsavedDocs
     dialog.setGeometry(dlgGeom[0], dlgGeom[1], dlgGeom[2], dlgGeom[3]);
     //dialog.setFixedSize(dialog.size());
 
-    QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
+    QVBoxLayout* mainLayout = new QVBoxLayout(&dialog);
 
-    QLabel *messageLabel = new QLabel(u8"Следующие файлы имеют несохраненные изменения:\nХотите сохранить изменения?");
+    QLabel* messageLabel = new QLabel(u8"Следующие файлы имеют несохраненные изменения:\nХотите сохранить изменения?");
     mainLayout->addWidget(messageLabel);
 
     // Список файлов
-    QListWidget *fileList = new QListWidget();
+    QListWidget* fileList = new QListWidget();
     for (const Document::Ptr& doc : unsavedDocs)
     {
         QFileInfo fileInfo(doc->filePath);
-        QListWidgetItem *item = new QListWidgetItem(fileInfo.fileName());
+        QListWidgetItem* item = new QListWidgetItem(fileInfo.fileName());
         //item->setData(Qt::UserRole, QVariant::fromValue(doc));
         item->setData(Qt::UserRole, doc->filePath);
         fileList->addItem(item);
@@ -8482,11 +8482,11 @@ int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr>& unsavedDocs
     mainLayout->addWidget(fileList);
 
     // Кнопки
-    QDialogButtonBox *buttonBox = new QDialogButtonBox();
+    QDialogButtonBox* buttonBox = new QDialogButtonBox();
 
-    QPushButton *saveAllButton = new QPushButton(u8"Сохранить все");
-    QPushButton *discardAllButton = new QPushButton(u8"Не сохранять");
-    QPushButton *cancelButton = new QPushButton(u8"Отмена");
+    QPushButton* saveAllButton = new QPushButton(u8"Сохранить все");
+    QPushButton* discardAllButton = new QPushButton(u8"Не сохранять");
+    QPushButton* cancelButton = new QPushButton(u8"Отмена");
 
     buttonBox->addButton(saveAllButton, QDialogButtonBox::AcceptRole);
     buttonBox->addButton(discardAllButton, QDialogButtonBox::DestructiveRole);
@@ -8799,7 +8799,7 @@ qreal MainWindow::viewPixelsToSceneRadius(GraphicsView* view, qreal viewPx) cons
 
 qreal MainWindow::effectiveViewPickPx(qreal baseValue) const
 {
-    return baseValue * imagePickScale();
+    return baseValue* imagePickScale();
 }
 
 qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
@@ -9283,9 +9283,12 @@ void MainWindow::forEachScene(std::function<void(QGraphicsScene*)> sceneHandler)
     for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
     {
         auto doc = it.value();
-        if (!doc) continue;
-        auto *sc = doc->scene;
-        if (!sc) continue;
+        if (!doc)
+            continue;
+
+        auto* sc = doc->scene;
+        if (!sc)
+            continue;
         sceneHandler(sc);
     }
 }
@@ -9295,12 +9298,12 @@ void MainWindow::apply_LineWidth_ToScene(QGraphicsScene* scene)
     if (!scene)
     {
         forEachScene([this](QGraphicsScene* scene){
-            for (auto *item : scene->items()) apply_LineWidth_ToItem(item);
+            for (auto* item : scene->items()) apply_LineWidth_ToItem(item);
             scene->update();
         });
         return;
     }
-    for (auto *it : scene->items()) apply_LineWidth_ToItem(it);
+    for (auto* it : scene->items()) apply_LineWidth_ToItem(it);
     scene->update();
 }
 
@@ -9309,12 +9312,12 @@ void MainWindow::apply_PointSize_ToScene(QGraphicsScene* scene)
     if (!scene)
     {
         forEachScene([this](QGraphicsScene* scene){
-            for (auto *item : scene->items()) apply_PointSize_ToItem(item);
+            for (auto* item : scene->items()) apply_PointSize_ToItem(item);
             scene->update();
         });
         return;
     }
-    for (auto *it : scene->items()) apply_PointSize_ToItem(it);
+    for (auto* it : scene->items()) apply_PointSize_ToItem(it);
     scene->update();
 }
 
@@ -9796,21 +9799,6 @@ ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* graphicsItem) const
     }
 
     backup.listRow = -1;
-    if (ui && ui->polygonList && graphicsItem)
-    {
-        for (int i = 0; i < ui->polygonList->count(); ++i)
-        {
-            QListWidgetItem* listWidget = ui->polygonList->item(i);
-            if (!listWidget)
-                continue;
-
-            if (listWidget->data(Qt::UserRole).value<QGraphicsItem*>() == graphicsItem)
-            {
-                backup.listRow = i;
-                break;
-            }
-        }
-    }
     backup.sceneRow = -1;
     if (ui && ui->polygonList && graphicsItem)
     {
@@ -9822,6 +9810,7 @@ ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* graphicsItem) const
 
             if (listWidget->data(Qt::UserRole).value<QGraphicsItem*>() == graphicsItem)
             {
+                backup.listRow = i;
                 backup.sceneRow = i;
                 break;
             }
@@ -9860,13 +9849,15 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& backup)
 
         if (uid != 0)
         {
+            // Восстанавливаем сохраненный uid.
             item->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
-            if (uid >= _uidCounter)
+            if (uid >= _uidCounter) // Чтобы новые фигуры не получили такой же
                 _uidCounter = uid + 1;
         }
         else
             ensureUid(item);
     };
+    // Восстанавливаем номер фигуры, который отображается в списке
     auto applyBackupNumber = [this](QGraphicsItem* item, int number)
     {
         if (!item)
@@ -10075,7 +10066,6 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* item, const ShapeBackup& b
         {
             if (auto* line = qgraphicsitem_cast<qgraph::Line*>(item))
             {
-
                 line->replaceScenePoints(backup.points, backup.closed);
                 line->setNumberingFromLast(backup.numberingFromLast);
                 line->setData(0, backup.className);
@@ -10219,6 +10209,8 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
             if (auto scene = item->scene())
                 scene->removeItem(item);
             removeListEntryBySceneItem(item);
+            // Нужно сбросить временные указатели и флаги,
+            // без этого после undo возможны обращения к удаленному объекту
             clearLinePolylineStateForDeletedItem(item);
             delete item;
         }
@@ -10668,9 +10660,11 @@ qulonglong MainWindow::ensureUid(QGraphicsItem* item) const
 {
     if (!item)
         return 0;
+    // Пытаемся получить уже назначенный uid из данных QGraphicsItem
     QVariant v = item->data(_roleUid);
     if (!v.isNull())
         return v.toULongLong();
+    // Если uid еще не был назначен, берем следующий свободный номер
     qulonglong uid = _uidCounter++;
     item->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
     return uid;
@@ -10979,7 +10973,7 @@ bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line
         messageBox(
             this,
             QMessageBox::Warning,
-            QString(u8"Нельзя объединить линии разных классов:\n\"%1\" и \"%2\".").arg(labelA, labelB)
+            QString(u8"Нельзя объединить линии разных классов:\n\"%1\" и \"%2\"").arg(labelA, labelB)
         );
         return false;
     }
@@ -11195,7 +11189,7 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scene
         messageBox(
             this,
             QMessageBox::Warning,
-            u8"Нельзя разорвать линию: нужно минимум 4 точки."
+            u8"Нельзя разорвать линию: нужно минимум 4 точки"
         );
         return false;
     }
@@ -11241,7 +11235,7 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scene
             this,
             QMessageBox::Warning,
             u8"Нельзя разорвать по этому ребру: получится линия из одной точки.  "
-            u8"Выберите внутреннее ребро."
+            u8"Выберите внутреннее ребро"
         );
         return false;
     }

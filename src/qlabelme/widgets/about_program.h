@@ -11,7 +11,7 @@ class AboutProgram : public QDialog
     Q_OBJECT
 
 public:
-    explicit AboutProgram(QWidget *parent = nullptr);
+    explicit AboutProgram(QWidget* parent = nullptr);
     ~AboutProgram() override;
 
 protected:
@@ -26,5 +26,5 @@ private:
     void saveGeometry() const;
 
 private:
-    Ui::AboutProgram *ui;
+    Ui::AboutProgram* ui;
 };

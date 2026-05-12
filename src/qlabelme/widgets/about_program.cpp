@@ -10,7 +10,7 @@
 #include <QPushButton>
 #include <QScreen>
 
-AboutProgram::AboutProgram(QWidget *parent)
+AboutProgram::AboutProgram(QWidget* parent)
     : QDialog(parent),
       ui(new Ui::AboutProgram)
 {

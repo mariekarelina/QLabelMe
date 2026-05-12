@@ -8,15 +8,8 @@ class LambdaCommand : public QUndoCommand
 {
 public:
     using Func = std::function<void()>;
-    using MergeFunc = std::function<bool(const QUndoCommand* other)>;
 
-    LambdaCommand(Func redoFunc, Func undoFunc, const QString& text = {})
-        : _redoFunc(std::move(redoFunc))
-        , _undoFunc(std::move(undoFunc))
-        , _text(text)
-    {
-        setText(_text);
-    }
+    LambdaCommand(Func redoFunc, Func undoFunc, const QString& text = {});
 
     void redo() override;
     void undo() override;

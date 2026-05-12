@@ -1,5 +1,13 @@
 #include "lambda_command.h"
 
+LambdaCommand::LambdaCommand(Func redoFunc, Func undoFunc, const QString& text)
+    : _redoFunc(std::move(redoFunc))
+    , _undoFunc(std::move(undoFunc))
+    , _text(text)
+{
+    setText(_text);
+}
+
 void LambdaCommand::redo()
 {
     if (_redoFunc)

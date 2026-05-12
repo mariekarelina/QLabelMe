@@ -13,7 +13,7 @@
 #include <QRegularExpression>
 #include <QShowEvent>
 
-Settings::Settings(QWidget *parent)
+Settings::Settings(QWidget* parent)
     : QDialog(parent),
       ui(new Ui::Settings)
 {
@@ -101,7 +101,7 @@ void Settings::wireUi()
 
 void Settings::setupCloseMethodGroup()
 {
-    auto *g = new QButtonGroup(this);
+    auto* g = new QButtonGroup(this);
     g->setExclusive(true);
 
     g->addButton(ui->doubleClickLMB, static_cast<int>(PolylineCloseMode::DoubleClick));
@@ -117,7 +117,7 @@ void Settings::setupCloseMethodGroup()
 
 void Settings::setupFinishMethodGroup()
 {
-    auto *g = new QButtonGroup(this);
+    auto* g = new QButtonGroup(this);
     g->setExclusive(true);
 
     g->addButton(ui->doubleClickLMB_2, static_cast<int>(LineFinishMode::DoubleClick));
@@ -175,7 +175,7 @@ void Settings::applyModelToUi()
         ui->labelFontValue->setText(QStringLiteral("%1, %2")
                                         .arg(_labelFont.family())
                                         .arg(pt));
-        ui->labelFontValue->setToolTip(tr("%1\nРазмер: %2")
+        ui->labelFontValue->setToolTip(QString::fromUtf8("%1\nРазмер: %2")
                                            .arg(_labelFont.family())
                                            .arg(pt));
     }
@@ -281,7 +281,7 @@ void Settings::on_buttonBox_rejected()
     reject();
 }
 
-void Settings::on_buttonBox_clicked(QAbstractButton *btn)
+void Settings::on_buttonBox_clicked(QAbstractButton* btn)
 {
     const auto role = ui->buttonBox->buttonRole(btn);
     if (role == QDialogButtonBox::ApplyRole)
@@ -319,7 +319,7 @@ void Settings::onPickLabelFont()
         ui->labelFontValue->setText(QStringLiteral("%1, %2")
                                         .arg(_labelFont.family())
                                         .arg(pt));
-        ui->labelFontValue->setToolTip(tr("%1\nРазмер: %2")
+        ui->labelFontValue->setToolTip(QString::fromUtf8("%1\nРазмер: %2")
                                         .arg(_labelFont.family())
                                         .arg(pt));
         QFont f = ui->labelFontValue->font();
@@ -328,7 +328,7 @@ void Settings::onPickLabelFont()
     }
 }
 
-void Settings::updateColorPreview(QPushButton *btn, const QColor &c)
+void Settings::updateColorPreview(QPushButton* btn, const QColor &c)
 {
     if (!btn) return;
     btn->setStyleSheet(
@@ -340,8 +340,8 @@ void Settings::updateColorPreview(QPushButton *btn, const QColor &c)
     );
 }
 
-bool Settings::pickColor(QWidget *parent, const QString &title,
-                               QColor &ioColor, QPushButton *previewBtn)
+bool Settings::pickColor(QWidget* parent, const QString &title,
+                               QColor &ioColor, QPushButton* previewBtn)
 {
     const QColor chosen = QColorDialog::getColor(ioColor, parent, title,
                                                  QColorDialog::ShowAlphaChannel);
@@ -353,7 +353,7 @@ bool Settings::pickColor(QWidget *parent, const QString &title,
     return true;
 }
 
-void Settings::attachColorPicker(QPushButton *btn, QColor *target)
+void Settings::attachColorPicker(QPushButton* btn, QColor* target)
 {
     if (!btn || !target)
         return;
@@ -373,7 +373,7 @@ void Settings::updateLabelFontPreview()
     const int pt = (_labelFont.pointSize() > 0) ? _labelFont.pointSize()
                                                 : QApplication::font().pointSize();
     ui->labelFontValue->setText(QStringLiteral("%1, %2").arg(_labelFont.family()).arg(pt));
-    ui->labelFontValue->setToolTip(tr("%1\nРазмер: %2").arg(_labelFont.family()).arg(pt));
+    ui->labelFontValue->setToolTip(QString::fromUtf8("%1\nРазмер: %2").arg(_labelFont.family()).arg(pt));
 
     QFont f = ui->labelFontValue->font();
     f.setFamily(_labelFont.family());

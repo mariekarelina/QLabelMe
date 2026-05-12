@@ -67,7 +67,7 @@ public:
         LineFinishMode finishLine = LineFinishMode::DoubleClick;
     };
 
-    explicit Settings(QWidget *parent = nullptr);
+    explicit Settings(QWidget* parent = nullptr);
     ~Settings();
 
     void   setValues(const Values& v);
@@ -92,10 +92,10 @@ private:
     void setupCloseMethodGroup();
     void setupFinishMethodGroup();
 
-    static void updateColorPreview(QPushButton *btn, const QColor &c);
-    static bool pickColor(QWidget *parent, const QString &title,
-                          QColor &ioColor, QPushButton *previewBtn);
-    void attachColorPicker(QPushButton *btn, QColor *target);
+    static void updateColorPreview(QPushButton* btn, const QColor &c);
+    static bool pickColor(QWidget* parent, const QString &title,
+                          QColor &ioColor, QPushButton* previewBtn);
+    void attachColorPicker(QPushButton* btn, QColor* target);
     void updateLabelFontPreview();
 
 private:
