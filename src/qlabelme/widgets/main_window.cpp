@@ -1,6 +1,7 @@
 #include "main_window.h"
 #include "ui_main_window.h"
 //#include "event_window.h"
+#include "undo_stack.h"
 
 #include "shared/defmac.h"
 #include "shared/break_point.h"
@@ -1917,8 +1918,26 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
             }
         }
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
+//------------------------------------------
+
+            auto rectData = undo::RectangleData::Ptr::create();
+            rectData->id = rectangle->id();
+            //rectData->className =
+
+            undo::Create* undoCreate = new undo::Create(doc->scene, rectangle->id(),
+                                                        u8"Добавление прямоугольника",
+                                                        rectData);
+
+            doc->undoStack2.push(undoCreate);
+
+            if (auto* stack = activeUndoStack())
+                stack->push(new LambdaCommand(redoFn, undoFn, description));
+
+//-----------------------------------------
+
+
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }

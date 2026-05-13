@@ -183,3 +183,79 @@ void MoveShapeAction::undo()
 {
     applyBackup(_before);
 }
+
+
+namespace undo {
+
+Create::Create(QGraphicsScene* scene, const QUuidEx& shapeId, const QString& text,
+               ShapeData::Ptr data)
+{
+    _scene = scene;
+    _shapeId = shapeId;
+    _text = text;
+    _data = data;
+    //_before = before;
+    //_after = after;
+    //_onApplied = onApplied;
+
+}
+
+void Create::undo()
+{
+    if (auto rect = _data.dynamic_cast_to<RectangleData::Ptr>())
+    {
+
+    }
+    else if (auto circle = _data.dynamic_cast_to<CircleDataData::Ptr>())
+    {
+
+    }
+    else if (auto circle = _data.dynamic_cast_to<CircleData::Ptr>())
+    {
+
+    }
+    else if (auto line = _data.dynamic_cast_to<LineData::Ptr>())
+    {
+
+    }
+    else if (auto pline = _data.dynamic_cast_to<PolylineData::Ptr>())
+    {
+
+    }
+    else if (auto point = _data.dynamic_cast_to<PointData::Ptr>())
+    {
+
+    }
+
+}
+
+void Create::redo()
+{
+    if (auto rect = _data.dynamic_cast_to<RectangleData::Ptr>())
+    {
+
+    }
+    else if (auto circle = _data.dynamic_cast_to<CircleDataData::Ptr>())
+    {
+
+    }
+    else if (auto circle = _data.dynamic_cast_to<CircleData::Ptr>())
+    {
+
+    }
+    else if (auto line = _data.dynamic_cast_to<LineData::Ptr>())
+    {
+
+    }
+    else if (auto pline = _data.dynamic_cast_to<PolylineData::Ptr>())
+    {
+
+    }
+    else if (auto point = _data.dynamic_cast_to<PointData::Ptr>())
+    {
+
+    }
+}
+
+
+} // namespace undo

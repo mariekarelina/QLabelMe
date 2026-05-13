@@ -93,12 +93,14 @@ struct Document
     //DISABLE_DEFAULT_COPY(Document)
 
     QString filePath;  // Путь к файлу изображения
-    QGraphicsScene* scene = nullptr;  // Сцена с изображением и разметкой
-    qgraph::VideoRect* videoRect = nullptr;
+    QGraphicsScene* scene = {nullptr};  // Сцена с изображением и разметкой
+    qgraph::VideoRect* videoRect = {nullptr};
     QPixmap pixmap;  // Само изображение
-    QGraphicsPixmapItem* pixmapItem{}; // Элемент на сцене
-    bool isModified = false; // Флаг, указывающий на наличие несохраненных изменений
+    QGraphicsPixmapItem* pixmapItem = {nullptr}; // Элемент на сцене
+    bool isModified = {false}; // Флаг, указывающий на наличие несохраненных изменений
     std::unique_ptr<QUndoStack> _undoStack;
+
+    QUndoStack undoStack2;
 
     // Состояние просмотра
     struct

@@ -5,3 +5,4 @@ packages/*
 *.autosave
 qgit_*
 .project
+.qtcreator
