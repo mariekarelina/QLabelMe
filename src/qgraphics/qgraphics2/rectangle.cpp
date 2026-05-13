@@ -265,7 +265,7 @@ void Rectangle::keyPressEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Delete)
     {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc)
             return;
 
@@ -310,7 +310,7 @@ void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     {
         if (scene())
         {
-            const auto selected = scene()->selectedItems();
+            const QList<QGraphicsItem*> selected = scene()->selectedItems();
             for (QGraphicsItem* it : selected)
             {
                 if (it && it != this)
@@ -356,7 +356,7 @@ void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     });
 
     QObject::connect(deleteAction, &QAction::triggered, [this]() {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc)
             return;
 
@@ -369,7 +369,7 @@ void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     });
 
     QObject::connect(changeClassAction, &QAction::triggered, [this]() {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc)
             return;
 
@@ -388,7 +388,7 @@ void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     });
 
     QObject::connect(toggleVisibleAction, &QAction::triggered, [this]() {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc)
             return;
 
@@ -510,10 +510,10 @@ void Rectangle::updatePointNumbers()
 
     if (!visibleNumbers)
     {
-        for (auto* n : pointNumbers)
+        for (QGraphicsSimpleTextItem* n : pointNumbers)
             if (n) n->setVisible(false);
 
-        for (auto* bg : numberBackgrounds)
+        for (QGraphicsRectItem* bg : numberBackgrounds)
             if (bg) bg->setVisible(false);
 
         return;
@@ -521,7 +521,7 @@ void Rectangle::updatePointNumbers()
 
     while (pointNumbers.size() < 4)
     {
-        auto* num = new QGraphicsSimpleTextItem(this);
+        QGraphicsSimpleTextItem* num = new QGraphicsSimpleTextItem(this);
         num->setZValue(1001);
         num->setPen(Qt::NoPen);
         num->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
@@ -531,7 +531,7 @@ void Rectangle::updatePointNumbers()
         num->setFlag(QGraphicsItem::ItemIsFocusable, false);
         pointNumbers.append(num);
 
-        auto* bg = new QGraphicsRectItem(this);
+        QGraphicsRectItem* bg = new QGraphicsRectItem(this);
         bg->setPen(Qt::NoPen);
         bg->setZValue(1000);
         bg->setFlag(QGraphicsItem::ItemIgnoresTransformations, true);
@@ -542,15 +542,15 @@ void Rectangle::updatePointNumbers()
         numberBackgrounds.append(bg);
     }
 
-    for (auto* n : pointNumbers)
+    for (QGraphicsSimpleTextItem* n : pointNumbers)
         if (n) n->setVisible(true);
 
-    for (auto* bg : numberBackgrounds)
+    for (QGraphicsRectItem* bg : numberBackgrounds)
         if (bg) bg->setVisible(true);
 
     DragCircle* circles[4] = {_circleTL, _circleTR, _circleBR, _circleBL};
 
-    auto centerOf = [](DragCircle* c) -> QPointF
+    QPointF (*centerOf)(DragCircle*) = [](DragCircle* c) -> QPointF
     {
         return c ? c->pos() : QPointF(0, 0);
     };
@@ -573,8 +573,8 @@ void Rectangle::updatePointNumbers()
 
         int idx = (i + _numberingOffset) % 4;
 
-        auto* num = pointNumbers[i];
-        auto* bg = numberBackgrounds[i];
+        QGraphicsSimpleTextItem* num = pointNumbers[i];
+        QGraphicsRectItem* bg = numberBackgrounds[i];
         if (!num || !bg)
             continue;
 
@@ -700,7 +700,7 @@ void Rectangle::rotatePointsCounterClockwise()
 
 void Rectangle::deleteItem()
 {
-    auto scene = this->scene();
+    QGraphicsScene* scene = this->scene();
     if (scene)
     {
         scene->removeItem(this);

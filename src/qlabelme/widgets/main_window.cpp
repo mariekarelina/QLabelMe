@@ -109,13 +109,13 @@ public:
         : QDialog(parent)
     {
         setWindowTitle(title);
-        auto* spin = new QDoubleSpinBox; spin->setRange(minValue, maxValue);
+        QDoubleSpinBox* spin = new QDoubleSpinBox; spin->setRange(minValue, maxValue);
                     spin->setDecimals(1); spin->setSingleStep(step); spin->setValue(value);
-        auto* form = new QFormLayout; form->addRow(label, spin);
-        auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+        QFormLayout* form = new QFormLayout; form->addRow(label, spin);
+        QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
         QObject::connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
         QObject::connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        auto* dialogLayout = new QVBoxLayout(this); dialogLayout->addLayout(form);
+        QVBoxLayout* dialogLayout = new QVBoxLayout(this); dialogLayout->addLayout(form);
                             dialogLayout->addWidget(buttonBox);
         _spin = spin;
     }
@@ -239,13 +239,13 @@ MainWindow::MainWindow(QWidget* parent) :
     // Создаем контейнер для тулбаров и кладем их рядом
     QWidget* toolBarsBlock = new QWidget(ui->layoutWidget1);
 
-    auto* vtb = new QVBoxLayout(toolBarsBlock);
+    QVBoxLayout* vtb = new QVBoxLayout(toolBarsBlock);
     vtb->setContentsMargins(0, 0, 0, 0);
     vtb->setSpacing(0); // Расстояние между тулбарами
 
     // Строка для тулбаров
     QWidget* toolBarsRow = new QWidget(toolBarsBlock);
-    auto* htb = new QHBoxLayout(toolBarsRow);
+    QHBoxLayout* htb = new QHBoxLayout(toolBarsRow);
     htb->setContentsMargins(0, 0, 0, 0);
     htb->setSpacing(8);
 
@@ -324,7 +324,7 @@ MainWindow::MainWindow(QWidget* parent) :
 
 
     // Сделать подсветку одинаковой яркой, даже когда список без фокуса
-    auto fixSelectionPalette = [](QListWidget* listWidget){
+    void (*fixSelectionPalette)(QListWidget*) = [](QListWidget* listWidget){
         QPalette palette = listWidget->palette();
         const QColor activeHighlight = palette.color(QPalette::Active, QPalette::Highlight);
         const QColor activeHighlightedText = palette.color(QPalette::Active, QPalette::HighlightedText);
@@ -465,15 +465,15 @@ MainWindow::MainWindow(QWidget* parent) :
             this, &MainWindow::onPolygonListSelectionChanged);
 
 
-    auto shNext = new QShortcut(QKeySequence(Qt::Key_D), this);
+    QShortcut* shNext = new QShortcut(QKeySequence(Qt::Key_D), this);
     shNext->setContext(Qt::ApplicationShortcut);
     connect(shNext, &QShortcut::activated, this, &MainWindow::nextImage);
 
-    auto shPrev = new QShortcut(QKeySequence(Qt::Key_A), this);
+    QShortcut* shPrev = new QShortcut(QKeySequence(Qt::Key_A), this);
     shPrev->setContext(Qt::ApplicationShortcut);
     connect(shPrev, &QShortcut::activated, this, &MainWindow::prevImage);
 
-    auto shSelectAll = new QShortcut(QKeySequence::SelectAll, this);
+    QShortcut* shSelectAll = new QShortcut(QKeySequence::SelectAll, this);
     shSelectAll->setContext(Qt::ApplicationShortcut);
     connect(shSelectAll, &QShortcut::activated, this, &MainWindow::selectAllShapes);
 
@@ -643,7 +643,7 @@ MainWindow::MainWindow(QWidget* parent) :
     //     ui->toolBar->addAction(_actRedo);
     // }
 
-    // auto undoBtn = qobject_cast<QToolButton*>(
+    // std::function<void()> undoBtn = qobject_cast<QToolButton*>(
     //     ui->toolBar->widgetForAction(_actUndo)
     // );
     // if (undoBtn)
@@ -651,7 +651,7 @@ MainWindow::MainWindow(QWidget* parent) :
     //     undoBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     // }
 
-    // auto redoBtn = qobject_cast<QToolButton*>(
+    // std::function<void()> redoBtn = qobject_cast<QToolButton*>(
     //     ui->toolBar->widgetForAction(_actRedo)
     // );
     // if (redoBtn)
@@ -664,7 +664,7 @@ MainWindow::MainWindow(QWidget* parent) :
     // connect(_undoStack.get(), &QUndoStack::indexChanged, this, [this]() {
     //     if (_loadingNow)
     //         return;
-    //     auto doc = currentDocument();
+    //     Document::Ptr doc = currentDocument();
     //     if (!doc)
     //         return;
 
@@ -744,7 +744,7 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->menuBar->setVisible(mbVisible);
 
     // Чтобы шорткаты работали даже при скрытом menuBar
-    const auto acts = findChildren<QAction*>();
+    const QList<QAction*> acts = findChildren<QAction*>();
     for (QAction* act : acts)
     {
         if (!act)
@@ -793,7 +793,7 @@ void MainWindow::deinit()
 
 void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
 {
-    auto isAnyDrawingNow = [&]() -> bool
+    const std::function<bool()> isAnyDrawingNow = [&]() -> bool
     {
         return _isInDrawingMode
             || _isDrawingPolyline || _isDrawingLine
@@ -826,7 +826,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         {
             QGraphicsItem* item = pickItemByEdgeAt(graphView, mouseEvent->pos());
 
-            if (auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(item))
+            if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
             {
                 ShapeBackup before = makeBackupFromItem(polyline);
                 const qulonglong uid = before.uid;
@@ -837,7 +837,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 if (!sameGeometry(before, after))
                     pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
 
-                if (auto doc = currentDocument(); doc && !doc->isModified)
+                if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                 {
                     doc->isModified = true;
                     updateFileListDisplay(doc->filePath);
@@ -847,7 +847,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 return;
             }
 
-            if (auto* line = qgraphicsitem_cast<qgraph::Line*>(item))
+            if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
             {
                 ShapeBackup before = makeBackupFromItem(line);
                 const qulonglong uid = before.uid;
@@ -858,7 +858,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 if (!sameGeometry(before, after))
                     pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
 
-                if (auto doc = currentDocument(); doc && !doc->isModified)
+                if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                 {
                     doc->isModified = true;
                     updateFileListDisplay(doc->filePath);
@@ -909,10 +909,10 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
         // Находим полилинию под курсором (самую верхнюю)
         qgraph::Polyline* poly = nullptr;
-        const auto itemsAtPos = graphView->scene()->items(scenePos);
+        const QList<QGraphicsItem*> itemsAtPos = graphView->scene()->items(scenePos);
         for (QGraphicsItem* item : itemsAtPos)
         {
-            if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+            if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
             {
                 poly = polyline;
                 break;
@@ -1001,7 +1001,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
         QGraphicsItem* selectionItem = clickedItem;
 
-        if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(selectionItem))
+        if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(selectionItem))
             selectionItem = handle->parentItem();
 
         if (selectionItem && selectionItem != _videoRect)
@@ -1353,7 +1353,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
         _currPoint = nullptr;
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -1444,12 +1444,6 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
 void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
 {
-    // auto isAnyDrawingNow = [&]() -> bool {
-    //     return _isInDrawingMode
-    //         || _isDrawingPolyline || _isDrawingLine || _isDrawingRectangle || _isDrawingCircle || _isDrawingPoint
-    //         || _drawingPolyline  || _drawingLine  || _drawingRectangle  || _drawingCircle  || _drawingPoint;
-    // };
-
     // Если в рисовании Line/Polyline ЛКМ уехала дальше порога
     if (_pendingDrawTool != PendingDrawTool::None
         && (mouseEvent->buttons() & Qt::LeftButton)
@@ -1635,13 +1629,13 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
             _draggingItem->moveBy(delta.x(), delta.y());
 
             // Обновляем ручки для перемещаемой фигуры
-            if (auto* circle = dynamic_cast<qgraph::Circle*>(_draggingItem))
+            if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(_draggingItem))
                 circle->updateHandlePosition();
-            else if (auto* rect = dynamic_cast<qgraph::Rectangle*>(_draggingItem))
+            else if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(_draggingItem))
                 rect->updateHandlePosition();
-            else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(_draggingItem))
+            else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_draggingItem))
                 polyline->updateHandlePosition();
-            else if (auto* line = dynamic_cast<qgraph::Line*>(_draggingItem))
+            else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(_draggingItem))
                 line->updateHandlePosition();
 
             updateAllPointNumbers();
@@ -1708,7 +1702,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             if (_m_zoom <= 0.000001)
                 _m_zoom = 1.0;
 
-            if (auto doc = currentDocument())
+            if (Document::Ptr doc = currentDocument())
                 saveCurrentViewState(doc);
 
             updateAllPointNumbers();
@@ -1728,8 +1722,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
             QGraphicsItem* selectionItem = clickedItem;
 
-            if (auto* h = qgraphicsitem_cast<qgraph::DragCircle*>(selectionItem))
-                selectionItem = h->parentItem();
+            if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(selectionItem))
+                selectionItem = handle->parentItem();
 
             if (selectionItem && selectionItem != _videoRect)
                 selectionItem = findMovableAncestor(selectionItem);
@@ -1789,7 +1783,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         {
             _movingItem->setFlags(_moveSavedFlags);
 
-            if (_moveHadChanges)
+            /*if (_moveHadChanges)
             {
                 if (_moveIsGroup && !_movingItems.isEmpty())
                 {
@@ -1833,6 +1827,86 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                                              u8"Перемещение фигуры");
                     }
                 }
+            }*/
+            if (_moveHadChanges)
+            {
+                if (_moveIsGroup && !_movingItems.isEmpty())
+                {
+                    QString descr = (_movingItems.size() == 1)
+                                    ? u8"Перемещение фигуры"
+                                    : u8"Перемещение фигур";
+
+                    QUndoStack* stack = activeUndoStack();
+
+                    if (stack)
+                        stack->beginMacro(descr);
+
+                    const int count = qMin(_movingItems.size(), _moveGroupInitialPos.size());
+
+                    for (int i = 0; i < count; ++i)
+                    {
+                        QGraphicsItem* item = _movingItems[i];
+                        if (!item)
+                            continue;
+
+                        qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(item);
+                        if (!shape)
+                            continue;
+
+                        const QPointF delta = item->scenePos() - _moveGroupInitialPos[i];
+
+                        if (qFuzzyIsNull(delta.x()) && qFuzzyIsNull(delta.y()))
+                            continue;
+
+                        if (stack)
+                        {
+                            stack->push(new undo::Move(_scene,
+                                                       shape,
+                                                       u8"Перемещение фигуры",
+                                                       delta));
+                        }
+                    }
+
+                    if (stack)
+                        stack->endMacro();
+
+                    Document::Ptr doc = currentDocument();
+                    if (doc)
+                    {
+                        doc->isModified = true;
+                        updateFileListDisplay(doc->filePath);
+                    }
+                }
+                else
+                {
+                    qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(_movingItem);
+
+                    if (shape)
+                    {
+                        const QPointF startPos = _movePressScenePos - _moveGrabOffsetScene;
+                        const QPointF delta = _movingItem->scenePos() - startPos;
+
+                        if (!qFuzzyIsNull(delta.x()) || !qFuzzyIsNull(delta.y()))
+                        {
+                            QUndoStack* stack = activeUndoStack();
+
+                            if (stack)
+                            {
+                                stack->push(new undo::Move(_scene,
+                                                           shape,
+                                                           u8"Перемещение фигуры",
+                                                           delta));
+                            }
+
+                            Document::Ptr doc = currentDocument();
+                            if (doc)
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
+                        }
+                    }
+                }
             }
 
             if (_moveHadChanges)
@@ -1841,17 +1915,17 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 {
                     for (QGraphicsItem* item : _movingItems)
                     {
-                        if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+                        if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
                             polyline->updatePointNumbers();
-                        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+                        else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
                             line->updatePointNumbers();
                     }
                 }
                 else
                 {
-                    if (auto* polyline = dynamic_cast<qgraph::Polyline*>(_movingItem))
+                    if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_movingItem))
                         polyline->updatePointNumbers();
-                    else if (auto* line = dynamic_cast<qgraph::Line*>(_movingItem))
+                    else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(_movingItem))
                         line->updatePointNumbers();
                 }
             }
@@ -1922,7 +1996,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         {
 //------------------------------------------
 
-            auto rectData = undo::RectangleData::Ptr::create();
+            undo::RectangleData::Ptr rectData = undo::RectangleData::Ptr::create();
             rectData->id = rectangle->id();
             rectData->className = rectangle->data(0).toString();
             rectData->zLevel = rectangle->zValue();
@@ -1938,10 +2012,6 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             {
                 stack->push(undoCreate);
             }
-            //doc->undoStack2.push(undoCreate);
-
-            // if (auto* stack = activeUndoStack())
-            //     stack->push(new LambdaCommand(redoFn, undoFn, description));
 
 //-----------------------------------------
 
@@ -2014,7 +2084,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
             }
         }
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -2057,9 +2127,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                     const qulonglong uid = ensureUid(_polyline);
                     const QString cls = selectedClass;
 
-                    auto redoFn = [this, uid, cls]()
+                    std::function<void()> redoFn = [this, uid, cls]()
                     {
-                        auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
                         if (!polyline)
                             return;
 
@@ -2078,16 +2148,16 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                         _resumeUid = 0;
                         updateModeLabel();
 
-                        if (auto doc = currentDocument())
+                        if (Document::Ptr doc = currentDocument())
                         {
                             doc->isModified = true;
                             updateFileListDisplay(doc->filePath);
                         }
                     };
 
-                    auto undoFn = [this, uid]()
+                    std::function<void()> undoFn = [this, uid]()
                     {
-                        auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
                         if (!polyline)
                             return;
 
@@ -2105,7 +2175,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                         removeListEntryBySceneItem(polyline);
 
-                        if (auto doc = currentDocument())
+                        if (Document::Ptr doc = currentDocument())
                         {
                             doc->isModified = true;
                             updateFileListDisplay(doc->filePath);
@@ -2128,9 +2198,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             _drawingPolyline = false;
             updateModeLabel();
 
-            auto redoFn = [this, uid, cls]()
+            std::function<void()> redoFn = [this, uid, cls]()
             {
-                auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
                 if (!polyline)
                     return;
 
@@ -2152,7 +2222,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 _resumeUid = 0;
                 updateModeLabel();
 
-                if (auto doc = currentDocument())
+                if (Document::Ptr doc = currentDocument())
                 {
                     doc->isModified = true;
                     updateFileListDisplay(doc->filePath);
@@ -2160,9 +2230,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 raiseAllHandlesToTop();
             };
 
-            auto undoFn = [this, uid]()
+            std::function<void()> undoFn = [this, uid]()
             {
-                auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
                 if (!polyline)
                     return;
 
@@ -2181,7 +2251,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                 removeListEntryBySceneItem(polyline);
 
-                if (auto doc = currentDocument())
+                if (Document::Ptr doc = currentDocument())
                 {
                     doc->isModified = true;
                     updateFileListDisplay(doc->filePath);
@@ -2196,7 +2266,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         }
         _polyline = nullptr;
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -2243,9 +2313,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                     _drawingLine = false;
                     updateModeLabel();
 
-                    auto redoFn = [this, uid, cls]()
+                    std::function<void()> redoFn = [this, uid, cls]()
                     {
-                        auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
                         if (!line)
                             return;
 
@@ -2264,7 +2334,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                         _resumeUid = 0;
                         updateModeLabel();
 
-                        if (auto doc = currentDocument())
+                        if (Document::Ptr doc = currentDocument())
                         {
                             doc->isModified = true;
                             updateFileListDisplay(doc->filePath);
@@ -2272,9 +2342,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                         raiseAllHandlesToTop();
                     };
 
-                    auto undoFn = [this, uid]()
+                    std::function<void()> undoFn = [this, uid]()
                     {
-                        auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
                         if (!line)
                             return;
 
@@ -2293,7 +2363,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                         removeListEntryBySceneItem(line);
 
-                        if (auto doc = currentDocument())
+                        if (Document::Ptr doc = currentDocument())
                         {
                             doc->isModified = true;
                             updateFileListDisplay(doc->filePath);
@@ -2316,9 +2386,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             _drawingLine = false;
             updateModeLabel();
 
-            auto redoFn = [this, uid, cls]()
+            std::function<void()> redoFn = [this, uid, cls]()
             {
-                auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
                 if (!line)
                     return;
 
@@ -2340,7 +2410,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 _resumeUid = 0;
                 updateModeLabel();
 
-                if (auto doc = currentDocument())
+                if (Document::Ptr doc = currentDocument())
                 {
                     doc->isModified = true;
                     updateFileListDisplay(doc->filePath);
@@ -2348,9 +2418,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 raiseAllHandlesToTop();
             };
 
-            auto undoFn = [this, uid]()
+            std::function<void()> undoFn = [this, uid]()
             {
-                auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
                 if (!line)
                     return;
 
@@ -2369,7 +2439,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                 removeListEntryBySceneItem(line);
 
-                if (auto doc = currentDocument())
+                if (Document::Ptr doc = currentDocument())
                 {
                     doc->isModified = true;
                     updateFileListDisplay(doc->filePath);
@@ -2385,7 +2455,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
         _line = nullptr;
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -2513,7 +2583,7 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
     if (!item)
         return;
 
-    if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(item))
+    if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(item))
         item = handle->parentItem();
 
     if (!item || item == _videoRect)
@@ -2542,7 +2612,7 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
         if (!selectedSceneItem)
             continue;
 
-        if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(selectedSceneItem))
+        if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(selectedSceneItem))
             selectedSceneItem = handle->parentItem();
 
         selectedSceneItem = findMovableAncestor(selectedSceneItem);
@@ -2565,7 +2635,7 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
             if (!selectedSceneItem)
                 continue;
 
-            if (auto* handle = qgraphicsitem_cast<qgraph::DragCircle*>(selectedSceneItem))
+            if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(selectedSceneItem))
                 selectedSceneItem = handle->parentItem();
 
             selectedSceneItem = findMovableAncestor(selectedSceneItem);
@@ -2626,7 +2696,7 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
 
     updatePolygonListTexts();
 
-    if (auto doc = currentDocument())
+    if (Document::Ptr doc = currentDocument())
     {
         doc->isModified = true;
         updateFileListDisplay(doc->filePath);
@@ -2652,7 +2722,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         }
         case QEvent::MouseButtonPress:
         {
-            auto* me = static_cast<QMouseEvent*>(event);
+            QMouseEvent* me = static_cast<QMouseEvent*>(event);
             if (me->button() != Qt::LeftButton)
                 break;
 
@@ -2677,7 +2747,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                 if (handle && handle->parentItem())
                 {
-                    if (auto* polyline = dynamic_cast<qgraph::Polyline*>(handle->parentItem()))
+                    if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(handle->parentItem()))
                     {
                         ShapeBackup before = makeBackupFromItem(polyline);
                         const qulonglong uid = before.uid;
@@ -2688,7 +2758,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         if (!sameGeometry(before, after))
                             pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
 
-                        if (auto doc = currentDocument(); doc && !doc->isModified)
+                        if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                         {
                             doc->isModified = true;
                             updateFileListDisplay(doc->filePath);
@@ -2698,7 +2768,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         return true;
                     }
 
-                    if (auto* line = dynamic_cast<qgraph::Line*>(handle->parentItem()))
+                    if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(handle->parentItem()))
                     {
                         ShapeBackup before = makeBackupFromItem(line);
                         const qulonglong uid = before.uid;
@@ -2709,7 +2779,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         if (!sameGeometry(before, after))
                             pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
 
-                        if (auto doc = currentDocument(); doc && !doc->isModified)
+                        if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                         {
                             doc->isModified = true;
                             updateFileListDisplay(doc->filePath);
@@ -2754,7 +2824,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             if (_drawingPolyline && _polyline &&
                 qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::SingleClickOnFirstPoint)
             {
-                const auto& circles = _polyline->circles();
+                const QVector<qgraph::DragCircle*>& circles = _polyline->circles();
                 if (!circles.isEmpty())
                 {
                     const QPointF p0 = circles.first()->scenePos();
@@ -2787,9 +2857,9 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                     const qulonglong uid = ensureUid(_polyline);
                                     const QString cls = selectedClass;
 
-                                    auto redoFn = [this, uid, cls]()
+                                    std::function<void()> redoFn = [this, uid, cls]()
                                     {
-                                        auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
                                         if (!polyline)
                                             return;
 
@@ -2808,16 +2878,16 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                         _resumeEditing = false;
                                         _resumeUid = 0;
 
-                                        if (auto doc = currentDocument())
+                                        if (Document::Ptr doc = currentDocument())
                                         {
                                             doc->isModified = true;
                                             updateFileListDisplay(doc->filePath);
                                         }
                                     };
 
-                                    auto undoFn = [this, uid]()
+                                    std::function<void()> undoFn = [this, uid]()
                                     {
-                                        auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
                                         if (!polyline) return;
 
                                         polyline->setClosed(false, false);
@@ -2835,7 +2905,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                         removeListEntryBySceneItem(polyline);
 
-                                        if (auto doc = currentDocument())
+                                        if (Document::Ptr doc = currentDocument())
                                         {
                                             doc->isModified = true;
                                             updateFileListDisplay(doc->filePath);
@@ -2859,9 +2929,9 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             _drawingPolyline = false;
                             updateModeLabel();
 
-                            auto redoFn = [this, uid, cls]()
+                            std::function<void()> redoFn = [this, uid, cls]()
                             {
-                                auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
                                 if (!polyline)
                                     return;
 
@@ -2883,7 +2953,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                 _resumeEditing = false;
                                 _resumeUid = 0;
 
-                                if (auto doc = currentDocument())
+                                if (Document::Ptr doc = currentDocument())
                                 {
                                     doc->isModified = true;
                                     updateFileListDisplay(doc->filePath);
@@ -2891,9 +2961,9 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                 raiseAllHandlesToTop();
                             };
 
-                            auto undoFn = [this, uid]()
+                            std::function<void()> undoFn = [this, uid]()
                             {
-                                auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
                                 if (!polyline)
                                     return;
 
@@ -2912,7 +2982,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                 removeListEntryBySceneItem(polyline);
 
-                                if (auto doc = currentDocument())
+                                if (Document::Ptr doc = currentDocument())
                                 {
                                     doc->isModified = true;
                                     updateFileListDisplay(doc->filePath);
@@ -2928,7 +2998,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                         _polyline = nullptr;
 
-                        if (auto doc = currentDocument())
+                        if (Document::Ptr doc = currentDocument())
                         {
                             doc->isModified = true;
                             updateFileListDisplay(doc->filePath);
@@ -2948,7 +3018,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             // Захватываем существующий узел только при очень точном попадании
             if (drawingLineLike)
             {
-                if (auto* preciseHandle = pickHandleAt(sp, _drawHandleCommitRadius))
+                if (qgraph::DragCircle* preciseHandle = pickHandleAt(sp, _drawHandleCommitRadius))
                 {
                     if (preciseHandle->scene() && _scene && _scene->items().contains(preciseHandle))
                     {
@@ -2960,7 +3030,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 break; // иначе пусть клик дойдет до handleLineLmbClick / handlePolylineLmbClick
             }
 
-            if (auto* target = pickHiddenHandle(sp, topIsHandle))
+            if (qgraph::DragCircle* target = pickHiddenHandle(sp, topIsHandle))
             {
                 if (target->scene() && _scene && _scene->items().contains(target))
                 {
@@ -2990,7 +3060,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 break;
             }
 
-            auto* me = static_cast<QMouseEvent*>(event);
+            QMouseEvent* me = static_cast<QMouseEvent*>(event);
             const QPointF sp = ui->graphView->mapToScene(me->pos());
 
             if (_drawingRuler || _isDrawingRuler)
@@ -3056,7 +3126,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         }
         case QEvent::MouseButtonRelease:
         {
-            auto* me = static_cast<QMouseEvent*>(event);
+            QMouseEvent* me = static_cast<QMouseEvent*>(event);
             if (me->button() != Qt::LeftButton)
                 break;
 
@@ -3082,7 +3152,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         case QEvent::ShortcutOverride:
         case QEvent::KeyPress:
         {
-            auto* ke = static_cast<QKeyEvent*>(event);
+            QKeyEvent* ke = static_cast<QKeyEvent*>(event);
 
             // Завершение рисования по 'C' при выбранном режиме KeyC
             if (_drawingPolyline && _polyline &&
@@ -3112,7 +3182,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             if (obj != ui->graphView->viewport())
                 break;
 
-            auto* we = static_cast<QWheelEvent*>(event);
+            QWheelEvent* we = static_cast<QWheelEvent*>(event);
             // Shift + колесико = горизонтальный скролл
             if ((we->modifiers() & Qt::ShiftModifier) &&
                 !(we->modifiers() & Qt::ControlModifier))
@@ -3127,10 +3197,10 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                 if (dx != 0)
                 {
-                    auto* hbar = ui->graphView->horizontalScrollBar();
+                    QScrollBar* hbar = ui->graphView->horizontalScrollBar();
                     hbar->setValue(hbar->value() - dx);
 
-                    if (auto doc = currentDocument())
+                    if (Document::Ptr doc = currentDocument())
                         saveCurrentViewState(doc);
                 }
                 we->accept();
@@ -3201,7 +3271,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             updateAllPointNumbers();
             ui->graphView->viewport()->update();
 
-            if (auto doc = currentDocument())
+            if (Document::Ptr doc = currentDocument())
                 saveCurrentViewState(doc);
 
             we->accept();
@@ -3216,7 +3286,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 event->accept();
                 return true;
             }
-            auto* ce = static_cast<QContextMenuEvent*>(event);
+            QContextMenuEvent* ce = static_cast<QContextMenuEvent*>(event);
 
             const QPoint  viewPos = ce->pos();
             const QPointF scenePos = ui->graphView->mapToScene(viewPos);
@@ -3227,11 +3297,11 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     item = byEdge;
             }
 
-            if (auto* circle = dynamic_cast<DragCircle*>(item))
+            if (DragCircle* circle = dynamic_cast<DragCircle*>(item))
             {
-                if (auto* parent = circle->parentItem())
+                if (QGraphicsItem* parent = circle->parentItem())
                 {
-                    if (auto* polyline = dynamic_cast<qgraph::Polyline*>(parent))
+                    if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(parent))
                     {
                         QMenu menu {ui->graphView};
                         QAction* actRemove = menu.addAction(u8"Удалить узел");
@@ -3253,7 +3323,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             if (!sameGeometry(before, after))
                                 pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
 
-                            if (auto doc = currentDocument(); doc && !doc->isModified)
+                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                             {
                                 doc->isModified = true;
                                 updateFileListDisplay(doc->filePath);
@@ -3291,7 +3361,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                     _resumeEditing = false;
                                     _resumeUid = 0;
 
-                                    if (auto doc = currentDocument(); doc && !doc->isModified)
+                                    if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                                     {
                                         doc->isModified = true;
                                         updateFileListDisplay(doc->filePath);
@@ -3307,7 +3377,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             ShapeBackup before = makeBackupFromItem(polyline);
                             qulonglong uid = before.uid;
 
-                            const auto& circles = polyline->circles();
+                            const  QVector<qgraph::DragCircle*>& circles = polyline->circles();
                             const int idx = circles.indexOf(circle);
                             if (idx < 0)
                             {
@@ -3322,7 +3392,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             if (!sameGeometry(before, after))
                                 pushModifyShapeCommand(uid, before, after, u8"Пересчет нумерации");
 
-                            if (auto doc = currentDocument(); doc && !doc->isModified)
+                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                             {
                                 doc->isModified = true;
                                 updateFileListDisplay(doc->filePath);
@@ -3339,7 +3409,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             if (!sameGeometry(before, after))
                                 pushModifyShapeCommand(uid, before, after, u8"Нумерация по часовой стрелке");
 
-                            if (auto doc = currentDocument(); doc && !doc->isModified)
+                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                             {
                                 doc->isModified = true;
                                 updateFileListDisplay(doc->filePath);
@@ -3356,7 +3426,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             if (!sameGeometry(before, after))
                                 pushModifyShapeCommand(uid, before, after, u8"Нумерация против часовой стрелки");
 
-                            if (auto doc = currentDocument(); doc && !doc->isModified)
+                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                             {
                                 doc->isModified = true;
                                 updateFileListDisplay(doc->filePath);
@@ -3365,14 +3435,14 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         ce->accept();
                         return true;
                     }
-                    if (auto* line = dynamic_cast<qgraph::Line*>(parent))
+                    if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(parent))
                     {
                         QMenu menu(ui->graphView);
 
                         QAction* actRemove = menu.addAction(u8"Удалить узел");
                         QAction* actResume = menu.addAction(u8"Возобновить редактирование");
                         QAction* actRecalc = nullptr;
-                        const auto& circles = line->circles();
+                        const  QVector<qgraph::DragCircle*>& circles = line->circles();
                         const int idx = circles.indexOf(circle);
                         if ((idx == 0) || (idx == circles.size() - 1))
                             actRecalc = menu.addAction(u8"Пересчитать нумерацию");
@@ -3390,7 +3460,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             if (!sameGeometry(before, after))
                                 pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
 
-                            if (auto doc = currentDocument(); doc && !doc->isModified)
+                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                             {
                                 doc->isModified = true;
                                 updateFileListDisplay(doc->filePath);
@@ -3430,7 +3500,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                     _resumeEditing = false;
                                     _resumeUid = 0;
 
-                                    if (auto doc = currentDocument(); doc && !doc->isModified)
+                                    if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                                     {
                                         doc->isModified = true;
                                         updateFileListDisplay(doc->filePath);
@@ -3453,7 +3523,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             if (!sameGeometry(before, after))
                                 pushModifyShapeCommand(uid, before, after, u8"Пересчет нумерации");
 
-                            if (auto doc = currentDocument(); doc && !doc->isModified)
+                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                             {
                                 doc->isModified = true;
                                 updateFileListDisplay(doc->filePath);
@@ -3462,7 +3532,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         ce->accept();
                         return true;
                     }
-                    if (auto* rect = dynamic_cast<qgraph::Rectangle*>(parent))
+                    if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(parent))
                     {
                         QMenu menu(ui->graphView);
                         QAction* actRecalc = menu.addAction(u8"Пересчитать нумерацию");
@@ -3479,7 +3549,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                             if (!sameGeometry(before, after))
                                 pushModifyShapeCommand(uid, before, after, u8"Пересчет нумерации");
 
-                            if (auto doc = currentDocument(); doc && !doc->isModified)
+                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                             {
                                 doc->isModified = true;
                                 updateFileListDisplay(doc->filePath);
@@ -3492,7 +3562,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 }
             }
 
-            if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+            if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
             {
                 const QPainterPath p = polyline->path();
 
@@ -3528,7 +3598,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     if (!sameGeometry(before, after))
                         pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
 
-                    if (auto doc = currentDocument(); doc && !doc->isModified)
+                    if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                     {
                         doc->isModified = true;
                         updateFileListDisplay(doc->filePath);
@@ -3552,7 +3622,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     // Если полилиния замкнута, разрываем именно то ребро, по которому был ПКМ
                     if (polyline->isClosed() && n >= 3)
                     {
-                        auto dist2PointToSegment = [](const QPointF& p, const QPointF& a, const QPointF& b) -> double
+                        double (*dist2PointToSegment)(const QPointF&, const QPointF&, const QPointF&) =
+                            [](const QPointF& p, const QPointF& a, const QPointF& b) -> double
                         {
                             const double vx = b.x() - a.x();
                             const double vy = b.y() - a.y();
@@ -3600,7 +3671,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 ce->accept();
                 return true;
             }
-            if (auto* line = dynamic_cast<qgraph::Line*>(item))
+            if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
             {
                 const QPainterPath p = line->path();
 
@@ -3638,7 +3709,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     if (!sameGeometry(before, after))
                         pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
 
-                    if (auto doc = currentDocument(); doc && !doc->isModified)
+                    if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                     {
                         doc->isModified = true;
                         updateFileListDisplay(doc->filePath);
@@ -4008,7 +4079,7 @@ void MainWindow::fitImageToView()
     if (_m_zoom <= 0.000001)
         _m_zoom = 1.0;
 
-    if (auto doc = currentDocument())
+    if (Document::Ptr doc = currentDocument())
     {
         const qreal zoom = ui->graphView->transform().m11();
         doc->viewState = {
@@ -4079,7 +4150,7 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem*
                     if (item->parentItem() != nullptr)
                         continue;
 
-                    if (auto sc = item->scene())
+                    if (QGraphicsScene* sc = item->scene())
                         sc->removeItem(item);
 
                     prevDoc->scene->addItem(item);
@@ -4258,7 +4329,7 @@ void MainWindow::onPolygonListSelectionChanged()
             item->setSelected(false);
         }
 
-        for (auto* li : selected)
+        for (QListWidgetItem* li : selected)
         {
             if (!li)
                 continue;
@@ -4463,9 +4534,9 @@ void MainWindow::on_actClosePolyline_triggered()
                     _drawingLine = false;
                     updateModeLabel();
 
-                    auto redoFn = [this, uid, cls]()
+                    std::function<void()> redoFn = [this, uid, cls]()
                     {
-                        auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
                         if (!line)
                             return;
 
@@ -4484,7 +4555,7 @@ void MainWindow::on_actClosePolyline_triggered()
                         _resumeUid = 0;
                         updateModeLabel();
 
-                        if (auto doc = currentDocument())
+                        if (Document::Ptr doc = currentDocument())
                         {
                             doc->isModified = true;
                             updateFileListDisplay(doc->filePath);
@@ -4492,9 +4563,9 @@ void MainWindow::on_actClosePolyline_triggered()
                         raiseAllHandlesToTop();
                     };
 
-                    auto undoFn = [this, uid]()
+                    std::function<void()> undoFn = [this, uid]()
                     {
-                        auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
                         if (!line)
                             return;
 
@@ -4512,7 +4583,7 @@ void MainWindow::on_actClosePolyline_triggered()
 
                         removeListEntryBySceneItem(line);
 
-                        if (auto doc = currentDocument())
+                        if (Document::Ptr doc = currentDocument())
                         {
                             doc->isModified = true;
                             updateFileListDisplay(doc->filePath);
@@ -4535,9 +4606,9 @@ void MainWindow::on_actClosePolyline_triggered()
             _drawingLine = false;
             updateModeLabel();
 
-            auto redoFn = [this, uid, cls]()
+            std::function<void()> redoFn = [this, uid, cls]()
             {
-                auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
                 if (!line) return;
 
                 line->setClosed(true, false);
@@ -4558,7 +4629,7 @@ void MainWindow::on_actClosePolyline_triggered()
                 _resumeUid = 0;
                 updateModeLabel();
 
-                if (auto doc = currentDocument())
+                if (Document::Ptr doc = currentDocument())
                 {
                     doc->isModified = true;
                     updateFileListDisplay(doc->filePath);
@@ -4566,9 +4637,9 @@ void MainWindow::on_actClosePolyline_triggered()
                 raiseAllHandlesToTop();
             };
 
-            auto undoFn = [this, uid]()
+            std::function<void()> undoFn = [this, uid]()
             {
-                auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
                 if (!line) return;
 
                 line->setClosed(false, false);
@@ -4586,7 +4657,7 @@ void MainWindow::on_actClosePolyline_triggered()
 
                 removeListEntryBySceneItem(line);
 
-                if (auto doc = currentDocument())
+                if (Document::Ptr doc = currentDocument())
                 {
                     doc->isModified = true;
                     updateFileListDisplay(doc->filePath);
@@ -4601,7 +4672,7 @@ void MainWindow::on_actClosePolyline_triggered()
         }
         _line = nullptr;
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -4613,7 +4684,7 @@ void MainWindow::on_actClosePolyline_triggered()
 void MainWindow::wheelEvent(QWheelEvent* event)
 {
     // Сохраняем состояние при изменении масштаба
-    if (auto doc = currentDocument())
+    if (Document::Ptr doc = currentDocument())
     {
         saveCurrentViewState(doc);
     }
@@ -4623,7 +4694,7 @@ void MainWindow::wheelEvent(QWheelEvent* event)
 void MainWindow::resizeEvent(QResizeEvent* event)
 {
     // При изменении размера сохраняем текущее состояние
-    if (auto doc = currentDocument())
+    if (Document::Ptr doc = currentDocument())
     {
         saveCurrentViewState(doc);
         QMainWindow::resizeEvent(event);
@@ -4664,7 +4735,8 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
     // чтобы старые документы не участвовали в последующих проверках
     if (_undoGroup)
     {
-        for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
+        for (QMap<QString, Document::Ptr>::iterator it = _documentsMap.begin();
+             it != _documentsMap.end(); ++it)
         {
             if (it.value() && it.value()->_undoStack)
                 _undoGroup->removeStack(it.value()->_undoStack.get());
@@ -4759,7 +4831,7 @@ void MainWindow::onSceneItemRemoved(QGraphicsItem* item)
 
 void MainWindow::on_actDelete_triggered()
 {
-    auto doc = currentDocument();
+    Document::Ptr doc = currentDocument();
     if (!doc)
         return;
 
@@ -4797,7 +4869,7 @@ void MainWindow::on_actDelete_triggered()
         QVector<qulonglong>   uids;
     };
 
-    auto payload = std::make_shared<Payload>();
+    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
     payload->backups = backups;
     payload->uids.reserve(backups.size());
 
@@ -4808,7 +4880,7 @@ void MainWindow::on_actDelete_triggered()
     }
 
     // redo: удалить текущие элементы по uid
-    auto redoFn = [this, payload]()
+    std::function<void()> redoFn = [this, payload]()
     {
         for (qulonglong uid : std::as_const(payload->uids))
         {
@@ -4824,7 +4896,7 @@ void MainWindow::on_actDelete_triggered()
             }
         }
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -4832,7 +4904,7 @@ void MainWindow::on_actDelete_triggered()
     };
 
     // undo: восстановить по снапшотам
-    auto undoFn = [this, payload]()
+    std::function<void()> undoFn = [this, payload]()
     {
         QVector<ShapeBackup> backups = payload->backups;
 
@@ -4848,7 +4920,7 @@ void MainWindow::on_actDelete_triggered()
             Q_UNUSED(created);
         }
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -4861,7 +4933,7 @@ void MainWindow::on_actDelete_triggered()
 
 void MainWindow::on_actSettingsApp_triggered()
 {
-    auto visualStyleBackup = _vstyle;
+    MainWindow::VisualStyle visualStyleBackup = _vstyle;
     bool wasApplied = false;
 
     Settings dlg(this);
@@ -5184,15 +5256,15 @@ void MainWindow::on_actViewNum_triggered()
     QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
     for (QGraphicsItem* item : selectedItems)
     {
-        if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+        if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
         {
             rectangle->togglePointNumbers();
         }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             polyline->togglePointNumbers();
         }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
         {
             line->togglePointNumbers();
         }
@@ -5204,17 +5276,17 @@ void MainWindow::on_actRotatePointsClockwise_triggered()
     QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
     for (QGraphicsItem* item : selectedItems)
     {
-        if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+        if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
         {
             rectangle->rotatePointsClockwise();
             updateAllPointNumbers();
         }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             polyline->rotatePointsClockwise();
             updateAllPointNumbers();
         }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
         {
             line->rotatePointsClockwise();
             updateAllPointNumbers();
@@ -5227,17 +5299,17 @@ void MainWindow::on_actRotatePointsCounterClockwise_triggered()
     QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
     for (QGraphicsItem* item : selectedItems)
     {
-        if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+        if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
         {
             rectangle->rotatePointsCounterClockwise();
             updateAllPointNumbers();
         }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             polyline->rotatePointsCounterClockwise();
             updateAllPointNumbers();
         }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
         {
             line->rotatePointsCounterClockwise();
             updateAllPointNumbers();
@@ -5263,15 +5335,15 @@ void MainWindow::on_toggleSelectionFrame_triggered()
     QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
     for (QGraphicsItem* item : selectedItems)
     {
-        if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             polyline->toggleSelectionRect();
         }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
         {
             line->toggleSelectionRect();
         }
-        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
         {
             circle->toggleSelectionRect();
         }
@@ -5302,7 +5374,7 @@ void MainWindow::on_actRedo_triggered()
 
 void MainWindow::on_actResetAnnotation_triggered()
 {
-    auto doc = currentDocument();
+    Document::Ptr doc = currentDocument();
     if (!doc)
         return;
 
@@ -5330,7 +5402,7 @@ void MainWindow::on_actResetAnnotation_triggered()
     allItems.reserve(ui->polygonList->count());
     for (int i = 0; i < ui->polygonList->count(); ++i)
     {
-        if (auto* it = ui->polygonList->item(i))
+        if (QListWidgetItem* it = ui->polygonList->item(i))
             allItems.push_back(it);
     }
     restoreTemporaryRaisedZValues();
@@ -5344,7 +5416,7 @@ void MainWindow::on_actResetAnnotation_triggered()
         QVector<qulonglong>   uids;
     };
 
-    auto payload = std::make_shared<Payload>();
+    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
     payload->backups = backups;
     payload->uids.reserve(backups.size());
 
@@ -5355,7 +5427,7 @@ void MainWindow::on_actResetAnnotation_triggered()
     }
 
     // redo: удалить все элементы по uid
-    auto redoFn = [this, payload]()
+    std::function<void()> redoFn = [this, payload]()
     {
         for (qulonglong uid : std::as_const(payload->uids))
         {
@@ -5371,7 +5443,7 @@ void MainWindow::on_actResetAnnotation_triggered()
             }
         }
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -5379,7 +5451,7 @@ void MainWindow::on_actResetAnnotation_triggered()
     };
 
     // undo: восстановить по снапшотам
-    auto undoFn = [this, payload]()
+    std::function<void()> undoFn = [this, payload]()
     {
         for (const ShapeBackup& b : std::as_const(payload->backups))
         {
@@ -5387,7 +5459,7 @@ void MainWindow::on_actResetAnnotation_triggered()
             Q_UNUSED(created);
         }
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -5400,7 +5472,7 @@ void MainWindow::on_actResetAnnotation_triggered()
 
 void MainWindow::on_actRestoreAnnotation_triggered()
 {
-    auto doc = currentDocument();
+    Document::Ptr doc = currentDocument();
     if (!doc)
         return;
 
@@ -5527,7 +5599,7 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
     QIcon defaultIcon(":/images/resources/not_ok.svg");
 
     // Добавляем файлы
-    for (auto filename : files)
+    for (const QString& filename : files)
     {
         QString filePath = directory.filePath(filename);
         QListWidgetItem* item = new QListWidgetItem(filename);
@@ -5567,7 +5639,7 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
             // реагируем только если этот стек активен у группы
             if (_undoGroup && (_undoGroup->activeStack() != stack)) return;
 
-            if (auto doc = currentDocument())
+            if (Document::Ptr doc = currentDocument())
             {
                 // Если стек в состоянии <пусто>, считаем файл неизмененным
                 const bool clean = stack->isClean();
@@ -5686,7 +5758,7 @@ void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
     if (!sameGeometry(before, after))
         pushModifyShapeCommand(uid, before, after, u8"Смена класса");
 
-    if (auto doc = currentDocument(); doc && !doc->isModified)
+    if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
     {
         doc->isModified = true;
         updateFileListDisplay(doc->filePath);
@@ -5948,7 +6020,7 @@ void MainWindow::writeShapesJsonToClipboard(const QJsonObject& json) const
     }
 
     // Пишем и JSON, и YAML в буфер обмена
-    auto* mime = new QMimeData;
+    QMimeData* mime = new QMimeData;
     mime->setData(kShapesMimeType, raw);
     mime->setText(yaml);
 
@@ -6018,7 +6090,7 @@ QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
             continue;
         }
 
-        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+        if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
         {
             shapeObj["type"] = "rectangle";
             // QRectF r = rect->rect();
@@ -6028,7 +6100,7 @@ QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
             shapeObj["width"] = r.width();
             shapeObj["height"] = r.height();
         }
-        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
         {
             shapeObj["type"] = "circle";
             //QPointF center = circle->realCenter();
@@ -6037,7 +6109,7 @@ QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
             shapeObj["y"] = center.y();
             shapeObj["radius"] = circle->realRadius();
         }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             shapeObj["type"] = "polyline";
             shapeObj["closed"] = polyline->isClosed();
@@ -6053,7 +6125,7 @@ QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
             }
             shapeObj["points"] = pointsArray;
         }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
         {
             shapeObj["type"] = "line";
             QJsonArray pointsArray;
@@ -6068,7 +6140,7 @@ QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
 
             shapeObj["points"] = pointsArray;
         }
-        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
+        else if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
         {
             shapeObj["type"] = "point";
             QPointF center = point->center();
@@ -6263,7 +6335,7 @@ QJsonObject MainWindow::serializeSelectedItemsToJson(QGraphicsScene* scene)
 
         shapeObj["class"] = className;
 
-        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+        if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
         {
             shapeObj["type"] = "rectangle";
             //QRectF r = rect->rect();
@@ -6273,7 +6345,7 @@ QJsonObject MainWindow::serializeSelectedItemsToJson(QGraphicsScene* scene)
             shapeObj["width"] = r.width();
             shapeObj["height"] = r.height();
         }
-        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
         {
             shapeObj["type"] = "circle";
             //QPointF center = circle->realCenter();
@@ -6282,7 +6354,7 @@ QJsonObject MainWindow::serializeSelectedItemsToJson(QGraphicsScene* scene)
             shapeObj["y"] = center.y();
             shapeObj["radius"] = circle->realRadius();
         }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             shapeObj["type"] = "polyline";
             shapeObj["closed"] = polyline->isClosed();
@@ -6298,7 +6370,7 @@ QJsonObject MainWindow::serializeSelectedItemsToJson(QGraphicsScene* scene)
 
             shapeObj["points"] = pointsArray;
         }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
         {
             shapeObj["type"] = "line";
             QJsonArray pointsArray;
@@ -6313,7 +6385,7 @@ QJsonObject MainWindow::serializeSelectedItemsToJson(QGraphicsScene* scene)
 
             shapeObj["points"] = pointsArray;
         }
-        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
+        else if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
         {
             shapeObj["type"] = "point";
             QPointF center = point->center();
@@ -6334,7 +6406,7 @@ QJsonObject MainWindow::serializeSelectedItemsToJson(QGraphicsScene* scene)
 
 void MainWindow::copySelectedShapes()
 {
-    auto doc = currentDocument();
+    Document::Ptr doc = currentDocument();
     if (!doc || !doc->scene)
         return;
 
@@ -6369,7 +6441,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     // Запоминаем, что было на сцене ДО вставки
     QList<QGraphicsItem*> beforeItems = scene->items();
 
-    auto normalizedImagePath = [](const QString& path) -> QString
+    QString (*normalizedImagePath)(const QString&) = [](const QString& path) -> QString
     {
         if (path.isEmpty())
             return {};
@@ -6559,7 +6631,7 @@ qgraph::VideoRect* MainWindow::findVideoRect(QGraphicsScene* scene)
 
     foreach(QGraphicsItem* item, scene->items())
     {
-        if (auto* videoRect = dynamic_cast<qgraph::VideoRect*>(item))
+        if (qgraph::VideoRect* videoRect = dynamic_cast<qgraph::VideoRect*>(item))
         {
             return videoRect;
         }
@@ -6653,10 +6725,8 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
     if (!doc || !doc->scene || !doc->videoRect)
         return;
 
-    auto savePointNode = [](YamlConfig* conf,
-                            YAML::Node& parent,
-                            const char* key,
-                            const QPointF& point)
+    void (*savePointNode)(YamlConfig*, YAML::Node&, const char*, const QPointF&) =
+        [](YamlConfig* conf, YAML::Node& parent, const char* key, const QPointF& point)
     {
         YamlConfig::Func savePoint = [point](YamlConfig* conf, YAML::Node& ypoint, bool)
         {
@@ -6668,9 +6738,8 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
         conf->setValue(parent, key, savePoint);
     };
 
-    auto savePointsArray = [](YamlConfig* conf,
-                              YAML::Node& parent,
-                              const QVector<QPointF>& points)
+    void (*savePointsArray)(YamlConfig*, YAML::Node&, const QVector<QPointF>&) =
+        [](YamlConfig* conf, YAML::Node& parent, const QVector<QPointF>& points)
     {
         YamlConfig::Func savePoints = [points](YamlConfig* conf, YAML::Node& ypoints, bool)
         {
@@ -6898,7 +6967,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
 
     int fallbackOrder = 0;
 
-    auto finalizeOldLoadedShape = [&](QGraphicsItem* item)
+    std::function<void(QGraphicsItem*)> finalizeOldLoadedShape = [&](QGraphicsItem* item)
     {
         if (!item)
             return;
@@ -7103,9 +7172,8 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
         int order = 0;
         const qreal baseZ = doc->videoRect ? doc->videoRect->zValue() : 0.0;
 
-        auto readPointNode = [&](const YAML::Node& parent,
-                                 const char* key,
-                                 QPointF& point) -> bool
+        std::function<bool(const YAML::Node&, const char*, QPointF&)> readPointNode =
+            [&](const YAML::Node& parent, const char* key, QPointF& point) -> bool
         {
             if (!parent[key])
                 return false;
@@ -7120,8 +7188,8 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
             return true;
         };
 
-        auto readPointsArray = [&](const YAML::Node& parent,
-                                   QVector<QPointF>& points)
+        std::function<void(const YAML::Node&, QVector<QPointF>&)> readPointsArray =
+            [&](const YAML::Node& parent, QVector<QPointF>& points)
         {
             if (!parent["points"])
                 return;
@@ -7138,9 +7206,8 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
             }
         };
 
-        auto finalizeShape = [&](QGraphicsItem* item,
-                                 const YAML::Node& yshape,
-                                 const QString& label)
+        std::function<void(QGraphicsItem*, const YAML::Node&, const QString&)> finalizeShape =
+            [&](QGraphicsItem* item, const YAML::Node& yshape, const QString& label)
         {
             if (!item)
                 return;
@@ -7547,7 +7614,8 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
 
     bool generatedMissingColors = false;
 
-    auto generateRandomClassColor = [&](const QMap<QString, QColor>& existingColors, int fallbackIndex) -> QColor
+    std::function<QColor(const QMap<QString, QColor>&, int)> generateRandomClassColor =
+        [&](const QMap<QString, QColor>& existingColors, int fallbackIndex) -> QColor
     {
         for (int attempt = 0; attempt < 64; ++attempt)
         {
@@ -7555,7 +7623,8 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
             QColor c = QColor::fromHsl(h, 200, 120);
 
             bool alreadyUsed = false;
-            for (auto it = existingColors.begin(); it != existingColors.end(); ++it)
+            for (QMap<QString, QColor>::const_iterator it = existingColors.constBegin();
+                 it != existingColors.constEnd(); ++it)
             {
                 if (it.value().isValid() && it.value() == c)
                 {
@@ -7733,10 +7802,10 @@ void MainWindow::onSceneSelectionChanged()
             if (!sceneItem)
                 continue;
 
-            if (auto* h = dynamic_cast<qgraph::DragCircle*>(sceneItem))
+            if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(sceneItem))
             {
-                if (h->parentItem())
-                    sceneItem = h->parentItem();
+                if (handle->parentItem())
+                    sceneItem = handle->parentItem();
             }
 
             for (int i = 0; i < ui->polygonList->count(); ++i)
@@ -7779,14 +7848,13 @@ void MainWindow::updateCoordinateList()
     if (selectedItems.isEmpty())
         return;
 
-    auto addLine = [this](const QString& text)
+    std::function<void(const QString&)> addLine = [this](const QString& text)
     {
         ui->coordinateList->addItem(text);
     };
 
-    auto calcBounds = [](const QVector<QPointF>& pts,
-                         QPointF& topLeft,
-                         QPointF& bottomRight) -> bool
+    bool (*calcBounds)(const QVector<QPointF>&, QPointF&, QPointF&) =
+        [](const QVector<QPointF>& pts, QPointF& topLeft, QPointF& bottomRight) -> bool
     {
         if (pts.isEmpty())
             return false;
@@ -7816,7 +7884,7 @@ void MainWindow::updateCoordinateList()
         if (!item)
             continue;
 
-        if (auto* point = dynamic_cast<qgraph::Point*>(item))
+        if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
         {
             if (!firstShape)
                 addLine(QString());
@@ -7829,7 +7897,7 @@ void MainWindow::updateCoordinateList()
                            .arg(round2(center.x()))
                            .arg(round2(center.y())));
         }
-        else if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+        else if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
         {
             if (!firstShape)
                 addLine(QString());
@@ -7860,7 +7928,7 @@ void MainWindow::updateCoordinateList()
             addLine(QString(u8"Ширина: %1").arg(round2(width)));
             addLine(QString(u8"Высота: %1").arg(round2(height)));
         }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             if (!firstShape)
                 addLine(QString());
@@ -7893,7 +7961,7 @@ void MainWindow::updateCoordinateList()
             addLine(QString(u8"Ширина: %1").arg(round2(width)));
             addLine(QString(u8"Высота: %1").arg(round2(height)));
         }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
         {
             if (!firstShape)
                 addLine(QString());
@@ -7927,7 +7995,7 @@ void MainWindow::updateCoordinateList()
             addLine(QString(u8"Ширина: %1").arg(round2(width)));
             addLine(QString(u8"Высота: %1").arg(round2(height)));
         }
-        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
         {
             if (!firstShape)
                 addLine(QString());
@@ -8027,7 +8095,7 @@ void MainWindow::removePolygonItem(QGraphicsItem* item)
     delete item;
 
     // Помечаем документ как измененный
-    if (auto doc = currentDocument())
+    if (Document::Ptr doc = currentDocument())
     {
         doc->isModified = true;
         updateFileListDisplay(doc->filePath);
@@ -8050,7 +8118,7 @@ void MainWindow::removePolygonListItem(QListWidgetItem* item)
     delete ui->polygonList->takeItem(ui->polygonList->row(item));
     renumberPolygonList();
     // Помечаем документ как измененный
-    if (auto doc = currentDocument())
+    if (Document::Ptr doc = currentDocument())
     {
         doc->isModified = true;
         updateFileListDisplay(doc->filePath);
@@ -8224,19 +8292,19 @@ void MainWindow::raiseAllHandlesToTop()
     // Проходим по всем элементам и поднимаем их ручки
     for (QGraphicsItem* item : _scene->items())
     {
-        if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+        if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
         {
             rectangle->raiseHandlesToTop();
         }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             polyline->raiseHandlesToTop();
         }
-        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
         {
             circle->raiseHandlesToTop();
         }
-        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
+        else if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
             point->raiseHandlesToTop();
     }
 }
@@ -8281,10 +8349,11 @@ void MainWindow::restoreTemporaryRaisedZValues()
     if (_temporaryRaisedZValues.isEmpty())
         return;
 
-    const auto raised = _temporaryRaisedZValues;
+    const QHash<qulonglong, qreal> raised = _temporaryRaisedZValues;
     _temporaryRaisedZValues.clear();
 
-    for (auto it = raised.constBegin(); it != raised.constEnd(); ++it)
+    for (QHash<qulonglong, qreal>::const_iterator it = raised.constBegin();
+         it != raised.constEnd(); ++it)
     {
         QGraphicsItem* item = findItemByUid(it.key());
         if (!item)
@@ -8353,7 +8422,7 @@ void MainWindow::moveSelectedItemsToBack()
     QList<QGraphicsItem*> selectedRoots;
     QList<QGraphicsItem*> nonSelectedRoots;
 
-    auto isRootShape = [this](QGraphicsItem* item) -> bool
+    std::function<bool(QGraphicsItem*)> isRootShape = [this](QGraphicsItem* item) -> bool
     {
         if (!item)
             return false;
@@ -8390,7 +8459,8 @@ void MainWindow::moveSelectedItemsToBack()
     if (selectedRoots.isEmpty())
         return;
 
-    auto byZ = [](QGraphicsItem* firstItem, QGraphicsItem* secondItem)
+    bool (*byZ)(QGraphicsItem*, QGraphicsItem*) =
+        [](QGraphicsItem* firstItem, QGraphicsItem* secondItem)
     {
         if (qFuzzyCompare(firstItem->zValue(), secondItem->zValue()))
             return firstItem < secondItem;
@@ -8442,7 +8512,7 @@ void MainWindow::moveSelectedItemsToBack()
 }
 bool MainWindow::hasUnsavedChanges() const
 {
-    for (const auto& doc : _documentsMap.values())
+    for (const Document::Ptr& doc : _documentsMap.values())
     {
         if (doc && doc->isModified)
             return true;
@@ -8453,7 +8523,8 @@ bool MainWindow::hasUnsavedChanges() const
 QList<Document::Ptr> MainWindow::getUnsavedDocuments() const
 {
     QList<Document::Ptr> unsavedDocs;
-    for (auto it = _documentsMap.constBegin(); it != _documentsMap.constEnd(); ++it)
+    for (QMap<QString, Document::Ptr>::const_iterator it = _documentsMap.constBegin();
+         it != _documentsMap.constEnd(); ++it)
     {
         if (it.value()->isModified)
         {
@@ -8551,7 +8622,8 @@ int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr>& unsavedDocs
 
 void MainWindow::saveAllDocuments()
 {
-    for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
+    for (QMap<QString, Document::Ptr>::const_iterator it = _documentsMap.begin();
+         it != _documentsMap.end(); ++it)
     {
         if (it.value()->isModified)
         {
@@ -8573,28 +8645,28 @@ qgraph::DragCircle* MainWindow::pickHiddenHandle(const QPointF& scenePos, bool& 
     const QRectF pickRect(scenePos - QPointF(radiusScene, radiusScene),
                         QSizeF(2 * radiusScene, 2 * radiusScene));
 
-    const auto items = _scene->items(pickRect, Qt::IntersectsItemShape, Qt::DescendingOrder);
+    const QList<QGraphicsItem*> items = _scene->items(pickRect, Qt::IntersectsItemShape, Qt::DescendingOrder);
 
     // Если верхний элемент уже ручка - «обманка» не нужна, пусть работает стандартный drag
     if (!items.isEmpty())
-        if (auto* dc = dynamic_cast<qgraph::DragCircle*>(items.front()))
+        if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(items.front()))
         {
             topIsHandle = true;
-            return dc;
+            return handle;
         }
 
     // Ищем ближайшую ручку в глубине стека
     qgraph::DragCircle* best = nullptr;
     qreal bestD2 = std::numeric_limits<qreal>::max();
 
-    for (auto* it : items)
+    for (QGraphicsItem* it : items)
     {
-        if (auto* circle = dynamic_cast<qgraph::Circle*>(it))
+        if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(it))
         {
             QPointF localCursorPos = circle->mapFromScene(scenePos);
             if (circle->isCursorNearCircle(localCursorPos))
             {
-                auto* handle = circle->getDragCircle();
+                qgraph::DragCircle* handle = circle->getDragCircle();
                 if (handle && handle->isValid())
                 {
                     const QPointF c = handle->mapToScene(handle->rect().center());
@@ -8610,16 +8682,16 @@ qgraph::DragCircle* MainWindow::pickHiddenHandle(const QPointF& scenePos, bool& 
             }
             continue;
         }
-        if (auto* dc = dynamic_cast<qgraph::DragCircle*>(it))
+        if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(it))
         {
-            const QPointF c = dc->mapToScene(dc->rect().center());
+            const QPointF c = handle->mapToScene(handle->rect().center());
             const qreal dx = c.x() - scenePos.x();
             const qreal dy = c.y() - scenePos.y();
             const qreal d2 = dx*dx + dy*dy;
             if (d2 <= bestD2)
             {
                 bestD2 = d2;
-                best = dc;
+                best = handle;
             }
         }
     }
@@ -8706,7 +8778,7 @@ void MainWindow::endGhost()
 
     if (_ghostTarget)
     {
-        if (auto* shape = dynamic_cast<qgraph::Shape*>(_ghostTarget->parentItem()))
+        if (qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(_ghostTarget->parentItem()))
             shape->dragCircleRelease(_ghostTarget);
         _ghostTarget->setHoverStyle(false);
         _ghostTarget->setGhostDriven(false);
@@ -8855,11 +8927,11 @@ qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos, qreal cust
         if (!item || !item->scene())
             continue;
 
-        if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
         {
             if (circle->isCursorNearCircle(circle->mapFromScene(scenePos)))
             {
-                auto* handle = circle->getDragCircle();
+                qgraph::DragCircle* handle = circle->getDragCircle();
                 if (handle && handle->isValid())
                 {
                     circle->updateHandlePosition(scenePos);
@@ -8869,7 +8941,7 @@ qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos, qreal cust
             continue;
         }
 
-        if (auto* handle = dynamic_cast<qgraph::DragCircle*>(item))
+        if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(item))
         {
             if (!handle->isValid())
                 continue;
@@ -8923,7 +8995,7 @@ QGraphicsItem* MainWindow::pickItemByEdgeAt(GraphicsView* view, const QPoint& vi
         if (item == _videoRect)
             continue;
 
-        if (qgraphicsitem_cast<qgraph::DragCircle*>(item))
+        if (dynamic_cast<qgraph::DragCircle*>(item))
             continue;
 
         // Берем только фигуры
@@ -9050,7 +9122,7 @@ void MainWindow::showGhostFor(qgraph::DragCircle* handle)
     _ghostActive = false;
 
     // Для круга используем специальную логику позиционирования
-    if (auto* circle = dynamic_cast<qgraph::Circle*>(handle->parentItem()))
+    if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(handle->parentItem()))
     {
         // Получаем позицию курсора в сцене
         QPointF cursorPos = ui->graphView->mapToScene(ui->graphView->mapFromGlobal(QCursor::pos()));
@@ -9116,15 +9188,15 @@ void MainWindow::updateAllPointNumbers()
 
     for (QGraphicsItem* item : _scene->items())
     {
-        if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+        if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
         {
             rectangle->updatePointNumbers();
         }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             polyline->updatePointNumbers();
         }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
         {
             line->updatePointNumbers();
         }
@@ -9261,9 +9333,9 @@ void MainWindow::saveVisualStyle() const
 
 void MainWindow::applyStyle_AllDocuments()
 {
-    for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
+    for (QMap<QString, Document::Ptr>::iterator it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
     {
-        auto doc = it.value();
+        Document::Ptr doc = it.value();
         if (!doc || !doc->scene)
             continue;
 
@@ -9307,13 +9379,13 @@ void MainWindow::applyStyle_AllDocuments()
 
 void MainWindow::forEachScene(std::function<void(QGraphicsScene*)> sceneHandler)
 {
-    for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
+    for (QMap<QString, Document::Ptr>::iterator it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
     {
-        auto doc = it.value();
+        Document::Ptr doc = it.value();
         if (!doc)
             continue;
 
-        auto* sc = doc->scene;
+        QGraphicsScene* sc = doc->scene;
         if (!sc)
             continue;
         sceneHandler(sc);
@@ -9325,12 +9397,14 @@ void MainWindow::apply_LineWidth_ToScene(QGraphicsScene* scene)
     if (!scene)
     {
         forEachScene([this](QGraphicsScene* scene){
-            for (auto* item : scene->items()) apply_LineWidth_ToItem(item);
+            for (QGraphicsItem* item : scene->items())
+                apply_LineWidth_ToItem(item);
             scene->update();
         });
         return;
     }
-    for (auto* it : scene->items()) apply_LineWidth_ToItem(it);
+    for (QGraphicsItem* it : scene->items())
+        apply_LineWidth_ToItem(it);
     scene->update();
 }
 
@@ -9339,23 +9413,25 @@ void MainWindow::apply_PointSize_ToScene(QGraphicsScene* scene)
     if (!scene)
     {
         forEachScene([this](QGraphicsScene* scene){
-            for (auto* item : scene->items()) apply_PointSize_ToItem(item);
+            for (QGraphicsItem* item : scene->items())
+                apply_PointSize_ToItem(item);
             scene->update();
         });
         return;
     }
-    for (auto* it : scene->items()) apply_PointSize_ToItem(it);
+    for (QGraphicsItem* it : scene->items())
+        apply_PointSize_ToItem(it);
     scene->update();
 }
 
 void MainWindow::apply_NumberSize_ToScene(QGraphicsScene* scene)
 {
-    auto applyForScene = [this](QGraphicsScene* scene)
+    std::function<void(QGraphicsScene*)> applyForScene = [this](QGraphicsScene* scene)
     {
         if (!scene)
             return;
 
-        for (auto* it : scene->items())
+        for (QGraphicsItem* it : scene->items())
             apply_NumberSize_ToItem(it);
         scene->update();
     };
@@ -9375,110 +9451,110 @@ void MainWindow::apply_LineWidth_ToItem(QGraphicsItem* item)
     if (!item)
         return;
 
-    const auto w = _vstyle.lineWidth;
+    const qreal width = _vstyle.lineWidth;
 
-    if (auto r = dynamic_cast<qgraph::Rectangle*>(item))
+    if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
     {
-        QPen p=r->pen();
-        p.setWidthF(w);
-        p.setCosmetic(true);
+        QPen pen = rect->pen();
+        pen.setWidthF(width);
+        pen.setCosmetic(true);
 
-        const QString cls = r->data(0).toString();
-        const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vstyle.rectangleLineColor);
+        const QString className = rect->data(0).toString();
+        const QColor classColor = classColorFor(className);
+        pen.setColor(classColor.isValid() ? classColor : _vstyle.rectangleLineColor);
 
-        r->setPen(p);
+        rect->setPen(pen);
         return;
     }
-    if (auto c = dynamic_cast<qgraph::Circle*>(item))
+    if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
     {
-        QPen p=c->pen();
-        p.setWidthF(w);
-        p.setCosmetic(true);
+        QPen pen = circle->pen();
+        pen.setWidthF(width);
+        pen.setCosmetic(true);
 
-        const QString cls = c->data(0).toString();
-        const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vstyle.circleLineColor);
+        const QString className = circle->data(0).toString();
+        const QColor classColor = classColorFor(className);
+        pen.setColor(classColor.isValid() ? classColor : _vstyle.circleLineColor);
 
-        c->setPen(p);
-        c->applyLineStyle(w);
-        c->setGlobalSelectionRectVisible(_vstyle.showSelectionFrame);
+        circle->setPen(pen);
+        circle->applyLineStyle(width);
+        circle->setGlobalSelectionRectVisible(_vstyle.showSelectionFrame);
         return;
     }
-    if (auto pl= dynamic_cast<qgraph::Polyline*>(item))
+    if (qgraph::Polyline* pline= dynamic_cast<qgraph::Polyline*>(item))
     {
-        QPen p=pl->pen();
-        p.setWidthF(w);
-        p.setCosmetic(true);
+        QPen pen = pline->pen();
+        pen.setWidthF(width);
+        pen.setCosmetic(true);
 
-        const QString cls = pl->data(0).toString();
-        const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vstyle.polylineLineColor);
+        const QString className = pline->data(0).toString();
+        const QColor classColor = classColorFor(className);
+        pen.setColor(classColor.isValid() ? classColor : _vstyle.polylineLineColor);
 
-        pl->setPen(p);
-        pl->setGlobalSelectionRectVisible(_vstyle.showSelectionFrame);
+        pline->setPen(pen);
+        pline->setGlobalSelectionRectVisible(_vstyle.showSelectionFrame);
         return;
     }
-    if (auto l = dynamic_cast<qgraph::Line*>(item))
+    if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
     {
-        QPen p = l->pen();
-        p.setWidthF(_vstyle.lineWidth);
-        p.setCosmetic(true);
+        QPen pen = line->pen();
+        pen.setWidthF(_vstyle.lineWidth);
+        pen.setCosmetic(true);
 
-        const QString cls = l->data(0).toString();
-        const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vstyle.lineLineColor);
+        const QString className = line->data(0).toString();
+        const QColor classColor = classColorFor(className);
+        pen.setColor(classColor.isValid() ? classColor : _vstyle.lineLineColor);
 
-        l->setPen(p);
-        l->setGlobalSelectionRectVisible(_vstyle.showSelectionFrame);
+        line->setPen(pen);
+        line->setGlobalSelectionRectVisible(_vstyle.showSelectionFrame);
         return;
     }
-    if (auto pnt = dynamic_cast<qgraph::Point*>(item))
+    if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
     {
-        QPen p = pnt->pen();
-        p.setWidthF(_vstyle.pointOutlineWidth); // Отдельная толщина для точки
-        p.setCosmetic(true);
+        QPen pen = point->pen();
+        pen.setWidthF(_vstyle.pointOutlineWidth); // Отдельная толщина для точки
+        pen.setCosmetic(true);
 
-        const QString cls = pnt->data(0).toString();
-        const QColor cc = classColorFor(cls);
-        p.setColor(cc.isValid() ? cc : _vstyle.pointOutlineWidth);
+        const QString className = point->data(0).toString();
+        const QColor classColor = classColorFor(className);
+        pen.setColor(classColor.isValid() ? classColor : _vstyle.pointOutlineWidth);
 
-        pnt->setPen(p);
+        point->setPen(pen);
         return;
     }
 
     // Базовые Qt‑элементы
-    if (auto l = qgraphicsitem_cast<QGraphicsLineItem*>(item))
+    if (QGraphicsLineItem* line = dynamic_cast<QGraphicsLineItem*>(item))
     {
-        QPen p=l->pen();
-        p.setWidthF(w);
-        p.setCosmetic(true);
-        l->setPen(p);
+        QPen pen = line->pen();
+        pen.setWidthF(width);
+        pen.setCosmetic(true);
+        line->setPen(pen);
         return;
     }
 
-    if (auto pth=qgraphicsitem_cast<QGraphicsPathItem*>(item))
+    if (QGraphicsPathItem* pline = dynamic_cast<QGraphicsPathItem*>(item))
     {
-        QPen p=pth->pen();
-        p.setWidthF(w);
-        p.setCosmetic(true);
-        pth->setPen(p);
+        QPen pen = pline->pen();
+        pen.setWidthF(width);
+        pen.setCosmetic(true);
+        pline->setPen(pen);
         return;
     }
-    if (auto el = qgraphicsitem_cast<QGraphicsEllipseItem*>(item))
+    if (QGraphicsEllipseItem* circle = dynamic_cast<QGraphicsEllipseItem*>(item))
     {
-        QPen p=el->pen();
-        p.setWidthF(w);
-        p.setCosmetic(true);
-        el->setPen(p);
+        QPen pen = circle->pen();
+        pen.setWidthF(width);
+        pen.setCosmetic(true);
+        circle->setPen(pen);
         return;
     }
-    if (auto rc = qgraphicsitem_cast<QGraphicsRectItem*>(item))
+    if (QGraphicsRectItem* rect = dynamic_cast<QGraphicsRectItem*>(item))
     {
-        QPen p=rc->pen();
-        p.setWidthF(w);
-        p.setCosmetic(true);
-        rc->setPen(p);
+        QPen pen = rect->pen();
+        pen.setWidthF(width);
+        pen.setCosmetic(true);
+        rect->setPen(pen);
         return;
     }
 }
@@ -9491,18 +9567,18 @@ void MainWindow::apply_PointSize_ToItem(QGraphicsItem* item)
     // Ручки обычно лежат детьми нужной фигуры
     for (QGraphicsItem* ch : item->childItems())
     {
-        if (auto h = dynamic_cast<qgraph::DragCircle*>(ch))
+        if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(ch))
         {
             const bool isPoint = (dynamic_cast<qgraph::Point*>(item) != nullptr);
 
             // Размер узла для Point должен следовать размеру точки
             const qreal pointHandleSize = std::max<qreal>(_vstyle.pointSize, 4.0);
 
-            h->setBaseStyle(_vstyle.handleColor, isPoint ? pointHandleSize : _vstyle.handleSize);
-            h->setInteractionRadius(_ghostPickRadius);
-            h->setSelectedHandleColor(_vstyle.selectedHandleColor);
-            h->restoreBaseStyle();
-            qgraph::DragCircle::rememberCurrentAsBase(h);
+            handle->setBaseStyle(_vstyle.handleColor, isPoint ? pointHandleSize : _vstyle.handleSize);
+            handle->setInteractionRadius(_ghostPickRadius);
+            handle->setSelectedHandleColor(_vstyle.selectedHandleColor);
+            handle->restoreBaseStyle();
+            qgraph::DragCircle::rememberCurrentAsBase(handle);
         }
     }
 }
@@ -9513,19 +9589,19 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* item)
         return;
 
     // Для классов фигур
-    if (auto* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+    if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
     {
         rectangle->setGlobalPointNumbersVisible(_vstyle.showNumbers);
         rectangle->applyNumberStyle(_vstyle.numberFontPt, _vstyle.numberColor, _vstyle.numberBgColor);
         return;
     }
-    if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+    if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
     {
         polyline->setGlobalPointNumbersVisible(_vstyle.showNumbers);
         polyline->applyNumberStyle(_vstyle.numberFontPt, _vstyle.numberColor, _vstyle.numberBgColor);
         return;
     }
-    if (auto* line = dynamic_cast<qgraph::Line*>(item))
+    if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
     {
         line->setGlobalPointNumbersVisible(_vstyle.showNumbers);
         line->applyNumberStyle(_vstyle.numberFontPt, _vstyle.numberColor, _vstyle.numberBgColor);
@@ -9538,7 +9614,7 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* item)
 
     for (QGraphicsItem* ch : item->childItems())
     {
-        if (auto t = dynamic_cast<QGraphicsSimpleTextItem*>(ch))
+        if (QGraphicsSimpleTextItem* t = dynamic_cast<QGraphicsSimpleTextItem*>(ch))
         {
             // Проверяем, что это номер (короткое число)
             QString text = t->text();
@@ -9549,7 +9625,7 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* item)
                 if (ok) texts << t;
             }
         }
-        else if (auto bg = dynamic_cast<QGraphicsRectItem*>(ch))
+        else if (QGraphicsRectItem* bg = dynamic_cast<QGraphicsRectItem*>(ch))
         {
             if (bg->zValue() > 900 && bg->zValue() < 1010)
                 backgrounds << bg;
@@ -9557,7 +9633,7 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* item)
     }
 
     // Применяем стиль к текстам
-    for (auto* t : texts)
+    for (QGraphicsSimpleTextItem* t : texts)
     {
         if (!t) continue;
 
@@ -9571,7 +9647,7 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* item)
     }
 
     // Обновляем фоны
-    for (auto* bg : backgrounds)
+    for (QGraphicsRectItem* bg : backgrounds)
     {
         if (!bg) continue;
 
@@ -9579,7 +9655,7 @@ void MainWindow::apply_NumberSize_ToItem(QGraphicsItem* item)
         QGraphicsSimpleTextItem* nearest = nullptr;
         qreal bestDistance = std::numeric_limits<qreal>::max();
 
-        for (auto* t : texts)
+        for (QGraphicsSimpleTextItem* t : texts)
         {
             if (!t) continue;
 
@@ -9608,7 +9684,7 @@ void MainWindow::apply_PointStyle_ToItem(QGraphicsItem* item)
     if (!item)
         return;
 
-    if (auto* p = dynamic_cast<qgraph::Point*>(item))
+    if (qgraph::Point* p = dynamic_cast<qgraph::Point*>(item))
     {
 
         const QString cls = p->data(0).toString();
@@ -9656,31 +9732,31 @@ void MainWindow::updateLineColorsForScene(QGraphicsScene* scene)
         const QColor classC = classColorFor(cls);
         const bool hasClassColor = classC.isValid();
 
-        if (auto* rect = dynamic_cast<qgraph::Rectangle*>(item))
+        if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
         {
             QPen pen = rect->pen();
             pen.setColor(hasClassColor ? classC : _vstyle.rectangleLineColor);
             rect->setPen(pen);
         }
-        else if (auto* circle = dynamic_cast<qgraph::Circle*>(item))
+        else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
         {
             QPen pen = circle->pen();
             pen.setColor(hasClassColor ? classC : _vstyle.circleLineColor);
             circle->setPen(pen);
         }
-        else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
         {
             QPen pen = polyline->pen();
             pen.setColor(hasClassColor ? classC : _vstyle.polylineLineColor);
             polyline->setPen(pen);
         }
-        else if (auto* line = dynamic_cast<qgraph::Line*>(item))
+        else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
         {
             QPen pen = line->pen();
             pen.setColor(hasClassColor ? classC : _vstyle.lineLineColor);
             line->setPen(pen);
         }
-        else if (auto* point = dynamic_cast<qgraph::Point*>(item))
+        else if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
         {
             QPen pen = point->pen();
             pen.setColor(hasClassColor ? classC : _vstyle.pointColor);
@@ -9715,7 +9791,7 @@ void MainWindow::applyZoom(qreal zoomFactor)
 
     _m_zoom = zoomFactor;
 
-    if (auto doc = currentDocument())
+    if (Document::Ptr doc = currentDocument())
     {
         doc->viewState = {
             ui->graphView->horizontalScrollBar()->value(),
@@ -9773,7 +9849,7 @@ QUndoStack* MainWindow::activeUndoStack() const
         return stack;
 
     // Запасной вариант - стек текущего документа
-    if (auto doc = currentDocument())
+    if (Document::Ptr doc = currentDocument())
         return doc->_undoStack ? doc->_undoStack.get() : nullptr;
 
     return nullptr;
@@ -9795,31 +9871,31 @@ ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* graphicsItem) const
     backup.zValue = originalZValueForItem(graphicsItem);
     backup.visible = graphicsItem->isVisible();
 
-    if (auto* rect = dynamic_cast<qgraph::Rectangle*>(graphicsItem))
+    if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(graphicsItem))
     {
         backup.kind = ShapeKind::Rectangle;
         backup.rect = rect->mapRectToScene(rect->rect());
     }
-    else if (auto* circle = dynamic_cast<qgraph::Circle*>(graphicsItem))
+    else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(graphicsItem))
     {
         backup.kind = ShapeKind::Circle;
         backup.circleCenter = circle->center();
         backup.circleRadius = circle->realRadius();
     }
-    else if (auto* polyline = dynamic_cast<qgraph::Polyline*>(graphicsItem))
+    else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(graphicsItem))
     {
         backup.kind  = ShapeKind::Polyline;
         backup.points = polyline->points();
         backup.closed = polyline->isClosed();
     }
-    else if (auto* line = dynamic_cast<qgraph::Line*>(graphicsItem))
+    else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(graphicsItem))
     {
         backup.kind  = ShapeKind::Line;
         backup.points = line->points();
         backup.closed = line->isClosed();
         backup.numberingFromLast = line->isNumberingFromLast();
     }
-    else if (auto* point = dynamic_cast<qgraph::Point*>(graphicsItem))
+    else if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(graphicsItem))
     {
         backup.kind = ShapeKind::Point;
         backup.pointCenter = point->center();
@@ -9869,7 +9945,8 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& backup)
 {
     QGraphicsItem* created = nullptr;
 
-    auto applyBackupUid = [this](QGraphicsItem* item, qulonglong uid)
+    std::function<void(QGraphicsItem*, qulonglong)> applyBackupUid =
+        [this](QGraphicsItem* item, qulonglong uid)
     {
         if (!item)
             return;
@@ -9885,7 +9962,8 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& backup)
             ensureUid(item);
     };
     // Восстанавливаем номер фигуры, который отображается в списке
-    auto applyBackupNumber = [this](QGraphicsItem* item, int number)
+    std::function<void(QGraphicsItem*, int)> applyBackupNumber =
+        [this](QGraphicsItem* item, int number)
     {
         if (!item)
             return;
@@ -9900,7 +9978,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& backup)
     {
         case ShapeKind::Rectangle:
         {
-            auto* rect = new qgraph::Rectangle(_scene);
+            qgraph::Rectangle* rect = new qgraph::Rectangle(_scene);
 
             applyBackupUid(rect, backup.uid);
             rect->setRealSceneRect(backup.rect);
@@ -9919,7 +9997,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& backup)
         }
         case ShapeKind::Circle:
         {
-            auto* circle = new qgraph::Circle(_scene, backup.circleCenter);
+            qgraph::Circle* circle = new qgraph::Circle(_scene, backup.circleCenter);
 
             applyBackupUid(circle, backup.uid);
             circle->setRealRadius(backup.circleRadius);
@@ -9940,7 +10018,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& backup)
             if (backup.points.isEmpty())
                 break;
 
-            auto* polyline = new qgraph::Polyline(_scene, backup.points.front());
+            qgraph::Polyline* polyline = new qgraph::Polyline(_scene, backup.points.front());
 
             applyBackupUid(polyline, backup.uid);
             polyline->beginBulkLoad();
@@ -9970,7 +10048,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& backup)
         {
             if (backup.points.isEmpty())
                 break;
-            auto* line = new qgraph::Line(_scene, backup.points.front());
+            qgraph::Line* line = new qgraph::Line(_scene, backup.points.front());
             applyBackupUid(line, backup.uid);
 
             line->beginBulkLoad();
@@ -9998,7 +10076,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& backup)
         }
         case ShapeKind::Point:
         {
-            auto* point = new qgraph::Point(_scene);
+            qgraph::Point* point = new qgraph::Point(_scene);
 
             applyBackupUid(point, backup.uid);
             apply_PointSize_ToItem(point);
@@ -10036,7 +10114,7 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* item, const ShapeBackup& b
     switch (backup.kind)
     {
         case ShapeKind::Rectangle:
-            if (auto* rect = qgraphicsitem_cast<qgraph::Rectangle*>(item))
+            if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
             {
                 rect->setRealSceneRect(backup.rect);
                 rect->updatePointNumbers();
@@ -10052,7 +10130,7 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* item, const ShapeBackup& b
             break;
 
         case ShapeKind::Circle:
-            if (auto* circle = qgraphicsitem_cast<qgraph::Circle*>(item))
+            if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
             {
                 circle->setRealRadius(backup.circleRadius);
                 apply_LineWidth_ToItem(circle);
@@ -10074,7 +10152,7 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* item, const ShapeBackup& b
 
         case ShapeKind::Polyline:
         {
-            if (auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(item))
+            if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
             {
                 // Полная замена узлов из снапшота
                 polyline->replaceScenePoints(backup.points, backup.closed);
@@ -10091,7 +10169,7 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* item, const ShapeBackup& b
 
         case ShapeKind::Line:
         {
-            if (auto* line = qgraphicsitem_cast<qgraph::Line*>(item))
+            if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
             {
                 line->replaceScenePoints(backup.points, backup.closed);
                 line->setNumberingFromLast(backup.numberingFromLast);
@@ -10106,7 +10184,7 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* item, const ShapeBackup& b
             break;
         }
         case ShapeKind::Point:
-            if (auto* point = qgraphicsitem_cast<qgraph::Point*>(item))
+            if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
             {
                 apply_PointStyle_ToItem(point);
                 apply_PointSize_ToItem(point);
@@ -10169,7 +10247,7 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
         bool skipFirstRedo = false;
     };
 
-    auto payload = std::make_shared<Payload>();
+    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
     payload->backup = backup;
 
     // Берем uid из снапшота или с самого объекта
@@ -10181,7 +10259,7 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
     payload->uid = uid;
     payload->skipFirstRedo = (createdNow != nullptr);
 
-    auto redoFn = [this, payload]()
+    std::function<void()> redoFn = [this, payload]()
     {
         if (payload->uid == 0)
             return;
@@ -10193,7 +10271,7 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
         {
             payload->skipFirstRedo = false;
 
-            if (auto doc = currentDocument())
+            if (Document::Ptr doc = currentDocument())
             {
                 doc->isModified = true;
                 updateFileListDisplay(doc->filePath);
@@ -10219,21 +10297,21 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
             }
         }
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
     };
 
-    auto undoFn = [this, payload]()
+    std::function<void()> undoFn = [this, payload]()
     {
         if (payload->uid == 0)
             return;
 
         if (QGraphicsItem* item = findItemByUid(payload->uid))
         {
-            if (auto scene = item->scene())
+            if (QGraphicsScene* scene = item->scene())
                 scene->removeItem(item);
             removeListEntryBySceneItem(item);
             // Нужно сбросить временные указатели и флаги,
@@ -10242,14 +10320,14 @@ void MainWindow::pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
             delete item;
         }
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
     };
 
-    if (auto* stack = activeUndoStack())
+    if (QUndoStack* stack = activeUndoStack())
         stack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
@@ -10261,11 +10339,11 @@ void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString
         qulonglong  uid = 0;
     };
 
-    auto payload = std::make_shared<Payload>();
+    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
     payload->backup = backup;
     payload->uid = backup.uid;
 
-    auto redoFn = [this, payload]()
+    std::function<void()> redoFn = [this, payload]()
     {
         // Ищем существующий объект по uid
         QGraphicsItem* it = nullptr;
@@ -10287,14 +10365,14 @@ void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString
             }
         }
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
     };
 
-    auto undoFn = [this, payload]()
+    std::function<void()> undoFn = [this, payload]()
     {
         if (payload->uid == 0)
             return;
@@ -10307,14 +10385,14 @@ void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString
             delete item;
         }
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
     };
 
-    if (auto* stack = activeUndoStack())
+    if (QUndoStack* stack = activeUndoStack())
         stack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
@@ -10331,7 +10409,7 @@ void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
         bool skipFirstRedo = false;
     };
 
-    auto payload = std::make_shared<Payload>();
+    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
     payload->before = before;
     payload->after  = after;
 
@@ -10342,7 +10420,8 @@ void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
         uid = ensureUid(item);
     payload->uid = uid;
 
-    auto apply = [this](qulonglong uid, const ShapeBackup& snap)
+    std::function<bool(qulonglong, const ShapeBackup&)> apply =
+        [this](qulonglong uid, const ShapeBackup& snap)
     {
         QGraphicsItem* item = findItemByUid(uid);
         if (item)
@@ -10359,27 +10438,27 @@ void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
         return false;
     };
 
-    auto redoFn = [this, payload, apply]()
+    std::function<void()> redoFn = [this, payload, apply]()
     {
         apply(payload->uid, payload->after);
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
     };
 
-    auto undoFn = [this, payload, apply]()
+    std::function<void()> undoFn = [this, payload, apply]()
     {
         apply(payload->uid, payload->before);
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
     };
 
-    if (auto* stack = activeUndoStack())
+    if (QUndoStack* stack = activeUndoStack())
         stack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
@@ -10395,7 +10474,7 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
         qulonglong uid = 0;
     };
 
-    auto payload = std::make_shared<Payload>();
+    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
     payload->before = before;
     payload->after = after;
 
@@ -10408,7 +10487,8 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
     payload->uid = uid;
 
     // Найти актуальный item по uid; если нет - пересоздать из снапшота
-    auto apply = [this](qulonglong uid, const ShapeBackup& snap)
+    std::function<bool(qulonglong, const ShapeBackup&)> apply =
+        [this](qulonglong uid, const ShapeBackup& snap)
     {
         QGraphicsItem* item = findItemByUid(uid);
         if (item)
@@ -10426,27 +10506,27 @@ void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
         return false;
     };
 
-    auto redoFn = [this, payload, apply]()
+    std::function<void()> redoFn = [this, payload, apply]()
     {
         apply(payload->uid, payload->after);
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
     };
 
-    auto undoFn = [this, payload, apply]()
+    std::function<void()> undoFn = [this, payload, apply]()
     {
         apply(payload->uid, payload->before);
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
     };
 
-    if (auto* stack = activeUndoStack())
+    if (QUndoStack* stack = activeUndoStack())
         stack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
@@ -10455,7 +10535,7 @@ void MainWindow::pushModifyShapeCommand(qulonglong uid,
                                         const ShapeBackup& after,
                                         const QString& description)
 {
-    auto doc = currentDocument();
+    Document::Ptr doc = currentDocument();
     if (!doc || !doc->_undoStack)
         return;
 
@@ -10466,14 +10546,15 @@ void MainWindow::pushModifyShapeCommand(qulonglong uid,
         ShapeBackup after;
     };
 
-    auto payload = std::make_shared<Payload>();
+    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
     payload->uid    = uid;
     payload->before = before;
     payload->after  = after;
 
     // Применяем снапшот к существующей фигуре по uid.
     // Если фигуру не нашли - просто no-op, без пересоздания.
-    auto applySnap = [this](qulonglong uid, const ShapeBackup& snap)
+    std::function<void(qulonglong, const ShapeBackup&)> applySnap =
+        [this](qulonglong uid, const ShapeBackup& snap)
     {
         if (QGraphicsItem* item = findItemByUid(uid))
         {
@@ -10481,20 +10562,20 @@ void MainWindow::pushModifyShapeCommand(qulonglong uid,
         }
     };
 
-    auto redoFn = [this, payload, applySnap]()
+    std::function<void()> redoFn = [this, payload, applySnap]()
     {
         applySnap(payload->uid, payload->after);
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
     };
 
-    auto undoFn = [this, payload, applySnap]()
+    std::function<void()> undoFn = [this, payload, applySnap]()
     {
         applySnap(payload->uid, payload->before);
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -10508,7 +10589,7 @@ void MainWindow::pushMoveImageCommand(const QPointF& before,
                                       const QPointF& after,
                                       const QString& description)
 {
-    auto doc = currentDocument();
+    Document::Ptr doc = currentDocument();
     if (!doc || !doc->_undoStack || !_videoRect)
         return;
 
@@ -10521,30 +10602,31 @@ void MainWindow::pushMoveImageCommand(const QPointF& before,
         QPointF after;
     };
 
-    auto payload = std::make_shared<Payload>();
+    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
     payload->before = before;
     payload->after = after;
 
-    auto applyPos = [this](const QPointF& pos)
+    std::function<void(const QPointF&)> applyPos =
+        [this](const QPointF& pos)
     {
         if (_videoRect)
             _videoRect->setPos(pos);
     };
 
-    auto redoFn = [this, payload, applyPos]()
+    std::function<void()> redoFn = [this, payload, applyPos]()
     {
         applyPos(payload->after);
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
     };
 
-    auto undoFn = [this, payload, applyPos]()
+    std::function<void()> undoFn = [this, payload, applyPos]()
     {
         applyPos(payload->before);
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -10559,7 +10641,7 @@ void MainWindow::pushReplaceShapeCommand(qulonglong uid,
                                         const ShapeBackup& after,
                                         const QString& description)
 {
-    auto doc = currentDocument();
+    Document::Ptr doc = currentDocument();
     if (!doc || !doc->_undoStack)
         return;
 
@@ -10570,22 +10652,23 @@ void MainWindow::pushReplaceShapeCommand(qulonglong uid,
         ShapeBackup after;
     };
 
-    auto p = std::make_shared<Payload>();
-    p->uid = uid;
-    p->before = before;
-    p->after  = after;
+    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
+    payload->uid = uid;
+    payload->before = before;
+    payload->after  = after;
 
-    p->before.uid = uid;
-    p->after.uid  = uid;
+    payload->before.uid = uid;
+    payload->after.uid  = uid;
 
-    auto replaceBySnap = [this](qulonglong uid, const ShapeBackup& snap)
+    std::function<void(qulonglong, const ShapeBackup&)> replaceBySnap =
+        [this](qulonglong uid, const ShapeBackup& snap)
     {
         if (!uid)
             return;
 
         if (QGraphicsItem* item = findItemByUid(uid))
         {
-            if (auto sc = item->scene())
+            if (QGraphicsScene* sc = item->scene())
                 sc->removeItem(item);
 
             removeListEntryBySceneItem(item);
@@ -10598,20 +10681,20 @@ void MainWindow::pushReplaceShapeCommand(qulonglong uid,
             created->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
     };
 
-    auto redoFn = [this, p, replaceBySnap]()
+    std::function<void()> redoFn = [this, payload, replaceBySnap]()
     {
-        replaceBySnap(p->uid, p->after);
-        if (auto doc = currentDocument())
+        replaceBySnap(payload->uid, payload->after);
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
     };
 
-    auto undoFn = [this, p, replaceBySnap]()
+    std::function<void()> undoFn = [this, payload, replaceBySnap]()
     {
-        replaceBySnap(p->uid, p->before);
-        if (auto doc = currentDocument())
+        replaceBySnap(payload->uid, payload->before);
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -10671,7 +10754,7 @@ QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
     if (!_scene || uid == 0)
         return nullptr;
 
-    const auto itemsList = _scene->items();
+    const QList<QGraphicsItem*> itemsList = _scene->items();
     for (QGraphicsItem* item : itemsList)
     {
         if (!item)
@@ -10784,7 +10867,7 @@ QColor MainWindow::classColorFor(const QString& className) const
     if (className.isEmpty())
         return QColor();
 
-    const auto it = _projectClassColors.find(className);
+    const QMap<QString, QColor>::const_iterator it = _projectClassColors.find(className);
     if (it == _projectClassColors.end())
         return QColor();
 
@@ -10824,43 +10907,43 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
 
     const QBrush noBrush {Qt::transparent};
 
-    if (auto* r = dynamic_cast<qgraph::Rectangle*>(item))
+    if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
     {
-        QPen p = r->pen();
-        p.setColor(lineColor);
-        p.setWidthF(_vstyle.lineWidth);
-        p.setCosmetic(true);
-        r->setPen(p);
+        QPen pen = rect->pen();
+        pen.setColor(lineColor);
+        pen.setWidthF(_vstyle.lineWidth);
+        pen.setCosmetic(true);
+        rect->setPen(pen);
 
-        r->setBrush(r->isSelected() ? fillBrush : noBrush);
+        rect->setBrush(rect->isSelected() ? fillBrush : noBrush);
         return;
     }
 
-    if (auto* cir = dynamic_cast<qgraph::Circle*>(item))
+    if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
     {
-        QPen p = cir->pen();
-        p.setColor(lineColor);
-        p.setWidthF(_vstyle.lineWidth);
-        p.setCosmetic(true);
-        cir->setPen(p);
+        QPen pen = circle->pen();
+        pen.setColor(lineColor);
+        pen.setWidthF(_vstyle.lineWidth);
+        pen.setCosmetic(true);
+        circle->setPen(pen);
 
-        cir->setBrush(cir->isSelected() ? fillBrush : noBrush);
+        circle->setBrush(circle->isSelected() ? fillBrush : noBrush);
 
-        for (QGraphicsItem* ch : cir->childItems())
+        for (QGraphicsItem* ch : circle->childItems())
         {
-            if (auto* li = dynamic_cast<QGraphicsLineItem*>(ch))
+            if (QGraphicsLineItem* lineCenter = dynamic_cast<QGraphicsLineItem*>(ch))
             {
-                QPen cp = li->pen();
-                cp.setColor(lineColor);
-                cp.setWidthF(_vstyle.lineWidth);
-                cp.setCosmetic(true);
-                li->setPen(cp);
+                QPen pen = lineCenter->pen();
+                pen.setColor(lineColor);
+                pen.setWidthF(_vstyle.lineWidth);
+                pen.setCosmetic(true);
+                lineCenter->setPen(pen);
             }
         }
         return;
     }
 
-    if (auto* polyline = dynamic_cast<qgraph::Polyline*>(item))
+    if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
     {
         QPen pen = polyline->pen();
         pen.setColor(lineColor);
@@ -10872,7 +10955,7 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
         return;
     }
 
-    if (auto* line = dynamic_cast<qgraph::Line*>(item))
+    if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
     {
         QPen pen = line->pen();
         pen.setColor(lineColor);
@@ -10884,7 +10967,7 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
         return;
     }
 
-    if (auto* point = dynamic_cast<qgraph::Point*>(item))
+    if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
     {
         const qreal diam = std::max(2, _vstyle.pointSize);
         point->setDotStyle(lineColor, diam, _vstyle.handleSize);
@@ -10942,11 +11025,11 @@ bool MainWindow::handleMergeLinesClick(const QPointF& scenePos)
         return false;
 
     QGraphicsItem* parent = h->parentItem();
-    auto* line = dynamic_cast<qgraph::Line*>(parent);
+    qgraph::Line* line = dynamic_cast<qgraph::Line*>(parent);
     if (!line)
         return false;
 
-    const auto& circles = line->circles();
+    const QVector<qgraph::DragCircle*>& circles = line->circles();
     const int idx = circles.indexOf(h);
     if ((idx != 0) && (idx != circles.size() - 1))
         return false; // Нужен только конец линии
@@ -10973,7 +11056,7 @@ bool MainWindow::handleMergeLinesClick(const QPointF& scenePos)
 
 bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line* lineB, int indexB)
 {
-    auto doc = currentDocument();
+    Document::Ptr doc = currentDocument();
     if (!doc || !doc->_undoStack || !lineA || !lineB)
         return false;
 
@@ -11043,7 +11126,8 @@ bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line
     if (merged.size() < 2)
         return false;
 
-    auto rotateToIndex = [](QVector<QPointF>& points, int k)
+    void (*rotateToIndex)(QVector<QPointF>&, int) =
+        [](QVector<QPointF>& points, int k)
     {
         if (points.isEmpty())
             return;
@@ -11104,7 +11188,8 @@ bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line
     Payload::Ptr payload = make_shared<Payload>();
     //Payload::Ptr payload = Payload::Ptr::create();
 
-    auto backupForSceneItem = [this](QGraphicsItem* gi) -> ShapeBackup
+    std::function<ShapeBackup(QGraphicsItem*)> backupForSceneItem =
+        [this](QGraphicsItem* gi) -> ShapeBackup
     {
         ShapeBackup backup{};
         backup.uid = gi->data(_roleUid).toULongLong();
@@ -11114,7 +11199,7 @@ bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line
         backup.zValue = gi->zValue();
         backup.visible = gi->isVisible();
 
-        if (auto* line = dynamic_cast<qgraph::Line*>(gi))
+        if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(gi))
         {
             backup.kind = ShapeKind::Line;
             backup.points = line->points();
@@ -11132,7 +11217,7 @@ bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line
 
     payload->mergedUid = ++_uidCounter; // Резервируем uid
 
-    auto redoFn = [this, payload]()
+    std::function<void()> redoFn = [this, payload]()
     {
         // Удаляем А и В по uid
         for (qulonglong uid : {payload->aBackup.uid, payload->bBackup.uid})
@@ -11150,7 +11235,7 @@ bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line
         if (payload->mergedPts.isEmpty())
             return;
 
-        auto* line = new qgraph::Line(_scene, payload->mergedPts.front());
+        qgraph::Line* line = new qgraph::Line(_scene, payload->mergedPts.front());
         line->setData(_roleUid, QVariant::fromValue<qulonglong>(payload->mergedUid));
 
         for (int i = 1; i < payload->mergedPts.size(); ++i)
@@ -11168,14 +11253,14 @@ bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line
         line->updateHandlePosition();
         linkSceneItemToList(line);
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
     };
 
-    auto undoFn = [this, payload]()
+    std::function<void()> undoFn = [this, payload]()
     {
         if (payload->mergedUid)
         {
@@ -11192,7 +11277,7 @@ bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line
         recreateFromBackup(payload->aBackup);
         recreateFromBackup(payload->bBackup);
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -11205,7 +11290,7 @@ bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line
 
 bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scenePos)
 {
-    auto doc = currentDocument();
+    Document::Ptr doc = currentDocument();
     if (!doc || !doc->_undoStack || !line)
         return false;
 
@@ -11221,7 +11306,8 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scene
         return false;
     }
 
-    auto dist2PointToSegment = [](const QPointF& p, const QPointF& a, const QPointF& b) -> double
+    double (*dist2PointToSegment)(const QPointF&, const QPointF&, const QPointF&) =
+        [](const QPointF& p, const QPointF& a, const QPointF& b) -> double
     {
         const double vx = b.x() - a.x();
         const double vy = b.y() - a.y();
@@ -11280,7 +11366,7 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scene
         qulonglong uid2 = 0;
     };
 
-    auto payload = std::make_shared<Payload>();
+    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
     payload->oldBackup = before;
     payload->label = before.className;
     payload->zValue = before.zValue;
@@ -11298,7 +11384,7 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scene
     for (int i = bestIdx + 1; i < n; ++i)
         payload->pts2.push_back(before.points[i]);
 
-    auto redoFn = [this, payload]()
+    std::function<void()> redoFn = [this, payload]()
     {
         // Удалить старую линию
         if (payload->oldBackup.uid)
@@ -11312,11 +11398,12 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scene
             }
         }
 
-        auto makeLine = [this, payload](const QVector<QPointF>& pts, qulonglong uid)
+        std::function<void(const QVector<QPointF>&, qulonglong)> makeLine =
+            [this, payload](const QVector<QPointF>& pts, qulonglong uid)
         {
             if (pts.size() < 2) return;
 
-            auto* line = new qgraph::Line(_scene, pts.front());
+            qgraph::Line* line = new qgraph::Line(_scene, pts.front());
             line->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
             for (int i = 1; i < pts.size(); ++i)
                 line->addPoint(pts[i], _scene);
@@ -11338,14 +11425,14 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scene
         makeLine(payload->pts1, payload->uid1);
         makeLine(payload->pts2, payload->uid2);
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
     };
 
-    auto undoFn = [this, payload]()
+    std::function<void()> undoFn = [this, payload]()
     {
         // Удалить две новые линии
         for (qulonglong uid : {payload->uid1, payload->uid2})
@@ -11363,7 +11450,7 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scene
         // Восстановить старую
         recreateFromBackup(payload->oldBackup);
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -11556,9 +11643,9 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
                             _drawingPolyline = false;
                             updateModeLabel();
 
-                            auto redoFn = [this, uid, cls]()
+                            std::function<void()> redoFn = [this, uid, cls]()
                             {
-                                auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
                                 if (!polyline)
                                     return;
 
@@ -11577,16 +11664,16 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
                                 _resumeUid = 0;
                                 updateModeLabel();
 
-                                if (auto doc = currentDocument())
+                                if (Document::Ptr doc = currentDocument())
                                 {
                                     doc->isModified = true;
                                     updateFileListDisplay(doc->filePath);
                                 }
                             };
 
-                            auto undoFn = [this, uid]()
+                            std::function<void()> undoFn = [this, uid]()
                             {
-                                auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                                qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
                                 if (!polyline)
                                     return;
 
@@ -11605,7 +11692,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
                                 removeListEntryBySceneItem(polyline);
 
-                                if (auto doc = currentDocument())
+                                if (Document::Ptr doc = currentDocument())
                                 {
                                     doc->isModified = true;
                                     updateFileListDisplay(doc->filePath);
@@ -11627,9 +11714,9 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
                     _drawingPolyline = false;
                     updateModeLabel();
 
-                    auto redoFn = [this, uid, cls]()
+                    std::function<void()> redoFn = [this, uid, cls]()
                     {
-                        auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
                         if (!polyline)
                             return;
 
@@ -11651,7 +11738,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
                         _resumeUid = 0;
                         updateModeLabel();
 
-                        if (auto doc = currentDocument())
+                        if (Document::Ptr doc = currentDocument())
                         {
                             doc->isModified = true;
                             updateFileListDisplay(doc->filePath);
@@ -11659,9 +11746,9 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
                         raiseAllHandlesToTop();
                     };
 
-                    auto undoFn = [this, uid]()
+                    std::function<void()> undoFn = [this, uid]()
                     {
-                        auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(uid));
+                        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
                         if (!polyline)
                             return;
 
@@ -11680,7 +11767,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
                         removeListEntryBySceneItem(polyline);
 
-                        if (auto doc = currentDocument())
+                        if (Document::Ptr doc = currentDocument())
                         {
                             doc->isModified = true;
                             updateFileListDisplay(doc->filePath);
@@ -11697,7 +11784,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
                 _polyline = nullptr;
 
-                if (auto doc = currentDocument())
+                if (Document::Ptr doc = currentDocument())
                 {
                     doc->isModified = true;
                     updateFileListDisplay(doc->filePath);
@@ -11723,13 +11810,13 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
             bool       didAdd = false;
         };
 
-        auto payload = std::make_shared<Payload>();
+        std::shared_ptr<Payload> payload = std::make_shared<Payload>();
         payload->uid = ensureUid(_polyline);
         payload->pt  = p;
 
-        auto redoFn = [this, payload]()
+        std::function<void()> redoFn = [this, payload]()
         {
-            auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(payload->uid));
+            qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(payload->uid));
             if (!polyline)
                 return;
 
@@ -11743,23 +11830,23 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
             payload->didAdd = (polyline->_circles.size() > before);
 
-            if (auto doc = currentDocument())
+            if (Document::Ptr doc = currentDocument())
             {
                 doc->isModified = true;
                 updateFileListDisplay(doc->filePath);
             }
         };
 
-        auto undoFn = [this, payload]()
+        std::function<void()> undoFn = [this, payload]()
         {
-            auto* polyline = qgraphicsitem_cast<qgraph::Polyline*>(findItemByUid(payload->uid));
+            qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(payload->uid));
             if (!polyline)
                 return;
 
             if (payload->didAdd)
                 polyline->removeLastPointForce(true);
 
-            if (auto doc = currentDocument())
+            if (Document::Ptr doc = currentDocument())
             {
                 doc->isModified = true;
                 updateFileListDisplay(doc->filePath);
@@ -11847,9 +11934,9 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                             _drawingLine = false;
                             updateModeLabel();
 
-                            auto redoFn = [this, uid, cls]()
+                            std::function<void()> redoFn = [this, uid, cls]()
                             {
-                                auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                                qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
                                 if (!line) return;
 
                                 line->setClosed(true, false);
@@ -11866,7 +11953,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                                 _resumeUid = 0;
                                 updateModeLabel();
 
-                                if (auto doc = currentDocument())
+                                if (Document::Ptr doc = currentDocument())
                                 {
                                     doc->isModified = true;
                                     updateFileListDisplay(doc->filePath);
@@ -11874,9 +11961,9 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                                 raiseAllHandlesToTop();
                             };
 
-                            auto undoFn = [this, uid]()
+                            std::function<void()> undoFn = [this, uid]()
                             {
-                                auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                                qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
                                 if (!line) return;
 
                                 line->setClosed(false, false);
@@ -11894,7 +11981,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
                                 removeListEntryBySceneItem(line);
 
-                                if (auto doc = currentDocument())
+                                if (Document::Ptr doc = currentDocument())
                                 {
                                     doc->isModified = true;
                                     updateFileListDisplay(doc->filePath);
@@ -11918,9 +12005,9 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                     _drawingLine = false;
                     updateModeLabel();
 
-                    auto redoFn = [this, uid, cls]()
+                    std::function<void()> redoFn = [this, uid, cls]()
                     {
-                        auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
                         if (!line) return;
 
                         line->setClosed(true, false);
@@ -11941,7 +12028,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                         _resumeUid = 0;
                         updateModeLabel();
 
-                        if (auto doc = currentDocument())
+                        if (Document::Ptr doc = currentDocument())
                         {
                             doc->isModified = true;
                             updateFileListDisplay(doc->filePath);
@@ -11949,9 +12036,9 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                         raiseAllHandlesToTop();
                     };
 
-                    auto undoFn = [this, uid]()
+                    std::function<void()> undoFn = [this, uid]()
                     {
-                        auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(uid));
+                        qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
                         if (!line) return;
 
                         line->setClosed(false, false);
@@ -11969,7 +12056,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
                         removeListEntryBySceneItem(line);
 
-                        if (auto doc = currentDocument())
+                        if (Document::Ptr doc = currentDocument())
                         {
                             doc->isModified = true;
                             updateFileListDisplay(doc->filePath);
@@ -11985,7 +12072,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
                 _line = nullptr;
 
-                if (auto doc = currentDocument())
+                if (Document::Ptr doc = currentDocument())
                 {
                     doc->isModified = true;
                     updateFileListDisplay(doc->filePath);
@@ -12010,13 +12097,13 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
             bool       didAdd = {false};
         };
 
-        auto payload = std::make_shared<Payload>();
+        std::shared_ptr<Payload> payload = std::make_shared<Payload>();
         payload->uid = ensureUid(_line);
         payload->pt  = p;
 
-        auto redoFn = [this, payload]()
+        std::function<void()> redoFn = [this, payload]()
         {
-            auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(payload->uid));
+            qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(payload->uid));
             if (!line) return;
 
             const int before = line->_circles.count();
@@ -12028,22 +12115,22 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
             payload->didAdd = (line->_circles.size() > before);
 
-            if (auto doc = currentDocument())
+            if (Document::Ptr doc = currentDocument())
             {
                 doc->isModified = true;
                 updateFileListDisplay(doc->filePath);
             }
         };
 
-        auto undoFn = [this, payload]()
+        std::function<void()> undoFn = [this, payload]()
         {
-            auto* line = qgraphicsitem_cast<qgraph::Line*>(findItemByUid(payload->uid));
+            qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(payload->uid));
             if (!line) return;
 
             if (payload->didAdd)
                 line->removeLastPointForce(true);
 
-            if (auto doc = currentDocument())
+            if (Document::Ptr doc = currentDocument())
             {
                 doc->isModified = true;
                 updateFileListDisplay(doc->filePath);
@@ -12093,7 +12180,7 @@ void MainWindow::moveCurrentShapeInList(int direction)
 
     const qulonglong uid = ensureUid(sceneItem);
 
-    auto redoFn = [this, uid, toRow]()
+    std::function<void()> redoFn = [this, uid, toRow]()
     {
         const int currentRow = polygonListRowByUid(uid);
         if (currentRow < 0)
@@ -12101,14 +12188,14 @@ void MainWindow::moveCurrentShapeInList(int direction)
 
         movePolygonListRow(currentRow, toRow);
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
     };
 
-    auto undoFn = [this, uid, fromRow]()
+    std::function<void()> undoFn = [this, uid, fromRow]()
     {
         const int currentRow = polygonListRowByUid(uid);
         if (currentRow < 0)
@@ -12116,7 +12203,7 @@ void MainWindow::moveCurrentShapeInList(int direction)
 
         movePolygonListRow(currentRow, fromRow);
 
-        if (auto doc = currentDocument())
+        if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);

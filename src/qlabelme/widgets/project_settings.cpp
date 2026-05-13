@@ -41,13 +41,13 @@ ProjectSettings::ProjectSettings(QWidget* parent)
     ui->setupUi(this);
     setWindowTitle(u8"Настройки проекта");
 
-    if (auto b = ui->buttonBox->button(QDialogButtonBox::Ok))
+    if (QPushButton* b = ui->buttonBox->button(QDialogButtonBox::Ok))
         b->setText(u8"ОК");
 
-    if (auto b = ui->buttonBox->button(QDialogButtonBox::Apply))
+    if (QPushButton* b = ui->buttonBox->button(QDialogButtonBox::Apply))
         b->setText(u8"Применить");
 
-    if (auto b = ui->buttonBox->button(QDialogButtonBox::Cancel))
+    if (QPushButton* b = ui->buttonBox->button(QDialogButtonBox::Cancel))
         b->setText(u8"Отмена");
 
     // Всегда открываемся на первой вкладке
@@ -106,7 +106,7 @@ void ProjectSettings::setProjectClasses(const QStringList& classes)
         {
             const QString& name = _classes[i];
 
-            auto* it = new QListWidgetItem();
+            QListWidgetItem* it = new QListWidgetItem();
             it->setText("");
             it->setData(RoleClassName, name);
 
@@ -128,7 +128,7 @@ QMap<QString, QColor> ProjectSettings::projectClassColors() const
 
     for (int i = 0; i < ui->listClasses->count(); ++i)
     {
-        auto* it = ui->listClasses->item(i);
+        QListWidgetItem* it = ui->listClasses->item(i);
         const QString name = it->data(RoleClassName).toString();
         const QColor c = it->data(Qt::UserRole).value<QColor>();
         if (!name.isEmpty() && c.isValid())
@@ -146,7 +146,7 @@ void ProjectSettings::setProjectClassColors(const QMap<QString, QColor>& colors)
 
     for (int i = 0; i < ui->listClasses->count(); ++i)
     {
-        auto* it = ui->listClasses->item(i);
+        QListWidgetItem* it = ui->listClasses->item(i);
         const QString name = it->data(RoleClassName).toString();
         const QColor c = colors.value(name, QColor());
         if (c.isValid())
@@ -189,7 +189,7 @@ static QStringList collectListItems(QListWidget* lw)
 
 void ProjectSettings::on_buttonBox_clicked(QAbstractButton* btn)
 {
-    const auto role = ui->buttonBox->buttonRole(btn);
+    const QDialogButtonBox::ButtonRole role = ui->buttonBox->buttonRole(btn);
     if (role == QDialogButtonBox::ApplyRole)
     {
         _classes = collectListItems(ui->listClasses);
@@ -227,7 +227,7 @@ void ProjectSettings::onSortAZ()
 
     for (int i = 0; i < ui->listClasses->count(); ++i)
     {
-        auto* it = ui->listClasses->item(i);
+        QListWidgetItem* it = ui->listClasses->item(i);
         ItemData d;
         //d.name = it->text();
         d.name = it->data(RoleClassName).toString();
@@ -244,7 +244,7 @@ void ProjectSettings::onSortAZ()
 
     for (int i = 0; i < items.size(); ++i)
     {
-        auto* it = new QListWidgetItem();
+        QListWidgetItem* it = new QListWidgetItem();
         it->setText("");
         it->setData(RoleClassName, items[i].name);
         it->setData(Qt::UserRole, items[i].color);
@@ -363,14 +363,17 @@ void ProjectSettings::onAddClass()
         return;
     }
 
-    auto exists = std::any_of(current.begin(), current.end(),
-                              [&](const QString& s){ return s.compare(name, Qt::CaseInsensitive) == 0; });
+    const bool exists = std::any_of(current.begin(), current.end(),
+                                    [&](const QString& s)
+                                    {
+                                        return s.compare(name, Qt::CaseInsensitive) == 0;
+                                    });
     if (exists) return;
 
     const int row = ui->listClasses->currentRow();
     const int insertRow = (row < 0) ? ui->listClasses->count() : (row + 1);
 
-    auto* it = new QListWidgetItem();
+    QListWidgetItem* it = new QListWidgetItem();
     it->setText("");
     it->setData(RoleClassName, name);
 
@@ -398,8 +401,8 @@ void ProjectSettings::onRemoveClass()
     box.setText(QString::fromUtf8("Удалить класс «%1» из списка?").arg(name));
     box.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
 
-    if (auto b = box.button(QMessageBox::Yes)) b->setText(u8"Да");
-    if (auto b = box.button(QMessageBox::No))  b->setText(u8"Нет");
+    if (QAbstractButton* b = box.button(QMessageBox::Yes)) b->setText(u8"Да");
+    if (QAbstractButton* b = box.button(QMessageBox::No))  b->setText(u8"Нет");
 
     const QSize sz(380, 160);
     box.resize(sz);
@@ -520,23 +523,23 @@ void ProjectSettings::onEditClass()
 // Создаем виджет-строку
 QWidget* ProjectSettings::makeClassRowWidget(QListWidgetItem* item)
 {
-    auto* w = new QWidget(ui->listClasses);
+    QWidget* w = new QWidget(ui->listClasses);
     //w->setMinimumHeight(36);
     //item->setSizeHint(QSize(0, 36));
 
-    auto* lay = new QHBoxLayout(w);
+    QHBoxLayout* lay = new QHBoxLayout(w);
     //lay->setContentsMargins(6, 0, 6, 0);
     lay->setSpacing(6);
     lay->setContentsMargins(6, 4, 6, 4);
 
-    auto* lbl = new QLabel(item->data(RoleClassName).toString(), w);
+    QLabel* lbl = new QLabel(item->data(RoleClassName).toString(), w);
 
     w->setStyleSheet("background: transparent;");
     lbl->setStyleSheet("background: transparent;");
 
     lbl->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
-    auto* btn = new QToolButton(w);
+    QToolButton* btn = new QToolButton(w);
     btn->setAutoRaise(true);
     btn->setCursor(Qt::PointingHandCursor);
     btn->setFocusPolicy(Qt::NoFocus);

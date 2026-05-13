@@ -170,7 +170,7 @@ QGraphicsEllipseItem* Point::ensureDotVis()
 
 void Point::deleteItem()
 {
-    auto sc = this->scene();
+    QGraphicsScene* sc = this->scene();
     if (!sc)
         return;
 
@@ -242,7 +242,7 @@ void Point::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     {
         if (scene())
         {
-            const auto selected = scene()->selectedItems();
+            const QList<QGraphicsItem*> selected = scene()->selectedItems();
             for (QGraphicsItem* it : selected)
             {
                 if (it && it != this)
@@ -263,7 +263,7 @@ void Point::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     QAction* deleteAction = menu.addAction("Удалить (Del)");
 
     QObject::connect(changeClassAction, &QAction::triggered, [this]() {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc) return;
 
         QObject* receiver = sc->property("classChangeReceiver").value<QObject*>();
@@ -283,7 +283,7 @@ void Point::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     });
 
     QObject::connect(toggleVisibleAction, &QAction::triggered, [this]() {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc)
             return;
 
@@ -326,7 +326,7 @@ void Point::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWi
 
 void Point::showDotIfIdle()
 {
-    if (auto* dv = ensureDotVis())
+    if (QGraphicsEllipseItem* dv = ensureDotVis())
         dv->setVisible(true);
 }
 

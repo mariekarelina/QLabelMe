@@ -77,10 +77,7 @@ void Polyline::setRealSceneRect(const QRectF& r)
 
 void Polyline::updateHandlePosition()
 {
-//    for (auto circle : _circles)
-//    {
-//        circle->moveBy(delta.x(), delta.y());
-//    }
+
 }
 
 void Polyline::addPoint(const QPointF& position, QGraphicsScene* scene)
@@ -382,7 +379,7 @@ void Polyline::setClosed(bool closed, bool callCallback)
     {
         _closeCallbackScheduled = true;
 
-        auto cb = _modificationCallback;
+        std::function<void()> cb = _modificationCallback;
 
         QTimer::singleShot(0, [this, cb]()
         {
@@ -442,7 +439,7 @@ void Polyline::keyPressEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Delete)
     {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc)
             return;
 
@@ -590,7 +587,7 @@ void Polyline::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     {
         if (scene())
         {
-            const auto selected = scene()->selectedItems();
+            const QList<QGraphicsItem*> selected = scene()->selectedItems();
             for (QGraphicsItem* it : selected)
             {
                 if (it && it != this)
@@ -643,7 +640,7 @@ void Polyline::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     });
 
     QObject::connect(deleteAction, &QAction::triggered, [this]() {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc)
             return;
 
@@ -656,7 +653,7 @@ void Polyline::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     });
 
     QObject::connect(changeClassAction, &QAction::triggered, [this]() {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc) return;
 
         QObject* receiver = sc->property("classChangeReceiver").value<QObject*>();
@@ -672,7 +669,7 @@ void Polyline::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     });
 
     QObject::connect(toggleVisibleAction, &QAction::triggered, [this]() {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc)
             return;
 
@@ -859,7 +856,7 @@ void Polyline::dragCircleRelease(DragCircle* circle)
 
     if (_modificationCallback)
     {
-        auto cb = _modificationCallback;
+        std::function<void()> cb = _modificationCallback;
         QTimer::singleShot(0, [cb]() { cb(); });
     }
 }
@@ -1050,10 +1047,10 @@ void Polyline::updatePointNumbers()
     // Если нумерация выключена - ничего не удаляем, просто скрываем
     if (!visibleNumbers)
     {
-        for (auto* n : pointNumbers)
+        for (QGraphicsSimpleTextItem* n : pointNumbers)
             if (n) n->setVisible(false);
 
-        for (auto* bg : numberBackgrounds)
+        for (QGraphicsRectItem* bg : numberBackgrounds)
             if (bg) bg->setVisible(false);
 
         return;
@@ -1075,7 +1072,7 @@ void Polyline::updatePointNumbers()
     // Доращиваем массивы до нужного размера, но не пересоздаем все заново
     while (pointNumbers.size() < _circles.size())
     {
-        auto* number = new QGraphicsSimpleTextItem(this);
+        QGraphicsSimpleTextItem* number = new QGraphicsSimpleTextItem(this);
         number->setZValue(1001);
         number->setPen(Qt::NoPen);
         number->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
@@ -1086,7 +1083,7 @@ void Polyline::updatePointNumbers()
         number->setFlag(QGraphicsItem::ItemIsFocusable, false);
         pointNumbers.append(number);
 
-        auto* bg = new QGraphicsRectItem(this);
+        QGraphicsRectItem* bg = new QGraphicsRectItem(this);
         bg->setPen(Qt::NoPen);
         bg->setZValue(1000);
         bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
@@ -1126,7 +1123,7 @@ void Polyline::updatePointNumbers()
                 QPointF inSegment = circlePos - prevPos;
                 QPointF outSegment = nextPos - circlePos;
 
-                auto normalizeVec = [](const QPointF& v) -> QPointF
+                QPointF (*normalizeVec)(const QPointF&) = [](const QPointF& v) -> QPointF
                 {
                     const qreal len = QLineF(QPointF(0, 0), v).length();
                     if (len <= 0.000001)
@@ -1139,7 +1136,8 @@ void Polyline::updatePointNumbers()
 
                 const bool isClockwiseNow = (area2 > 0.0);
 
-                auto outwardNormal = [isClockwiseNow](const QPointF& seg) -> QPointF
+                std::function<QPointF(const QPointF&)> outwardNormal =
+                    [isClockwiseNow](const QPointF& seg) -> QPointF
                 {
                     return isClockwiseNow
                         ? QPointF(seg.y(), -seg.x())
@@ -1212,8 +1210,8 @@ void Polyline::updatePointNumbers()
             }
         }
 
-        auto* number = pointNumbers[i];
-        auto* bg = numberBackgrounds[i];
+        QGraphicsSimpleTextItem* number = pointNumbers[i];
+        QGraphicsRectItem* bg = numberBackgrounds[i];
         if (!number || !bg)
             continue;
 

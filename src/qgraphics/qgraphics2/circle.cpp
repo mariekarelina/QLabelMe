@@ -378,7 +378,7 @@ void Circle::keyPressEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Delete)
     {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc)
             return;
 
@@ -409,7 +409,7 @@ void Circle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     {
         if (scene())
         {
-            const auto selected = scene()->selectedItems();
+            const QList<QGraphicsItem*> selected = scene()->selectedItems();
             for (QGraphicsItem* it : selected)
             {
                 if (it && it != this)
@@ -445,7 +445,7 @@ void Circle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     });
 
     QObject::connect(deleteAction, &QAction::triggered, [this]() {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc)
             return;
 
@@ -458,7 +458,7 @@ void Circle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     });
 
     QObject::connect(changeClassAction, &QAction::triggered, [this]() {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc) return;
 
         QObject* receiver = sc->property("classChangeReceiver").value<QObject*>();
@@ -474,7 +474,7 @@ void Circle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     });
 
     QObject::connect(toggleVisibleAction, &QAction::triggered, [this]() {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc)
             return;
 
@@ -740,7 +740,7 @@ struct Circle::SceneFilter : public QObject
             return false;
         if (ev->type() == QEvent::GraphicsSceneMouseMove)
         {
-            auto* me = static_cast<QGraphicsSceneMouseEvent*>(ev);
+            QGraphicsSceneMouseEvent* me = static_cast<QGraphicsSceneMouseEvent*>(ev);
             owner->updateHandlePosition(me->scenePos());
         }
         return false;
@@ -845,7 +845,7 @@ QVariant Circle::saveState() const
 
 void Circle::loadState(const QVariant& v)
 {
-    const auto m = v.toMap();
+    const QVariantMap m = v.toMap();
     if (m.contains("center"))  setRealCenter(m["center"].toPointF());
     if (m.contains("radius"))  setRealRadius(m["radius"].toReal());
     if (m.contains("z"))       setZValue(m["z"].toInt());

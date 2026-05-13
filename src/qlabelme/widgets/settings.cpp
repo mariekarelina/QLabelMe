@@ -101,7 +101,7 @@ void Settings::wireUi()
 
 void Settings::setupCloseMethodGroup()
 {
-    auto* g = new QButtonGroup(this);
+    QButtonGroup* g = new QButtonGroup(this);
     g->setExclusive(true);
 
     g->addButton(ui->doubleClickLMB, static_cast<int>(PolylineCloseMode::DoubleClick));
@@ -117,7 +117,7 @@ void Settings::setupCloseMethodGroup()
 
 void Settings::setupFinishMethodGroup()
 {
-    auto* g = new QButtonGroup(this);
+    QButtonGroup* g = new QButtonGroup(this);
     g->setExclusive(true);
 
     g->addButton(ui->doubleClickLMB_2, static_cast<int>(LineFinishMode::DoubleClick));
@@ -283,7 +283,7 @@ void Settings::on_buttonBox_rejected()
 
 void Settings::on_buttonBox_clicked(QAbstractButton* btn)
 {
-    const auto role = ui->buttonBox->buttonRole(btn);
+    const QDialogButtonBox::ButtonRole role = ui->buttonBox->buttonRole(btn);
     if (role == QDialogButtonBox::ApplyRole)
     {
         applyUiToModel();

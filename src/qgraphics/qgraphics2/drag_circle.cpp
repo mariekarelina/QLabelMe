@@ -165,7 +165,7 @@ void DragCircle::applyHoverStyle(QGraphicsRectItem* item, bool active)
     const QBrush baseBr = item->data(kRoleBaseBrush).value<QBrush>();
 
     // Для Circle/Point не рисуем hover-квадрат (узлы у них невидимые)
-    if (auto* p = item->parentItem())
+    if (QGraphicsItem* p = item->parentItem())
     {
         if (dynamic_cast<qgraph::Circle*>(p) != nullptr ||
             dynamic_cast<qgraph::Point*>(p)  != nullptr)
@@ -354,7 +354,7 @@ QVariant DragCircle::itemChange(GraphicsItemChange change, const QVariant &value
             return QGraphicsRectItem::itemChange(change, value);
 
         // Определяем родителя-фигуру
-        if (auto* shape = dynamic_cast<Shape*>(parentItem()))
+        if (Shape* shape = dynamic_cast<Shape*>(parentItem()))
         {
             // Если фигура сейчас программно раскладывает ручки - не триггерим рекурсию
             if (shape->handlesUpdateBlocked())

@@ -75,10 +75,7 @@ void Line::setRealSceneRect(const QRectF& r)
 
 void Line::updateHandlePosition()
 {
-//    for (auto circle : _circles)
-//    {
-//        circle->moveBy(delta.x(), delta.y());
-//    }
+
 }
 
 void Line::addPoint(const QPointF& position, QGraphicsScene* scene)
@@ -433,7 +430,7 @@ void Line::keyPressEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Delete)
     {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc)
             return;
 
@@ -575,7 +572,7 @@ void Line::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     {
         if (scene())
         {
-            const auto selected = scene()->selectedItems();
+            const QList<QGraphicsItem*> selected = scene()->selectedItems();
             for (QGraphicsItem* it : selected)
             {
                 if (it && it != this)
@@ -628,7 +625,7 @@ void Line::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     });
 
     QObject::connect(deleteAction, &QAction::triggered, [this]() {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc)
             return;
 
@@ -641,7 +638,7 @@ void Line::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     });
 
     QObject::connect(changeClassAction, &QAction::triggered, [this]() {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc) return;
 
         QObject* receiver = sc->property("classChangeReceiver").value<QObject*>();
@@ -657,7 +654,7 @@ void Line::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     });
 
     QObject::connect(toggleVisibleAction, &QAction::triggered, [this]() {
-        auto sc = this->scene();
+        QGraphicsScene* sc = this->scene();
         if (!sc)
             return;
 
@@ -1031,10 +1028,10 @@ void Line::updatePointNumbers()
 
     if (!visibleNumbers)
     {
-        for (auto* n : pointNumbers)
+        for (QGraphicsSimpleTextItem* n : pointNumbers)
             if (n) n->setVisible(false);
 
-        for (auto* bg : numberBackgrounds)
+        for (QGraphicsRectItem* bg : numberBackgrounds)
             if (bg) bg->setVisible(false);
 
         return;
@@ -1042,7 +1039,7 @@ void Line::updatePointNumbers()
 
     while (pointNumbers.size() < _circles.size())
     {
-        auto* number = new QGraphicsSimpleTextItem(this);
+        QGraphicsSimpleTextItem* number = new QGraphicsSimpleTextItem(this);
         number->setZValue(1001);
         number->setPen(Qt::NoPen);
         number->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
@@ -1053,7 +1050,7 @@ void Line::updatePointNumbers()
         number->setFlag(QGraphicsItem::ItemIsFocusable, false);
         pointNumbers.append(number);
 
-        auto* bg = new QGraphicsRectItem(this);
+        QGraphicsRectItem* bg = new QGraphicsRectItem(this);
         bg->setPen(Qt::NoPen);
         bg->setZValue(1000);
         bg->setFlag(QGraphicsItem::ItemIgnoresParentOpacity, true);
@@ -1137,8 +1134,8 @@ void Line::updatePointNumbers()
             }
         }
 
-        auto* number = pointNumbers[i];
-        auto* bg = numberBackgrounds[i];
+        QGraphicsSimpleTextItem* number = pointNumbers[i];
+        QGraphicsRectItem* bg = numberBackgrounds[i];
         if (!number || !bg)
             continue;
 

@@ -27,7 +27,7 @@ UserGuide::UserGuide(QWidget* parent)
 
     connect(ui->treeContents, &QTreeWidget::itemSelectionChanged, this, [this]()
     {
-        auto items = ui->treeContents->selectedItems();
+        QList<QTreeWidgetItem*> items = ui->treeContents->selectedItems();
         if (items.isEmpty())
             return;
 
