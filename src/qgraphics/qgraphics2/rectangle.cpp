@@ -544,12 +544,14 @@ void Rectangle::updatePointNumbers()
 
     for (auto* n : pointNumbers)
         if (n) n->setVisible(true);
+
     for (auto* bg : numberBackgrounds)
         if (bg) bg->setVisible(true);
 
-    DragCircle* circles[4] = { _circleTL, _circleTR, _circleBR, _circleBL };
+    DragCircle* circles[4] = {_circleTL, _circleTR, _circleBR, _circleBL};
 
-    auto centerOf = [](DragCircle* c) -> QPointF {
+    auto centerOf = [](DragCircle* c) -> QPointF
+    {
         return c ? c->pos() : QPointF(0, 0);
     };
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "shared/simple_signal.h"
+#include "shared/qt/quuidex.h"
 #include "drag_circle.h"
 
 namespace qgraph {
@@ -49,6 +50,9 @@ public:
     virtual void raiseHandlesToTop() = 0;
     //virtual void updateHandlesZValue() = 0;
 
+    QUuidEx id() const {return _id;}
+    void setId(const QUuidEx& val) {_id = val;}
+
     int tag() const {return _tag;}
     void setTag(int val) {_tag = val;}
 
@@ -70,6 +74,7 @@ public:
 protected:
     bool _active = {false};
     float _frameScale = {1};
+    QUuidEx _id = {QUuidEx::createUuid()};
     int _tag = {0};
 
     int _handlesUpdateBlock = 0;

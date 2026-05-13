@@ -1,0 +1,185 @@
+#include "undo_stack.h"
+
+#include "qgraphics2/circle.h"
+#include "qgraphics2/line.h"
+#include "qgraphics2/point.h"
+#include "qgraphics2/polyline.h"
+#include "qgraphics2/rectangle.h"
+
+UndoAction::UndoAction(QGraphicsScene* scene, Type type, const QString& text,
+                       const ShapeBackup2& before, const ShapeBackup2& after,
+                       ApplyCallback onApplied)
+{
+    _scene = scene;
+    _type = type;
+    _text = text;
+    _before = before;
+    _after = after;
+    _onApplied = onApplied;
+}
+
+bool UndoAction::applyBackup(const ShapeBackup2& backup)
+{
+    qgraph::Shape* shape = findItem(backup.id);
+    if (!shape)
+        return false;
+
+    restoreFromBackup(shape, backup);
+
+    if (_onApplied)
+        _onApplied(shape);
+
+    return true;
+}
+
+void UndoAction::restoreFromBackup(qgraph::Shape* item, const ShapeBackup2& backup)
+{
+    if (!item)
+        return;
+
+    if (backup.shapeNumber >= 0)
+        item->setData(_roleShapeNumber, backup.shapeNumber);
+
+    // Общие свойства есть у всех фигур
+    item->setData(0, backup.className);
+    item->setZValue(backup.zValue);
+    item->setVisible(backup.visible);
+
+
+    switch (backup.kind)
+    {
+        case ShapeKind::Rectangle:
+            if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
+            {
+                rect->setRealSceneRect(backup.rect);
+
+                rect->updateHandlePosition();
+                rect->updatePointNumbers();
+            }
+            break;
+
+        case ShapeKind::Circle:
+            if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
+            {
+                circle->setRealRadius(backup.circleRadius);
+
+                const QPointF currentCenter = circle->sceneBoundingRect().center();
+                const QPointF targetCenter = backup.circleCenter;
+                const QPointF delta = targetCenter - currentCenter;
+
+                if (!qFuzzyIsNull(delta.x()) || !qFuzzyIsNull(delta.y()))
+                    circle->moveBy(delta.x(), delta.y());
+
+                circle->updateHandlePosition();
+            }
+            break;
+
+        case ShapeKind::Polyline:
+            if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
+            {
+                polyline->replaceScenePoints(backup.points, backup.closed);
+
+                polyline->updateHandlePosition();
+                polyline->updatePointNumbers();
+            }
+            break;
+
+        case ShapeKind::Line:
+            if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
+            {
+                line->replaceScenePoints(backup.points, backup.closed);
+                line->setNumberingFromLast(backup.numberingFromLast);
+
+                line->updateHandlePosition();
+                line->updatePointNumbers();
+            }
+            break;
+
+        case ShapeKind::Point:
+            if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
+            {
+                    point->setCenter(backup.pointCenter);
+
+                point->updateHandlePosition();
+            }
+            break;
+    }
+    // TODO - отображение в ui
+
+    // if (ui && ui->polygonList)
+    // {
+    //     int currentRow = -1;
+    //     QListWidgetItem* currentItem = nullptr;
+
+    //     for (int i = 0; i < ui->polygonList->count(); ++i)
+    //     {
+    //         QListWidgetItem* li = ui->polygonList->item(i);
+    //         if (!li)
+    //             continue;
+
+    //         if (li->data(Qt::UserRole).value<QGraphicsItem*>() == item)
+    //         {
+    //             currentRow = i;
+    //             currentItem = li;
+    //             break;
+    //         }
+    //     }
+
+    //     if (!currentItem && !backup.className.isEmpty())
+    //     {
+    //         linkSceneItemToList(item, backup.listRow);
+    //     }
+    //     else if (currentItem)
+    //     {
+    //         const int targetRow = (backup.listRow < 0) ? currentRow : backup.listRow;
+    //         if (targetRow != currentRow &&
+    //             targetRow >= 0 &&
+    //             targetRow < ui->polygonList->count())
+    //         {
+    //             QListWidgetItem* moved = ui->polygonList->takeItem(currentRow);
+    //             ui->polygonList->insertItem(targetRow, moved);
+    //         }
+    //         renumberPolygonList();
+    //     }
+    // }
+}
+
+qgraph::Shape* UndoAction::findItem(const QUuidEx id) const
+{
+    if (!_scene || id.isNull())
+        return nullptr;
+
+    for (QGraphicsItem* item : _scene->items())
+    {
+        if (!item)
+            continue;
+
+        if (qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(item))
+        {
+            if (shape->id() == id)
+                return shape;
+        }
+    }
+    return nullptr;
+}
+
+MoveShapeAction::MoveShapeAction(QGraphicsScene* scene,
+                                 const QString& text,
+                                 const ShapeBackup2& before,
+                                 const ShapeBackup2& after,
+                                 ApplyCallback onApplied)
+    : UndoAction(scene, before, after, text, onApplied)
+{
+}
+
+// redo() применяет состояние после перемещения
+void MoveShapeAction::redo()
+{
+    applyBackup(_after);
+}
+
+// undo() возвращает состояние до перемещения
+void MoveShapeAction::undo()
+{
+    applyBackup(_before);
+}

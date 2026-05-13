@@ -30,6 +30,7 @@ Product {
     cpp.includePaths: [
         "./",
         "./widgets",
+        "./undo"
     ]
 
     Group {
@@ -49,12 +50,6 @@ Product {
             "about_program.ui",
             "graphics_view.cpp",
             "graphics_view.h",
-            "handle.cpp",
-            "handle.h",
-            "lambda_command.cpp",
-            "lambda_command.h",
-            "line.cpp",
-            "line.h",
             "main_window.cpp",
             "main_window.h",
             "main_window.ui",
@@ -69,12 +64,20 @@ Product {
             "settings.cpp",
             "settings.h",
             "settings.ui",
-            "square.cpp",
-            "square.h",
             "user_guide.cpp",
             "user_guide.h",
             "user_guide.md",
             "user_guide.ui",
+        ]
+    }
+    Group {
+        name: "undo"
+        prefix: "undo/"
+        files: [
+            "lambda_command.cpp",
+            "lambda_command.h",
+            "undo_stack.cpp",
+            "undo_stack.h",
         ]
     }
 

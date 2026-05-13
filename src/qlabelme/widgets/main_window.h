@@ -16,9 +16,9 @@
 
 //#include "qutils/video_widget.h"
 
-#include "handle.h"
-#include "square.h"
-#include "line.h"
+// #include "handle.h"
+// #include "square.h"
+// #include "line.h"
 
 #include "lambda_command.h"
 
@@ -547,7 +547,7 @@ private:
     bool _isAllMoved       = {false}; // Флаг для перетаскивания изображения вместе с разметкой
 
     qgraph::Polyline*  _currentLine = {nullptr};   // Текущая линия
-    SquareDrawingItem* _currentSquare = {nullptr}; // Текущий квадрат
+    //SquareDrawingItem* _currentSquare = {nullptr}; // Текущий квадрат
     QList<QPointF>     _polylinePoints;            // Точки текущей полилинии
 
     enum class PendingDrawTool {None, Polyline, Line};
