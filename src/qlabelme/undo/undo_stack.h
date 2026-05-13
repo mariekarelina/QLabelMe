@@ -9,11 +9,11 @@
 #include <QUndoCommand>
 
 // Тип фигур
-enum class ShapeKind {Rectangle, Circle, Polyline, Line, Point};
+enum class ShapeKind2 {Rectangle, Circle, Polyline, Line, Point};
 
 struct ShapeBackup2
 {
-    ShapeKind kind = {ShapeKind::Rectangle};
+    ShapeKind2 kind = {ShapeKind2::Rectangle};
     QUuidEx   id; // Идентификатор объекта, см класс Shape
     QString   className;
     qreal     zValue = 0;
@@ -85,7 +85,7 @@ struct ShapeData : clife_base
 {
     typedef clife_ptr<ShapeData> Ptr;
 
-    //ShapeKind kind = {ShapeKind::Rectangle};
+    //ShapeKind2 kind = {ShapeKind2::Rectangle};
     QUuidEx   id; // Идентификатор объекта, см класс Shape
     QString   className;
     int       zLevel = {0};
@@ -177,13 +177,22 @@ class Create : public BaseUndo
 {
 public:
 
-    Create(QGraphicsScene* scene, const QUuidEx& shapeId, const QString& text,
+    // Create(QGraphicsScene* scene, const QUuidEx& shapeId, const QString& text,
+    //        ShapeData::Ptr data);
+    Create(QGraphicsScene* scene, qgraph::Shape* shape, const QString& text,
            ShapeData::Ptr data);
 
     void undo() override;
     void redo() override;
 
 private:
+    qgraph::Shape* _shape = nullptr;
+    bool _skipFirstRedo = true; // TODO
+
+};
+
+class Move : public BaseUndo
+{
 
 };
 

@@ -34,21 +34,21 @@ bool UndoAction::applyBackup(const ShapeBackup2& backup)
 
 void UndoAction::restoreFromBackup(qgraph::Shape* item, const ShapeBackup2& backup)
 {
-    if (!item)
+    QGraphicsItem* graphicsItem = dynamic_cast<QGraphicsItem*>(item);
+
+    if (!graphicsItem)
         return;
 
-    if (backup.shapeNumber >= 0)
-        item->setData(_roleShapeNumber, backup.shapeNumber);
+    // shapeNumber здесь пока не трогаем:
+    // _roleShapeNumber находится в MainWindow, а undo_stack.cpp его не видит.
 
-    // Общие свойства есть у всех фигур
-    item->setData(0, backup.className);
-    item->setZValue(backup.zValue);
-    item->setVisible(backup.visible);
-
+    graphicsItem->setData(0, backup.className);
+    item->setZLevel(backup.zValue);
+    item->shapeVisible(backup.visible);
 
     switch (backup.kind)
     {
-        case ShapeKind::Rectangle:
+        case ShapeKind2::Rectangle:
             if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
             {
                 rect->setRealSceneRect(backup.rect);
@@ -58,7 +58,7 @@ void UndoAction::restoreFromBackup(qgraph::Shape* item, const ShapeBackup2& back
             }
             break;
 
-        case ShapeKind::Circle:
+        case ShapeKind2::Circle:
             if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
             {
                 circle->setRealRadius(backup.circleRadius);
@@ -74,7 +74,7 @@ void UndoAction::restoreFromBackup(qgraph::Shape* item, const ShapeBackup2& back
             }
             break;
 
-        case ShapeKind::Polyline:
+        case ShapeKind2::Polyline:
             if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
             {
                 polyline->replaceScenePoints(backup.points, backup.closed);
@@ -84,7 +84,7 @@ void UndoAction::restoreFromBackup(qgraph::Shape* item, const ShapeBackup2& back
             }
             break;
 
-        case ShapeKind::Line:
+        case ShapeKind2::Line:
             if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
             {
                 line->replaceScenePoints(backup.points, backup.closed);
@@ -95,7 +95,7 @@ void UndoAction::restoreFromBackup(qgraph::Shape* item, const ShapeBackup2& back
             }
             break;
 
-        case ShapeKind::Point:
+        case ShapeKind2::Point:
             if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
             {
                     point->setCenter(backup.pointCenter);
@@ -168,7 +168,7 @@ MoveShapeAction::MoveShapeAction(QGraphicsScene* scene,
                                  const ShapeBackup2& before,
                                  const ShapeBackup2& after,
                                  ApplyCallback onApplied)
-    : UndoAction(scene, before, after, text, onApplied)
+    : UndoAction(scene, Type::Move, text, before, after, onApplied)
 {
 }
 
@@ -187,28 +187,34 @@ void MoveShapeAction::undo()
 
 namespace undo {
 
-Create::Create(QGraphicsScene* scene, const QUuidEx& shapeId, const QString& text,
-               ShapeData::Ptr data)
+// Create::Create(QGraphicsScene* scene, const QUuidEx& shapeId, const QString& text,
+//                ShapeData::Ptr data)
+Create::Create(QGraphicsScene* scene, qgraph::Shape* shape, const QString& text,
+       ShapeData::Ptr data)
 {
     _scene = scene;
-    _shapeId = shapeId;
+    _shape = shape;
+    if (_shape)
+            _shapeId = _shape->id();
     _text = text;
     _data = data;
     //_before = before;
     //_after = after;
     //_onApplied = onApplied;
-
+    setText(text);
+    //_shape = findShape(_scene, _shapeId);
 }
 
 void Create::undo()
 {
-    if (auto rect = _data.dynamic_cast_to<RectangleData::Ptr>())
+    if (RectangleData::Ptr rect = _data.dynamic_cast_to<RectangleData::Ptr>())
     {
+        qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(_shape);
 
-    }
-    else if (auto circle = _data.dynamic_cast_to<CircleDataData::Ptr>())
-    {
+        if (rectangle && rectangle->scene())
+            rectangle->scene()->removeItem(rectangle);
 
+        return;
     }
     else if (auto circle = _data.dynamic_cast_to<CircleData::Ptr>())
     {
@@ -231,13 +237,42 @@ void Create::undo()
 
 void Create::redo()
 {
-    if (auto rect = _data.dynamic_cast_to<RectangleData::Ptr>())
-    {
+    if (!_scene || !_data)
+        return;
 
+    // QUndoStack::push() сразу вызывает redo()
+    // Но при создании прямоугольника объект уже находится на сцене,
+    // поэтому первый redo() должен ничего не делать
+    if (_skipFirstRedo)
+    {
+        _skipFirstRedo = false;
+        return;
     }
-    else if (auto circle = _data.dynamic_cast_to<CircleDataData::Ptr>())
-    {
 
+    if (RectangleData::Ptr rect = _data.dynamic_cast_to<RectangleData::Ptr>())
+    {
+        qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(_shape);
+
+        if (!rectangle)
+        {
+           rectangle = new qgraph::Rectangle(_scene);
+           rectangle->setId(rect->id);
+
+           _shape = rectangle;
+           _shapeId = rectangle->id();
+        }
+        else if (!rectangle->scene())
+        {
+           _scene->addItem(rectangle);
+        }
+
+        rectangle->setData(0, rect->className);
+        rectangle->setZLevel(rect->zLevel);
+        rectangle->shapeVisible(rect->visible);
+
+        rectangle->setRealSceneRect(rect->rect);
+        rectangle->updateHandlePosition();
+        rectangle->updatePointNumbers();
     }
     else if (auto circle = _data.dynamic_cast_to<CircleData::Ptr>())
     {

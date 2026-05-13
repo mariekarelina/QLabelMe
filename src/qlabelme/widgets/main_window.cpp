@@ -1913,8 +1913,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 applyClassColorToItem(rectangle, selectedClass);
                 linkSceneItemToList(rectangle); // Связываем новый элемент с списком
 
-                ShapeBackup b = makeBackupFromItem(rectangle);
-                pushAdoptExistingShapeCommand(rectangle, b, u8"Добавление прямоугольника");
+                // ShapeBackup b = makeBackupFromItem(rectangle);
+                // pushAdoptExistingShapeCommand(rectangle, b, u8"Добавление прямоугольника");
 
             }
         }
@@ -1924,16 +1924,24 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
             auto rectData = undo::RectangleData::Ptr::create();
             rectData->id = rectangle->id();
-            //rectData->className =
+            rectData->className = rectangle->data(0).toString();
+            rectData->zLevel = rectangle->zValue();
+            rectData->visible = rectangle->isVisible();
+            rectData->rect = finalRect;
+            rectData->shapeNumber = ensureShapeNumber(rectangle);
 
-            undo::Create* undoCreate = new undo::Create(doc->scene, rectangle->id(),
+            undo::Create* undoCreate = new undo::Create(doc->scene, rectangle,
                                                         u8"Добавление прямоугольника",
                                                         rectData);
 
-            doc->undoStack2.push(undoCreate);
+            if (QUndoStack* stack = activeUndoStack())
+            {
+                stack->push(undoCreate);
+            }
+            //doc->undoStack2.push(undoCreate);
 
-            if (auto* stack = activeUndoStack())
-                stack->push(new LambdaCommand(redoFn, undoFn, description));
+            // if (auto* stack = activeUndoStack())
+            //     stack->push(new LambdaCommand(redoFn, undoFn, description));
 
 //-----------------------------------------
 
