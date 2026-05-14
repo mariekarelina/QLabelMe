@@ -17,6 +17,8 @@ class Shape
 public:
     typedef Closure<void (QGraphicsItem*)> ItemSignal;
 
+    virtual ~Shape() = default;
+
     // Признак активирования/выделения геометрической фигуры
     bool active() const {return _active;}
     virtual void setActive(bool) = 0;

@@ -34,50 +34,50 @@ struct ShapeBackup2
     int shapeNumber = -1; // Номер в списке
 };
 
-class UndoAction : public QUndoCommand
-{
-public:
-    enum class Type {Restore, Delete, Move, Edit};
-    // Callback нужен, чтобы MainWindow мог обновить ui
-    using ApplyCallback = std::function<void(qgraph::Shape*)>;
+// class UndoAction : public QUndoCommand
+// {
+// public:
+//     enum class Type {Restore, Delete, Move, Edit};
+//     // Callback нужен, чтобы MainWindow мог обновить ui
+//     using ApplyCallback = std::function<void(qgraph::Shape*)>;
 
-    UndoAction(QGraphicsScene* scene, Type type, const QString& text,
-               const ShapeBackup2& before, const ShapeBackup2& after,
-               ApplyCallback onApplied);
+//     UndoAction(QGraphicsScene* scene, Type type, const QString& text,
+//                const ShapeBackup2& before, const ShapeBackup2& after,
+//                ApplyCallback onApplied);
 
-    // Применяет снимок к уже существующей фигуре
-    bool applyBackup(const ShapeBackup2& backup);
-    // Восстанавливает состояние фигуры
-    void restoreFromBackup(qgraph::Shape* item, const ShapeBackup2& backup);
-    // Ищет фигуру на сцене по qgraph::Shape::id()
-    qgraph::Shape* findItem(const QUuidEx id) const;
+//     // Применяет снимок к уже существующей фигуре
+//     bool applyBackup(const ShapeBackup2& backup);
+//     // Восстанавливает состояние фигуры
+//     void restoreFromBackup(qgraph::Shape* item, const ShapeBackup2& backup);
+//     // Ищет фигуру на сцене по qgraph::Shape::id()
+//     qgraph::Shape* findItem(const QUuidEx id) const;
 
 
-protected:
-    QGraphicsScene* _scene = {nullptr};
-    Type _type = {Type::Restore};
-    QString _text;
-    ShapeBackup2 _before;
-    ShapeBackup2 _after;
+// protected:
+//     QGraphicsScene* _scene = {nullptr};
+//     Type _type = {Type::Restore};
+//     QString _text;
+//     ShapeBackup2 _before;
+//     ShapeBackup2 _after;
 
-    ApplyCallback _onApplied;
-};
+//     ApplyCallback _onApplied;
+// };
 
-class MoveShapeAction : public UndoAction
-{
-public:
-    MoveShapeAction(QGraphicsScene* scene, const QString& text,
-                    const ShapeBackup2& before, const ShapeBackup2& after,
-                    ApplyCallback onApplied = {});
+// class MoveShapeAction : public UndoAction
+// {
+// public:
+//     MoveShapeAction(QGraphicsScene* scene, const QString& text,
+//                     const ShapeBackup2& before, const ShapeBackup2& after,
+//                     ApplyCallback onApplied = {});
 
-    void redo() override;
-    void undo() override;
-};
+//     void redo() override;
+//     void undo() override;
+// };
 
-class UndoRestore : public QUndoCommand
-{
+// class UndoRestore : public QUndoCommand
+// {
 
-};
+// };
 
 namespace undo {
 
@@ -156,16 +156,15 @@ public:
     // // Восстанавливает состояние фигуры
     // void restoreFromBackup(qgraph::Shape* item, const ShapeBackup2& backup);
     // // Ищет фигуру на сцене по qgraph::Shape::id()
-    // qgraph::Shape* findItem(const QUuidEx id) const;
+    qgraph::Shape* findItem(const QUuidEx id) const;
 
 protected:
     QGraphicsScene* _scene = {nullptr};
-    QUuidEx _shapeId;
+    //QUuidEx _shapeId;
+    QList<QUuidEx> _shapeIds;
     QString _text;
 
     ShapeData::Ptr _data;
-    //ShapeData::Ptr _data;
-
     // Type _type = {Type::Restore};
     // ShapeBackup2 _before;
     // ShapeBackup2 _after;
@@ -173,28 +172,58 @@ protected:
     // ApplyCallback _onApplied;
 };
 
+
 class Create : public BaseUndo
 {
 public:
 
-    // Create(QGraphicsScene* scene, const QUuidEx& shapeId, const QString& text,
-    //        ShapeData::Ptr data);
-    Create(QGraphicsScene* scene, qgraph::Shape* shape, const QString& text,
+    Create(QGraphicsScene* scene, const QUuidEx& shapeId, const QString& text,
            ShapeData::Ptr data);
+    ~Create();
 
     void undo() override;
     void redo() override;
 
 private:
-    qgraph::Shape* _shape = nullptr;
-    bool _skipFirstRedo = true; // TODO
+    //qgraph::Shape* _shape = {nullptr};
+    QList<qgraph::Shape*> _shapes;
 
+    // Первый redo() ничего не делает, т.к. фигура уже на сцене
+    bool _skipFirstRedo = {true};
 };
 
-class Move : public BaseUndo
+
+class Delete : public BaseUndo
 {
 
 };
 
+
+class Move : public BaseUndo
+{
+public:
+    Move(QGraphicsScene* scene, const QList<QUuidEx> shapeIds, const QString& text,
+         const QPointF& delta);
+
+    void undo() override;
+    void redo() override;
+
+private:
+    QPointF _delta;
+    // Первый redo() ничего не делает, т.к. фигура уже на сцене
+    bool _skipFirstRedo = {true};
+};
+
+
+class Edit : public BaseUndo
+{
+
+};
+
+
+class ChangeClass : public BaseUndo
+{
+
+};
 
 } // namespace undo

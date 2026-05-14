@@ -1018,10 +1018,11 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
                 _movingItem = nullptr;
                 _movingItems.clear();
-                _moveGroupBefore.clear();
+                //_moveGroupBefore.clear();
                 _moveGroupInitialPos.clear();
                 _moveIsGroup = false;
                 _moveHadChanges = false;
+                _moveInProgress = false;
 
                 _draggingItem = nullptr;
                 _isDraggingImage = false;
@@ -1062,10 +1063,11 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         // Сбрасываем состояния перемещения
         _movingItem = nullptr;
         _movingItems.clear();
-        _moveGroupBefore.clear();
+        //_moveGroupBefore.clear();
         _moveGroupInitialPos.clear();
         _moveIsGroup = false;
         _moveHadChanges = false;
+        _moveInProgress = false;
 
         _draggingItem = nullptr;
         _isDraggingImage = false;
@@ -1115,7 +1117,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                         && movableItem->flags().testFlag(QGraphicsItem::ItemIsMovable))
                     {
                         _movingItem = movableItem;
-                        _moveBeforeSnap = makeBackupFromItem(_movingItem);
+                        //_moveBeforeSnap = makeBackupFromItem(_movingItem);
                         _moveHadChanges = false;
                         _moveInProgress = true;
 
@@ -1127,7 +1129,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                         _movingItem->setFlag(QGraphicsItem::ItemIsMovable, false);
 
                         _movingItems.clear();
-                        _moveGroupBefore.clear();
+                        //_moveGroupBefore.clear();
                         _moveGroupInitialPos.clear();
                         _moveIsGroup = false;
                         _movePressScenePos = scenePos;
@@ -1150,16 +1152,22 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                                     continue;
 
                                 _movingItems.append(root);
-                                _moveGroupBefore.append(makeBackupFromItem(root));
+                                //_moveGroupBefore.append(makeBackupFromItem(root));
                                 _moveGroupInitialPos.append(root->scenePos());
                             }
 
                             if (!_movingItems.contains(_movingItem))
                             {
                                 _movingItems.append(_movingItem);
-                                _moveGroupBefore.append(makeBackupFromItem(_movingItem));
+                                //_moveGroupBefore.append(makeBackupFromItem(_movingItem));
                                 _moveGroupInitialPos.append(_movingItem->scenePos());
                             }
+                        }
+                        else
+                        {
+                            // Одну фигуру тоже кладем в общий список
+                            _movingItems.append(_movingItem);
+                            _moveGroupInitialPos.append(_movingItem->scenePos());
                         }
                     }
                 }
@@ -1558,45 +1566,99 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
         }
         //return;
     }
+    // if (_movingItem && (mouseEvent->buttons() & Qt::LeftButton))
+    // {
+    //     const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
+
+    //     if (_moveIsGroup && !_movingItems.isEmpty())
+    //     {
+    //         // Сдвиг относительно положения курсора при захвате
+    //         const QPointF shift = scenePos - _movePressScenePos;
+
+    //         const int count = qMin(_movingItems.size(), _moveGroupInitialPos.size());
+    //         for (int i = 0; i < count; ++i)
+    //         {
+    //             QGraphicsItem* item = _movingItems[i];
+    //             if (!item)
+    //                 continue;
+
+    //             const QPointF& startPos = _moveGroupInitialPos[i];
+    //             item->setPos(startPos + shift);
+    //         }
+    //     }
+    //     else
+    //     {
+    //         _movingItem->setPos(scenePos - _moveGrabOffsetScene);
+    //     }
+
+    //     _moveHadChanges = true;
+    // }
+    // else if (_movingItem)
+    // {
+    //     // Перед сбросом возвращаем исходные флаги
+    //     _movingItem->setFlags(_moveSavedFlags);
+    //     // ЛКМ уже не зажата, но _movingItem остался - сбрасываем состояние
+    //     _movingItem = nullptr;
+    //     _movingItems.clear();
+    //     _moveGroupBefore.clear();
+    //     _moveGroupInitialPos.clear();
+    //     _moveIsGroup = false;
+    //     _moveHadChanges = false;
+    //     _moveInProgress = false;
+    // }
     if (_movingItem && (mouseEvent->buttons() & Qt::LeftButton))
     {
         const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
 
-        if (_moveIsGroup && !_movingItems.isEmpty())
+        if (!_movingItems.isEmpty() && !_moveGroupInitialPos.isEmpty())
         {
-            // Сдвиг относительно положения курсора при захвате
-            const QPointF shift = scenePos - _movePressScenePos;
+            QPointF shift;
+
+            if (_moveIsGroup)
+            {
+                // Для группы все фигуры сдвигаются одинаково
+                // относительно положения курсора в момент захвата.
+                shift = scenePos - _movePressScenePos;
+            }
+            else
+            {
+                // Для одной фигуры учитываем место захвата внутри фигуры,
+                // чтобы она не прыгала под курсор.
+                const QPointF targetPos = scenePos - _moveGrabOffsetScene;
+                shift = targetPos - _moveGroupInitialPos.first();
+            }
 
             const int count = qMin(_movingItems.size(), _moveGroupInitialPos.size());
+
             for (int i = 0; i < count; ++i)
             {
                 QGraphicsItem* item = _movingItems[i];
+
                 if (!item)
                     continue;
 
-                const QPointF& startPos = _moveGroupInitialPos[i];
-                item->setPos(startPos + shift);
+                item->setPos(_moveGroupInitialPos[i] + shift);
             }
-        }
-        else
-        {
-            _movingItem->setPos(scenePos - _moveGrabOffsetScene);
         }
 
         _moveHadChanges = true;
+        mouseEvent->accept();
+        return;
     }
     else if (_movingItem)
     {
-        // Перед сбросом возвращаем исходные флаги
         _movingItem->setFlags(_moveSavedFlags);
-        // ЛКМ уже не зажата, но _movingItem остался - сбрасываем состояние
+
         _movingItem = nullptr;
         _movingItems.clear();
-        _moveGroupBefore.clear();
         _moveGroupInitialPos.clear();
         _moveIsGroup = false;
         _moveHadChanges = false;
         _moveInProgress = false;
+
+        mouseEvent->accept();
+        updateModeLabel();
+        return;
     }
 
     if (mouseEvent->buttons() & Qt::LeftButton)
@@ -1777,13 +1839,13 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         }
         updateModeLabel();
     }
-    if (mouseEvent->button() == Qt::LeftButton)
+    /*if (mouseEvent->button() == Qt::LeftButton)
     {
         if (_movingItem)
         {
             _movingItem->setFlags(_moveSavedFlags);
 
-            /*if (_moveHadChanges)
+            if (_moveHadChanges)
             {
                 if (_moveIsGroup && !_movingItems.isEmpty())
                 {
@@ -1827,120 +1889,121 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                                              u8"Перемещение фигуры");
                     }
                 }
-            }*/
-            if (_moveHadChanges)
+            }
+
+            // if (_moveHadChanges)
+            // {
+            //     if (_moveIsGroup && !_movingItems.isEmpty())
+            //     {
+            //         for (QGraphicsItem* item : _movingItems)
+            //         {
+            //             if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
+            //                 polyline->updatePointNumbers();
+            //             else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
+            //                 line->updatePointNumbers();
+            //         }
+            //     }
+            //     else
+            //     {
+            //         if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_movingItem))
+            //             polyline->updatePointNumbers();
+            //         else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(_movingItem))
+            //             line->updatePointNumbers();
+            //     }
+            // }
+
+            // _movingItem = nullptr;
+            // _movingItems.clear();
+            // _moveGroupBefore.clear();
+            // _moveGroupInitialPos.clear();
+            // _moveIsGroup = false;
+            // _moveHadChanges = false;
+            // _moveInProgress = false;
+            // updateCoordinateList();
+        }
+    }*/
+
+    if (mouseEvent->button() == Qt::LeftButton)
+    {
+        if (_movingItem)
+        {
+            _movingItem->setFlags(_moveSavedFlags);
+
+            if (_moveHadChanges && !_movingItems.isEmpty())
             {
-                if (_moveIsGroup && !_movingItems.isEmpty())
+                const int count = qMin(_movingItems.size(), _moveGroupInitialPos.size());
+
+                QList<QUuidEx> shapeIds;
+                QPointF delta;
+                bool hasMovedShapes = false;
+
+                for (int i = 0; i < count; ++i)
                 {
-                    QString descr = (_movingItems.size() == 1)
-                                    ? u8"Перемещение фигуры"
-                                    : u8"Перемещение фигур";
+                    QGraphicsItem* item = _movingItems[i];
 
-                    QUndoStack* stack = activeUndoStack();
+                    if (!item)
+                        continue;
 
-                    if (stack)
-                        stack->beginMacro(descr);
+                    qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(item);
 
-                    const int count = qMin(_movingItems.size(), _moveGroupInitialPos.size());
+                    if (!shape)
+                        continue;
 
-                    for (int i = 0; i < count; ++i)
+                    const QUuidEx shapeId = shape->id();
+
+                    if (shapeId.isNull())
+                        continue;
+
+                    if (!hasMovedShapes)
                     {
-                        QGraphicsItem* item = _movingItems[i];
-                        if (!item)
-                            continue;
-
-                        qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(item);
-                        if (!shape)
-                            continue;
-
-                        const QPointF delta = item->scenePos() - _moveGroupInitialPos[i];
+                        delta = item->scenePos() - _moveGroupInitialPos[i];
 
                         if (qFuzzyIsNull(delta.x()) && qFuzzyIsNull(delta.y()))
-                            continue;
+                            break;
 
-                        if (stack)
-                        {
-                            stack->push(new undo::Move(_scene,
-                                                       shape,
-                                                       u8"Перемещение фигуры",
-                                                       delta));
-                        }
+                        hasMovedShapes = true;
                     }
 
-                    if (stack)
-                        stack->endMacro();
+                    shapeIds.append(shapeId);
+                }
+
+                if (hasMovedShapes && !shapeIds.isEmpty())
+                {
+                    const QString description = shapeIds.size() == 1
+                                                ? u8"Перемещение фигуры"
+                                                : u8"Перемещение фигур";
+
+                    if (QUndoStack* stack = activeUndoStack())
+                    {
+                        stack->push(new undo::Move(_scene,
+                                                   shapeIds,
+                                                   description,
+                                                   delta));
+                    }
 
                     Document::Ptr doc = currentDocument();
+
                     if (doc)
                     {
                         doc->isModified = true;
                         updateFileListDisplay(doc->filePath);
                     }
                 }
-                else
-                {
-                    qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(_movingItem);
-
-                    if (shape)
-                    {
-                        const QPointF startPos = _movePressScenePos - _moveGrabOffsetScene;
-                        const QPointF delta = _movingItem->scenePos() - startPos;
-
-                        if (!qFuzzyIsNull(delta.x()) || !qFuzzyIsNull(delta.y()))
-                        {
-                            QUndoStack* stack = activeUndoStack();
-
-                            if (stack)
-                            {
-                                stack->push(new undo::Move(_scene,
-                                                           shape,
-                                                           u8"Перемещение фигуры",
-                                                           delta));
-                            }
-
-                            Document::Ptr doc = currentDocument();
-                            if (doc)
-                            {
-                                doc->isModified = true;
-                                updateFileListDisplay(doc->filePath);
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (_moveHadChanges)
-            {
-                if (_moveIsGroup && !_movingItems.isEmpty())
-                {
-                    for (QGraphicsItem* item : _movingItems)
-                    {
-                        if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
-                            polyline->updatePointNumbers();
-                        else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
-                            line->updatePointNumbers();
-                    }
-                }
-                else
-                {
-                    if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_movingItem))
-                        polyline->updatePointNumbers();
-                    else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(_movingItem))
-                        line->updatePointNumbers();
-                }
             }
 
             _movingItem = nullptr;
             _movingItems.clear();
-            _moveGroupBefore.clear();
             _moveGroupInitialPos.clear();
             _moveIsGroup = false;
             _moveHadChanges = false;
             _moveInProgress = false;
+
             updateCoordinateList();
+            mouseEvent->accept();
+            updateModeLabel();
+            return;
         }
     }
-
 
 
     if (mouseEvent->button() == Qt::LeftButton && _isDrawingRectangle)
@@ -2004,7 +2067,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             rectData->rect = finalRect;
             rectData->shapeNumber = ensureShapeNumber(rectangle);
 
-            undo::Create* undoCreate = new undo::Create(doc->scene, rectangle,
+            undo::Create* undoCreate = new undo::Create(doc->scene, rectangle->id(),
                                                         u8"Добавление прямоугольника",
                                                         rectData);
 
