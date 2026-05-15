@@ -62,7 +62,8 @@ void TimedMessageBox::showEvent(QShowEvent* e)
 QMessageBox::StandardButton messageBox(QWidget* parent,
                                        QMessageBox::Icon icon,
                                        QString message,
-                                       int closeTimeout)
+                                       int closeTimeout,
+                                       BoxExtFunc boxExt)
 {
     message.replace("  ", "<br>").replace(" ", "&nbsp;");
     TimedMessageBox msgBox {parent, closeTimeout};
@@ -71,6 +72,9 @@ QMessageBox::StandardButton messageBox(QWidget* parent,
     msgBox.setWindowTitle(qApp->applicationName());
     msgBox.setTextFormat(Qt::RichText);
     msgBox.setText(message);
+
+    if (boxExt)
+        boxExt(&msgBox);
 
     int res = msgBox.exec();
     return static_cast<QMessageBox::StandardButton>(res);

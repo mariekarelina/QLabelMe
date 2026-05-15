@@ -6,6 +6,7 @@
 
 namespace qgraph {
 
+quint64 shapeId();
 template<typename> class ShapeT;
 
 /**
@@ -52,8 +53,8 @@ public:
     virtual void raiseHandlesToTop() = 0;
     //virtual void updateHandlesZValue() = 0;
 
-    QUuidEx id() const {return _id;}
-    void setId(const QUuidEx& val) {_id = val;}
+    //QUuidEx id() const {return _id;}
+    //void setId(const QUuidEx& val) {_id = val;}
 
     int tag() const {return _tag;}
     void setTag(int val) {_tag = val;}
@@ -62,13 +63,13 @@ public:
     SimpleSignal<ItemSignal> circleReleaseSignal;
     SimpleSignal<ItemSignal> shapeMoveSignal;
 
-    bool handlesUpdateBlocked() const { return _handlesUpdateBlock > 0; }
+    bool handlesUpdateBlocked() const {return _handlesUpdateBlock > 0;}
 
     // RAII-гард, который блокирует вызовы dragCircleMove из itemChange
     class HandleBlocker {
     public:
-        explicit HandleBlocker(Shape* s) : _s(s) { if (_s) ++_s->_handlesUpdateBlock; }
-        ~HandleBlocker() { if (_s) --_s->_handlesUpdateBlock; }
+        explicit HandleBlocker(Shape* s) : _s(s) {if (_s) ++_s->_handlesUpdateBlock;}
+        ~HandleBlocker() {if (_s) --_s->_handlesUpdateBlock;}
     private:
         Shape* _s;
     };
@@ -76,7 +77,7 @@ public:
 protected:
     bool _active = {false};
     float _frameScale = {1};
-    QUuidEx _id = {QUuidEx::createUuid()};
+    //QUuidEx _id = {QUuidEx::createUuid()};
     int _tag = {0};
 
     int _handlesUpdateBlock = 0;
@@ -87,6 +88,11 @@ protected:
 template<typename T>
 struct ShapeT : public Shape, public T
 {
+    ShapeT() : Shape(), T(nullptr)
+    {
+        T::setData(SHAPE_ID, shapeId());
+    }
+
     ~ShapeT() {}
 
     void setActive(bool) override;

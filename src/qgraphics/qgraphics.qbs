@@ -30,6 +30,7 @@ Product {
         "qgraphics2/polyline.h",
         "qgraphics2/rectangle.cpp",
         "qgraphics2/rectangle.h",
+        "qgraphics2/shape.cpp",
         "qgraphics2/shape.h",
         "qgraphics2/square.cpp",
         "qgraphics2/square.h",

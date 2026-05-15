@@ -1,5 +1,8 @@
 #include "undo_stack.h"
 
+#include "shared/list.h"
+#include "shared/break_point.h"
+
 #include "qgraphics2/circle.h"
 #include "qgraphics2/line.h"
 #include "qgraphics2/point.h"
@@ -187,61 +190,85 @@
 
 namespace undo {
 
-qgraph::Shape* BaseUndo::findItem(const QUuidEx id) const
+BaseUndo::~BaseUndo()
 {
-    if (!_scene || id.isNull())
-        return nullptr;
-
-    for (QGraphicsItem* item : _scene->items())
-    {
-        if (!item)
-            continue;
-
-        if (qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(item))
-        {
-            if (shape->id() == id)
-                return shape;
-        }
-    }
-    return nullptr;
+    for (QGraphicsItem* shape : _shapesCollector)
+        delete shape;
 }
 
-// Create::Create(QGraphicsScene* scene, const QUuidEx& shapeId, const QString& text,
+bool BaseUndo::firstRedo()
+{
+    if (_firstRedo)
+    {
+        _firstRedo = false;
+        return true;
+    }
+    return false;
+}
+
+// qgraph::Shape* BaseUndo::findItem(const QUuidEx id) const
+// {
+//     if (!_scene || id.isNull())
+//         return nullptr;
+
+//     for (QGraphicsItem* item : _scene->items())
+//     {
+//         if (!item)
+//             continue;
+
+//         if (qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(item))
+//         {
+//             if (shape->id() == id)
+//                 return shape;
+//         }
+//     }
+//     return nullptr;
+// }
+
+// Create::Create(QGraphicsScene* scene, const QUuidEx& shape, const QString& text,
 //                ShapeData::Ptr data)
-Create::Create(QGraphicsScene* scene, const QUuidEx& shapeId, const QString& text,
-       ShapeData::Ptr data)
+Create::Create(QGraphicsScene* scene, QGraphicsItem* shape, const QString& text)
 {
     _scene = scene;
-    //_shape = shape;
-    _shapeIds.append(shapeId);
-    _text = text;
-    _data = data;
+    _shape = shape;
+    //_shapes.insert(shape);
+    //_text = text;
+    //_data = data;
 
-    setText(text);
+    QUndoCommand::setText(text);
     //_shape = findShape(_scene, _shapeId);
 }
 
 Create::~Create()
 {
-    for (qgraph::Shape* shape : _shapes)
-        if (shape)
-            delete shape;
 }
 
 void Create::undo()
 {
-    // if (_shape)
-    //         return;
+    if (_shape)
+        return;
 
-    //QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(_shape);
-    for (const QUuidEx& shapeId : _shapeIds)
-        if (qgraph::Shape* shape = findItem(shapeId))
-        {
-            QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
-            _scene->removeItem(item);
-            //_shape = shape;
-            _shapes.append(shape);
-        }
+    _scene->removeItem(_shape);
+    _shapesCollector.insert(_shape);
+
+    // for (QGraphicsItem* shape : _shapes)
+    // {
+    //     if (!shape)
+    //         continue;
+
+
+
+    // }
+
+    // //QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(_shape);
+    // for (const QUuidEx& shapeId : _shapeIds)
+    //     if (qgraph::Shape* shape = findItem(shapeId))
+    //     {
+    //         QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
+    //         _scene->removeItem(item);
+    //         //_shape = shape;
+    //         _shapes.append(shape);
+    //     }
 
 
     // if (!item || !item->scene())
@@ -277,22 +304,23 @@ void Create::undo()
 
 void Create::redo()
 {
-    if (!_scene || !_data)
+    if (!_scene /*|| !_data*/)
         return;
 
-    if (_skipFirstRedo)
-    {
-        _skipFirstRedo = false;
+    if (firstRedo())
         return;
-    }
-    for (qgraph::Shape* shape : _shapes)
-        if (shape)
-        {
-            QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
-            _scene->addItem(item);
-            // _shape = nullptr;
-            _shapes.removeAll(shape);
-        }
+
+    _scene->addItem(_shape);
+    _shapesCollector.remove(_shape);
+
+    // for (qgraph::Shape* shape : _shapes)
+    //     if (shape)
+    //     {
+    //         QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
+    //         _scene->addItem(item);
+    //         // _shape = nullptr;
+    //         _shapes.removeAll(shape);
+    //     }
 
     // QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(_shape);
 
@@ -346,30 +374,32 @@ void Create::redo()
 }
 
 Delete::Delete(QGraphicsScene* scene,
-               const QList<qgraph::Shape*>& shapes,
+               const QSet<QGraphicsItem*>& shapes,
                QListWidget* listWidget,
                const QList<ListItemState>& listItems,
                const QString& text)
 {
     _scene = scene;
+    _shapes = shapes;
+    _shapesCollector = shapes;
     _listWidget = listWidget;
     _listItems = listItems;
-    _text = text;
+    //_text = text;
 
-    for (qgraph::Shape* shape : shapes)
-    {
-        if (shape && !shape->id().isNull())
-            _shapeIds.append(shape->id());
-    }
+    // for (qgraph::Shape* shape : shapes)
+    // {
+    //     if (shape && !shape->id().isNull())
+    //         _shapeIds.append(shape->id());
+    // }
 
-    setText(text);
+    QUndoCommand::setText(text);
 }
 
 Delete::~Delete()
 {
-    for (qgraph::Shape* shape : _shapes)
-        if (shape)
-            delete shape;
+    // for (qgraph::Shape* shape : _shapes)
+    //     if (shape)
+    //         delete shape;
 
     for (const ListItemState& state : _listItems)
         if (state.item && !state.item->listWidget())
@@ -381,14 +411,17 @@ void Delete::undo()
     if (!_scene)
         return;
 
-    for (qgraph::Shape* shape : _shapes)
+    for (QGraphicsItem* shape : _shapes)
     {
-        if (shape)
+        _scene->addItem(shape);
+        _shapesCollector.remove(shape);
+
+        QVariant vdata = shape->data(SHAPE_UNDO_DELETE_DATA);
+        if (vdata.canConvert<undo::Delete::Data>())
         {
-            QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
-            _scene->addItem(item);
-            // Фигура снова на сцене, команда больше не должна владеть ею
-            _shapes.removeAll(shape);
+            undo::Delete::Data data = vdata.value<undo::Delete::Data>();
+            // ...
+
         }
     }
 
@@ -403,7 +436,8 @@ void Delete::undo()
         {
             int row = state.row;
 
-            if (row < 0 || row > _listWidget->count())
+            //if (row < 0 || row > _listWidget->count())
+            if (!lst::inRange(row, 0, _listWidget->count()))
                 row = _listWidget->count();
 
             _listWidget->insertItem(row, listItem);
@@ -417,17 +451,26 @@ void Delete::redo()
     if (!_scene)
         return;
 
-    for (const QUuidEx& shapeId : _shapeIds)
-    {
-        if (qgraph::Shape* shape = findItem(shapeId))
-        {
-            QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
-            _scene->removeItem(item);
+    if (firstRedo())
+        return;
 
-            // После removeItem() фигура больше не принадлежит сцене
-            _shapes.append(shape);
-        }
+    for (QGraphicsItem* shape : _shapes)
+    {
+        _scene->removeItem(shape);
+        _shapesCollector.insert(shape);
     }
+
+    // for (const QUuidEx& shapeId : _shapeIds)
+    // {
+    //     if (qgraph::Shape* shape = findItem(shapeId))
+    //     {
+    //         QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
+    //         _scene->removeItem(item);
+
+    //         // После removeItem() фигура больше не принадлежит сцене
+    //         _shapes.append(shape);
+    //     }
+    // }
     if (!_listWidget)
         return;
 
@@ -442,16 +485,16 @@ void Delete::redo()
     }
 }
 
-Move::Move(QGraphicsScene* scene, const QList<QUuidEx> shapeIds, const QString& text,
+Move::Move(QGraphicsScene* scene, QSet<QGraphicsItem*> shapes, const QString& text,
            const QPointF& delta)
 {
     _scene = scene;
-    //_shapeId = shapeId;
-    _shapeIds = shapeIds;
-    _text = text;
+    _shapes = shapes;
+    //_shapesCollector = shapes;
+    //_text = text;
     _delta = delta;
 
-    setText(text);
+    QUndoCommand::setText(text);
 }
 
 void Move::undo()
@@ -461,36 +504,34 @@ void Move::undo()
 
     //qgraph::Shape* shape = nullptr;
 
-    for (const QUuidEx& shapeId : _shapeIds)
-        if (qgraph::Shape* shape = findItem(shapeId))
-        {
-            QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
-            item->moveBy(-_delta.x(), -_delta.y());
+    for (QGraphicsItem* shape : _shapes)
+    {
+        shape->moveBy(-_delta.x(), -_delta.y());
 
-            if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(shape))
-            {
-                rectangle->updateHandlePosition();
-                rectangle->updatePointNumbers();
-            }
-            if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(shape))
-            {
-                circle->updateHandlePosition();
-            }
-            if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(shape))
-            {
-                line->updateHandlePosition();
-                line->updatePointNumbers();
-            }
-            if (qgraph::Polyline* pline = dynamic_cast<qgraph::Polyline*>(shape))
-            {
-                pline->updateHandlePosition();
-                pline->updatePointNumbers();
-            }
-            if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(shape))
-            {
-                point->updateHandlePosition();
-            }
+        if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(shape))
+        {
+            rectangle->updateHandlePosition();
+            rectangle->updatePointNumbers();
         }
+        if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(shape))
+        {
+            circle->updateHandlePosition();
+        }
+        if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(shape))
+        {
+            line->updateHandlePosition();
+            line->updatePointNumbers();
+        }
+        if (qgraph::Polyline* pline = dynamic_cast<qgraph::Polyline*>(shape))
+        {
+            pline->updateHandlePosition();
+            pline->updatePointNumbers();
+        }
+        if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(shape))
+        {
+            point->updateHandlePosition();
+        }
+    }
 }
 
 void Move::redo()
@@ -498,44 +539,37 @@ void Move::redo()
     // if (!_scene || _shapeId.isNull())
     //     return;
 
-    if (_skipFirstRedo)
-    {
-        _skipFirstRedo = false;
+    if (firstRedo())
         return;
-    }
 
-    //qgraph::Shape* shape = nullptr;
+    for (QGraphicsItem* shape : _shapes)
+    {
+        shape->moveBy(_delta.x(), _delta.y());
 
-    for (const QUuidEx& shapeId : _shapeIds)
-        if (qgraph::Shape* shape = findItem(shapeId))
+        if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(shape))
         {
-            QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
-            item->moveBy(_delta.x(), _delta.y());
-
-            if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(shape))
-            {
-                rectangle->updateHandlePosition();
-                rectangle->updatePointNumbers();
-            }
-            if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(shape))
-            {
-                circle->updateHandlePosition();
-            }
-            if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(shape))
-            {
-                line->updateHandlePosition();
-                line->updatePointNumbers();
-            }
-            if (qgraph::Polyline* pline = dynamic_cast<qgraph::Polyline*>(shape))
-            {
-                pline->updateHandlePosition();
-                pline->updatePointNumbers();
-            }
-            if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(shape))
-            {
-                point->updateHandlePosition();
-            }
+            rectangle->updateHandlePosition();
+            rectangle->updatePointNumbers();
         }
+        if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(shape))
+        {
+            circle->updateHandlePosition();
+        }
+        if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(shape))
+        {
+            line->updateHandlePosition();
+            line->updatePointNumbers();
+        }
+        if (qgraph::Polyline* pline = dynamic_cast<qgraph::Polyline*>(shape))
+        {
+            pline->updateHandlePosition();
+            pline->updatePointNumbers();
+        }
+        if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(shape))
+        {
+            point->updateHandlePosition();
+        }
+    }
 }
 
 } // namespace undo

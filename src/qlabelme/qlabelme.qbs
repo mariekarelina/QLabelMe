@@ -58,6 +58,8 @@ Product {
             "project_settings.cpp",
             "project_settings.h",
             "project_settings.ui",
+            "save_geometry.cpp",
+            "save_geometry.h",
             "select_class.cpp",
             "select_class.h",
             "select_class.ui",

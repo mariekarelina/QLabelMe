@@ -1933,8 +1933,9 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             {
                 const int count = qMin(_movingItems.size(), _moveGroupInitialPos.size());
 
-                QList<QUuidEx> shapeIds;
+                //QList<QUuidEx> shapeIds;
                 QPointF delta;
+                QSet<QGraphicsItem*> shapes;
                 bool hasMovedShapes = false;
 
                 for (int i = 0; i < count; ++i)
@@ -1944,15 +1945,16 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                     if (!item)
                         continue;
 
-                    qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(item);
+                    //qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(item);
 
-                    if (!shape)
-                        continue;
+                    //if (!shape)
+                    //    continue;
 
-                    const QUuidEx shapeId = shape->id();
+                    //const QUuidEx shapeId = shape->id();
+                    // quint64 shapeId = item->data(SHAPE_ID).toULongLong();
 
-                    if (shapeId.isNull())
-                        continue;
+                    // if (shapeId == 0)
+                    //     continue;
 
                     if (!hasMovedShapes)
                     {
@@ -1964,21 +1966,19 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                         hasMovedShapes = true;
                     }
 
-                    shapeIds.append(shapeId);
+                    //shapeIds.append(shapeId);
+                    shapes.insert(item);
                 }
 
-                if (hasMovedShapes && !shapeIds.isEmpty())
+                if (hasMovedShapes && shapes.count())
                 {
-                    const QString description = shapeIds.size() == 1
+                    const QString description = (shapes.count() == 1)
                                                 ? u8"Перемещение фигуры"
                                                 : u8"Перемещение фигур";
 
                     if (QUndoStack* stack = activeUndoStack())
                     {
-                        stack->push(new undo::Move(_scene,
-                                                   shapeIds,
-                                                   description,
-                                                   delta));
+                        stack->push(new undo::Move(_scene, shapes, description, delta));
                     }
 
                     Document::Ptr doc = currentDocument();
@@ -2059,21 +2059,21 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         {
 //------------------------------------------
 
-            undo::RectangleData::Ptr rectData = undo::RectangleData::Ptr::create();
-            rectData->id = rectangle->id();
-            rectData->className = rectangle->data(0).toString();
-            rectData->zLevel = rectangle->zValue();
-            rectData->visible = rectangle->isVisible();
-            rectData->rect = finalRect;
-            rectData->shapeNumber = ensureShapeNumber(rectangle);
+            // undo::RectangleData::Ptr rectData = undo::RectangleData::Ptr::create();
+            // rectData->id = rectangle->id();
+            // rectData->className = rectangle->data(0).toString();
+            // rectData->zLevel = rectangle->zValue();
+            // rectData->visible = rectangle->isVisible();
+            // rectData->rect = finalRect;
+            // rectData->shapeNumber = ensureShapeNumber(rectangle);
 
-            undo::Create* undoCreate = new undo::Create(doc->scene, rectangle->id(),
-                                                        u8"Добавление прямоугольника",
-                                                        rectData);
+            // undo::Create* undoCreate = new undo::Create(doc->scene, rectangle,
+            //                                             u8"Добавление прямоугольника");
 
             if (QUndoStack* stack = activeUndoStack())
             {
-                stack->push(undoCreate);
+                stack->push(new undo::Create(doc->scene, rectangle,
+                                             u8"Добавление прямоугольника"));
             }
 
 //-----------------------------------------
@@ -4902,15 +4902,18 @@ void MainWindow::on_actDelete_triggered()
     if (selectedItems.isEmpty())
         return;
 
-    if (selectedItems.size() > 1)
+    if (selectedItems.count() > 1)
     {
-        QMessageBox msgBox(this);
-        msgBox.setWindowTitle(u8"Удаление фигур");
-        msgBox.setText(
-            QString(u8"Удалить выбранные фигуры?\nКоличество фигур: %1")
-                .arg(selectedItems.size())
-        );
+        // TODO переделать на messageBox() с использованеим BoxExtFunc, кнопки должны быть стандартными
+
+        QString msg = u8"Удалить выбранные фигуры?\nКоличество фигур: %1";
+        msg = msg.arg(selectedItems.count());
+
+        QMessageBox msgBox {this};
         msgBox.setIcon(QMessageBox::Question);
+        msgBox.setWindowTitle(qApp->applicationName());
+        msgBox.setTextFormat(Qt::RichText);
+        msgBox.setText(msg);
 
         QPushButton* btnYes = msgBox.addButton(u8"Да", QMessageBox::AcceptRole);
         QPushButton* btnNo = msgBox.addButton(u8"Нет", QMessageBox::RejectRole);
@@ -4998,7 +5001,7 @@ void MainWindow::on_actDelete_triggered()
 
     // if (doc->_undoStack)
     //     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, u8"Удаление фигур"));
-    QList<qgraph::Shape*> shapes;
+    QSet<QGraphicsItem*> shapes;
     QList<undo::Delete::ListItemState> listItems;
 
     for (QListWidgetItem* listItem : selectedItems)
@@ -5006,38 +5009,42 @@ void MainWindow::on_actDelete_triggered()
         if (!listItem)
             continue;
 
-        QGraphicsItem* graphicsItem = sceneItemFromListItem(listItem);
-        if (!graphicsItem)
-            continue;
-
-        qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(graphicsItem);
+        QGraphicsItem* shape = sceneItemFromListItem(listItem);
         if (!shape)
             continue;
 
-        clearLinePolylineStateForDeletedItem(graphicsItem);
+        //qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(graphicsItem);
+        //if (!shape)
+        //    continue;
+
+        clearLinePolylineStateForDeletedItem(shape);
 
         undo::Delete::ListItemState listItemState;
         listItemState.item = listItem;
         listItemState.row = ui->polygonList->row(listItem);
 
-        shapes.append(shape);
+        undo::Delete::Data undoDelData;
+        undoDelData.item = listItem;
+        undoDelData.row = ui->polygonList->row(listItem);
+        //QVariant data; data.setValue(undoDelData);
+        //shape->setData(SHAPE_UNDO_DELETE_DATA, data);
+        shape->setData(SHAPE_UNDO_DELETE_DATA, QVariant::fromValue(undoDelData));
+
+        shapes.insert(shape);
         listItems.append(listItemState);
     }
 
     if (shapes.isEmpty())
         return;
 
-    const QString description = shapes.size() == 1
+    const QString description = (shapes.count() == 1)
                                 ? u8"Удаление фигуры"
                                 : u8"Удаление фигур";
 
     if (QUndoStack* stack = activeUndoStack())
     {
-        stack->push(new undo::Delete(_scene,
-                                     shapes,
-                                     ui->polygonList,
-                                     listItems,
-                                     description));
+        stack->push(new undo::Delete(_scene, shapes, ui->polygonList,
+                                     listItems, description));
     }
 
     updateCoordinateList();
@@ -5498,6 +5505,8 @@ void MainWindow::on_actResetAnnotation_triggered()
     if (ui->polygonList->count() == 0)
         return;
 
+    // TODO переделать на messageBox() с использованеим BoxExtFunc, кнопки должны быть стандартными
+
     // Подтверждение
     QMessageBox msgBox(this);
     msgBox.setWindowTitle(u8"Сбросить разметку");
@@ -5609,6 +5618,8 @@ void MainWindow::on_actRestoreAnnotation_triggered()
 
     if (hasUnsaved || ui->polygonList->count() > 0)
     {
+        // TODO переделать на messageBox() с использованеим BoxExtFunc, кнопки должны быть стандартными
+
         QMessageBox msgBox(this);
         msgBox.setWindowTitle(u8"Восстановить разметку");
         msgBox.setText(u8"Восстановить разметку из файла .yaml?\nВсе несохранённые изменения будут потеряны");

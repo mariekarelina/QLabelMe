@@ -41,6 +41,10 @@ Project {
             "PPROTO_VERSION_HIGH=0",
             "PPROTO_JSON_SERIALIZE",
             "PPROTO_MESSAGE_NEW_JSON_FORMAT",
+            "SHAPE_ID=0",
+            "SHAPE_NUMBER=1",
+            "SHAPE_LIST_ORDER=2",
+            "SHAPE_UNDO_DELETE_DATA=3",
           //"SODIUM_ENCRYPTION",
         ];
         return def;

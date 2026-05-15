@@ -83,59 +83,58 @@ struct ShapeBackup2
 
 namespace undo {
 
-struct ShapeData : clife_base
-{
-    typedef clife_ptr<ShapeData> Ptr;
+// struct ShapeData : clife_base
+// {
+//     typedef clife_ptr<ShapeData> Ptr;
 
-    //ShapeKind2 kind = {ShapeKind2::Rectangle};
-    QUuidEx   id; // Идентификатор объекта, см класс Shape
-    QString   className;
-    int       zLevel = {0};
-    bool      visible = {true};
+//     //ShapeKind2 kind = {ShapeKind2::Rectangle};
+//     QUuidEx   id; // Идентификатор объекта, см класс Shape
+//     QString   className;
+//     int       zLevel = {0};
+//     bool      visible = {true};
 
-    int listRow = -1;     // Номер в правой панели
-    int sceneRow = -1;    // Порядок на сцене
-    int shapeNumber = -1; // Номер в списке
-};
+//     int listRow = -1;     // Номер в правой панели
+//     int sceneRow = -1;    // Порядок на сцене
+//     int shapeNumber = -1; // Номер в списке
+// };
 
-struct RectangleData : ShapeData
-{
-    typedef clife_ptr<RectangleData> Ptr;
+// struct RectangleData : ShapeData
+// {
+//     typedef clife_ptr<RectangleData> Ptr;
 
-    QRectF rect;
-};
+//     QRectF rect;
+// };
 
-struct CircleData : ShapeData
-{
-    typedef clife_ptr<CircleData> Ptr;
+// struct CircleData : ShapeData
+// {
+//     typedef clife_ptr<CircleData> Ptr;
 
-    QPointF circleCenter;
-    qreal   circleRadius = 0;
-};
+//     QPointF circleCenter;
+//     qreal   circleRadius = 0;
+// };
 
-struct LineData : ShapeData
-{
-    typedef clife_ptr<LineData> Ptr;
+// struct LineData : ShapeData
+// {
+//     typedef clife_ptr<LineData> Ptr;
 
-    QVector<QPointF> points;
-    bool numberingFromLast = false;
-};
+//     QVector<QPointF> points;
+//     bool numberingFromLast = false;
+// };
 
-struct PolylineData : ShapeData
-{
-    typedef clife_ptr<PolylineData> Ptr;
+// struct PolylineData : ShapeData
+// {
+//     typedef clife_ptr<PolylineData> Ptr;
 
-    QVector<QPointF> points;
-    bool closed = {false};
-};
+//     QVector<QPointF> points;
+//     bool closed = {false};
+// };
 
-struct PointData : ShapeData
-{
-    typedef clife_ptr<PointData> Ptr;
+// struct PointData : ShapeData
+// {
+//     typedef clife_ptr<PointData> Ptr;
 
-    QPointF pointCenter;
-};
-
+//     QPointF pointCenter;
+// };
 
 class BaseUndo : public QUndoCommand //, public clife_base
 {
@@ -145,6 +144,7 @@ public:
     // using ApplyCallback = std::function<void(qgraph::Shape*)>;
 
     BaseUndo() : QUndoCommand(nullptr) {}
+    ~BaseUndo();
 
     //bool init(QGraphicsScene* scene, Type type, const QString& text,
               //            const ShapeBackup2& before, const ShapeBackup2& after,);
@@ -158,40 +158,40 @@ public:
     // // Восстанавливает состояние фигуры
     // void restoreFromBackup(qgraph::Shape* item, const ShapeBackup2& backup);
     // // Ищет фигуру на сцене по qgraph::Shape::id()
-    qgraph::Shape* findItem(const QUuidEx id) const;
+    //qgraph::Shape* findItem(const QUuidEx id) const;
 
 protected:
     QGraphicsScene* _scene = {nullptr};
     //QUuidEx _shapeId;
-    QList<QUuidEx> _shapeIds;
-    QString _text;
+    //QList<QUuidEx> _shapeIds;
+    QSet<QGraphicsItem*> _shapesCollector;
+    //QString _text;
 
-    ShapeData::Ptr _data;
+    //ShapeData::Ptr _data;
     // Type _type = {Type::Restore};
     // ShapeBackup2 _before;
     // ShapeBackup2 _after;
 
     // ApplyCallback _onApplied;
+    bool firstRedo();
+    bool _firstRedo = {true};
 };
-
 
 class Create : public BaseUndo
 {
 public:
 
-    Create(QGraphicsScene* scene, const QUuidEx& shapeId, const QString& text,
-           ShapeData::Ptr data);
+    Create(QGraphicsScene* scene, QGraphicsItem* shape, const QString& text);
     ~Create();
 
     void undo() override;
     void redo() override;
 
 private:
+    QGraphicsItem* _shape = {nullptr};
+    //quint64 shapeId = {0};
     //qgraph::Shape* _shape = {nullptr};
-    QList<qgraph::Shape*> _shapes;
-
-    // Первый redo() ничего не делает, т.к. фигура уже на сцене
-    bool _skipFirstRedo = {true};
+    //QList<qgraph::Shape*> _shapes;
 };
 
 
@@ -203,11 +203,18 @@ public:
         QListWidgetItem* item = {nullptr};
         int row = -1;
     };
+
+    struct Data
+    {
+        QListWidgetItem* item = {nullptr};
+        int row = -1;
+    };
+
     Delete(QGraphicsScene* scene,
-          const QList<qgraph::Shape*>& shapes,
-          QListWidget* listWidget,
-          const QList<ListItemState>& listItems,
-          const QString& text);
+           const QSet<QGraphicsItem*>& shapes,
+           QListWidget* listWidget,
+           const QList<ListItemState>& listItems,
+           const QString& text);
     ~Delete();
 
     void undo() override;
@@ -215,26 +222,24 @@ public:
 
 private:
     // Фигуры, удаленные со сцены
-    QList<qgraph::Shape*> _shapes;
+    QSet<QGraphicsItem*> _shapes;
 
     QListWidget* _listWidget = {nullptr};
     QList<ListItemState> _listItems;
 };
 
-
 class Move : public BaseUndo
 {
 public:
-    Move(QGraphicsScene* scene, const QList<QUuidEx> shapeIds, const QString& text,
+    Move(QGraphicsScene* scene, QSet<QGraphicsItem*> shapes, const QString& text,
          const QPointF& delta);
 
     void undo() override;
     void redo() override;
 
 private:
+    QSet<QGraphicsItem*> _shapes;
     QPointF _delta;
-    // Первый redo() ничего не делает, т.к. фигура уже на сцене
-    bool _skipFirstRedo = {true};
 };
 
 
@@ -250,3 +255,5 @@ class ChangeClass : public BaseUndo
 };
 
 } // namespace undo
+
+Q_DECLARE_METATYPE(undo::Delete::Data)
