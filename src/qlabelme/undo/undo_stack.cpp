@@ -345,6 +345,103 @@ void Create::redo()
     // }
 }
 
+Delete::Delete(QGraphicsScene* scene,
+               const QList<qgraph::Shape*>& shapes,
+               QListWidget* listWidget,
+               const QList<ListItemState>& listItems,
+               const QString& text)
+{
+    _scene = scene;
+    _listWidget = listWidget;
+    _listItems = listItems;
+    _text = text;
+
+    for (qgraph::Shape* shape : shapes)
+    {
+        if (shape && !shape->id().isNull())
+            _shapeIds.append(shape->id());
+    }
+
+    setText(text);
+}
+
+Delete::~Delete()
+{
+    for (qgraph::Shape* shape : _shapes)
+        if (shape)
+            delete shape;
+
+    for (const ListItemState& state : _listItems)
+        if (state.item && !state.item->listWidget())
+            delete state.item;
+}
+
+void Delete::undo()
+{
+    if (!_scene)
+        return;
+
+    for (qgraph::Shape* shape : _shapes)
+    {
+        if (shape)
+        {
+            QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
+            _scene->addItem(item);
+            // Фигура снова на сцене, команда больше не должна владеть ею
+            _shapes.removeAll(shape);
+        }
+    }
+
+    if (!_listWidget)
+        return;
+
+    QList<ListItemState> listItems = _listItems;
+
+    for (const ListItemState& state : listItems)
+    {
+        if (QListWidgetItem* listItem = state.item)
+        {
+            int row = state.row;
+
+            if (row < 0 || row > _listWidget->count())
+                row = _listWidget->count();
+
+            _listWidget->insertItem(row, listItem);
+            listItem->setSelected(true);
+        }
+    }
+}
+
+void Delete::redo()
+{
+    if (!_scene)
+        return;
+
+    for (const QUuidEx& shapeId : _shapeIds)
+    {
+        if (qgraph::Shape* shape = findItem(shapeId))
+        {
+            QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
+            _scene->removeItem(item);
+
+            // После removeItem() фигура больше не принадлежит сцене
+            _shapes.append(shape);
+        }
+    }
+    if (!_listWidget)
+        return;
+
+    for (int i = _listItems.size() - 1; i >= 0; --i)
+    {
+        QListWidgetItem* listItem = _listItems[i].item;
+
+        const int row = _listWidget->row(listItem);
+
+        if (row >= 0)
+            _listWidget->takeItem(row);
+    }
+}
+
 Move::Move(QGraphicsScene* scene, const QList<QUuidEx> shapeIds, const QString& text,
            const QPointF& delta)
 {

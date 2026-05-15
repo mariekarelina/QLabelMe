@@ -7,6 +7,8 @@
 
 #include <QGraphicsScene>
 #include <QUndoCommand>
+#include <QListWidget>
+#include <QListWidgetItem>
 
 // Тип фигур
 enum class ShapeKind2 {Rectangle, Circle, Polyline, Line, Point};
@@ -195,7 +197,28 @@ private:
 
 class Delete : public BaseUndo
 {
+public:
+    struct ListItemState
+    {
+        QListWidgetItem* item = {nullptr};
+        int row = -1;
+    };
+    Delete(QGraphicsScene* scene,
+          const QList<qgraph::Shape*>& shapes,
+          QListWidget* listWidget,
+          const QList<ListItemState>& listItems,
+          const QString& text);
+    ~Delete();
 
+    void undo() override;
+    void redo() override;
+
+private:
+    // Фигуры, удаленные со сцены
+    QList<qgraph::Shape*> _shapes;
+
+    QListWidget* _listWidget = {nullptr};
+    QList<ListItemState> _listItems;
 };
 
 

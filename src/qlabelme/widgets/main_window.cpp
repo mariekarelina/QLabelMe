@@ -4898,7 +4898,7 @@ void MainWindow::on_actDelete_triggered()
     if (!doc)
         return;
 
-    const QList<QListWidgetItem*> selectedItems = ui->polygonList->selectedItems();
+    QList<QListWidgetItem*> selectedItems = ui->polygonList->selectedItems();
     if (selectedItems.isEmpty())
         return;
 
@@ -4923,75 +4923,128 @@ void MainWindow::on_actDelete_triggered()
     }
     restoreTemporaryRaisedZValues();
 
-    // Снимки для восстановления
-    const QVector<ShapeBackup> backups = collectBackupsForItems(selectedItems);
-
-    struct Payload
+    std::sort(selectedItems.begin(), selectedItems.end(),
+              [this](QListWidgetItem* left, QListWidgetItem* right)
     {
-        QVector<ShapeBackup>  backups;
-        QVector<qulonglong>   uids;
-    };
+        return ui->polygonList->row(left) < ui->polygonList->row(right);
+    });
 
-    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
-    payload->backups = backups;
-    payload->uids.reserve(backups.size());
+    // // Снимки для восстановления
+    // const QVector<ShapeBackup> backups = collectBackupsForItems(selectedItems);
 
-    for (const ShapeBackup& b : backups)
+    // struct Payload
+    // {
+    //     QVector<ShapeBackup>  backups;
+    //     QVector<qulonglong>   uids;
+    // };
+
+    // std::shared_ptr<Payload> payload = std::make_shared<Payload>();
+    // payload->backups = backups;
+    // payload->uids.reserve(backups.size());
+
+    // for (const ShapeBackup& b : backups)
+    // {
+    //     if (b.uid != 0)
+    //         payload->uids.push_back(b.uid);
+    // }
+
+    // // redo: удалить текущие элементы по uid
+    // std::function<void()> redoFn = [this, payload]()
+    // {
+    //     for (qulonglong uid : std::as_const(payload->uids))
+    //     {
+    //         if (!uid)
+    //             continue;
+
+    //         if (QGraphicsItem* gi = findItemByUid(uid))
+    //         {
+    //             _scene->removeItem(gi);
+    //             removeListEntryBySceneItem(gi);
+    //             clearLinePolylineStateForDeletedItem(gi);
+    //             delete gi;
+    //         }
+    //     }
+
+    //     if (Document::Ptr doc = currentDocument())
+    //     {
+    //         doc->isModified = true;
+    //         updateFileListDisplay(doc->filePath);
+    //     }
+    // };
+
+    // // undo: восстановить по снапшотам
+    // std::function<void()> undoFn = [this, payload]()
+    // {
+    //     QVector<ShapeBackup> backups = payload->backups;
+
+    //     std::sort(backups.begin(), backups.end(),
+    //               [](const ShapeBackup& a, const ShapeBackup& b)
+    //     {
+    //         return a.listRow < b.listRow;
+    //     });
+
+    //     for (const ShapeBackup& b : backups)
+    //     {
+    //         QGraphicsItem* created = recreateFromBackup(b);
+    //         Q_UNUSED(created);
+    //     }
+
+    //     if (Document::Ptr doc = currentDocument())
+    //     {
+    //         doc->isModified = true;
+    //         updateFileListDisplay(doc->filePath);
+    //     }
+    // };
+
+    // if (doc->_undoStack)
+    //     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, u8"Удаление фигур"));
+    QList<qgraph::Shape*> shapes;
+    QList<undo::Delete::ListItemState> listItems;
+
+    for (QListWidgetItem* listItem : selectedItems)
     {
-        if (b.uid != 0)
-            payload->uids.push_back(b.uid);
+        if (!listItem)
+            continue;
+
+        QGraphicsItem* graphicsItem = sceneItemFromListItem(listItem);
+        if (!graphicsItem)
+            continue;
+
+        qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(graphicsItem);
+        if (!shape)
+            continue;
+
+        clearLinePolylineStateForDeletedItem(graphicsItem);
+
+        undo::Delete::ListItemState listItemState;
+        listItemState.item = listItem;
+        listItemState.row = ui->polygonList->row(listItem);
+
+        shapes.append(shape);
+        listItems.append(listItemState);
     }
 
-    // redo: удалить текущие элементы по uid
-    std::function<void()> redoFn = [this, payload]()
+    if (shapes.isEmpty())
+        return;
+
+    const QString description = shapes.size() == 1
+                                ? u8"Удаление фигуры"
+                                : u8"Удаление фигур";
+
+    if (QUndoStack* stack = activeUndoStack())
     {
-        for (qulonglong uid : std::as_const(payload->uids))
-        {
-            if (!uid)
-                continue;
+        stack->push(new undo::Delete(_scene,
+                                     shapes,
+                                     ui->polygonList,
+                                     listItems,
+                                     description));
+    }
 
-            if (QGraphicsItem* gi = findItemByUid(uid))
-            {
-                _scene->removeItem(gi);
-                removeListEntryBySceneItem(gi);
-                clearLinePolylineStateForDeletedItem(gi);
-                delete gi;
-            }
-        }
+    updateCoordinateList();
+    updateShapeListButtons();
 
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-    };
-
-    // undo: восстановить по снапшотам
-    std::function<void()> undoFn = [this, payload]()
-    {
-        QVector<ShapeBackup> backups = payload->backups;
-
-        std::sort(backups.begin(), backups.end(),
-                  [](const ShapeBackup& a, const ShapeBackup& b)
-        {
-            return a.listRow < b.listRow;
-        });
-
-        for (const ShapeBackup& b : backups)
-        {
-            QGraphicsItem* created = recreateFromBackup(b);
-            Q_UNUSED(created);
-        }
-
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-    };
-
-    if (doc->_undoStack)
-        doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, u8"Удаление фигур"));
+    if (_scene)
+        _scene->update();
 }
 
 void MainWindow::on_actSettingsApp_triggered()
@@ -5696,16 +5749,16 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
         _undoGroup->addStack(doc->_undoStack.get());           // группа будет переключать активный
 
         QUndoStack* stack = doc->_undoStack.get();
-        QObject::connect(stack, &QUndoStack::indexChanged, this, [this, stack](int){
-            if (_loadingNow) return;
+        QObject::connect(stack, &QUndoStack::cleanChanged,
+                         this, [this, stack](bool clean){
+            if (_loadingNow)
+                return;
 
-            // реагируем только если этот стек активен у группы
-            if (_undoGroup && (_undoGroup->activeStack() != stack)) return;
+            if (_undoGroup && _undoGroup->activeStack() != stack)
+                return;
 
             if (Document::Ptr doc = currentDocument())
             {
-                // Если стек в состоянии <пусто>, считаем файл неизмененным
-                const bool clean = stack->isClean();
                 doc->isModified = !clean;
                 updateFileListDisplay(doc->filePath);
             }
