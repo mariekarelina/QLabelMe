@@ -60,6 +60,12 @@
 #include <QGraphicsScene>
 #include <QGraphicsLineItem>
 #include <QGraphicsTextItem>
+
+#include <QModelIndex>
+#include <QItemSelectionModel>
+#include <QStandardItemModel>
+#include <QStandardItem>
+
 //#include "graphicsscene.h"
 #include "graphics_view.h"
 #include "settings.h"
@@ -86,6 +92,12 @@ class MainWindow;
 
 class QLabel;
 
+struct PolygonListData
+{
+    QVector<QGraphicsItem*> items;
+    std::unique_ptr<QStandardItemModel> model;
+};
+
 struct Document
 {
     typedef container_ptr<Document> Ptr;
@@ -101,6 +113,8 @@ struct Document
     std::unique_ptr<QUndoStack> _undoStack;
 
     QUndoStack undoStack2;
+
+    PolygonListData polygonList;
 
     // Состояние просмотра
     struct
@@ -295,8 +309,8 @@ private:
     bool loadClassesFromFile(const QString& filePath);
     bool saveProjectClasses(const QStringList& classes, const QMap<QString, QColor>& colors);
 
-    void onPolygonListItemClicked(QListWidgetItem* item);
-    void onPolygonListItemDoubleClicked(QListWidgetItem* item);
+    void onPolygonListItemClicked(const QModelIndex& index);
+    void onPolygonListItemDoubleClicked(const QModelIndex& index);
     void onSceneSelectionChanged();
 
     void updateCoordinateList();
@@ -305,7 +319,7 @@ private:
 
     // Удаление элемента со сцены и из списка
     void removePolygonItem(QGraphicsItem* item);
-    void removePolygonListItem(QListWidgetItem* item);
+    void removePolygonListRow(int row);
 
     // Связывание элементов сцены и списка
     void linkSceneItemToList(QGraphicsItem* sceneItem);
@@ -315,7 +329,7 @@ private:
 
     void showPolygonListContextMenu(const QPoint &pos);
 
-    void updatePolygonListItemText(QListWidgetItem* item);
+    void updatePolygonListItemText(int row);
     void updatePolygonListTexts();
 
     bool isYamlFileEmpty(const QString& yamlPath) const;
@@ -399,7 +413,7 @@ private:
     ShapeBackup makeBackupFromItem(QGraphicsItem* graphicsItem) const;
 
     // Создаем снимки, по которому потом будем восстанавливать фигуры
-    QVector<ShapeBackup> collectBackupsForItems(const QList<QListWidgetItem*>& listItems) const;
+    QVector<ShapeBackup> collectBackupsForItems(const QVector<QGraphicsItem*>& items) const;
 
     // Создаем фигуру из снимка
     QGraphicsItem* recreateFromBackup(const ShapeBackup&);
@@ -440,13 +454,17 @@ private:
                                  const ShapeBackup& after,
                                  const QString& description);
 
+    void setPolygonListModelForCurrentDocument();
     // Удаляет несколько фигур сразу
-    void removeSceneAndListItems(const QList<QListWidgetItem*>& listItems);
+    void removeSceneAndListItems(const QVector<QGraphicsItem*>& items);
 
     // Удаляет одну запись из списка по заданному QGraphicsItem
     void removeListEntryBySceneItem(QGraphicsItem* sceneItem);
 
-    static QGraphicsItem* sceneItemFromListItem(const QListWidgetItem* listItem);
+    // static QGraphicsItem* sceneItemFromListItem(const QListWidgetItem* listItem);
+    QGraphicsItem* sceneItemFromListIndex(const QModelIndex& index) const;
+    QGraphicsItem* sceneItemFromListRow(int row) const;
+    int polygonListRowByItem(QGraphicsItem* sceneItem) const;
 
     // Поиск фигуры по uid на текущей сцене
     QGraphicsItem* findItemByUid(qulonglong uid) const;
@@ -492,7 +510,7 @@ private:
     // Кнопки в списке фигур
     void moveCurrentShapeInList(int direction);
     void movePolygonListRow(int fromRow, int toRow);
-    int polygonListRowByUid(qulonglong uid) const;
+    //int polygonListRowByUid(QGraphicsItem* sceneItem) const;
     void updateShapeListButtons();
     void refreshShapeListOrderRole();
 

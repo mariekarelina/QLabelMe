@@ -178,6 +178,10 @@ Document::Ptr Document::create(const QString& path)
 {
     Ptr doc {new Document};
     doc->filePath = path;
+
+    doc->polygonList.model.reset(new QStandardItemModel);
+    doc->polygonList.model->setColumnCount(1);
+
     return doc;
 }
 
@@ -324,19 +328,20 @@ MainWindow::MainWindow(QWidget* parent) :
 
 
     // Сделать подсветку одинаковой яркой, даже когда список без фокуса
-    void (*fixSelectionPalette)(QListWidget*) = [](QListWidget* listWidget){
-        QPalette palette = listWidget->palette();
+    void (*fixSelectionPalette)(QAbstractItemView*) = [](QAbstractItemView* itemView)
+    {
+        QPalette palette = itemView->palette();
         const QColor activeHighlight = palette.color(QPalette::Active, QPalette::Highlight);
         const QColor activeHighlightedText = palette.color(QPalette::Active, QPalette::HighlightedText);
 
-        palette.setColor(QPalette::Inactive, QPalette::Highlight,       activeHighlight);
+        palette.setColor(QPalette::Inactive, QPalette::Highlight, activeHighlight);
         palette.setColor(QPalette::Inactive, QPalette::HighlightedText, activeHighlightedText);
-        palette.setColor(QPalette::Disabled, QPalette::Highlight,       activeHighlight);
+        palette.setColor(QPalette::Disabled, QPalette::Highlight, activeHighlight);
         palette.setColor(QPalette::Disabled, QPalette::HighlightedText, activeHighlightedText);
 
-        listWidget->setPalette(palette);
-        if (listWidget->viewport())
-            listWidget->viewport()->setPalette(palette);
+        itemView->setPalette(palette);
+        if (itemView->viewport())
+            itemView->viewport()->setPalette(palette);
     };
 
     fixSelectionPalette(ui->polygonList);
@@ -453,16 +458,14 @@ MainWindow::MainWindow(QWidget* parent) :
     chk_connect_a(ui->fileList, &QListWidget::currentItemChanged,
                   this, &MainWindow::fileList_ItemChanged);
 
-    connect(ui->polygonList, &QListWidget::itemClicked,
+    connect(ui->polygonList, &QListView::clicked,
             this, &MainWindow::onPolygonListItemClicked);
-    connect(ui->polygonList, &QListWidget::itemDoubleClicked,
+
+    connect(ui->polygonList, &QListView::doubleClicked,
             this, &MainWindow::onPolygonListItemDoubleClicked);
-    connect(_scene, &QGraphicsScene::selectionChanged,
-            this, &MainWindow::onSceneSelectionChanged);
-    connect(_scene, &QGraphicsScene::changed,
-            this,  &MainWindow::onSceneChanged);
-    connect(ui->polygonList, &QListWidget::itemSelectionChanged,
-            this, &MainWindow::onPolygonListSelectionChanged);
+
+    connect(ui->polygonList, &QWidget::customContextMenuRequested,
+            this, &MainWindow::showPolygonListContextMenu);
 
 
     QShortcut* shNext = new QShortcut(QKeySequence(Qt::Key_D), this);
@@ -479,8 +482,6 @@ MainWindow::MainWindow(QWidget* parent) :
 
     ui->polygonList->setContextMenuPolicy(Qt::CustomContextMenu);
     ui->polygonList->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    connect(ui->polygonList, &QListWidget::customContextMenuRequested,
-            this, &MainWindow::showPolygonListContextMenu);
 
     ui->btnMoveShapeUp->setToolTip(QString::fromUtf8("Переместить фигуру выше"));
     ui->btnMoveShapeDown->setToolTip(QString::fromUtf8("Переместить фигуру ниже"));
@@ -505,14 +506,6 @@ MainWindow::MainWindow(QWidget* parent) :
     connect(ui->btnDelete, &QToolButton::clicked,
             this, &MainWindow::on_actDelete_triggered);
 
-    connect(ui->polygonList, &QListWidget::currentRowChanged,
-            this, [this](int)
-    {
-        updateShapeListButtons();
-    });
-
-    connect(ui->polygonList, &QListWidget::itemSelectionChanged,
-            this, &MainWindow::updateShapeListButtons);
 
     updateShapeListButtons();
 
@@ -2660,18 +2653,30 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
 
     // Сначала пытаемся собрать группу из выделения в правом списке,
     // так как команда вызывается из контекстного меню polygonList
-    QList<QListWidgetItem*> selectedListItems;
-    if (ui && ui->polygonList)
-        selectedListItems = ui->polygonList->selectedItems();
+    QModelIndexList selectedRows;
+
+    if (ui && ui->polygonList && ui->polygonList->selectionModel())
+        selectedRows = ui->polygonList->selectionModel()->selectedRows();
+
+    Document::Ptr doc = currentDocument();
 
     bool clickedItemIsInListSelection = false;
 
-    for (QListWidgetItem* listItem : selectedListItems)
+    for (const QModelIndex& index : selectedRows)
     {
-        if (!listItem)
+        if (!index.isValid())
             continue;
 
-        QGraphicsItem* selectedSceneItem = listItem->data(Qt::UserRole).value<QGraphicsItem*>();
+        if (!doc)
+            continue;
+
+        const int row = index.row();
+
+        if (row < 0 || row >= doc->polygonList.items.size())
+            continue;
+
+        QGraphicsItem* selectedSceneItem = doc->polygonList.items[row];
+
         if (!selectedSceneItem)
             continue;
 
@@ -2689,12 +2694,21 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
 
     if (clickedItemIsInListSelection)
     {
-        for (QListWidgetItem* listItem : selectedListItems)
+        for (const QModelIndex& index : selectedRows)
         {
-            if (!listItem)
+            if (!index.isValid())
                 continue;
 
-            QGraphicsItem* selectedSceneItem = listItem->data(Qt::UserRole).value<QGraphicsItem*>();
+            if (!doc)
+                continue;
+
+            const int row = index.row();
+
+            if (row < 0 || row >= doc->polygonList.items.size())
+                continue;
+
+            QGraphicsItem* selectedSceneItem = doc->polygonList.items[row];
+
             if (!selectedSceneItem)
                 continue;
 
@@ -4316,7 +4330,20 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem*
             fitImageToView();
     }
     //updateAllPointNumbers();
-    updatePolygonListForCurrentScene();
+    //updatePolygonListForCurrentScene();
+
+    setPolygonListModelForCurrentDocument();
+
+    if (currentDoc->polygonList.model &&
+        currentDoc->polygonList.model->rowCount() == 0)
+    {
+        updatePolygonListForCurrentScene();
+    }
+    else
+    {
+        updatePolygonListTexts();
+    }
+
     clearAllHandleHoverEffects();
     // Обновляем отображение звездочки (файл изменен)
     updateFileListDisplay(currentDoc->filePath);
@@ -4360,15 +4387,20 @@ void MainWindow::onSceneChanged()
 
 void MainWindow::onPolygonListSelectionChanged()
 {
-    if (!_scene)
+    if (!_scene || !ui || !ui->polygonList)
         return;
 
     if (_syncingSelection)
         return;
 
-    _syncingSelection = true;
+    QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
 
-    QList<QListWidgetItem*> selected = ui->polygonList->selectedItems();
+    if (!selectionModel)
+        return;
+
+    const QModelIndexList selectedRows = selectionModel->selectedRows();
+
+    _syncingSelection = true;
 
     {
         QSignalBlocker blockScene(_scene);
@@ -4392,22 +4424,23 @@ void MainWindow::onPolygonListSelectionChanged()
             item->setSelected(false);
         }
 
-        for (QListWidgetItem* li : selected)
+        for (const QModelIndex& index : selectedRows)
         {
-            if (!li)
-                continue;
+            QGraphicsItem* sceneItem = sceneItemFromListIndex(index);
 
-            if (QGraphicsItem* scItem = li->data(Qt::UserRole).value<QGraphicsItem*>())
-                scItem->setSelected(true);
+            if (sceneItem)
+                sceneItem->setSelected(true);
         }
     }
 
     updateCoordinateList();
 
-    if (!selected.isEmpty())
+    if (!selectedRows.isEmpty())
     {
-        if (QGraphicsItem* scItem = selected.first()->data(Qt::UserRole).value<QGraphicsItem*>())
-            ui->graphView->ensureVisible(scItem);
+        QGraphicsItem* sceneItem = sceneItemFromListIndex(selectedRows.first());
+
+        if (sceneItem)
+            ui->graphView->ensureVisible(sceneItem);
     }
 
     raiseSelectedShapesTemporarily();
@@ -4448,12 +4481,7 @@ void MainWindow::selectAllShapes()
             item->setSelected(true);
         }
 
-        for (int i = 0; i < ui->polygonList->count(); ++i)
-        {
-            QListWidgetItem* li = ui->polygonList->item(i);
-            if (li)
-                li->setSelected(true);
-        }
+        ui->polygonList->selectAll();
     }
 
     _syncingSelection = false;
@@ -4812,7 +4840,7 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
     _imageDataMap.clear();
 
     ui->fileList->clear();
-    ui->polygonList->clear();
+    ui->polygonList->setModel(nullptr);
     ui->coordinateList->clear();
 
     if (_undoView)
@@ -4877,19 +4905,7 @@ void MainWindow::onSceneItemRemoved(QGraphicsItem* item)
         updateModeLabel();
     }
 
-    // Ищем соответствующий элемент в списке полигонов
-    for (int i = 0; i < ui->polygonList->count(); ++i)
-    {
-        QListWidgetItem* listItem = ui->polygonList->item(i);
-        QVariant itemData = listItem->data(Qt::UserRole);
-
-        if (itemData.isValid() && itemData.value<QGraphicsItem*>() == item)
-        {
-            delete ui->polygonList->takeItem(i);
-            renumberPolygonList();
-            break;
-        }
-    }
+    removeListEntryBySceneItem(item);
 }
 
 void MainWindow::on_actDelete_triggered()
@@ -4898,38 +4914,20 @@ void MainWindow::on_actDelete_triggered()
     if (!doc)
         return;
 
-    QList<QListWidgetItem*> selectedItems = ui->polygonList->selectedItems();
-    if (selectedItems.isEmpty())
+    QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
+
+    if (!selectionModel)
         return;
 
-    if (selectedItems.count() > 1)
+    QModelIndexList selectedRows = selectionModel->selectedRows();
+
+    if (selectedRows.isEmpty())
+        return;
+
+    std::sort(selectedRows.begin(), selectedRows.end(),
+              [](const QModelIndex& left, const QModelIndex& right)
     {
-        // TODO переделать на messageBox() с использованеим BoxExtFunc, кнопки должны быть стандартными
-
-        QString msg = u8"Удалить выбранные фигуры?\nКоличество фигур: %1";
-        msg = msg.arg(selectedItems.count());
-
-        QMessageBox msgBox {this};
-        msgBox.setIcon(QMessageBox::Question);
-        msgBox.setWindowTitle(qApp->applicationName());
-        msgBox.setTextFormat(Qt::RichText);
-        msgBox.setText(msg);
-
-        QPushButton* btnYes = msgBox.addButton(u8"Да", QMessageBox::AcceptRole);
-        QPushButton* btnNo = msgBox.addButton(u8"Нет", QMessageBox::RejectRole);
-        msgBox.setDefaultButton(btnNo);
-
-        msgBox.exec();
-
-        if (msgBox.clickedButton() != btnYes)
-            return;
-    }
-    restoreTemporaryRaisedZValues();
-
-    std::sort(selectedItems.begin(), selectedItems.end(),
-              [this](QListWidgetItem* left, QListWidgetItem* right)
-    {
-        return ui->polygonList->row(left) < ui->polygonList->row(right);
+        return left.row() < right.row();
     });
 
     // // Снимки для восстановления
@@ -5004,35 +5002,35 @@ void MainWindow::on_actDelete_triggered()
     QSet<QGraphicsItem*> shapes;
     QList<undo::Delete::ListItemState> listItems;
 
-    for (QListWidgetItem* listItem : selectedItems)
-    {
-        if (!listItem)
-            continue;
+    // for (QListWidgetItem* listItem : selectedItems)
+    // {
+    //     if (!listItem)
+    //         continue;
 
-        QGraphicsItem* shape = sceneItemFromListItem(listItem);
-        if (!shape)
-            continue;
+    //     QGraphicsItem* shape = sceneItemFromListIndex(index);
+    //     if (!shape)
+    //         continue;
 
-        //qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(graphicsItem);
-        //if (!shape)
-        //    continue;
+    //     //qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(graphicsItem);
+    //     //if (!shape)
+    //     //    continue;
 
-        clearLinePolylineStateForDeletedItem(shape);
+    //     clearLinePolylineStateForDeletedItem(shape);
 
-        undo::Delete::ListItemState listItemState;
-        listItemState.item = listItem;
-        listItemState.row = ui->polygonList->row(listItem);
+    //     undo::Delete::ListItemState listItemState;
+    //     listItemState.item = listItem;
+    //     listItemState.row = ui->polygonList->row(listItem);
 
-        undo::Delete::Data undoDelData;
-        undoDelData.item = listItem;
-        undoDelData.row = ui->polygonList->row(listItem);
-        //QVariant data; data.setValue(undoDelData);
-        //shape->setData(SHAPE_UNDO_DELETE_DATA, data);
-        shape->setData(SHAPE_UNDO_DELETE_DATA, QVariant::fromValue(undoDelData));
+    //     undo::Delete::Data undoDelData;
+    //     undoDelData.item = listItem;
+    //     undoDelData.row = ui->polygonList->row(listItem);
+    //     //QVariant data; data.setValue(undoDelData);
+    //     //shape->setData(SHAPE_UNDO_DELETE_DATA, data);
+    //     shape->setData(SHAPE_UNDO_DELETE_DATA, QVariant::fromValue(undoDelData));
 
-        shapes.insert(shape);
-        listItems.append(listItemState);
-    }
+    //     shapes.insert(shape);
+    //     listItems.append(listItemState);
+    // }
 
     if (shapes.isEmpty())
         return;
@@ -5041,11 +5039,11 @@ void MainWindow::on_actDelete_triggered()
                                 ? u8"Удаление фигуры"
                                 : u8"Удаление фигур";
 
-    if (QUndoStack* stack = activeUndoStack())
-    {
-        stack->push(new undo::Delete(_scene, shapes, ui->polygonList,
-                                     listItems, description));
-    }
+    // if (QUndoStack* stack = activeUndoStack())
+    // {
+    //     stack->push(new undo::Delete(_scene, shapes, ui->polygonList,
+    //                                  listItems, description));
+    // }
 
     updateCoordinateList();
     updateShapeListButtons();
@@ -5502,7 +5500,7 @@ void MainWindow::on_actResetAnnotation_triggered()
         return;
 
     // Если разметки нет
-    if (ui->polygonList->count() == 0)
+    if (doc->polygonList.items.isEmpty())
         return;
 
     // TODO переделать на messageBox() с использованеим BoxExtFunc, кнопки должны быть стандартными
@@ -5523,17 +5521,18 @@ void MainWindow::on_actResetAnnotation_triggered()
         return;
 
     // Собираем все элементы из списка
-    QList<QListWidgetItem*> allItems;
-    allItems.reserve(ui->polygonList->count());
-    for (int i = 0; i < ui->polygonList->count(); ++i)
-    {
-        if (QListWidgetItem* it = ui->polygonList->item(i))
-            allItems.push_back(it);
-    }
-    restoreTemporaryRaisedZValues();
+    // QList<QListWidgetItem*> allItems;
+    // allItems.reserve(ui->polygonList->count());
+    // for (int i = 0; i < ui->polygonList->count(); ++i)
+    // {
+    //     if (QListWidgetItem* it = ui->polygonList->item(i))
+    //         allItems.push_back(it);
+    // }
+    // restoreTemporaryRaisedZValues();
+    const QVector<ShapeBackup> backups = collectBackupsForItems(doc->polygonList.items);
 
     // Снимки для восстановления
-    const QVector<ShapeBackup> backups = collectBackupsForItems(allItems);
+    // const QVector<ShapeBackup> backups = collectBackupsForItems(allItems);
 
     struct Payload
     {
@@ -5616,7 +5615,7 @@ void MainWindow::on_actRestoreAnnotation_triggered()
     // Восстановление откатит все несохраненные изменения
     const bool hasUnsaved = doc->isModified || (doc->_undoStack && !doc->_undoStack->isClean());
 
-    if (hasUnsaved || ui->polygonList->count() > 0)
+    if (hasUnsaved || !doc->polygonList.items.isEmpty())
     {
         // TODO переделать на messageBox() с использованеим BoxExtFunc, кнопки должны быть стандартными
 
@@ -5788,7 +5787,13 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
 
 void MainWindow::updatePolygonListForCurrentScene()
 {
-    ui->polygonList->clear();
+    Document::Ptr doc = currentDocument();
+    if (!doc || !doc->polygonList.model)
+        return;
+
+    doc->polygonList.items.clear();
+    doc->polygonList.model->clear();
+    doc->polygonList.model->setColumnCount(1);
 
     if (ui->coordinateList)
         ui->coordinateList->clear();
@@ -5863,20 +5868,7 @@ void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
     item->setData(0, newClass);
     applyClassColorToItem(item, newClass);
 
-    bool foundInList = false;
-    for (int i = 0; i < ui->polygonList->count(); ++i)
-    {
-        QListWidgetItem* li = ui->polygonList->item(i);
-        if (!li)
-            continue;
-
-        if (li->data(Qt::UserRole).value<QGraphicsItem*>() == item)
-        {
-            foundInList = true;
-            break;
-        }
-    }
-    if (!foundInList)
+    if (polygonListRowByItem(item) < 0)
         linkSceneItemToList(item);
     else
         renumberPolygonList();
@@ -6697,6 +6689,8 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     QList<QListWidgetItem*> pastedListItems;
     pastedListItems.reserve(newItems.size());
 
+    QModelIndexList pastedIndexes;
+
     for (QGraphicsItem* item : newItems)
     {
         if (!item)
@@ -6706,10 +6700,12 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
         if (className.isEmpty())
             continue;
 
-        QListWidgetItem* listItem = new QListWidgetItem;
-        listItem->setData(Qt::UserRole, QVariant::fromValue(item));
-        ui->polygonList->addItem(listItem);
-        pastedListItems.append(listItem);
+        linkSceneItemToList(item, -1, false);
+
+        const int row = polygonListRowByItem(item);
+
+        if (doc && doc->polygonList.model && row >= 0)
+            pastedIndexes.append(doc->polygonList.model->index(row, 0));
     }
 
     renumberPolygonListTextOnly();
@@ -6718,14 +6714,19 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
         QSignalBlocker blocker(ui->polygonList);
         ui->polygonList->clearSelection();
 
-        for (QListWidgetItem* listItem : pastedListItems)
-        {
-            if (listItem)
-                listItem->setSelected(true);
-        }
+        QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
 
-        if (!pastedListItems.isEmpty() && pastedListItems.last())
-            ui->polygonList->setCurrentItem(pastedListItems.last());
+        if (selectionModel)
+        {
+            for (const QModelIndex& index : pastedIndexes)
+            {
+                selectionModel->select(index,
+                                       QItemSelectionModel::Select | QItemSelectionModel::Rows);
+            }
+
+            if (!pastedIndexes.isEmpty())
+                ui->polygonList->setCurrentIndex(pastedIndexes.last());
+        }
     }
 
     ui->polygonList->setFocus();
@@ -7864,26 +7865,22 @@ bool MainWindow::saveProjectClasses(const QStringList& classes,
     return yconfig.saveFile(std::string(encoded.constData(), encoded.size()));
 }
 
-void MainWindow::onPolygonListItemClicked(QListWidgetItem* item)
+void MainWindow::onPolygonListItemClicked(const QModelIndex& index)
 {
-    if (!item) return;
+    QGraphicsItem* sceneItem = sceneItemFromListIndex(index);
 
-    QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
     if (sceneItem)
-    {
-       ui->graphView->centerOn(sceneItem);
-    }
+        ui->graphView->centerOn(sceneItem);
 }
 
-void MainWindow::onPolygonListItemDoubleClicked(QListWidgetItem* item)
+void MainWindow::onPolygonListItemDoubleClicked(const QModelIndex& index)
 {
-    if (!item) return;
+    QGraphicsItem* sceneItem = sceneItemFromListIndex(index);
 
-    QGraphicsItem* graphicsItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
-    if (!graphicsItem) return;
+    if (!sceneItem)
+        return;
 
-    // Фокусируемся на элементе и увеличиваем масштаб
-    ui->graphView->centerOn(graphicsItem);
+    ui->graphView->centerOn(sceneItem);
     ui->graphView->scale(1.2, 1.2);
 }
 
@@ -7926,28 +7923,38 @@ void MainWindow::onSceneSelectionChanged()
         const QList<QGraphicsItem*> selected = _scene->selectedItems();
         for (QGraphicsItem* sceneItem : selected)
         {
-            if (!sceneItem)
-                continue;
+            QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
 
-            if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(sceneItem))
+            if (selectionModel)
             {
-                if (handle->parentItem())
-                    sceneItem = handle->parentItem();
-            }
+                selectionModel->clearSelection();
 
-            for (int i = 0; i < ui->polygonList->count(); ++i)
-            {
-                QListWidgetItem* listItem = ui->polygonList->item(i);
-                if (!listItem)
-                    continue;
+                const QList<QGraphicsItem*> selected = _scene->selectedItems();
 
-                QGraphicsItem* boundItem =
-                    listItem->data(Qt::UserRole).value<QGraphicsItem*>();
-
-                if (boundItem == sceneItem)
+                for (QGraphicsItem* sceneItem : selected)
                 {
-                    listItem->setSelected(true);
-                    break;
+                    if (!sceneItem)
+                        continue;
+
+                    if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(sceneItem))
+                    {
+                        if (handle->parentItem())
+                            sceneItem = handle->parentItem();
+                    }
+
+                    const int row = polygonListRowByItem(sceneItem);
+
+                    if (row < 0)
+                        continue;
+
+                    Document::Ptr doc = currentDocument();
+
+                    if (!doc || !doc->polygonList.model)
+                        continue;
+
+                    QModelIndex index = doc->polygonList.model->index(row, 0);
+                    selectionModel->select(index,
+                                           QItemSelectionModel::Select | QItemSelectionModel::Rows);
                 }
             }
         }
@@ -8200,28 +8207,17 @@ QListWidgetItem* MainWindow::findFileListItem(const QString& filePath)
 
 void MainWindow::removePolygonItem(QGraphicsItem* item)
 {
-    if (!item) return;
+    if (!item)
+        return;
 
-    // Удаляем из списка
-    for (int i = 0; i < ui->polygonList->count(); ++i)
-    {
-        QListWidgetItem* listItem = ui->polygonList->item(i);
-        if (listItem && listItem->data(Qt::UserRole).value<QGraphicsItem*>() == item)
-        {
-            delete ui->polygonList->takeItem(i);
-            renumberPolygonList();
-            break;
-        }
-    }
+    removeListEntryBySceneItem(item);
 
-    // Удаляем со сцены
     if (item->scene())
-    {
         item->scene()->removeItem(item);
-    }
+
+    clearLinePolylineStateForDeletedItem(item);
     delete item;
 
-    // Помечаем документ как измененный
     if (Document::Ptr doc = currentDocument())
     {
         doc->isModified = true;
@@ -8229,23 +8225,31 @@ void MainWindow::removePolygonItem(QGraphicsItem* item)
     }
 }
 
-void MainWindow::removePolygonListItem(QListWidgetItem* item)
+void MainWindow::removePolygonListRow(int row)
 {
-    if (!item) return;
+    QGraphicsItem* sceneItem = sceneItemFromListRow(row);
 
-    // Получаем связанный графический элемент
-    QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
-    if (sceneItem && sceneItem->scene() == _scene)
-    {
+    if (!sceneItem)
+        return;
+
+    if (sceneItem->scene() == _scene)
         _scene->removeItem(sceneItem);
-        clearLinePolylineStateForDeletedItem(sceneItem);
-        delete sceneItem;
+
+    clearLinePolylineStateForDeletedItem(sceneItem);
+    delete sceneItem;
+
+    Document::Ptr doc = currentDocument();
+
+    if (doc && doc->polygonList.model &&
+        row >= 0 && row < doc->polygonList.items.size())
+    {
+        doc->polygonList.items.removeAt(row);
+        doc->polygonList.model->removeRow(row);
     }
-    // Удаляем из списка
-    delete ui->polygonList->takeItem(ui->polygonList->row(item));
+
     renumberPolygonList();
-    // Помечаем документ как измененный
-    if (Document::Ptr doc = currentDocument())
+
+    if (doc)
     {
         doc->isModified = true;
         updateFileListDisplay(doc->filePath);
@@ -8262,35 +8266,45 @@ void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem, int row, bool nee
     if (!sceneItem)
         return;
 
+    Document::Ptr doc = currentDocument();
+    if (!doc || !doc->polygonList.model)
+        return;
+
     QString className = sceneItem->data(0).toString();
     if (className.isEmpty())
         return;
 
+    if (polygonListRowByItem(sceneItem) >= 0)
+        return;
+
     ensureShapeNumber(sceneItem);
 
-    QListWidgetItem* listItem = new QListWidgetItem;
-    listItem->setData(Qt::UserRole, QVariant::fromValue(sceneItem));
+    const int count = doc->polygonList.items.size();
+    const int insertRow = (row >= 0 && row <= count) ? row : count;
 
-    if (row < 0 || row > ui->polygonList->count())
-        ui->polygonList->addItem(listItem);
-    else
-        ui->polygonList->insertItem(row, listItem);
+    doc->polygonList.items.insert(insertRow, sceneItem);
+
+    QStandardItem* modelItem = new QStandardItem;
+    modelItem->setEditable(false);
+    doc->polygonList.model->insertRow(insertRow, modelItem);
 
     if (needRenumber)
         renumberPolygonList();
     else
-        updatePolygonListItemText(listItem);
+        updatePolygonListItemText(insertRow);
 }
 
 void MainWindow::renumberPolygonList()
 {
-    if (!ui || !ui->polygonList)
+    Document::Ptr doc = currentDocument();
+
+    if (!doc)
         return;
 
     refreshShapeListOrderRole();
 
-    for (int i = 0; i < ui->polygonList->count(); ++i)
-        updatePolygonListItemText(ui->polygonList->item(i));
+    for (int row = 0; row < doc->polygonList.items.size(); ++row)
+        updatePolygonListItemText(row);
 
     updateShapeListButtons();
 
@@ -8300,29 +8314,40 @@ void MainWindow::renumberPolygonList()
 
 void MainWindow::renumberPolygonListTextOnly()
 {
-    if (!ui || !ui->polygonList)
+    Document::Ptr doc = currentDocument();
+
+    if (!doc)
         return;
 
     refreshShapeListOrderRole();
 
-    for (int i = 0; i < ui->polygonList->count(); ++i)
-        updatePolygonListItemText(ui->polygonList->item(i));
+    for (int row = 0; row < doc->polygonList.items.size(); ++row)
+        updatePolygonListItemText(row);
 
     updateShapeListButtons();
 }
 
-void MainWindow::showPolygonListContextMenu(const QPoint &pos)
+void MainWindow::showPolygonListContextMenu(const QPoint& pos)
 {
-    QListWidgetItem* item = ui->polygonList->itemAt(pos);
-    if (!item) return;
+    if (!ui || !ui->polygonList)
+        return;
 
-    QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
-    if (!sceneItem) return;
+    QModelIndex index = ui->polygonList->indexAt(pos);
+
+    if (!index.isValid())
+        return;
+
+    QGraphicsItem* sceneItem = sceneItemFromListIndex(index);
+
+    if (!sceneItem)
+        return;
 
     QMenu menu;
+
     QAction* toggleVisibleAction = menu.addAction(
         sceneItem->isVisible() ? u8"Скрыть разметку" : u8"Показать разметку"
     );
+
     QAction* deleteAction = menu.addAction(u8"Удалить (Del)");
 
     QAction* chosen = menu.exec(ui->polygonList->viewport()->mapToGlobal(pos));
@@ -8333,43 +8358,58 @@ void MainWindow::showPolygonListContextMenu(const QPoint &pos)
     }
     else if (chosen == deleteAction)
     {
-        if (!item->isSelected())
+        QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
+
+        if (selectionModel && !selectionModel->isSelected(index))
         {
-            ui->polygonList->clearSelection();
-            item->setSelected(true);
+            selectionModel->clearSelection();
+            selectionModel->select(index,
+                                   QItemSelectionModel::Select | QItemSelectionModel::Rows);
         }
 
-        ui->polygonList->setCurrentItem(item);
+        ui->polygonList->setCurrentIndex(index);
         on_actDelete_triggered();
     }
 }
 
-void MainWindow::updatePolygonListItemText(QListWidgetItem* item)
+void MainWindow::updatePolygonListItemText(int row)
 {
-    if (!item)
+    Document::Ptr doc = currentDocument();
+
+    if (!doc || !doc->polygonList.model)
         return;
 
-    QGraphicsItem* sceneItem = item->data(Qt::UserRole).value<QGraphicsItem*>();
+    if (row < 0 || row >= doc->polygonList.items.size())
+        return;
+
+    QGraphicsItem* sceneItem = doc->polygonList.items[row];
     if (!sceneItem)
+        return;
+
+    QStandardItem* modelItem = doc->polygonList.model->item(row);
+    if (!modelItem)
         return;
 
     const QString className = sceneItem->data(0).toString();
 
     const int number = ensureShapeNumber(sceneItem);
     QString text = QString("%1: %2").arg(number).arg(className);
+
     if (!sceneItem->isVisible())
         text += " [скрыто]";
 
-    item->setText(text);
+    modelItem->setText(text);
 }
 
 void MainWindow::updatePolygonListTexts()
 {
-    if (!ui || !ui->polygonList)
+    Document::Ptr doc = currentDocument();
+
+    if (!doc)
         return;
 
-    for (int i = 0; i < ui->polygonList->count(); ++i)
-        updatePolygonListItemText(ui->polygonList->item(i));
+    for (int row = 0; row < doc->polygonList.items.size(); ++row)
+        updatePolygonListItemText(row);
 }
 
 bool MainWindow::isYamlFileEmpty(const QString& yamlPath) const
@@ -10032,39 +10072,25 @@ ShapeBackup MainWindow::makeBackupFromItem(QGraphicsItem* graphicsItem) const
     backup.sceneRow = -1;
     if (ui && ui->polygonList && graphicsItem)
     {
-        for (int i = 0; i < ui->polygonList->count(); ++i)
-        {
-            QListWidgetItem* listWidget = ui->polygonList->item(i);
-            if (!listWidget)
-                continue;
-
-            if (listWidget->data(Qt::UserRole).value<QGraphicsItem*>() == graphicsItem)
-            {
-                backup.listRow = i;
-                backup.sceneRow = i;
-                break;
-            }
-        }
+        backup.listRow = polygonListRowByItem(graphicsItem);
+        backup.sceneRow = backup.listRow;
     }
     return backup;
 }
 
-QVector<ShapeBackup> MainWindow::collectBackupsForItems(const QList<QListWidgetItem*>& listItems) const
+QVector<ShapeBackup> MainWindow::collectBackupsForItems(const QVector<QGraphicsItem*>& items) const
 {
     QVector<ShapeBackup> out;
-    out.reserve(listItems.size());
+    out.reserve(items.size());
 
-    for (QListWidgetItem* li : listItems)
+    for (QGraphicsItem* item : items)
     {
-        if (!li)
+        if (!item)
             continue;
 
-        QGraphicsItem* gi = sceneItemFromListItem(li);
-        if (!gi)
-            continue;
-
-        out.append(makeBackupFromItem(gi));
+        out.append(makeBackupFromItem(item));
     }
+
     return out;
 }
 
@@ -10327,37 +10353,26 @@ void MainWindow::applyBackupToExisting(QGraphicsItem* item, const ShapeBackup& b
     }
     if (ui && ui->polygonList)
     {
-        int currentRow = -1;
-        QListWidgetItem* currentItem = nullptr;
+        int currentRow = polygonListRowByItem(item);
 
-        for (int i = 0; i < ui->polygonList->count(); ++i)
-        {
-            QListWidgetItem* li = ui->polygonList->item(i);
-            if (!li)
-                continue;
-
-            if (li->data(Qt::UserRole).value<QGraphicsItem*>() == item)
-            {
-                currentRow = i;
-                currentItem = li;
-                break;
-            }
-        }
-
-        if (!currentItem && !backup.className.isEmpty())
+        if (currentRow < 0 && !backup.className.isEmpty())
         {
             linkSceneItemToList(item, backup.listRow);
         }
-        else if (currentItem)
+        else if (currentRow >= 0)
         {
             const int targetRow = (backup.listRow < 0) ? currentRow : backup.listRow;
+
+            Document::Ptr doc = currentDocument();
+            const int count = doc ? doc->polygonList.items.size() : 0;
+
             if (targetRow != currentRow &&
                 targetRow >= 0 &&
-                targetRow < ui->polygonList->count())
+                targetRow < count)
             {
-                QListWidgetItem* moved = ui->polygonList->takeItem(currentRow);
-                ui->polygonList->insertItem(targetRow, moved);
+                movePolygonListRow(currentRow, targetRow);
             }
+
             renumberPolygonList();
         }
     }
@@ -10831,22 +10846,47 @@ void MainWindow::pushReplaceShapeCommand(qulonglong uid,
     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
-void MainWindow::removeSceneAndListItems(const QList<QListWidgetItem*>& listItems)
+void MainWindow::setPolygonListModelForCurrentDocument()
 {
-    // Удаляем все выбранные по связке из списка - сцена
-    for (QListWidgetItem* li : listItems)
+    Document::Ptr doc = currentDocument();
+
+    if (!ui || !ui->polygonList || !doc || !doc->polygonList.model)
     {
-        if (!li)
+        ui->polygonList->setModel(nullptr);
+        return;
+    }
+
+    ui->polygonList->setModel(doc->polygonList.model.get());
+
+    QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
+    if (selectionModel)
+    {
+        connect(selectionModel, &QItemSelectionModel::selectionChanged,
+                this, &MainWindow::onPolygonListSelectionChanged,
+                Qt::UniqueConnection);
+
+        connect(selectionModel, &QItemSelectionModel::currentChanged,
+                this, &MainWindow::updateShapeListButtons,
+                Qt::UniqueConnection);
+    }
+
+    updateShapeListButtons();
+}
+
+void MainWindow::removeSceneAndListItems(const QVector<QGraphicsItem*>& items)
+{
+    for (QGraphicsItem* item : items)
+    {
+        if (!item)
             continue;
-        QGraphicsItem* gi = li->data(Qt::UserRole).value<QGraphicsItem*>();
-        if (gi)
-        {
-            _scene->removeItem(gi);
-            clearLinePolylineStateForDeletedItem(gi);
-            delete gi;
-        }
-        // Удаляем сам элемент списка
-        delete ui->polygonList->takeItem(ui->polygonList->row(li));
+
+        removeListEntryBySceneItem(item);
+
+        if (item->scene())
+            item->scene()->removeItem(item);
+
+        clearLinePolylineStateForDeletedItem(item);
+        delete item;
     }
 }
 
@@ -10854,27 +10894,69 @@ void MainWindow::removeListEntryBySceneItem(QGraphicsItem* sceneItem)
 {
     if (!sceneItem)
         return;
-    for (int row = 0; row < ui->polygonList->count(); ++row)
-    {
-        QListWidgetItem* it = ui->polygonList->item(row);
-        if (!it)
-            continue;
-        QGraphicsItem* linked = sceneItemFromListItem(it);
-        if (linked == sceneItem)
-        {
-            delete ui->polygonList->takeItem(row);
-            renumberPolygonList();
-            return;
-        }
-    }
+
+    Document::Ptr doc = currentDocument();
+
+    if (!doc || !doc->polygonList.model)
+        return;
+
+    const int row = polygonListRowByItem(sceneItem);
+
+    if (row < 0)
+        return;
+
+    doc->polygonList.items.removeAt(row);
+    doc->polygonList.model->removeRow(row);
+
+    renumberPolygonList();
 }
 
-QGraphicsItem* MainWindow::sceneItemFromListItem(const QListWidgetItem* listItem)
+QGraphicsItem* MainWindow::sceneItemFromListIndex(const QModelIndex& index) const
 {
-    if (!listItem)
+    if (!index.isValid())
         return nullptr;
-    return listItem->data(Qt::UserRole).value<QGraphicsItem*>();
+
+    return sceneItemFromListRow(index.row());
 }
+
+QGraphicsItem* MainWindow::sceneItemFromListRow(int row) const
+{
+    Document::Ptr doc = currentDocument();
+
+    if (!doc)
+        return nullptr;
+
+    if (row < 0 || row >= doc->polygonList.items.size())
+        return nullptr;
+
+    return doc->polygonList.items[row];
+}
+
+int MainWindow::polygonListRowByItem(QGraphicsItem* sceneItem) const
+{
+    if (!sceneItem)
+        return -1;
+
+    Document::Ptr doc = currentDocument();
+
+    if (!doc)
+        return -1;
+
+    for (int row = 0; row < doc->polygonList.items.size(); ++row)
+    {
+        if (doc->polygonList.items[row] == sceneItem)
+            return row;
+    }
+
+    return -1;
+}
+
+// QGraphicsItem* MainWindow::sceneItemFromListItem(const QListWidgetItem* listItem)
+// {
+//     if (!listItem)
+//         return nullptr;
+//     return listItem->data(Qt::UserRole).value<QGraphicsItem*>();
+// }
 
 QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
 {
@@ -12283,33 +12365,35 @@ void MainWindow::moveCurrentShapeInList(int direction)
         return;
 
     Document::Ptr doc = currentDocument();
+
     if (!doc)
         return;
 
-    const QList<QListWidgetItem*> selected = ui->polygonList->selectedItems();
+    QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
 
-    // Перемещение вверх/вниз делаем только для одной выбранной фигуры.
-    // Удаление при этом может работать для нескольких.
-    if (selected.size() != 1)
+    if (!selectionModel)
         return;
 
-    QListWidgetItem* currentItem = selected.first();
-    QGraphicsItem* sceneItem = sceneItemFromListItem(currentItem);
+    const QModelIndexList selectedRows = selectionModel->selectedRows();
+
+    if (selectedRows.size() != 1)
+        return;
+
+    const int fromRow = selectedRows.first().row();
+    const int toRow = fromRow + direction;
+
+    if (fromRow < 0 || toRow < 0 || toRow >= doc->polygonList.items.size())
+        return;
+
+    QGraphicsItem* sceneItem = sceneItemFromListRow(fromRow);
 
     if (!sceneItem)
         return;
 
-    const int fromRow = ui->polygonList->row(currentItem);
-    const int toRow = fromRow + direction;
-
-    if (fromRow < 0 || toRow < 0 || toRow >= ui->polygonList->count())
-        return;
-
-    const qulonglong uid = ensureUid(sceneItem);
-
-    std::function<void()> redoFn = [this, uid, toRow]()
+    std::function<void()> redoFn = [this, sceneItem, toRow]()
     {
-        const int currentRow = polygonListRowByUid(uid);
+        const int currentRow = polygonListRowByItem(sceneItem);
+
         if (currentRow < 0)
             return;
 
@@ -12322,9 +12406,10 @@ void MainWindow::moveCurrentShapeInList(int direction)
         }
     };
 
-    std::function<void()> undoFn = [this, uid, fromRow]()
+    std::function<void()> undoFn = [this, sceneItem, fromRow]()
     {
-        const int currentRow = polygonListRowByUid(uid);
+        const int currentRow = polygonListRowByItem(sceneItem);
+
         if (currentRow < 0)
             return;
 
@@ -12345,10 +12430,12 @@ void MainWindow::moveCurrentShapeInList(int direction)
 
 void MainWindow::movePolygonListRow(int fromRow, int toRow)
 {
-    if (!ui || !ui->polygonList)
+    Document::Ptr doc = currentDocument();
+
+    if (!ui || !ui->polygonList || !doc || !doc->polygonList.model)
         return;
 
-    const int count = ui->polygonList->count();
+    const int count = doc->polygonList.items.size();
 
     if (fromRow < 0 || fromRow >= count)
         return;
@@ -12359,20 +12446,27 @@ void MainWindow::movePolygonListRow(int fromRow, int toRow)
     if (fromRow == toRow)
         return;
 
-    QListWidgetItem* movedItem = nullptr;
-
     {
         QSignalBlocker block(ui->polygonList);
 
-        movedItem = ui->polygonList->takeItem(fromRow);
-        if (!movedItem)
-            return;
+        QGraphicsItem* movedSceneItem = doc->polygonList.items.takeAt(fromRow);
+        doc->polygonList.items.insert(toRow, movedSceneItem);
 
-        ui->polygonList->insertItem(toRow, movedItem);
+        QList<QStandardItem*> movedRow = doc->polygonList.model->takeRow(fromRow);
+        doc->polygonList.model->insertRow(toRow, movedRow);
 
         ui->polygonList->clearSelection();
-        movedItem->setSelected(true);
-        ui->polygonList->setCurrentItem(movedItem);
+
+        QModelIndex movedIndex = doc->polygonList.model->index(toRow, 0);
+        ui->polygonList->setCurrentIndex(movedIndex);
+
+        QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
+
+        if (selectionModel)
+        {
+            selectionModel->select(movedIndex,
+                                   QItemSelectionModel::Select | QItemSelectionModel::Rows);
+        }
     }
 
     refreshShapeListOrderRole();
@@ -12384,59 +12478,64 @@ void MainWindow::movePolygonListRow(int fromRow, int toRow)
         _scene->update();
 }
 
-int MainWindow::polygonListRowByUid(qulonglong uid) const
-{
-    if (!ui || !ui->polygonList || uid == 0)
-        return -1;
+// int MainWindow::polygonListRowByUid(QGraphicsItem* sceneItem) const
+// {
+//     if (!ui || !ui->polygonList || sceneItem == 0)
+//         return -1;
 
-    for (int i = 0; i < ui->polygonList->count(); ++i)
-    {
-        QListWidgetItem* listItem = ui->polygonList->item(i);
-        QGraphicsItem* sceneItem = sceneItemFromListItem(listItem);
+//     for (int i = 0; i < ui->polygonList->count(); ++i)
+//     {
+//         QListWidgetItem* listItem = ui->polygonList->item(i);
+//         QGraphicsItem* sceneItem = sceneItemFromListItem(listItem);
 
-        if (!sceneItem)
-            continue;
+//         if (!sceneItem)
+//             continue;
 
-        if (sceneItem->data(_roleUid).toULongLong() == uid)
-            return i;
-    }
+//         if (sceneItem->data(_roleUid).toULongLong() == sceneItem)
+//             return i;
+//     }
 
-    return -1;
-}
+//     return -1;
+// }
 
 void MainWindow::updateShapeListButtons()
 {
     if (!ui || !ui->polygonList)
         return;
 
-    const QList<QListWidgetItem*> selected = ui->polygonList->selectedItems();
+    QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
+
+    const QModelIndexList selectedRows =
+        selectionModel ? selectionModel->selectedRows() : QModelIndexList();
 
     int row = -1;
-    if (selected.size() == 1)
-        row = ui->polygonList->row(selected.first());
 
-    const int count = ui->polygonList->count();
+    if (selectedRows.size() == 1)
+        row = selectedRows.first().row();
+
+    Document::Ptr doc = currentDocument();
+    const int count = doc ? doc->polygonList.items.size() : 0;
 
     ui->btnMoveShapeUp->setEnabled(row > 0);
     ui->btnMoveShapeDown->setEnabled(row >= 0 && row < count - 1);
-
-    ui->btnDelete->setEnabled(!selected.isEmpty());
+    ui->btnDelete->setEnabled(!selectedRows.isEmpty());
 }
 
 void MainWindow::refreshShapeListOrderRole()
 {
-    if (!ui || !ui->polygonList)
+    Document::Ptr doc = currentDocument();
+
+    if (!doc)
         return;
 
-    for (int i = 0; i < ui->polygonList->count(); ++i)
+    for (int row = 0; row < doc->polygonList.items.size(); ++row)
     {
-        QListWidgetItem* listItem = ui->polygonList->item(i);
-        QGraphicsItem* sceneItem = sceneItemFromListItem(listItem);
+        QGraphicsItem* sceneItem = doc->polygonList.items[row];
 
         if (!sceneItem)
             continue;
 
-        sceneItem->setData(_roleListOrder, i);
+        sceneItem->setData(_roleListOrder, row);
     }
 }
 
@@ -12486,13 +12585,10 @@ QList<QGraphicsItem*> MainWindow::orderedShapeItemsForSave(Document::Ptr doc) co
     if (!doc || !doc->scene)
         return result;
 
-    if (doc == currentDocument() && ui && ui->polygonList)
+    if (!doc->polygonList.items.isEmpty())
     {
-        for (int i = 0; i < ui->polygonList->count(); ++i)
+        for (QGraphicsItem* sceneItem : doc->polygonList.items)
         {
-            QListWidgetItem* listItem = ui->polygonList->item(i);
-            QGraphicsItem* sceneItem = sceneItemFromListItem(listItem);
-
             if (!sceneItem)
                 continue;
 
@@ -12513,21 +12609,6 @@ QList<QGraphicsItem*> MainWindow::orderedShapeItemsForSave(Document::Ptr doc) co
         if (isRootShapeItem(item))
             result.append(item);
     }
-
-    std::sort(result.begin(), result.end(),
-              [](QGraphicsItem* a, QGraphicsItem* b)
-    {
-        bool aOk = false;
-        bool bOk = false;
-
-        const int aOrder = a->data(_roleListOrder).toInt(&aOk);
-        const int bOrder = b->data(_roleListOrder).toInt(&bOk);
-
-        const int av = aOk ? aOrder : std::numeric_limits<int>::max();
-        const int bv = bOk ? bOrder : std::numeric_limits<int>::max();
-
-        return av < bv;
-    });
 
     return result;
 }
