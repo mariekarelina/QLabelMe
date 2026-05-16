@@ -4,6 +4,7 @@
 #include "shared/clife_ptr.h"
 #include "shared/qt/quuidex.h"
 #include "qgraphics2/shape.h"
+#include "widgets/document.h"
 
 #include <QGraphicsScene>
 #include <QUndoCommand>
@@ -198,22 +199,34 @@ private:
 class Delete : public BaseUndo
 {
 public:
-    struct ListItemState
+    // struct ListItemState
+    // {
+    //     QListWidgetItem* item = {nullptr};
+    //     int row = -1;
+    // };
+
+    // struct Data
+    // {
+    //     QListWidgetItem* item = {nullptr};
+    //     int row = -1;
+    // };
+
+    // Delete(QGraphicsScene* scene,
+    //        const QSet<QGraphicsItem*>& shapes,
+    //        QListWidget* listWidget,
+    //        const QList<ListItemState>& listItems,
+    //        const QString& text);
+    struct RowState
     {
-        QListWidgetItem* item = {nullptr};
-        int row = -1;
+        QGraphicsItem* shape = {nullptr};
+        // Строка фигуры в списке до удаления
+        int row = {-1};
+        // Строка модели
+        QList<QStandardItem*> modelItems;
     };
 
-    struct Data
-    {
-        QListWidgetItem* item = {nullptr};
-        int row = -1;
-    };
-
-    Delete(QGraphicsScene* scene,
+    Delete(Document::Ptr doc,
            const QSet<QGraphicsItem*>& shapes,
-           QListWidget* listWidget,
-           const QList<ListItemState>& listItems,
            const QString& text);
     ~Delete();
 
@@ -222,10 +235,12 @@ public:
 
 private:
     // Фигуры, удаленные со сцены
-    QSet<QGraphicsItem*> _shapes;
+    // QSet<QGraphicsItem*> _shapes;
 
-    QListWidget* _listWidget = {nullptr};
-    QList<ListItemState> _listItems;
+    // QListWidget* _listWidget = {nullptr};
+    // QList<ListItemState> _listItems;
+    Document::Ptr _doc;
+    QVector<RowState> _rows;
 };
 
 class Move : public BaseUndo
@@ -256,4 +271,4 @@ class ChangeClass : public BaseUndo
 
 } // namespace undo
 
-Q_DECLARE_METATYPE(undo::Delete::Data)
+//Q_DECLARE_METATYPE(undo::Delete::Data)

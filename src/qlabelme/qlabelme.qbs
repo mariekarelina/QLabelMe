@@ -48,6 +48,7 @@ import QbsUtl
             "about_program.cpp",
             "about_program.h",
             "about_program.ui",
+            "document.h",
             "graphics_view.cpp",
             "graphics_view.h",
             "main_window.cpp",

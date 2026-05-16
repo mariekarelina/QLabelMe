@@ -67,6 +67,7 @@
 #include <QStandardItem>
 
 //#include "graphicsscene.h"
+#include "document.h"
 #include "graphics_view.h"
 #include "settings.h"
 #include "project_settings.h"
@@ -92,44 +93,44 @@ class MainWindow;
 
 class QLabel;
 
-struct PolygonListData
-{
-    QVector<QGraphicsItem*> items;
-    std::unique_ptr<QStandardItemModel> model;
-};
+// struct PolygonListData
+// {
+//     QVector<QGraphicsItem*> items;
+//     std::unique_ptr<QStandardItemModel> model;
+// };
 
-struct Document
-{
-    typedef container_ptr<Document> Ptr;
+// struct Document
+// {
+//     typedef container_ptr<Document> Ptr;
 
-    //DISABLE_DEFAULT_COPY(Document)
+//     //DISABLE_DEFAULT_COPY(Document)
 
-    QString filePath;  // Путь к файлу изображения
-    QGraphicsScene* scene = {nullptr};  // Сцена с изображением и разметкой
-    qgraph::VideoRect* videoRect = {nullptr};
-    QPixmap pixmap;  // Само изображение
-    QGraphicsPixmapItem* pixmapItem = {nullptr}; // Элемент на сцене
-    bool isModified = {false}; // Флаг, указывающий на наличие несохраненных изменений
-    std::unique_ptr<QUndoStack> _undoStack;
+//     QString filePath;  // Путь к файлу изображения
+//     QGraphicsScene* scene = {nullptr};  // Сцена с изображением и разметкой
+//     qgraph::VideoRect* videoRect = {nullptr};
+//     QPixmap pixmap;  // Само изображение
+//     QGraphicsPixmapItem* pixmapItem = {nullptr}; // Элемент на сцене
+//     bool isModified = {false}; // Флаг, указывающий на наличие несохраненных изменений
+//     std::unique_ptr<QUndoStack> _undoStack;
 
-    QUndoStack undoStack2;
+//     QUndoStack undoStack2;
 
-    PolygonListData polygonList;
+//     PolygonListData polygonList;
 
-    // Состояние просмотра
-    struct
-    {
-        int hScroll = 0;
-        int vScroll = 0;
-        // qreal zoom = 1.0;
-        qreal zoom = 0.0;
-        QPointF center;
-    } viewState;
+//     // Состояние просмотра
+//     struct
+//     {
+//         int hScroll = 0;
+//         int vScroll = 0;
+//         // qreal zoom = 1.0;
+//         qreal zoom = 0.0;
+//         QPointF center;
+//     } viewState;
 
-    static Ptr create(const QString& path);
+//     static Ptr create(const QString& path);
 
-    bool loadImage();
-};
+//     bool loadImage();
+// };
 
 struct ShapeSnapshot
 {
@@ -785,5 +786,5 @@ private:
     //friend class GraphicsView;
 };
 
-Q_DECLARE_METATYPE(Document::Ptr)
+//Q_DECLARE_METATYPE(Document::Ptr)
 

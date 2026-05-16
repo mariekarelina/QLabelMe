@@ -4915,21 +4915,21 @@ void MainWindow::on_actDelete_triggered()
     if (!doc)
         return;
 
-    QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
+    // QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
 
-    if (!selectionModel)
-        return;
+    // if (!selectionModel)
+    //     return;
 
-    QModelIndexList selectedRows = selectionModel->selectedRows();
+    // QModelIndexList selectedRows = selectionModel->selectedRows();
 
-    if (selectedRows.isEmpty())
-        return;
+    // if (selectedRows.isEmpty())
+    //     return;
 
-    std::sort(selectedRows.begin(), selectedRows.end(),
-              [](const QModelIndex& left, const QModelIndex& right)
-    {
-        return left.row() < right.row();
-    });
+    // std::sort(selectedRows.begin(), selectedRows.end(),
+    //           [](const QModelIndex& left, const QModelIndex& right)
+    // {
+    //     return left.row() < right.row();
+    // });
 
     // // Снимки для восстановления
     // const QVector<ShapeBackup> backups = collectBackupsForItems(selectedItems);
@@ -5000,8 +5000,8 @@ void MainWindow::on_actDelete_triggered()
 
     // if (doc->_undoStack)
     //     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, u8"Удаление фигур"));
-    QSet<QGraphicsItem*> shapes;
-    QList<undo::Delete::ListItemState> listItems;
+    // QSet<QGraphicsItem*> shapes;
+    // QList<undo::Delete::ListItemState> listItems;
 
     // for (QListWidgetItem* listItem : selectedItems)
     // {
@@ -5033,12 +5033,12 @@ void MainWindow::on_actDelete_triggered()
     //     listItems.append(listItemState);
     // }
 
-    if (shapes.isEmpty())
-        return;
+    // if (shapes.isEmpty())
+    //     return;
 
-    const QString description = (shapes.count() == 1)
-                                ? u8"Удаление фигуры"
-                                : u8"Удаление фигур";
+    // const QString description = (shapes.count() == 1)
+    //                             ? u8"Удаление фигуры"
+    //                             : u8"Удаление фигур";
 
     // if (QUndoStack* stack = activeUndoStack())
     // {
@@ -5046,11 +5046,93 @@ void MainWindow::on_actDelete_triggered()
     //                                  listItems, description));
     // }
 
-    updateCoordinateList();
-    updateShapeListButtons();
+    QSet<QGraphicsItem*> shapes;
 
-    if (_scene)
-        _scene->update();
+    const QList<QGraphicsItem*> selectedSceneItems = doc->scene->selectedItems();
+
+    for (QGraphicsItem* item : selectedSceneItems)
+    {
+        if (!item)
+            continue;
+
+        QGraphicsItem* shape = item;
+
+        if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(shape))
+            shape = handle->parentItem();
+
+        if (!shape)
+            continue;
+
+        if (shape == doc->videoRect)
+            continue;
+
+        // Удаляем только фигуры, которые есть в правом списке
+        if (polygonListRowByItem(shape) < 0)
+            continue;
+
+        shapes.insert(shape);
+    }
+
+    // Собираем фигуры, выбранные в QListView
+    if (ui && ui->polygonList && ui->polygonList->selectionModel())
+    {
+        QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
+        const QModelIndexList selectedRows = selectionModel->selectedRows();
+
+        for (const QModelIndex& index : selectedRows)
+        {
+            QGraphicsItem* shape = sceneItemFromListIndex(index);
+
+            if (!shape)
+                continue;
+
+            if (shape == doc->videoRect)
+                continue;
+
+            shapes.insert(shape);
+        }
+    }
+
+    if (shapes.isEmpty())
+        return;
+
+    if (shapes.size() > 1)
+    {
+        const QMessageBox::StandardButton answer = QMessageBox::question(
+            this,
+            QString::fromUtf8("Удаление фигур"),
+            QString::fromUtf8("Удалить выбранные фигуры?"),
+            QMessageBox::Yes | QMessageBox::No
+        );
+
+        if (answer != QMessageBox::Yes)
+            return;
+    }
+
+    for (QGraphicsItem* shape : shapes)
+    {
+        // Если удаляемая фигура сейчас находится в режиме редактирования
+        clearLinePolylineStateForDeletedItem(shape);
+        shape->setSelected(false);
+    }
+
+    const QString description = (shapes.size() == 1)
+        ? QString::fromUtf8("Удаление фигуры")
+        : QString::fromUtf8("Удаление фигур");
+
+    doc->_undoStack->push(new undo::Delete(doc, shapes, description));
+
+    updateShapeListButtons();
+    updateFileListDisplay(doc->filePath);
+
+    if (doc->scene)
+        doc->scene->update();
+
+    // updateCoordinateList();
+    // updateShapeListButtons();
+
+    // if (_scene)
+    //     _scene->update();
 }
 
 void MainWindow::on_actSettingsApp_triggered()
@@ -7918,45 +8000,39 @@ void MainWindow::onSceneSelectionChanged()
     }
 
     {
-        QSignalBlocker blocker(ui->polygonList);
-        ui->polygonList->clearSelection();
+        QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
+        Document::Ptr doc = currentDocument();
 
-        const QList<QGraphicsItem*> selected = _scene->selectedItems();
-        for (QGraphicsItem* sceneItem : selected)
+        if (selectionModel && doc && doc->polygonList.model)
         {
-            QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
+            QSignalBlocker blocker(selectionModel);
+            selectionModel->clearSelection();
 
-            if (selectionModel)
+            const QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+
+            for (QGraphicsItem* sceneItem : selectedItems)
             {
-                selectionModel->clearSelection();
+                if (!sceneItem)
+                    continue;
 
-                const QList<QGraphicsItem*> selected = _scene->selectedItems();
-
-                for (QGraphicsItem* sceneItem : selected)
+                if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(sceneItem))
                 {
-                    if (!sceneItem)
-                        continue;
-
-                    if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(sceneItem))
-                    {
-                        if (handle->parentItem())
-                            sceneItem = handle->parentItem();
-                    }
-
-                    const int row = polygonListRowByItem(sceneItem);
-
-                    if (row < 0)
-                        continue;
-
-                    Document::Ptr doc = currentDocument();
-
-                    if (!doc || !doc->polygonList.model)
-                        continue;
-
-                    QModelIndex index = doc->polygonList.model->index(row, 0);
-                    selectionModel->select(index,
-                                           QItemSelectionModel::Select | QItemSelectionModel::Rows);
+                    if (handle->parentItem())
+                        sceneItem = handle->parentItem();
                 }
+
+                const int row = polygonListRowByItem(sceneItem);
+
+                if (row < 0)
+                    continue;
+
+                const QModelIndex index = doc->polygonList.model->index(row, 0);
+
+                if (!index.isValid())
+                    continue;
+
+                selectionModel->select(index,
+                                       QItemSelectionModel::Select | QItemSelectionModel::Rows);
             }
         }
     }

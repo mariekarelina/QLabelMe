@@ -373,26 +373,63 @@ void Create::redo()
     // }
 }
 
-Delete::Delete(QGraphicsScene* scene,
+// Delete::Delete(QGraphicsScene* scene,
+//                const QSet<QGraphicsItem*>& shapes,
+//                QListWidget* listWidget,
+//                const QList<ListItemState>& listItems,
+//                const QString& text)
+// {
+//     _scene = scene;
+//     _shapes = shapes;
+//     _shapesCollector = shapes;
+//     _listWidget = listWidget;
+//     _listItems = listItems;
+//     //_text = text;
+
+//     // for (qgraph::Shape* shape : shapes)
+//     // {
+//     //     if (shape && !shape->id().isNull())
+//     //         _shapeIds.append(shape->id());
+//     // }
+
+//     QUndoCommand::setText(text);
+// }
+Delete::Delete(Document::Ptr doc,
                const QSet<QGraphicsItem*>& shapes,
-               QListWidget* listWidget,
-               const QList<ListItemState>& listItems,
                const QString& text)
 {
-    _scene = scene;
-    _shapes = shapes;
-    _shapesCollector = shapes;
-    _listWidget = listWidget;
-    _listItems = listItems;
-    //_text = text;
-
-    // for (qgraph::Shape* shape : shapes)
-    // {
-    //     if (shape && !shape->id().isNull())
-    //         _shapeIds.append(shape->id());
-    // }
+    _doc = doc;
 
     QUndoCommand::setText(text);
+
+    // Проверяем состояние документа
+    if (!_doc
+      || !_doc->scene
+      || !_doc->polygonList.model)
+        return;
+
+    for (QGraphicsItem* shape : shapes)
+    {
+        if (!shape)
+            continue;
+
+        RowState state;
+        state.shape = shape;
+
+        // Запоминаем строку до удаления
+        state.row = _doc->polygonList.items.indexOf(shape);
+
+        if (state.row < 0)
+            continue;
+
+        _rows.append(state);
+    }
+    // Храним строки по возрастанию
+    std::sort(_rows.begin(), _rows.end(),
+              [](const RowState& left, const RowState& right)
+    {
+        return left.row < right.row;
+    });
 }
 
 Delete::~Delete()
@@ -401,88 +438,165 @@ Delete::~Delete()
     //     if (shape)
     //         delete shape;
 
-    for (const ListItemState& state : _listItems)
-        if (state.item && !state.item->listWidget())
-            delete state.item;
+    // for (const ListItemState& state : _listItems)
+    //     if (state.item && !state.item->listWidget())
+    //         delete state.item;
+    for (const RowState& state : _rows)
+    {
+        for (QStandardItem* item : state.modelItems)
+        {
+            if (item && !item->model())
+                delete item;
+        }
+    }
 }
 
+// void Delete::undo()
+// {
+//     if (!_scene)
+//         return;
+
+//     for (QGraphicsItem* shape : _shapes)
+//     {
+//         _scene->addItem(shape);
+//         _shapesCollector.remove(shape);
+
+//         QVariant vdata = shape->data(SHAPE_UNDO_DELETE_DATA);
+//         if (vdata.canConvert<undo::Delete::Data>())
+//         {
+//             undo::Delete::Data data = vdata.value<undo::Delete::Data>();
+//             // ...
+
+//         }
+//     }
+
+//     if (!_listWidget)
+//         return;
+
+//     QList<ListItemState> listItems = _listItems;
+
+//     for (const ListItemState& state : listItems)
+//     {
+//         if (QListWidgetItem* listItem = state.item)
+//         {
+//             int row = state.row;
+
+//             //if (row < 0 || row > _listWidget->count())
+//             if (!lst::inRange(row, 0, _listWidget->count()))
+//                 row = _listWidget->count();
+
+//             _listWidget->insertItem(row, listItem);
+//             listItem->setSelected(true);
+//         }
+//     }
+// }
 void Delete::undo()
 {
-    if (!_scene)
+    if (!_doc
+      || !_doc->scene
+      || !_doc->polygonList.model)
         return;
 
-    for (QGraphicsItem* shape : _shapes)
+    // Восстанавливаем по возрастанию строк
+    for (RowState& state : _rows)
     {
-        _scene->addItem(shape);
-        _shapesCollector.remove(shape);
+        if (!state.shape)
+            continue;
 
-        QVariant vdata = shape->data(SHAPE_UNDO_DELETE_DATA);
-        if (vdata.canConvert<undo::Delete::Data>())
-        {
-            undo::Delete::Data data = vdata.value<undo::Delete::Data>();
-            // ...
+        if (!state.shape->scene())
+            _doc->scene->addItem(state.shape);
 
-        }
+        // После восстановления фигура снова принадлежит сцене
+        _shapesCollector.remove(state.shape);
+
+        int row = state.row;
+
+        // Если исходная строка стала некорректной
+        if (row < 0 || row > _doc->polygonList.items.size())
+            row = _doc->polygonList.items.size();
+
+        // Восстанавливаем связь строки списка с фигурой
+        if (!_doc->polygonList.items.contains(state.shape))
+            _doc->polygonList.items.insert(row, state.shape);
+
+        // Возвращаем строку модели обратно в QListView
+        if (!state.modelItems.isEmpty())
+            _doc->polygonList.model->insertRow(row, state.modelItems);
     }
 
-    if (!_listWidget)
-        return;
-
-    QList<ListItemState> listItems = _listItems;
-
-    for (const ListItemState& state : listItems)
-    {
-        if (QListWidgetItem* listItem = state.item)
-        {
-            int row = state.row;
-
-            //if (row < 0 || row > _listWidget->count())
-            if (!lst::inRange(row, 0, _listWidget->count()))
-                row = _listWidget->count();
-
-            _listWidget->insertItem(row, listItem);
-            listItem->setSelected(true);
-        }
-    }
+    _doc->isModified = true;
 }
 
+// void Delete::redo()
+// {
+//     if (!_scene)
+//         return;
+
+//     if (firstRedo())
+//         return;
+
+//     for (QGraphicsItem* shape : _shapes)
+//     {
+//         _scene->removeItem(shape);
+//         _shapesCollector.insert(shape);
+//     }
+
+//     // for (const QUuidEx& shapeId : _shapeIds)
+//     // {
+//     //     if (qgraph::Shape* shape = findItem(shapeId))
+//     //     {
+//     //         QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
+//     //         _scene->removeItem(item);
+
+//     //         // После removeItem() фигура больше не принадлежит сцене
+//     //         _shapes.append(shape);
+//     //     }
+//     // }
+//     if (!_listWidget)
+//         return;
+
+//     for (int i = _listItems.size() - 1; i >= 0; --i)
+//     {
+//         QListWidgetItem* listItem = _listItems[i].item;
+
+//         const int row = _listWidget->row(listItem);
+
+//         if (row >= 0)
+//             _listWidget->takeItem(row);
+//     }
+// }
 void Delete::redo()
 {
-    if (!_scene)
+    if (!_doc
+      || !_doc->scene
+      || !_doc->polygonList.model)
         return;
 
-    if (firstRedo())
-        return;
-
-    for (QGraphicsItem* shape : _shapes)
+    // Удаляем с конца, чтобы индексы строк не смещались
+    for (int i = _rows.size() - 1; i >= 0; --i)
     {
-        _scene->removeItem(shape);
-        _shapesCollector.insert(shape);
+        RowState& state = _rows[i];
+
+        if (!state.shape)
+            continue;
+
+        if (state.shape->scene())
+            _doc->scene->removeItem(state.shape);
+
+        // Фигура удалена со сцены, передана команде
+        _shapesCollector.insert(state.shape);
+
+        // Удаляем связь строки списка с фигурой
+        const int currentRow = _doc->polygonList.items.indexOf(state.shape);
+        if (currentRow >= 0)
+            _doc->polygonList.items.removeAt(currentRow);
+
+        // Забираем строку из модели QListView
+        if (state.row >= 0 && state.row < _doc->polygonList.model->rowCount())
+            state.modelItems = _doc->polygonList.model->takeRow(state.row);
     }
 
-    // for (const QUuidEx& shapeId : _shapeIds)
-    // {
-    //     if (qgraph::Shape* shape = findItem(shapeId))
-    //     {
-    //         QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
-    //         _scene->removeItem(item);
-
-    //         // После removeItem() фигура больше не принадлежит сцене
-    //         _shapes.append(shape);
-    //     }
-    // }
-    if (!_listWidget)
-        return;
-
-    for (int i = _listItems.size() - 1; i >= 0; --i)
-    {
-        QListWidgetItem* listItem = _listItems[i].item;
-
-        const int row = _listWidget->row(listItem);
-
-        if (row >= 0)
-            _listWidget->takeItem(row);
-    }
+    _doc->isModified = true;
 }
 
 Move::Move(QGraphicsScene* scene, QSet<QGraphicsItem*> shapes, const QString& text,
