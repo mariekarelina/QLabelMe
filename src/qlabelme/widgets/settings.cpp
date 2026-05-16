@@ -1,7 +1,9 @@
 #include "settings.h"
 #include "ui_settings.h"
+#include "load_geometry.h"
 
 #include "shared/defmac.h"
+#include "shared/config/appl_conf.h"
 
 #include <QDialogButtonBox>
 #include <QPushButton>
@@ -134,6 +136,18 @@ void Settings::setValues(const Values &v)
 {
     _values = v;
     applyModelToUi();
+}
+
+void Settings::loadGeometry()
+{
+    dialogLoadGeometry(config::base(), "windows.settings.geometry", this);
+}
+
+void Settings::saveGeometry() const
+{
+    QRect g = geometry();
+    QVector<int> wg {g.x(), g.y(), g.width(), g.height()};
+    config::base().setValue("windows.settings.geometry", wg);
 }
 
 void Settings::applyModelToUi()

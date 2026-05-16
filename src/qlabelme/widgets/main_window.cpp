@@ -1,6 +1,7 @@
 #include "main_window.h"
 #include "ui_main_window.h"
 //#include "event_window.h"
+#include "load_geometry.h"
 #include "undo_stack.h"
 
 #include "shared/defmac.h"
@@ -173,39 +174,6 @@ static bool sameGeometry(const ShapeBackup& firstBackup, const ShapeBackup& seco
                 && firstBackup.className == secondBackup.className;
     }
     return false;
-}
-
-Document::Ptr Document::create(const QString& path)
-{
-    Ptr doc {new Document};
-    doc->filePath = path;
-
-    doc->polygonList.model.reset(new QStandardItemModel);
-    doc->polygonList.model->setColumnCount(1);
-
-    return doc;
-}
-
-bool Document::loadImage()
-{
-    pixmap = QPixmap(filePath);
-    if (pixmap.isNull())
-    {
-        return false;
-    }
-    if (!scene)
-    {
-        scene = new QGraphicsScene();
-    }
-    if (!videoRect)
-    {
-        videoRect = new qgraph::VideoRect(scene);
-    }
-    videoRect->setPixmap(pixmap);
-
-    videoRect->setPos(0, 0);
-    scene->setSceneRect(QRectF(QPointF(0, 0), QSizeF(pixmap.size())));
-    return true;
 }
 
 MainWindow::MainWindow(QWidget* parent) :
@@ -1965,24 +1933,19 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 }
 
                 if (hasMovedShapes && shapes.count())
-                {
-                    const QString description = (shapes.count() == 1)
-                                                ? u8"Перемещение фигуры"
-                                                : u8"Перемещение фигур";
-
-                    if (QUndoStack* stack = activeUndoStack())
+                    if (Document::Ptr doc = currentDocument())
                     {
-                        stack->push(new undo::Move(_scene, shapes, description, delta));
-                    }
+                        if (QUndoStack* stack = activeUndoStack())
+                        {
+                            const QString description = (shapes.count() == 1)
+                                                        ? u8"Перемещение фигуры"
+                                                        : u8"Перемещение фигур";
 
-                    Document::Ptr doc = currentDocument();
-
-                    if (doc)
-                    {
+                            stack->push(new undo::Move(doc.get(), shapes, description, delta));
+                        }
                         doc->isModified = true;
                         updateFileListDisplay(doc->filePath);
                     }
-                }
             }
 
             _movingItem = nullptr;
@@ -2051,28 +2014,11 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         }
         if (Document::Ptr doc = currentDocument())
         {
-//------------------------------------------
-
-            // undo::RectangleData::Ptr rectData = undo::RectangleData::Ptr::create();
-            // rectData->id = rectangle->id();
-            // rectData->className = rectangle->data(0).toString();
-            // rectData->zLevel = rectangle->zValue();
-            // rectData->visible = rectangle->isVisible();
-            // rectData->rect = finalRect;
-            // rectData->shapeNumber = ensureShapeNumber(rectangle);
-
-            // undo::Create* undoCreate = new undo::Create(doc->scene, rectangle,
-            //                                             u8"Добавление прямоугольника");
-
             if (QUndoStack* stack = activeUndoStack())
             {
-                stack->push(new undo::Create(doc->scene, rectangle,
-                                             u8"Добавление прямоугольника"));
+                stack->push(new undo::Create(doc.get(), rectangle,
+                                             u8"Добавлен прямоугольник"));
             }
-
-//-----------------------------------------
-
-
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
@@ -2570,13 +2516,13 @@ void MainWindow::setSceneItemsMovable(bool movable)
         if (item->parentItem() != nullptr)
             continue;
 
-        if (item != _videoRect &&
-            item != _tempRectItem &&
-            item != _tempCircleItem &&
-            item != _tempPolyline &&
-            item != _currCircle &&
-            item != _currCircleCrossV &&
-            item != _currCircleCrossH)
+        if (item != _videoRect
+            && item != _tempRectItem
+            && item != _tempCircleItem
+            && item != _tempPolyline
+            && item != _currCircle
+            && item != _currCircleCrossV
+            && item != _currCircleCrossH)
         {
             item->setFlag(QGraphicsItem::ItemIsMovable, movable);
         }
@@ -2585,24 +2531,16 @@ void MainWindow::setSceneItemsMovable(bool movable)
 
 Document::Ptr MainWindow::currentDocument() const
 {
-    if (!ui || !ui->fileList)
-    {
-        return nullptr;
-    }
+    //if (!ui || !ui->fileList)
+    //    return {};
 
-    QListWidgetItem* currentItem = ui->fileList->currentItem();
-    if (!currentItem)
+    if (QListWidgetItem* currentItem = ui->fileList->currentItem())
     {
-        return nullptr;
+        QVariant data = currentItem->data(Qt::UserRole);
+        if (data.isValid() && data.canConvert<Document::Ptr>())
+            return data.value<Document::Ptr>();
     }
-
-    QVariant data = currentItem->data(Qt::UserRole);
-    if (!data.isValid() || !data.canConvert<Document::Ptr>())
-    {
-        return nullptr;
-    }
-
-    return data.value<Document::Ptr>();
+    return {};
 }
 
 void MainWindow::changeClassByUid(qulonglong uid)
@@ -2614,7 +2552,7 @@ void MainWindow::changeClassByUid(qulonglong uid)
 
     for (QGraphicsItem* item : _scene->items())
     {
-        if ((!item)
+        if (item == nullptr
             || (item == _videoRect)
             || (item == _tempRectItem)
             || (item == _tempCircleItem)
@@ -4099,12 +4037,8 @@ void MainWindow::on_actClose_triggered(bool)
 
 void MainWindow::on_actSave_triggered(bool)
 {
-    Document::Ptr doc = currentDocument();
-    if (!doc)
-    {
-        return;
-    }
-    saveAnnotationToFile(doc);
+    if (Document::Ptr doc = currentDocument())
+        saveAnnotationToFile(doc);
 }
 
 void MainWindow::on_actExit_triggered(bool)
@@ -4335,8 +4269,8 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem*
 
     setPolygonListModelForCurrentDocument();
 
-    if (currentDoc->polygonList.model &&
-        currentDoc->polygonList.model->rowCount() == 0)
+    //if (currentDoc->polygonList.model_ &&
+    if (currentDoc->polygonList.model.rowCount() == 0)
     {
         updatePolygonListForCurrentScene();
     }
@@ -4404,7 +4338,7 @@ void MainWindow::onPolygonListSelectionChanged()
     _syncingSelection = true;
 
     {
-        QSignalBlocker blockScene(_scene);
+        QSignalBlocker blocker {_scene}; (void) blocker;
 
         for (QGraphicsItem* item : _scene->items())
         {
@@ -5140,26 +5074,28 @@ void MainWindow::on_actSettingsApp_triggered()
     MainWindow::VisualStyle visualStyleBackup = _vstyle;
     bool wasApplied = false;
 
-    Settings dlg(this);
+    Settings settings {this};
 
-    QVector<int> geom{ -1, -1, 520, 360 };
-    config::base().getValue("windows.settings.geometry", geom);
-    if (geom.size() == 4) {
-        // Защита от слишком маленького размера
-        if (geom[2] < 320)
-            geom[2] = 320;
-        if (geom[3] < 220)
-            geom[3] = 220;
+    settings.loadGeometry();
 
-        if (geom[0] >= 0 && geom[1] >= 0)
-        {
-            dlg.setGeometry(geom[0], geom[1], geom[2], geom[3]);
-        }
-        else
-        {
-            dlg.resize(geom[2], geom[3]);
-        }
-    }
+    // QVector<int> geom{ -1, -1, 520, 360 };
+    // config::base().getValue("windows.settings.geometry", geom);
+    // if (geom.size() == 4) {
+    //     // Защита от слишком маленького размера
+    //     if (geom[2] < 320)
+    //         geom[2] = 320;
+    //     if (geom[3] < 220)
+    //         geom[3] = 220;
+
+    //     if (geom[0] >= 0 && geom[1] >= 0)
+    //     {
+    //         dlg.setGeometry(geom[0], geom[1], geom[2], geom[3]);
+    //     }
+    //     else
+    //     {
+    //         dlg.resize(geom[2], geom[3]);
+    //     }
+    // }
 
     Settings::Values init;
     init.lineWidth         = _vstyle.lineWidth;
@@ -5192,13 +5128,13 @@ void MainWindow::on_actSettingsApp_triggered()
     config::base().getValue("view.keep_image_scale_per_image", init.keepImageScale);
     config::base().getValue("ui.keep_menu_visibility", init.keepMenuBarVisibility);
 
-    dlg.setValues(init);
+    settings.setValues(init);
 
 
     // connect(&dlg, &Settings::settingsApplied, this,
     //             [this](const Settings::Values& v)
     // {
-    connect(&dlg, &Settings::settingsApplied, this,
+    connect(&settings, &Settings::settingsApplied, this,
             [this, &visualStyleBackup, &wasApplied](const Settings::Values& v)
     {
         wasApplied = true;
@@ -5317,16 +5253,18 @@ void MainWindow::on_actSettingsApp_triggered()
         });
     });
 
-    const int rc = dlg.exec();
-    // Геометрию восстановить/сохранить
-    const QRect r = dlg.isMaximized() || dlg.isFullScreen()
-                    ? dlg.normalGeometry()
-                    : dlg.geometry();
-    QVector<int> out { r.x(), r.y(), r.width(), r.height() };
-    config::base().setValue("windows.settings.geometry", out);
-    config::base().saveFile();
+    int res = settings.exec();
+    settings.saveGeometry();
 
-    if (rc == QDialog::Rejected)
+    // // Геометрию восстановить/сохранить
+    // QRect r = (settings.isMaximized() || settings.isFullScreen())
+    //           ? settings.normalGeometry()
+    //           : settings.geometry();
+    // QVector<int> out { r.x(), r.y(), r.width(), r.height() };
+    // config::base().setValue("windows.settings.geometry", out);
+    // config::base().saveFile();
+
+    if (res == QDialog::Rejected)
     {
         _vstyle = visualStyleBackup;
         saveVisualStyle();
@@ -5367,7 +5305,7 @@ void MainWindow::on_actSettingsApp_triggered()
                 if (item->parentItem() != nullptr)
                     continue;
 
-                const QString cls = item->data(0).toString();
+                QString cls = item->data(0).toString();
                 if (!cls.isEmpty())
                     applyClassColorToItem(item, cls);
             }
@@ -5871,12 +5809,11 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
 void MainWindow::updatePolygonListForCurrentScene()
 {
     Document::Ptr doc = currentDocument();
-    if (!doc || !doc->polygonList.model)
-        return;
+    if (!doc) return;
 
     doc->polygonList.items.clear();
-    doc->polygonList.model->clear();
-    doc->polygonList.model->setColumnCount(1);
+    doc->polygonList.model.clear();
+    doc->polygonList.model.setColumnCount(1);
 
     if (ui->coordinateList)
         ui->coordinateList->clear();
@@ -5890,10 +5827,10 @@ void MainWindow::updatePolygonListForCurrentScene()
         if (!item)
             continue;
 
-        if (item == _videoRect ||
-            item == _tempRectItem ||
-            item == _tempCircleItem ||
-            item == _tempPolyline)
+        if (item == _videoRect
+            || item == _tempRectItem
+            || item == _tempCircleItem
+            || item == _tempPolyline)
         {
             continue;
         }
@@ -5973,28 +5910,31 @@ void MainWindow::loadGeometry()
     // config::base().getValue("windows.main_window.geometry", v);
     // setGeometry(v[0], v[1], v[2], v[3]);
 
-    QVector<int> wg;
-    config::base().getValue("windows.main_window.geometry", wg);
-    if (wg.count() != 4)
-    {
-        //wg.resize(4);
-        wg = {10, 10, 1400, 800};
-        //setGeometry(wg[0], wg[1], wg[2], wg[3]);
+    std::vector<int> wsc23 = windowScreenCenter23();
+    windowLoadGeometry(config::base(), "windows.main_window.geometry", this, &wsc23);
 
-        QList<QScreen*> screens = QGuiApplication::screens();
-        if (!screens.isEmpty())
-        {
-            QRect screenGeometry = screens[0]->geometry();
-            //QRect windowGeometry = this->geometry();
-            QRect windowGeometry {0, 0, int(screenGeometry.width()  * (2./3)),
-                                        int(screenGeometry.height() * (2./3))};
-            wg[0] = screenGeometry.width()  / 2 - windowGeometry.width()  / 2;
-            wg[1] = screenGeometry.height() / 2 - windowGeometry.height() / 2;
-            wg[2] = windowGeometry.width();
-            wg[3] = windowGeometry.height();
-        }
-    }
-    setGeometry(wg[0], wg[1], wg[2], wg[3]);
+    // QVector<int> wg;
+    // config::base().getValue("windows.main_window.geometry", wg);
+    // if (wg.count() != 4)
+    // {
+    //     //wg.resize(4);
+    //     wg = {10, 10, 1400, 800};
+    //     //setGeometry(wg[0], wg[1], wg[2], wg[3]);
+
+    //     QList<QScreen*> screens = QGuiApplication::screens();
+    //     if (!screens.isEmpty())
+    //     {
+    //         QRect screenGeometry = screens[0]->geometry();
+    //         //QRect windowGeometry = this->geometry();
+    //         QRect windowGeometry {0, 0, int(screenGeometry.width()  * (2./3)),
+    //                                     int(screenGeometry.height() * (2./3))};
+    //         wg[0] = screenGeometry.width()  / 2 - windowGeometry.width()  / 2;
+    //         wg[1] = screenGeometry.height() / 2 - windowGeometry.height() / 2;
+    //         wg[2] = windowGeometry.width();
+    //         wg[3] = windowGeometry.height();
+    //     }
+    // }
+    // setGeometry(wg[0], wg[1], wg[2], wg[3]);
 
     QList<int> splitterSizes;
     if (config::base().getValue("windows.main_window.splitter_sizes", splitterSizes))
@@ -6025,8 +5965,8 @@ void MainWindow::loadGeometry()
 void MainWindow::saveGeometry()
 {
     QRect g = geometry();
-    QVector<int> v {g.x(), g.y(), g.width(), g.height()};
-    config::base().setValue("windows.main_window.geometry", v);
+    QVector<int> wg {g.x(), g.y(), g.width(), g.height()};
+    config::base().setValue("windows.main_window.geometry", wg);
 
     QList<int> splitterSizes = ui->splitter->sizes();
     config::base().setValue("windows.main_window.splitter_sizes", splitterSizes);
@@ -6628,8 +6568,7 @@ void MainWindow::copySelectedShapes()
 void MainWindow::pasteCopiedShapesToCurrentScene()
 {
     Document::Ptr doc = currentDocument();
-    if (!doc || !doc->scene)
-        return;
+    if (!doc) return;
 
     QJsonObject json = readShapesJsonFromClipboard();
     if (json.isEmpty())
@@ -6786,9 +6725,9 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
         linkSceneItemToList(item, -1, false);
 
         const int row = polygonListRowByItem(item);
-
-        if (doc && doc->polygonList.model && row >= 0)
-            pastedIndexes.append(doc->polygonList.model->index(row, 0));
+        //if (doc && doc->polygonList.model && row >= 0)
+        if (row >= 0)
+            pastedIndexes.append(doc->polygonList.model.index(row, 0));
     }
 
     renumberPolygonListTextOnly();
@@ -8003,9 +7942,9 @@ void MainWindow::onSceneSelectionChanged()
         QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
         Document::Ptr doc = currentDocument();
 
-        if (selectionModel && doc && doc->polygonList.model)
+        if (selectionModel && doc) // && doc->polygonList.model)
         {
-            QSignalBlocker blocker(selectionModel);
+            QSignalBlocker blocker {selectionModel}; (void) blocker;
             selectionModel->clearSelection();
 
             const QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
@@ -8026,13 +7965,13 @@ void MainWindow::onSceneSelectionChanged()
                 if (row < 0)
                     continue;
 
-                const QModelIndex index = doc->polygonList.model->index(row, 0);
+                const QModelIndex index = doc->polygonList.model.index(row, 0);
 
                 if (!index.isValid())
                     continue;
 
-                selectionModel->select(index,
-                                       QItemSelectionModel::Select | QItemSelectionModel::Rows);
+                selectionModel->select(index, QItemSelectionModel::Select
+                                              |QItemSelectionModel::Rows);
             }
         }
     }
@@ -8315,19 +8254,17 @@ void MainWindow::removePolygonListRow(int row)
     clearLinePolylineStateForDeletedItem(sceneItem);
     delete sceneItem;
 
-    Document::Ptr doc = currentDocument();
-
-    if (doc && doc->polygonList.model &&
-        row >= 0 && row < doc->polygonList.items.size())
+    if (Document::Ptr doc = currentDocument())
     {
-        doc->polygonList.items.removeAt(row);
-        doc->polygonList.model->removeRow(row);
-    }
+        //if ((row >= 0) && (row < doc->polygonList.items.size()))
+        if (lst::inRange(row, 0, doc->polygonList.items.count()))
+        {
+            doc->polygonList.items.removeAt(row);
+            doc->polygonList.model.removeRow(row);
+        }
 
-    renumberPolygonList();
+        renumberPolygonList();
 
-    if (doc)
-    {
         doc->isModified = true;
         updateFileListDisplay(doc->filePath);
     }
@@ -8344,8 +8281,7 @@ void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem, int row, bool nee
         return;
 
     Document::Ptr doc = currentDocument();
-    if (!doc || !doc->polygonList.model)
-        return;
+    if (!doc) return;
 
     QString className = sceneItem->data(0).toString();
     if (className.isEmpty())
@@ -8363,7 +8299,7 @@ void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem, int row, bool nee
 
     QStandardItem* modelItem = new QStandardItem;
     modelItem->setEditable(false);
-    doc->polygonList.model->insertRow(insertRow, modelItem);
+    doc->polygonList.model.insertRow(insertRow, modelItem);
 
     if (needRenumber)
         renumberPolygonList();
@@ -8452,24 +8388,22 @@ void MainWindow::showPolygonListContextMenu(const QPoint& pos)
 void MainWindow::updatePolygonListItemText(int row)
 {
     Document::Ptr doc = currentDocument();
+    if (!doc) return;
 
-    if (!doc || !doc->polygonList.model)
-        return;
-
-    if (row < 0 || row >= doc->polygonList.items.size())
+    //if (row < 0 || row >= doc->polygonList.items.size())
+    if (!lst::inRange(row, 0, doc->polygonList.items.count()))
         return;
 
     QGraphicsItem* sceneItem = doc->polygonList.items[row];
     if (!sceneItem)
         return;
 
-    QStandardItem* modelItem = doc->polygonList.model->item(row);
+    QStandardItem* modelItem = doc->polygonList.model.item(row);
     if (!modelItem)
         return;
 
-    const QString className = sceneItem->data(0).toString();
-
-    const int number = ensureShapeNumber(sceneItem);
+    int number = ensureShapeNumber(sceneItem);
+    QString className = sceneItem->data(0).toString();
     QString text = QString("%1: %2").arg(number).arg(className);
 
     if (!sceneItem->isVisible())
@@ -8787,13 +8721,18 @@ int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr>& unsavedDocs
         if (!doc)
             continue;
 
-        QFileInfo fileInfo(doc->filePath);
+        QFileInfo fileInfo {doc->filePath};
         documents.append(fileInfo.fileName());
     }
 
-    UnsavedChanges dialog(documents, this);
+    UnsavedChanges dialog {documents, this};
 
-    if (dialog.exec() != QDialog::Accepted)
+    dialog.loadGeometry();
+
+    int res = dialog.exec();
+    dialog.saveGeometry();
+
+    if (res != QDialog::Accepted)
         return QDialogButtonBox::Cancel;
 
     return dialog.selectedButton();
@@ -10861,21 +10800,20 @@ void MainWindow::pushReplaceShapeCommand(qulonglong uid,
 void MainWindow::setPolygonListModelForCurrentDocument()
 {
     Document::Ptr doc = currentDocument();
+    if (!doc) return;
 
-    if (!ui || !ui->polygonList || !doc || !doc->polygonList.model)
+    // if (!ui || !ui->polygonList || !doc || !doc->polygonList.model)
+    // {
+    //     ui->polygonList->setModel(nullptr);
+    //     return;
+    // }
+
+    ui->polygonList->setModel(&doc->polygonList.model);
+
+    if (QItemSelectionModel* selectionModel = ui->polygonList->selectionModel())
     {
-        ui->polygonList->setModel(nullptr);
-        return;
-    }
-
-    ui->polygonList->setModel(doc->polygonList.model.get());
-
-    QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
-    if (selectionModel)
-    {
-        connect(selectionModel, &QItemSelectionModel::selectionChanged,
-                this, &MainWindow::onPolygonListSelectionChanged,
-                Qt::UniqueConnection);
+        chk_connect_a(selectionModel, &QItemSelectionModel::selectionChanged,
+                      this, &MainWindow::onPolygonListSelectionChanged)
 
         connect(selectionModel, &QItemSelectionModel::currentChanged,
                 this, &MainWindow::updateShapeListButtons,
@@ -10908,9 +10846,10 @@ void MainWindow::removeListEntryBySceneItem(QGraphicsItem* sceneItem)
         return;
 
     Document::Ptr doc = currentDocument();
+    if (!doc) return;
 
-    if (!doc || !doc->polygonList.model)
-        return;
+    // if (!doc || !doc->polygonList.model)
+    //     return;
 
     const int row = polygonListRowByItem(sceneItem);
 
@@ -10918,7 +10857,7 @@ void MainWindow::removeListEntryBySceneItem(QGraphicsItem* sceneItem)
         return;
 
     doc->polygonList.items.removeAt(row);
-    doc->polygonList.model->removeRow(row);
+    doc->polygonList.model.removeRow(row);
 
     renumberPolygonList();
 }
@@ -12443,41 +12382,42 @@ void MainWindow::moveCurrentShapeInList(int direction)
 void MainWindow::movePolygonListRow(int fromRow, int toRow)
 {
     Document::Ptr doc = currentDocument();
+    if (!doc) return;
 
-    if (!ui || !ui->polygonList || !doc || !doc->polygonList.model)
+    // if (!ui || !ui->polygonList || !doc || !doc->polygonList.model)
+    //     return;
+
+    int count = doc->polygonList.items.count();
+
+    //if (fromRow < 0 || fromRow >= count)
+    if (!lst::inRange(fromRow, 0, count))
         return;
 
-    const int count = doc->polygonList.items.size();
-
-    if (fromRow < 0 || fromRow >= count)
-        return;
-
-    if (toRow < 0 || toRow >= count)
+    //if (toRow < 0 || toRow >= count)
+    if (!lst::inRange(toRow, 0, count))
         return;
 
     if (fromRow == toRow)
         return;
 
     {
-        QSignalBlocker block(ui->polygonList);
+        QSignalBlocker blocker {ui->polygonList}; (void) blocker;
 
         QGraphicsItem* movedSceneItem = doc->polygonList.items.takeAt(fromRow);
         doc->polygonList.items.insert(toRow, movedSceneItem);
 
-        QList<QStandardItem*> movedRow = doc->polygonList.model->takeRow(fromRow);
-        doc->polygonList.model->insertRow(toRow, movedRow);
+        QList<QStandardItem*> movedRow = doc->polygonList.model.takeRow(fromRow);
+        doc->polygonList.model.insertRow(toRow, movedRow);
 
         ui->polygonList->clearSelection();
 
-        QModelIndex movedIndex = doc->polygonList.model->index(toRow, 0);
+        QModelIndex movedIndex = doc->polygonList.model.index(toRow, 0);
         ui->polygonList->setCurrentIndex(movedIndex);
 
-        QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
-
-        if (selectionModel)
+        if (QItemSelectionModel* selectionModel = ui->polygonList->selectionModel())
         {
-            selectionModel->select(movedIndex,
-                                   QItemSelectionModel::Select | QItemSelectionModel::Rows);
+            selectionModel->select(movedIndex, QItemSelectionModel::Select
+                                               |QItemSelectionModel::Rows);
         }
     }
 

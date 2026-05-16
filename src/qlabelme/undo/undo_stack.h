@@ -8,8 +8,8 @@
 
 #include <QGraphicsScene>
 #include <QUndoCommand>
-#include <QListWidget>
-#include <QListWidgetItem>
+//#include <QListWidget>
+//#include <QListWidgetItem>
 
 // Тип фигур
 enum class ShapeKind2 {Rectangle, Circle, Polyline, Line, Point};
@@ -147,31 +147,10 @@ public:
     BaseUndo() : QUndoCommand(nullptr) {}
     ~BaseUndo();
 
-    //bool init(QGraphicsScene* scene, Type type, const QString& text,
-              //            const ShapeBackup2& before, const ShapeBackup2& after,);
-
-    // UndoAction(QGraphicsScene* scene, Type type, const QString& text,
-    //            const ShapeBackup2& before, const ShapeBackup2& after,
-    //            ApplyCallback onApplied);
-
-    // // Применяет снимок к уже существующей фигуре
-    // bool applyBackup(const ShapeBackup2& backup);
-    // // Восстанавливает состояние фигуры
-    // void restoreFromBackup(qgraph::Shape* item, const ShapeBackup2& backup);
-    // // Ищет фигуру на сцене по qgraph::Shape::id()
-    //qgraph::Shape* findItem(const QUuidEx id) const;
-
 protected:
-    QGraphicsScene* _scene = {nullptr};
-    //QUuidEx _shapeId;
-    //QList<QUuidEx> _shapeIds;
+    //QGraphicsScene* _scene = {nullptr};
+    Document* _doc = {nullptr};
     QSet<QGraphicsItem*> _shapesCollector;
-    //QString _text;
-
-    //ShapeData::Ptr _data;
-    // Type _type = {Type::Restore};
-    // ShapeBackup2 _before;
-    // ShapeBackup2 _after;
 
     // ApplyCallback _onApplied;
     bool firstRedo();
@@ -182,7 +161,7 @@ class Create : public BaseUndo
 {
 public:
 
-    Create(QGraphicsScene* scene, QGraphicsItem* shape, const QString& text);
+    Create(Document* doc, QGraphicsItem* shape, const QString& text);
     ~Create();
 
     void undo() override;
@@ -211,22 +190,18 @@ public:
     //     int row = -1;
     // };
 
-    // Delete(QGraphicsScene* scene,
-    //        const QSet<QGraphicsItem*>& shapes,
-    //        QListWidget* listWidget,
-    //        const QList<ListItemState>& listItems,
-    //        const QString& text);
     struct RowState
     {
         QGraphicsItem* shape = {nullptr};
+
         // Строка фигуры в списке до удаления
         int row = {-1};
+
         // Строка модели
         QList<QStandardItem*> modelItems;
     };
 
-    Delete(Document::Ptr doc,
-           const QSet<QGraphicsItem*>& shapes,
+    Delete(Document* doc, const QSet<QGraphicsItem*>& shapes,
            const QString& text);
     ~Delete();
 
@@ -234,19 +209,13 @@ public:
     void redo() override;
 
 private:
-    // Фигуры, удаленные со сцены
-    // QSet<QGraphicsItem*> _shapes;
-
-    // QListWidget* _listWidget = {nullptr};
-    // QList<ListItemState> _listItems;
-    Document::Ptr _doc;
     QVector<RowState> _rows;
 };
 
 class Move : public BaseUndo
 {
 public:
-    Move(QGraphicsScene* scene, QSet<QGraphicsItem*> shapes, const QString& text,
+    Move(Document* doc, QSet<QGraphicsItem*> shapes, const QString& text,
          const QPointF& delta);
 
     void undo() override;

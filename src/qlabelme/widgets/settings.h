@@ -18,9 +18,7 @@ class QShowEvent;
 
 class Settings : public QDialog
 {
-    Q_OBJECT
 public:
-
     enum class PolylineCloseMode
     {
         DoubleClick = 0,
@@ -70,11 +68,11 @@ public:
     explicit Settings(QWidget* parent = nullptr);
     ~Settings();
 
-    void   setValues(const Values& v);
     Values values() const {return _values;}
+    void setValues(const Values& v);
 
-protected:
-    void showEvent(QShowEvent* e) override;
+    void loadGeometry();
+    void saveGeometry() const;
 
 signals:
     void settingsApplied(const Settings::Values& v);
@@ -86,11 +84,15 @@ private slots:
     void onPickLabelFont();
 
 private:
+    Q_OBJECT
+    void showEvent(QShowEvent* e) override;
+
     void wireUi();
     void applyModelToUi();
     void applyUiToModel();
     void setupCloseMethodGroup();
     void setupFinishMethodGroup();
+
 
     static void updateColorPreview(QPushButton* btn, const QColor &c);
     static bool pickColor(QWidget* parent, const QString &title,

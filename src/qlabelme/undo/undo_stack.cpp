@@ -193,7 +193,16 @@ namespace undo {
 BaseUndo::~BaseUndo()
 {
     for (QGraphicsItem* shape : _shapesCollector)
-        delete shape;
+    {
+        if (shape && shape->scene())
+        {
+            // Отладить
+            break_point
+        }
+
+        if (shape && !shape->scene())
+            delete shape;
+    }
 }
 
 bool BaseUndo::firstRedo()
@@ -225,18 +234,13 @@ bool BaseUndo::firstRedo()
 //     return nullptr;
 // }
 
-// Create::Create(QGraphicsScene* scene, const QUuidEx& shape, const QString& text,
+// Create::Create(QGraphicsScene* doc, const QUuidEx& shape, const QString& text,
 //                ShapeData::Ptr data)
-Create::Create(QGraphicsScene* scene, QGraphicsItem* shape, const QString& text)
+Create::Create(Document* doc, QGraphicsItem* shape, const QString& text)
 {
-    _scene = scene;
+    _doc = doc;
     _shape = shape;
-    //_shapes.insert(shape);
-    //_text = text;
-    //_data = data;
-
     QUndoCommand::setText(text);
-    //_shape = findShape(_scene, _shapeId);
 }
 
 Create::~Create()
@@ -245,20 +249,9 @@ Create::~Create()
 
 void Create::undo()
 {
-    if (_shape)
-        return;
-
-    _scene->removeItem(_shape);
+    //_scene->removeItem(_shape);
+    _doc->scene->removeItem(_shape);
     _shapesCollector.insert(_shape);
-
-    // for (QGraphicsItem* shape : _shapes)
-    // {
-    //     if (!shape)
-    //         continue;
-
-
-
-    // }
 
     // //QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(_shape);
     // for (const QUuidEx& shapeId : _shapeIds)
@@ -304,13 +297,13 @@ void Create::undo()
 
 void Create::redo()
 {
-    if (!_scene /*|| !_data*/)
-        return;
+    //if (!_scene /*|| !_data*/)
+    //    return;
 
     if (firstRedo())
         return;
 
-    _scene->addItem(_shape);
+    _doc->scene->addItem(_shape);
     _shapesCollector.remove(_shape);
 
     // for (qgraph::Shape* shape : _shapes)
@@ -394,8 +387,7 @@ void Create::redo()
 
 //     QUndoCommand::setText(text);
 // }
-Delete::Delete(Document::Ptr doc,
-               const QSet<QGraphicsItem*>& shapes,
+Delete::Delete(Document* doc, const QSet<QGraphicsItem*>& shapes,
                const QString& text)
 {
     _doc = doc;
@@ -403,10 +395,8 @@ Delete::Delete(Document::Ptr doc,
     QUndoCommand::setText(text);
 
     // Проверяем состояние документа
-    if (!_doc
-      || !_doc->scene
-      || !_doc->polygonList.model)
-        return;
+    //if (!_doc || !_doc->scene || !_doc->polygonList.model)
+    //    return;
 
     for (QGraphicsItem* shape : shapes)
     {
@@ -492,10 +482,9 @@ Delete::~Delete()
 // }
 void Delete::undo()
 {
-    if (!_doc
-      || !_doc->scene
-      || !_doc->polygonList.model)
-        return;
+    //if (!_doc || !_doc->scene || !_doc->polygonList.model)
+    //if (!_doc || !_doc->scene)
+    //    return;
 
     // Восстанавливаем по возрастанию строк
     for (RowState& state : _rows)
@@ -521,7 +510,7 @@ void Delete::undo()
 
         // Возвращаем строку модели обратно в QListView
         if (!state.modelItems.isEmpty())
-            _doc->polygonList.model->insertRow(row, state.modelItems);
+            _doc->polygonList.model.insertRow(row, state.modelItems);
     }
 
     _doc->isModified = true;
@@ -567,10 +556,8 @@ void Delete::undo()
 // }
 void Delete::redo()
 {
-    if (!_doc
-      || !_doc->scene
-      || !_doc->polygonList.model)
-        return;
+    //if (!_doc || !_doc->scene || !_doc->polygonList.model)
+    //    return;
 
     // Удаляем с конца, чтобы индексы строк не смещались
     for (int i = _rows.size() - 1; i >= 0; --i)
@@ -592,22 +579,19 @@ void Delete::redo()
             _doc->polygonList.items.removeAt(currentRow);
 
         // Забираем строку из модели QListView
-        if (state.row >= 0 && state.row < _doc->polygonList.model->rowCount())
-            state.modelItems = _doc->polygonList.model->takeRow(state.row);
+        if (state.row >= 0 && state.row < _doc->polygonList.model.rowCount())
+            state.modelItems = _doc->polygonList.model.takeRow(state.row);
     }
 
     _doc->isModified = true;
 }
 
-Move::Move(QGraphicsScene* scene, QSet<QGraphicsItem*> shapes, const QString& text,
+Move::Move(Document* doc, QSet<QGraphicsItem*> shapes, const QString& text,
            const QPointF& delta)
 {
-    _scene = scene;
+    _doc = doc;
     _shapes = shapes;
-    //_shapesCollector = shapes;
-    //_text = text;
     _delta = delta;
-
     QUndoCommand::setText(text);
 }
 

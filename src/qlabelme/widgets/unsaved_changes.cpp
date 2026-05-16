@@ -1,6 +1,7 @@
 #include "unsaved_changes.h"
 
 #include "ui_unsaved_changes.h"
+#include "load_geometry.h"
 #include "shared/config/appl_conf.h"
 
 #include <QAbstractButton>
@@ -76,47 +77,54 @@ void UnsavedChanges::reject()
 
 void UnsavedChanges::loadGeometry()
 {
-    QVector<int> wg;
-    config::base().getValue("windows.unsaved_changes.geometry", wg);
+    //std::vector<int> wsc23 = windowScreenCenter23();
+    dialogLoadGeometry(config::base(), "windows.unsaved_changes.geometry", this);
 
-    if (wg.count() != 4)
-    {
-        wg = {10, 10, 600, 400};
+    // QVector<int> wg;
+    // config::base().getValue("windows.unsaved_changes.geometry", wg);
 
-        const QList<QScreen*> screens = QGuiApplication::screens();
-        if (!screens.isEmpty())
-        {
-            const QRect screenGeometry = screens[0]->availableGeometry();
+    // if (wg.count() != 4)
+    // {
+    //     wg = {10, 10, 600, 400};
 
-            QRect windowGeometry {
-                0,
-                0,
-                int(screenGeometry.width() * 0.40),
-                int(screenGeometry.height() * 0.35)
-            };
+    //     const QList<QScreen*> screens = QGuiApplication::screens();
+    //     if (!screens.isEmpty())
+    //     {
+    //         const QRect screenGeometry = screens[0]->availableGeometry();
 
-            windowGeometry.setWidth(qMax(windowGeometry.width(), 600));
-            windowGeometry.setHeight(qMax(windowGeometry.height(), 400));
+    //         QRect windowGeometry {
+    //             0,
+    //             0,
+    //             int(screenGeometry.width() * 0.40),
+    //             int(screenGeometry.height() * 0.35)
+    //         };
 
-            wg[0] = screenGeometry.x() + screenGeometry.width() / 2 - windowGeometry.width() / 2;
-            wg[1] = screenGeometry.y() + screenGeometry.height() / 2 - windowGeometry.height() / 2;
-            wg[2] = windowGeometry.width();
-            wg[3] = windowGeometry.height();
-        }
-    }
+    //         windowGeometry.setWidth(qMax(windowGeometry.width(), 600));
+    //         windowGeometry.setHeight(qMax(windowGeometry.height(), 400));
 
-    setGeometry(wg[0], wg[1], wg[2], wg[3]);
+    //         wg[0] = screenGeometry.x() + screenGeometry.width() / 2 - windowGeometry.width() / 2;
+    //         wg[1] = screenGeometry.y() + screenGeometry.height() / 2 - windowGeometry.height() / 2;
+    //         wg[2] = windowGeometry.width();
+    //         wg[3] = windowGeometry.height();
+    //     }
+    // }
+
+    // setGeometry(wg[0], wg[1], wg[2], wg[3]);
 }
 
 void UnsavedChanges::saveGeometry() const
 {
-    const QRect r = (isMaximized() || isFullScreen())
-                    ? normalGeometry()
-                    : geometry();
+    // const QRect r = (isMaximized() || isFullScreen())
+    //                 ? normalGeometry()
+    //                 : geometry();
 
-    QVector<int> out { r.x(), r.y(), r.width(), r.height() };
-    config::base().setValue("windows.unsaved_changes.geometry", out);
-    config::base().saveFile();
+    // QVector<int> out {r.x(), r.y(), r.width(), r.height()};
+    // config::base().setValue("windows.unsaved_changes.geometry", out);
+    // config::base().saveFile();
+
+    QRect g = geometry();
+    QVector<int> wg {g.x(), g.y(), g.width(), g.height()};
+    config::base().setValue("windows.unsaved_changes.geometry", wg);
 }
 
 QDialogButtonBox::StandardButton UnsavedChanges::selectedButton() const

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "shared/defmac.h"
+#include "shared/simple_ptr.h"
 #include "shared/container_ptr.h"
 #include "qgraphics2/video_rect.h"
 
@@ -18,15 +20,22 @@
 struct PolygonListData
 {
     QVector<QGraphicsItem*> items; // Порядок фигур в правой панели
-    std::unique_ptr<QStandardItemModel> model; // Модель, которую отображает QListView
+    QStandardItemModel model;      // Модель, которую отображает QListView
+    //std::unique_ptr<QStandardItemModel> model; // Модель, которую отображает QListView
 };
 
 struct Document
 {
     typedef container_ptr<Document> Ptr;
 
+    Document();
+    ~Document();
+
+    DISABLE_DEFAULT_COPY(Document)
+
     QString filePath;                            // Путь к файлу изображения
-    QGraphicsScene* scene = {nullptr};           // Сцена с изображением и разметкой
+    //QGraphicsScene* scene; // = {nullptr};     // Сцена с изображением и разметкой
+    simple_ptr<QGraphicsScene> scene;
     qgraph::VideoRect* videoRect = {nullptr};
     QPixmap pixmap;                              // Само изображение
     QGraphicsPixmapItem* pixmapItem = {nullptr}; // Элемент на сцене
@@ -39,9 +48,9 @@ struct Document
 
     struct
     {
-        int hScroll = 0;
-        int vScroll = 0;
-        qreal zoom = 0.0;
+        int hScroll = {0};
+        int vScroll = {0};
+        qreal zoom  = {0};
         QPointF center;
     } viewState;
 
