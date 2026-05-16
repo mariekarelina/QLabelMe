@@ -1,7 +1,7 @@
 import qbs
 import QbsUtl
 
-Product {
+ Product {
     name: "QLabelMe"
     targetName: "qlabelme"
     condition: true
@@ -66,6 +66,9 @@ Product {
             "settings.cpp",
             "settings.h",
             "settings.ui",
+            "unsaved_changes.cpp",
+            "unsaved_changes.h",
+            "unsaved_changes.ui",
             "user_guide.cpp",
             "user_guide.h",
             "user_guide.md",

@@ -30,6 +30,7 @@
 #include "user_guide.h"
 #include "about_program.h"
 #include "message_box.h"
+#include "unsaved_changes.h"
 
 #include <QApplication>
 #include <QMessageBox>
@@ -8703,88 +8704,23 @@ QList<Document::Ptr> MainWindow::getUnsavedDocuments() const
 
 int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr>& unsavedDocs)
 {
-    //QDialog dialog(this);
-    QDialog dialog(
-        this,
-        Qt::Dialog
-        |Qt::CustomizeWindowHint
-        |Qt::WindowTitleHint
-        |Qt::WindowCloseButtonHint);
+    QStringList documents;
 
-    dialog.setWindowTitle(u8"Несохраненные изменения");
-    dialog.setModal(true);
-    //dialog.setMinimumWidth(500);
-
-
-    dialog.setWindowFlag(Qt::WindowMaximizeButtonHint, false);
-    dialog.setWindowFlag(Qt::WindowMinMaxButtonsHint, false);
-    dialog.setWindowFlag(Qt::WindowFullscreenButtonHint, false);
-    dialog.setWindowState(Qt::WindowNoState);
-
-    //dialog.setWindowState(Qt::WindowNoState);
-
-    QVector<int> dlgGeom {100, 100, 600, 400};
-    config::base().getValue("windows.unsaved_changes_dialog.geometry", dlgGeom);
-    dialog.setGeometry(dlgGeom[0], dlgGeom[1], dlgGeom[2], dlgGeom[3]);
-    //dialog.setFixedSize(dialog.size());
-
-    QVBoxLayout* mainLayout = new QVBoxLayout(&dialog);
-
-    QLabel* messageLabel = new QLabel(u8"Следующие файлы имеют несохраненные изменения:\nХотите сохранить изменения?");
-    mainLayout->addWidget(messageLabel);
-
-    // Список файлов
-    QListWidget* fileList = new QListWidget();
     for (const Document::Ptr& doc : unsavedDocs)
     {
+        if (!doc)
+            continue;
+
         QFileInfo fileInfo(doc->filePath);
-        QListWidgetItem* item = new QListWidgetItem(fileInfo.fileName());
-        //item->setData(Qt::UserRole, QVariant::fromValue(doc));
-        item->setData(Qt::UserRole, doc->filePath);
-        fileList->addItem(item);
-        item->setSelected(true);
+        documents.append(fileInfo.fileName());
     }
-    mainLayout->addWidget(fileList);
 
-    // Кнопки
-    QDialogButtonBox* buttonBox = new QDialogButtonBox();
+    UnsavedChanges dialog(documents, this);
 
-    QPushButton* saveAllButton = new QPushButton(u8"Сохранить все");
-    QPushButton* discardAllButton = new QPushButton(u8"Не сохранять");
-    QPushButton* cancelButton = new QPushButton(u8"Отмена");
+    if (dialog.exec() != QDialog::Accepted)
+        return QDialogButtonBox::Cancel;
 
-    buttonBox->addButton(saveAllButton, QDialogButtonBox::AcceptRole);
-    buttonBox->addButton(discardAllButton, QDialogButtonBox::DestructiveRole);
-    buttonBox->addButton(cancelButton, QDialogButtonBox::RejectRole);
-
-    mainLayout->addWidget(buttonBox);
-
-    int result = QDialog::Rejected;
-
-    connect(saveAllButton, &QPushButton::clicked, [&]() {
-        result = QDialogButtonBox::SaveAll;
-        dialog.accept();
-    });
-
-    connect(discardAllButton, &QPushButton::clicked, [&]() {
-        result = QDialogButtonBox::Discard;
-        dialog.accept();
-    });
-
-    connect(cancelButton, &QPushButton::clicked, [&]() {
-        result = QDialogButtonBox::Cancel;
-        dialog.reject();
-    });
-
-    dialog.exec();
-    // Сохраняем геометрию только если окно не было развернуто на весь экран
-    if (!dialog.isMaximized() && !dialog.isFullScreen())
-    {
-        QRect g = dialog.geometry();
-        QVector<int> v {g.x(), g.y(), g.width(), g.height()};
-        config::base().setValue("windows.unsaved_changes_dialog.geometry", v);
-    }
-    return result;
+    return dialog.selectedButton();
 }
 
 void MainWindow::saveAllDocuments()
