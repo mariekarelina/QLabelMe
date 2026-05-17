@@ -178,8 +178,8 @@ static bool sameGeometry(const ShapeBackup& firstBackup, const ShapeBackup& seco
 
 MainWindow::MainWindow(QWidget* parent) :
     QMainWindow(parent),
-    ui(new Ui::MainWindow),
-    _scene(new QGraphicsScene(this))
+    ui(new Ui::MainWindow)
+    //_scene(new QGraphicsScene(this))
     //_socket(new tcp::Socket)
 {
     ui->setupUi(this);
@@ -318,8 +318,8 @@ MainWindow::MainWindow(QWidget* parent) :
 
     qRegisterMetaType<QGraphicsItem*>("QGraphicsItem*");
 
-    if (_scene)
-        _scene->installEventFilter(this);
+    // if (_scene)
+    //     _scene->installEventFilter(this);
 
     ui->graphView->viewport()->installEventFilter(this);
     loadVisualStyle();
@@ -350,11 +350,11 @@ MainWindow::MainWindow(QWidget* parent) :
 //    enableButtons(false);
 //    disableAdminMode();
 
-    ui->graphView->setScene(_scene);
-    connect(_scene, &QGraphicsScene::changed,
-            this,  &MainWindow::onSceneChanged);
+    //ui->graphView->setScene(_scene);
+    // connect(_scene, &QGraphicsScene::changed,
+    //         this,  &MainWindow::onSceneChanged);
 
-    _videoRect = new qgraph::VideoRect(_scene);
+    // _videoRect = new qgraph::VideoRect(_scene);
 
     //_labelConnectStatus = new QLabel(u8"Нет подключения", this);
     //ui->statusBar->addWidget(_labelConnectStatus);
@@ -405,7 +405,7 @@ MainWindow::MainWindow(QWidget* parent) :
 
     QString fileName = "/home/marie/фон.png";
     QPixmap pix(fileName);
-    _videoRect->setPixmap(pix);
+    //_videoRect->setPixmap(pix);
 
     // Масштабируем фон под размер окна
     pix = pix.scaled(ui->graphView->size(), Qt::KeepAspectRatioByExpanding);
@@ -487,7 +487,7 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->graphView->viewport()->setMouseTracking(true);
     ui->graphView->setMouseTracking(true);
 
-    _scene->installEventFilter(this);
+    //_scene->installEventFilter(this);
 
 //    chk_connect_q(_socket.get(), &tcp::Socket::message,
 //                  this, &MainWindow::message)
@@ -516,7 +516,7 @@ MainWindow::MainWindow(QWidget* parent) :
     applyLabelFontToUi();
 
     // сцена должна отдавать нам события
-    _scene->installEventFilter(this);
+    //_scene->installEventFilter(this);
 
     // нужен свободный трекинг мыши
     ui->graphView->viewport()->setMouseTracking(true);
@@ -533,14 +533,14 @@ MainWindow::MainWindow(QWidget* parent) :
     _lineFinishMode = static_cast<Settings::LineFinishMode>(cmLine);
     applyFinishLine();
 
-    ensureGhostAllocated();
+    //ensureGhostAllocated();
 
     //config::base().getValue("view.keep_image_scale", init.keepImageScale);
 
     // Приемник команд от фигур
-    _scene->setProperty("classChangeReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
-    _scene->setProperty("shapeDeleteReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
-    _scene->setProperty("fillShapeWhenSelected", _vstyle.fillShapeWhenSelected);
+    // _scene->setProperty("classChangeReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
+    // _scene->setProperty("shapeDeleteReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
+    // _scene->setProperty("fillShapeWhenSelected", _vstyle.fillShapeWhenSelected);
 
     // Стек и действия
     // _undoStack = std::make_unique<QUndoStack>(this);
@@ -665,19 +665,51 @@ MainWindow::MainWindow(QWidget* parent) :
             }
         });
 
-    connect(_projPropsDialog, &ProjectSettings::classColorsApplied, this,
-        [this](const QMap<QString, QColor>& colors)
-        {
-            _projectClassColors = colors;
+    // connect(_projPropsDialog, &ProjectSettings::classColorsApplied, this,
+    //     [this](const QMap<QString, QColor>& colors)
+    //     {
+    //         _projectClassColors = colors;
 
-            for (QGraphicsItem* item : _scene->items())
+    //         for (QGraphicsItem* item : _scene->items())
+    //         {
+    //             const QString cls = item->data(0).toString();
+    //             if (!cls.isEmpty())
+    //                 applyClassColorToItem(item, cls);
+    //         }
+    //         _scene->update();
+    //     });
+    connect(_projPropsDialog, &ProjectSettings::classColorsApplied, this,
+    [this](const QMap<QString, QColor>& colors)
+    {
+        _projectClassColors = colors;
+
+        QMap<QString, Document::Ptr>::const_iterator it = _documentsMap.constBegin();
+
+        while (it != _documentsMap.constEnd())
+        {
+            Document::Ptr doc = it.value();
+
+            if (doc && doc->scene)
             {
-                const QString cls = item->data(0).toString();
-                if (!cls.isEmpty())
-                    applyClassColorToItem(item, cls);
+                const QList<QGraphicsItem*> items = doc->scene->items();
+
+                for (QGraphicsItem* item : items)
+                {
+                    if (!item)
+                        continue;
+
+                    const QString cls = item->data(0).toString();
+
+                    if (!cls.isEmpty())
+                        applyClassColorToItem(item, cls);
+                }
+
+                doc->scene->update();
             }
-            _scene->update();
-        });
+
+            ++it;
+        }
+    });
 
     connect(ui->actUserGuide, &QAction::triggered, this, [this]()
     {
@@ -765,6 +797,12 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             || _drawingCircle  || _drawingPoint
             || _drawingRuler;
     };
+    Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene)
+        return;
+    QGraphicsScene* scene = doc->scene;
+    qgraph::VideoRect* videoRect = doc->videoRect;
+
     // Если мы в режиме рисования, то не меняем режим при нажатии на _videoRect
     if (isAnyDrawingNow())
     {
@@ -908,19 +946,27 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     {
         if (!_isDrawingRuler)
         {
+            Document::Ptr doc = currentDocument();
+
+            if (!doc || !doc->scene || !doc->videoRect)
+                return;
+
+            QGraphicsScene* scene = doc->scene;
+            qgraph::VideoRect* videoRect = doc->videoRect;
+
             _rulerStartPoint = graphView->mapToScene(mouseEvent->pos());
             _isDrawingRuler = true;
             updateModeLabel();
 
             if (_rulerLine)
             {
-                _scene->removeItem(_rulerLine);
+                scene->removeItem(_rulerLine);
                 delete _rulerLine;
                 _rulerLine = nullptr;
             }
             if (_rulerText)
             {
-                _scene->removeItem(_rulerText);
+                scene->removeItem(_rulerText);
                 delete _rulerText;
                 _rulerText = nullptr;
             }
@@ -932,15 +978,15 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             pen.setJoinStyle(Qt::RoundJoin);
             pen.setCosmetic(true);
 
-            _rulerLine = _scene->addLine(QLineF(_rulerStartPoint, _rulerStartPoint), pen);
+            _rulerLine = scene->addLine(QLineF(_rulerStartPoint, _rulerStartPoint), pen);
             _rulerLine->setZValue(1000);
 
-            _rulerText = _scene->addText(QStringLiteral("0"));
+            _rulerText = scene->addText(QStringLiteral("0"));
             _rulerText->setDefaultTextColor(_vstyle.rulerColor);
             // Масштабируем размер текста от размера изображения
-            if (_videoRect)
+            if (videoRect)
             {
-                const QSize imgSize = _videoRect->pixmap().size();
+                const QSize imgSize = videoRect->pixmap().size();
                 const int maxSide = std::max(imgSize.width(), imgSize.height());
 
                 QFont f = _rulerText->font();
@@ -966,11 +1012,11 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(selectionItem))
             selectionItem = handle->parentItem();
 
-        if (selectionItem && selectionItem != _videoRect)
+        if (selectionItem && selectionItem != videoRect)
             selectionItem = findMovableAncestor(selectionItem);
 
         // Выделение через сцену, включая мультивыделение по Ctrl
-        if (selectionItem && selectionItem != _videoRect)
+        if (selectionItem && selectionItem != videoRect)
         {
             const bool ctrlPressed = mouseEvent->modifiers() & Qt::ControlModifier;
 
@@ -997,7 +1043,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             }
             else
             {
-                const QList<QGraphicsItem*> selectedNow = _scene->selectedItems();
+                const QList<QGraphicsItem*> selectedNow = scene->selectedItems();
 
                 // Если кликнули по уже выделенной фигуре, и выделено несколько фигур,
                 // то сохраняем групповое выделение для последующего перетаскивания
@@ -1014,7 +1060,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         }
         else if (!(mouseEvent->modifiers() & Qt::ControlModifier))
         {
-            const QList<QGraphicsItem*> selectedNow = _scene->selectedItems();
+            const QList<QGraphicsItem*> selectedNow = scene->selectedItems();
             for (QGraphicsItem* item : selectedNow)
             {
                 if (item)
@@ -1071,11 +1117,11 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             // Shift + ЛКМ по фигуре - перемещение фигуры
             if (shiftPressed)
             {
-                if (selectionItem && selectionItem != _videoRect)
+                if (selectionItem && selectionItem != videoRect)
                 {
                     QGraphicsItem* movableItem = findMovableAncestor(selectionItem);
 
-                    if (movableItem && (movableItem != _videoRect)
+                    if (movableItem && (movableItem != videoRect)
                         && movableItem->flags().testFlag(QGraphicsItem::ItemIsMovable))
                     {
                         _movingItem = movableItem;
@@ -1096,7 +1142,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                         _moveIsGroup = false;
                         _movePressScenePos = scenePos;
 
-                        const QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+                        const QList<QGraphicsItem*> selectedItems = scene->selectedItems();
                         if (selectedItems.size() > 1 && movableItem->isSelected())
                         {
                             _moveIsGroup = true;
@@ -1176,7 +1222,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 {
                     _currCircle->setBrush(Qt::NoBrush);
                 }
-                _scene->addItem(_currCircle);
+                scene->addItem(_currCircle);
             }
             // Задаем позицию и начальный размер
             _currCircle->setRect(QRectF(_startPoint, QSizeF(1, 1)));
@@ -1185,7 +1231,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             const qreal crossSize = 6.0;
             if (!_currCircleCrossV)
             {
-                _currCircleCrossV = _scene->addLine(0, 0, 0, 0);
+                _currCircleCrossV = scene->addLine(0, 0, 0, 0);
                 _currCircleCrossV->setFlag(QGraphicsItem::ItemIsMovable, false);
                 _currCircleCrossV->setFlag(QGraphicsItem::ItemIsSelectable, false);
                 _currCircleCrossV->setFlag(QGraphicsItem::ItemIsFocusable, false);
@@ -1196,7 +1242,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             }
             if (!_currCircleCrossH)
             {
-                _currCircleCrossH = _scene->addLine(0, 0, 0, 0);
+                _currCircleCrossH = scene->addLine(0, 0, 0, 0);
                 _currCircleCrossH->setFlag(QGraphicsItem::ItemIsMovable, false);
                 _currCircleCrossH->setFlag(QGraphicsItem::ItemIsSelectable, false);
                 _currCircleCrossH->setFlag(QGraphicsItem::ItemIsFocusable, false);
@@ -1271,7 +1317,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 {
                     _currRectangle->setBrush(Qt::NoBrush);
                 }
-                _scene->addItem(_currRectangle);
+                scene->addItem(_currRectangle);
             }
             _currRectangle->setRect(QRectF(_startPoint, startPoint2));
             _isDrawingRectangle = true; // Включаем флаг рисования
@@ -1289,7 +1335,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         updateModeLabel();
         const QPointF sceneP = graphView->mapToScene(mouseEvent->pos());
 
-        _currPoint = new qgraph::Point(_scene);
+        _currPoint = new qgraph::Point(scene);
         ensureUid(_currPoint);
 
         // Применяем стили из настроек
@@ -1367,13 +1413,13 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             // Удаляем старую линейку (если осталась от прошлого измерения)
             if (_rulerLine)
             {
-                _scene->removeItem(_rulerLine);
+                scene->removeItem(_rulerLine);
                 delete _rulerLine;
                 _rulerLine = nullptr;
             }
             if (_rulerText)
             {
-                _scene->removeItem(_rulerText);
+                scene->removeItem(_rulerText);
                 delete _rulerText;
                 _rulerText = nullptr;
             }
@@ -1385,16 +1431,16 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
             pen.setJoinStyle(Qt::RoundJoin);
             pen.setCosmetic(true);
 
-            _rulerLine = _scene->addLine(QLineF(_rulerStartPoint, _rulerStartPoint), pen);
+            _rulerLine = scene->addLine(QLineF(_rulerStartPoint, _rulerStartPoint), pen);
             _rulerLine->setZValue(1000);
 
             // Текст с расстоянием
-            _rulerText = _scene->addText(QStringLiteral("0"));
+            _rulerText = scene->addText(QStringLiteral("0"));
             _rulerText->setDefaultTextColor(_vstyle.rulerColor);
             // Масштабируем размер текста от размера изображения
-            if (_videoRect)
+            if (videoRect)
             {
-                const QSize imgSize = _videoRect->pixmap().size();
+                const QSize imgSize = videoRect->pixmap().size();
                 const int maxSide = std::max(imgSize.width(), imgSize.height());
 
                 QFont rulerTextFont = _rulerText->font();
@@ -1672,6 +1718,8 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
 
 void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
 {
+    Document::Ptr doc = currentDocument();
+
     if (mouseEvent->button() == Qt::LeftButton)
         _leftMouseButtonDown = false;
     // Если не сдвиг, ставим точку
@@ -1749,10 +1797,10 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(selectionItem))
                 selectionItem = handle->parentItem();
 
-            if (selectionItem && selectionItem != _videoRect)
+            if (selectionItem && selectionItem != doc->videoRect)
                 selectionItem = findMovableAncestor(selectionItem);
 
-            if (selectionItem && selectionItem != _videoRect)
+            if (selectionItem && selectionItem != doc->videoRect)
             {
                 selectionItem->setSelected(!selectionItem->isSelected());
                 mouseEvent->accept();
@@ -1969,7 +2017,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         // Получаем финальный прямоугольник и нормализуем его (если размеры отрицательны)
         QRectF finalRect = _currRectangle->sceneBoundingRect();
         // Убираем временный прямоугольник из сцены
-        _scene->removeItem(_currRectangle);
+        doc->scene->removeItem(_currRectangle);
         delete _currRectangle;
         _currRectangle = nullptr; // Сбрасываем ссылку, чтобы начать новый прямоугольник
 
@@ -1978,7 +2026,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             return; // Не создаем объект, если размеры некорректны
 
         // Создаем объект класса Rectangle
-        qgraph::Rectangle* rectangle = new qgraph::Rectangle(_scene);
+        qgraph::Rectangle* rectangle = new qgraph::Rectangle(doc->scene);
         ensureUid(rectangle);
         rectangle->setRealSceneRect(finalRect); // Устанавливаем координаты и размеры
         rectangle->updatePointNumbers();
@@ -2031,20 +2079,20 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         QRectF circleRect = _currCircle->rect();
 
         // Удаляем временный круг
-        _scene->removeItem(_currCircle);
+        doc->scene->removeItem(_currCircle);
         delete _currCircle;
         _currCircle = nullptr;
 
         // Удаляем временный крестик центра
         if (_currCircleCrossV)
         {
-            _scene->removeItem(_currCircleCrossV);
+            doc->scene->removeItem(_currCircleCrossV);
             delete _currCircleCrossV;
             _currCircleCrossV = nullptr;
         }
         if (_currCircleCrossH)
         {
-            _scene->removeItem(_currCircleCrossH);
+            doc->scene->removeItem(_currCircleCrossH);
             delete _currCircleCrossH;
             _currCircleCrossH = nullptr;
         }
@@ -2055,7 +2103,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
 
         // Создаем объект класса Circle
-        qgraph::Circle* circle = new qgraph::Circle(_scene, _startPoint);
+        qgraph::Circle* circle = new qgraph::Circle(doc->scene, _startPoint);
         ensureUid(circle);
         // Устанавливаем радиус финального круга
         qreal finalRadius = circleRect.width() / 2;
@@ -2507,7 +2555,10 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
 void MainWindow::setSceneItemsMovable(bool movable)
 {
-    for (QGraphicsItem* item : _scene->items())
+    Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene)
+        return;
+    for (QGraphicsItem* item : doc->scene->items())
     {
         if (!item)
             continue;
@@ -2516,7 +2567,7 @@ void MainWindow::setSceneItemsMovable(bool movable)
         if (item->parentItem() != nullptr)
             continue;
 
-        if (item != _videoRect
+        if (item != doc->videoRect
             && item != _tempRectItem
             && item != _tempCircleItem
             && item != _tempPolyline
@@ -2545,15 +2596,17 @@ Document::Ptr MainWindow::currentDocument() const
 
 void MainWindow::changeClassByUid(qulonglong uid)
 {
-    if (!_scene || uid == 0)
+    Document::Ptr doc = currentDocument();
+
+    if (!doc->scene || uid == 0)
         return;
 
     QGraphicsItem* target = nullptr;
 
-    for (QGraphicsItem* item : _scene->items())
+    for (QGraphicsItem* item : doc->scene->items())
     {
         if (item == nullptr
-            || (item == _videoRect)
+            || (item == doc->videoRect)
             || (item == _tempRectItem)
             || (item == _tempCircleItem)
             || (item == _tempPolyline))
@@ -2578,10 +2631,12 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
     if (!item)
         return;
 
+    Document::Ptr doc = currentDocument();
+
     if (qgraph::DragCircle* handle = dynamic_cast<qgraph::DragCircle*>(item))
         item = handle->parentItem();
 
-    if (!item || item == _videoRect)
+    if (!item || item == doc->videoRect)
         return;
 
     item = findMovableAncestor(item);
@@ -2596,8 +2651,6 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
 
     if (ui && ui->polygonList && ui->polygonList->selectionModel())
         selectedRows = ui->polygonList->selectionModel()->selectedRows();
-
-    Document::Ptr doc = currentDocument();
 
     bool clickedItemIsInListSelection = false;
 
@@ -2624,7 +2677,7 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
 
         selectedSceneItem = findMovableAncestor(selectedSceneItem);
 
-        if (!selectedSceneItem || selectedSceneItem == _videoRect)
+        if (!selectedSceneItem || selectedSceneItem == doc->videoRect)
             continue;
 
         if (selectedSceneItem == item)
@@ -2656,7 +2709,7 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
 
             selectedSceneItem = findMovableAncestor(selectedSceneItem);
 
-            if (!selectedSceneItem || selectedSceneItem == _videoRect)
+            if (!selectedSceneItem || selectedSceneItem == doc->videoRect)
                 continue;
 
             if (!targets.contains(selectedSceneItem))
@@ -2719,8 +2772,8 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
     }
     updateCoordinateList();
 
-    if (_scene)
-        _scene->update();
+    if (doc->scene)
+        doc->scene->update();
 }
 
 bool MainWindow::eventFilter(QObject* obj, QEvent* event)
@@ -3027,6 +3080,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 }
             }
 
+            Document::Ptr doc = currentDocument();
+
             const bool drawingLineLike =
                     _drawingPolyline || _drawingLine || _isDrawingPolyline || _isDrawingLine;
 
@@ -3036,7 +3091,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             {
                 if (qgraph::DragCircle* preciseHandle = pickHandleAt(sp, _drawHandleCommitRadius))
                 {
-                    if (preciseHandle->scene() && _scene && _scene->items().contains(preciseHandle))
+                    if (preciseHandle->scene() && doc->scene && doc->scene->items().contains(preciseHandle))
                     {
                         startHandleDrag(preciseHandle, sp);
                         return true;
@@ -3048,7 +3103,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
             if (qgraph::DragCircle* target = pickHiddenHandle(sp, topIsHandle))
             {
-                if (target->scene() && _scene && _scene->items().contains(target))
+                if (target->scene() && doc->scene && doc->scene->items().contains(target))
                 {
                     if (topIsHandle)
                     {
@@ -3304,10 +3359,11 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             }
             QContextMenuEvent* ce = static_cast<QContextMenuEvent*>(event);
 
+            Document::Ptr doc = currentDocument();
             const QPoint  viewPos = ce->pos();
             const QPointF scenePos = ui->graphView->mapToScene(viewPos);
             QGraphicsItem* item = ui->graphView->itemAt(viewPos);
-            if (!item || item == _videoRect)
+            if (!item || item == doc->videoRect)
             {
                 if (QGraphicsItem* byEdge = pickItemByEdgeAt(ui->graphView, viewPos))
                     item = byEdge;
@@ -3770,6 +3826,9 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
 void MainWindow::keyPressEvent(QKeyEvent* event)
 {
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+
     if (event->modifiers() & Qt::ControlModifier)
     {
         QTransform base = ui->graphView->transform();
@@ -3837,8 +3896,8 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         {
             _polyline->togglePointNumbers();
             _polyline->updatePointNumbers();
-            if (_scene)
-                _scene->update();
+            if (scene)
+                scene->update();
 
             event->accept();
             return;
@@ -3848,8 +3907,8 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         {
             _line->togglePointNumbers();
             _line->updatePointNumbers();
-            if (_scene)
-                _scene->update();
+            if (scene)
+                scene->update();
 
             event->accept();
             return;
@@ -4075,34 +4134,62 @@ void MainWindow::on_btnTest_clicked(bool)
 
 void MainWindow::fitImageToView()
 {
-    if (!_scene || !_videoRect || !ui->graphView)
+    // if (!_scene || !_videoRect || !ui->graphView)
+    //     return;
+
+    // _scene->setSceneRect(_videoRect->boundingRect().translated(_videoRect->pos()));
+
+    // ui->graphView->resetTransform();
+
+    // ui->graphView->fitInView(_scene->sceneRect(), Qt::KeepAspectRatio);
+    // ui->graphView->centerOn(_scene->sceneRect().center());
+
+    // ui->graphView->horizontalScrollBar()->setValue(0);
+    // ui->graphView->verticalScrollBar()->setValue(0);
+
+    // if (_m_zoom <= 0.000001)
+    //     _m_zoom = 1.0;
+
+    // if (Document::Ptr doc = currentDocument())
+    // {
+    //     const qreal zoom = ui->graphView->transform().m11();
+    //     doc->viewState = {
+    //         0,
+    //         0,
+    //         zoom,
+    //         _scene->sceneRect().center()
+    //     };
+    //     doc->viewState.zoom = zoom;
+    // }
+    // _m_zoom = ui->graphView->transform().m11();
+    // updateAllPointNumbers();
+    // ui->graphView->viewport()->update();
+    Document::Ptr doc = currentDocument();
+
+    if (!doc || !doc->scene || !doc->videoRect)
         return;
 
-    _scene->setSceneRect(_videoRect->boundingRect().translated(_videoRect->pos()));
+    QGraphicsScene* scene = doc->scene;
+    qgraph::VideoRect* videoRect = doc->videoRect;
+
+    scene->setSceneRect(videoRect->boundingRect().translated(videoRect->pos()));
 
     ui->graphView->resetTransform();
-
-    ui->graphView->fitInView(_scene->sceneRect(), Qt::KeepAspectRatio);
-    ui->graphView->centerOn(_scene->sceneRect().center());
-
+    ui->graphView->fitInView(scene->sceneRect(), Qt::KeepAspectRatio);
+    ui->graphView->centerOn(scene->sceneRect().center());
     ui->graphView->horizontalScrollBar()->setValue(0);
     ui->graphView->verticalScrollBar()->setValue(0);
 
     if (_m_zoom <= 0.000001)
         _m_zoom = 1.0;
 
-    if (Document::Ptr doc = currentDocument())
-    {
-        const qreal zoom = ui->graphView->transform().m11();
-        doc->viewState = {
-            0,
-            0,
-            zoom,
-            _scene->sceneRect().center()
-        };
-        doc->viewState.zoom = zoom;
-    }
-    _m_zoom = ui->graphView->transform().m11();
+    const qreal zoom = ui->graphView->transform().m11();
+
+    doc->viewState = {0, 0, zoom, scene->sceneRect().center()};
+    doc->viewState.zoom = zoom;
+
+    _m_zoom = zoom;
+
     updateAllPointNumbers();
     ui->graphView->viewport()->update();
 }
@@ -4144,145 +4231,191 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem*
                            this, &MainWindow::onSceneChanged);
             }
 
-            // Если есть изменения в сцене, сохраняем их в документе
-            if (prevDoc->scene != _scene)
-            {
-                // Переносим все элементы (кроме videoRect) в документ предыдущего изображения
-                QList<QGraphicsItem*> items = _scene->items();
-                for (QGraphicsItem* item : items)
-                {
-                    if (!item)
-                        continue;
+            // // Если есть изменения в сцене, сохраняем их в документе
+            // if (prevDoc->scene != _scene)
+            // {
+            //     // Переносим все элементы (кроме videoRect) в документ предыдущего изображения
+            //     QList<QGraphicsItem*> items = _scene->items();
+            //     for (QGraphicsItem* item : items)
+            //     {
+            //         if (!item)
+            //             continue;
 
-                    if (item == _videoRect)
-                        continue;
+            //         if (item == _videoRect)
+            //             continue;
 
-                    // Переносим только корневые элементы.
-                    // Дочерние (ручки, крестик круга, рамки и т.п.) переедут вместе с родителем автоматически.
-                    if (item->parentItem() != nullptr)
-                        continue;
+            //         // Переносим только корневые элементы.
+            //         // Дочерние (ручки, крестик круга, рамки и т.п.) переедут вместе с родителем автоматически.
+            //         if (item->parentItem() != nullptr)
+            //             continue;
 
-                    if (QGraphicsScene* sc = item->scene())
-                        sc->removeItem(item);
+            //         if (QGraphicsScene* sc = item->scene())
+            //             sc->removeItem(item);
 
-                    prevDoc->scene->addItem(item);
-                }
+            //         prevDoc->scene->addItem(item);
+            //     }
 
-                // Обновляем указатели
-                prevDoc->videoRect = _videoRect;
-                _videoRect->setParentItem(nullptr);
-                prevDoc->scene->addItem(_videoRect);
-            }
+            //     // Обновляем указатели
+            //     prevDoc->videoRect = _videoRect;
+            //     _videoRect->setParentItem(nullptr);
+            //     prevDoc->scene->addItem(_videoRect);
+            // }
         }
     }
 
     // Получаем текущий документ
-    QVariant currentData = current->data(Qt::UserRole);
-    if (!currentData.canConvert<Document::Ptr>())
-    {
+    QVariant data = current->data(Qt::UserRole);
+
+    if (!data.canConvert<Document::Ptr>())
         return;
-    }
 
-    Document::Ptr currentDoc = currentData.value<Document::Ptr>();
-    _currentImagePath = currentDoc->filePath;
+    Document::Ptr doc = data.value<Document::Ptr>();
 
-    if (currentDoc && currentDoc->_undoStack)
-    {
-        // Переключаем активный стек группы
-        _undoGroup->setActiveStack(currentDoc->_undoStack.get());
+    if (!doc || !doc->scene)
+        return;
 
-        // И показываем его в QUndoView
-        if (_undoView) _undoView->setStack(currentDoc->_undoStack.get());
-    }
-    else
-    {
-        // Нет документа - отключаемся от группы и очищаем представление
-        _undoGroup->setActiveStack(nullptr);
-        if (_undoView) _undoView->setStack(nullptr);
-    }
+    _currentImagePath = doc->filePath;
 
-
-    // Временно блокируем обработку изменений сцены
-    _loadingNow = true;
-    bool sceneWasJustCreated = false;
-    // Если сцена еще не создана, загружаем изображение
-    if (!currentDoc->scene)
-    {
-        sceneWasJustCreated = true;
-
-        if (!currentDoc->loadImage())
-            return;
-
-        // Загружаем аннотации, если они есть
-        loadAnnotationFromFile(currentDoc);
-    }
-
-    // Устанавливаем текущую сцену
-    ui->graphView->setScene(currentDoc->scene);
-    _scene = currentDoc->scene;
-    _videoRect = currentDoc->videoRect;
-    // Приемник команд от фигур на каждую сцену
-    if (_scene)
-    {
-        _scene->setProperty("classChangeReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
-        _scene->setProperty("shapeDeleteReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
-        _scene->setProperty("fillShapeWhenSelected", _vstyle.fillShapeWhenSelected);
-    }
-
-    if (_videoRect && !_videoRect->pixmap().isNull())
-        updateImageSizeLabel(_videoRect->pixmap().size());
-    else
-        updateImageSizeLabel(QSize());
-
-    ensureGhostAllocated();
-
-    // Подключаем сигнал changed для новой сцены
-    if (currentDoc->scene)
-    {
-        connect(currentDoc->scene, &QGraphicsScene::selectionChanged,
-                this, &MainWindow::onSceneSelectionChanged,
-                Qt::UniqueConnection);
-
-        connect(currentDoc->scene, &QGraphicsScene::changed,
-                this, &MainWindow::onSceneChanged,
-                Qt::UniqueConnection);
-    }
-
-    _loadingNow = false;
-
-    bool keepPerImageZoom = false;
-    config::base().getValue("view.keep_image_scale_per_image", keepPerImageZoom);
-
-    if (sceneWasJustCreated)
-    {
-        fitImageToView();
-    }
-    else
-    {
-        if (keepPerImageZoom)
-            restoreViewState(currentDoc);
-        else
-            fitImageToView();
-    }
-    //updateAllPointNumbers();
-    //updatePolygonListForCurrentScene();
+    ui->graphView->setScene(doc->scene);
 
     setPolygonListModelForCurrentDocument();
 
-    //if (currentDoc->polygonList.model_ &&
-    if (currentDoc->polygonList.model.rowCount() == 0)
-    {
-        updatePolygonListForCurrentScene();
-    }
+    connect(doc->scene,
+            &QGraphicsScene::selectionChanged,
+            this,
+            &MainWindow::onSceneSelectionChanged,
+            Qt::UniqueConnection);
+
+    connect(doc->scene,
+            &QGraphicsScene::changed,
+            this,
+            &MainWindow::onSceneChanged,
+            Qt::UniqueConnection);
+
+    doc->scene->installEventFilter(this);
+    doc->scene->setProperty("classChangeReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
+    doc->scene->setProperty("shapeDeleteReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
+    doc->scene->setProperty("fillShapeWhenSelected", _vstyle.fillShapeWhenSelected);
+
+    ensureGhostAllocated();
+
+    if (doc->videoRect && !doc->videoRect->pixmap().isNull())
+        updateImageSizeLabel(doc->videoRect->pixmap().size());
     else
+        updateImageSizeLabel(QSize());
+
+    restoreViewState(doc);
+    updatePolygonListForCurrentScene();
+    updateCoordinateList();
+    updateWindowTitle();
+    raiseAllHandlesToTop();
+
+    if (_undoGroup && doc->_undoStack)
     {
-        updatePolygonListTexts();
+        _undoGroup->setActiveStack(doc->_undoStack.get());
+        _undoView->setStack(doc->_undoStack.get());
     }
 
-    clearAllHandleHoverEffects();
-    // Обновляем отображение звездочки (файл изменен)
-    updateFileListDisplay(currentDoc->filePath);
-    raiseAllHandlesToTop();
+    // Document::Ptr currentDoc = currentData.value<Document::Ptr>();
+    // _currentImagePath = currentDoc->filePath;
+
+    // if (currentDoc && currentDoc->_undoStack)
+    // {
+    //     // Переключаем активный стек группы
+    //     _undoGroup->setActiveStack(currentDoc->_undoStack.get());
+
+    //     // И показываем его в QUndoView
+    //     if (_undoView) _undoView->setStack(currentDoc->_undoStack.get());
+    // }
+    // else
+    // {
+    //     // Нет документа - отключаемся от группы и очищаем представление
+    //     _undoGroup->setActiveStack(nullptr);
+    //     if (_undoView) _undoView->setStack(nullptr);
+    // }
+
+
+    // // Временно блокируем обработку изменений сцены
+    // _loadingNow = true;
+    // bool sceneWasJustCreated = false;
+    // // Если сцена еще не создана, загружаем изображение
+    // if (!currentDoc->scene)
+    // {
+    //     sceneWasJustCreated = true;
+
+    //     if (!currentDoc->loadImage())
+    //         return;
+
+    //     // Загружаем аннотации, если они есть
+    //     loadAnnotationFromFile(currentDoc);
+    // }
+
+    // // Устанавливаем текущую сцену
+    // ui->graphView->setScene(currentDoc->scene);
+    // _scene = currentDoc->scene;
+    // _videoRect = currentDoc->videoRect;
+    // // Приемник команд от фигур на каждую сцену
+    // if (_scene)
+    // {
+    //     _scene->setProperty("classChangeReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
+    //     _scene->setProperty("shapeDeleteReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
+    //     _scene->setProperty("fillShapeWhenSelected", _vstyle.fillShapeWhenSelected);
+    // }
+
+    // if (_videoRect && !_videoRect->pixmap().isNull())
+    //     updateImageSizeLabel(_videoRect->pixmap().size());
+    // else
+    //     updateImageSizeLabel(QSize());
+
+    // ensureGhostAllocated();
+
+    // // Подключаем сигнал changed для новой сцены
+    // if (currentDoc->scene)
+    // {
+    //     connect(currentDoc->scene, &QGraphicsScene::selectionChanged,
+    //             this, &MainWindow::onSceneSelectionChanged,
+    //             Qt::UniqueConnection);
+
+    //     connect(currentDoc->scene, &QGraphicsScene::changed,
+    //             this, &MainWindow::onSceneChanged,
+    //             Qt::UniqueConnection);
+    // }
+
+    // _loadingNow = false;
+
+    // bool keepPerImageZoom = false;
+    // config::base().getValue("view.keep_image_scale_per_image", keepPerImageZoom);
+
+    // if (sceneWasJustCreated)
+    // {
+    //     fitImageToView();
+    // }
+    // else
+    // {
+    //     if (keepPerImageZoom)
+    //         restoreViewState(currentDoc);
+    //     else
+    //         fitImageToView();
+    // }
+    //updateAllPointNumbers();
+    //updatePolygonListForCurrentScene();
+
+    // setPolygonListModelForCurrentDocument();
+
+    // //if (currentDoc->polygonList.model_ &&
+    // if (currentDoc->polygonList.model.rowCount() == 0)
+    // {
+    //     updatePolygonListForCurrentScene();
+    // }
+    // else
+    // {
+    //     updatePolygonListTexts();
+    // }
+
+    // clearAllHandleHoverEffects();
+    // // Обновляем отображение звездочки (файл изменен)
+    // updateFileListDisplay(currentDoc->filePath);
+    // raiseAllHandlesToTop();
 }
 
 void MainWindow::onPolylineModified()
@@ -4322,8 +4455,8 @@ void MainWindow::onSceneChanged()
 
 void MainWindow::onPolygonListSelectionChanged()
 {
-    if (!_scene || !ui || !ui->polygonList)
-        return;
+    // if (!_scene || !ui || !ui->polygonList)
+    //     return;
 
     if (_syncingSelection)
         return;
@@ -4337,15 +4470,19 @@ void MainWindow::onPolygonListSelectionChanged()
 
     _syncingSelection = true;
 
-    {
-        QSignalBlocker blocker {_scene}; (void) blocker;
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+    qgraph::VideoRect* videoRect = doc->videoRect;
 
-        for (QGraphicsItem* item : _scene->items())
+    {
+        QSignalBlocker blocker {scene}; (void) blocker;
+
+        for (QGraphicsItem* item : scene->items())
         {
             if (!item)
                 continue;
 
-            if (item == _videoRect
+            if (item == videoRect
                 || item == _tempRectItem
                 || item == _tempCircleItem
                 || item == _tempPolyline)
@@ -4386,23 +4523,26 @@ void MainWindow::onPolygonListSelectionChanged()
 
 void MainWindow::selectAllShapes()
 {
-    if (!_scene || !ui || !ui->polygonList)
-        return;
+    // if (!_scene || !ui || !ui->polygonList)
+    //     return;
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+    qgraph::VideoRect* videoRect = doc->videoRect;
 
     _syncingSelection = true;
 
     {
-        QSignalBlocker blockScene(_scene);
+        QSignalBlocker blockScene(scene);
         QSignalBlocker blockList(ui->polygonList);
 
         ui->polygonList->clearSelection();
 
-        for (QGraphicsItem* item : _scene->items())
+        for (QGraphicsItem* item : scene->items())
         {
             if (!item)
                 continue;
 
-            if (item == _videoRect
+            if (item == videoRect
                 || item == _tempRectItem
                 || item == _tempCircleItem
                 || item == _tempPolyline)
@@ -4423,7 +4563,7 @@ void MainWindow::selectAllShapes()
 
     updateCoordinateList();
     raiseSelectedShapesTemporarily();
-    _scene->update();
+    scene->update();
 }
 
 void MainWindow::on_actRect_triggered()
@@ -4488,6 +4628,9 @@ void MainWindow::on_actLine_triggered()
 
 void MainWindow::on_actRuler_triggered()
 {
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+
     // Отключаем другие режимы рисования
     _drawingLine      = false;
     _drawingPoint     = false;
@@ -4507,13 +4650,13 @@ void MainWindow::on_actRuler_triggered()
     // При включении инструмента очищаем старую линейку
     if (_rulerLine)
     {
-        _scene->removeItem(_rulerLine);
+        scene->removeItem(_rulerLine);
         delete _rulerLine;
         _rulerLine = nullptr;
     }
     if (_rulerText)
     {
-        _scene->removeItem(_rulerText);
+        scene->removeItem(_rulerText);
         delete _rulerText;
         _rulerText = nullptr;
     }
@@ -4757,6 +4900,13 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
     {
         return;
     }
+
+    // Отвязываем view от сцены старого документа до удаления документов
+    ui->graphView->setScene(nullptr);
+
+    if (_undoView)
+        _undoView->setStack(nullptr);
+
     // Полностью забываем предыдущее состояние проекта,
     // чтобы старые документы не участвовали в последующих проверках
     if (_undoGroup)
@@ -4772,17 +4922,19 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
     _documentsMap.clear();
     _currentImagePath.clear();
     _scrollStates.clear();
-    _imageDataMap.clear();
+    //_imageDataMap.clear();
 
     ui->fileList->clear();
     ui->polygonList->setModel(nullptr);
     ui->coordinateList->clear();
 
-    if (_undoView)
-        _undoView->setStack(nullptr);
+    // if (_undoView)
+    //     _undoView->setStack(nullptr);
 
-    _scene = nullptr;
-    _videoRect = nullptr;
+    // Document::Ptr doc = currentDocument();
+
+    // doc->scene = nullptr;
+    // doc->videoRect = nullptr;
 
     updateWindowTitle();
     updateFolderPathDisplay();
@@ -4804,8 +4956,11 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
 
 void MainWindow::onSceneItemRemoved(QGraphicsItem* item)
 {
+    Document::Ptr doc = currentDocument();
+    qgraph::VideoRect* videoRect = doc->videoRect;
+
     // Пропускаем временные элементы и само изображение
-    if (item == _videoRect || item == _tempRectItem ||
+    if (item == videoRect || item == _tempRectItem ||
         item == _tempCircleItem || item == _tempPolyline)
     {
         return;
@@ -5071,6 +5226,9 @@ void MainWindow::on_actDelete_triggered()
 
 void MainWindow::on_actSettingsApp_triggered()
 {
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+
     MainWindow::VisualStyle visualStyleBackup = _vstyle;
     bool wasApplied = false;
 
@@ -5180,8 +5338,9 @@ void MainWindow::on_actSettingsApp_triggered()
         {
             _rulerText->setDefaultTextColor(_vstyle.rulerColor);
         }
-        if (_scene)
-            _scene->update();
+        Document::Ptr doc = currentDocument();
+        if (doc->scene)
+            doc->scene->update();
 
         applyLabelFontToUi();
 
@@ -5199,7 +5358,8 @@ void MainWindow::on_actSettingsApp_triggered()
                 if (!item)
                     continue;
 
-                if (item == _videoRect
+                Document::Ptr doc = currentDocument();
+                if (item == doc->videoRect
                     || item == _tempRectItem
                     || item == _tempCircleItem
                     || item == _tempPolyline)
@@ -5218,7 +5378,7 @@ void MainWindow::on_actSettingsApp_triggered()
             sc->update();
         });
 
-        if (_scene)
+        if (doc->scene)
             onSceneSelectionChanged();
 
         /*apply_LineWidth_ToScene(nullptr);
@@ -5288,13 +5448,14 @@ void MainWindow::on_actSettingsApp_triggered()
         {
             if (!sc)
                 return;
+            Document::Ptr doc = currentDocument();
 
             for (QGraphicsItem* item : sc->items())
             {
                 if (!item)
                     continue;
 
-                if (item == _videoRect
+                if (item == doc->videoRect
                     || item == _tempRectItem
                     || item == _tempCircleItem
                     || item == _tempPolyline)
@@ -5313,7 +5474,7 @@ void MainWindow::on_actSettingsApp_triggered()
             sc->update();
         });
 
-        if (_scene)
+        if (scene)
             onSceneSelectionChanged();
     }
 }
@@ -5395,7 +5556,10 @@ void MainWindow::on_actBack_triggered()
 
 void MainWindow::on_actViewNum_triggered()
 {
-    QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+
+    QList<QGraphicsItem*> selectedItems = scene->selectedItems();
     for (QGraphicsItem* item : selectedItems)
     {
         if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
@@ -5415,7 +5579,10 @@ void MainWindow::on_actViewNum_triggered()
 
 void MainWindow::on_actRotatePointsClockwise_triggered()
 {
-    QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+
+    QList<QGraphicsItem*> selectedItems = scene->selectedItems();
     for (QGraphicsItem* item : selectedItems)
     {
         if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
@@ -5438,7 +5605,10 @@ void MainWindow::on_actRotatePointsClockwise_triggered()
 
 void MainWindow::on_actRotatePointsCounterClockwise_triggered()
 {
-    QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+
+    QList<QGraphicsItem*> selectedItems = scene->selectedItems();
     for (QGraphicsItem* item : selectedItems)
     {
         if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
@@ -5471,10 +5641,13 @@ void MainWindow::on_Paste_triggered()
 
 void MainWindow::on_toggleSelectionFrame_triggered()
 {
-    if (!_scene)
-        return;
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
 
-    QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+    // if (!_scene)
+    //     return;
+
+    QList<QGraphicsItem*> selectedItems = scene->selectedItems();
     for (QGraphicsItem* item : selectedItems)
     {
         if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
@@ -5574,6 +5747,7 @@ void MainWindow::on_actResetAnnotation_triggered()
     // redo: удалить все элементы по uid
     std::function<void()> redoFn = [this, payload]()
     {
+        Document::Ptr doc = currentDocument();
         for (qulonglong uid : std::as_const(payload->uids))
         {
             if (!uid)
@@ -5581,7 +5755,7 @@ void MainWindow::on_actResetAnnotation_triggered()
 
             if (QGraphicsItem* gi = findItemByUid(uid))
             {
-                _scene->removeItem(gi);
+                doc->scene->removeItem(gi);
                 removeListEntryBySceneItem(gi);
                 clearLinePolylineStateForDeletedItem(gi);
                 delete gi;
@@ -5809,25 +5983,29 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
 void MainWindow::updatePolygonListForCurrentScene()
 {
     Document::Ptr doc = currentDocument();
-    if (!doc) return;
+
+    if (!doc)
+        return;
 
     doc->polygonList.items.clear();
     doc->polygonList.model.clear();
     doc->polygonList.model.setColumnCount(1);
 
-    if (ui->coordinateList)
-        ui->coordinateList->clear();
+    ui->coordinateList->clear();
 
-    if (!_scene)
+    if (!doc->scene)
         return;
 
+    QGraphicsScene* scene = doc->scene;
+    qgraph::VideoRect* videoRect = doc->videoRect;
+
     QList<QGraphicsItem*> roots;
-    for (QGraphicsItem* item : _scene->items())
+    for (QGraphicsItem* item : scene->items())
     {
         if (!item)
             continue;
 
-        if (item == _videoRect
+        if (item == videoRect
             || item == _tempRectItem
             || item == _tempCircleItem
             || item == _tempPolyline)
@@ -6207,6 +6385,7 @@ QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
     QJsonObject root;
     QJsonArray shapesArray;
 
+    Document::Ptr doc = currentDocument();
 
     if (!scene)
     {
@@ -6217,7 +6396,7 @@ QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
     for (QGraphicsItem* item : scene->items())
     {
         // Пропускаем само изображение и временные элементы
-        if (item == _videoRect || item == _tempRectItem ||
+        if (item == doc->videoRect || item == _tempRectItem ||
             item == _tempCircleItem || item == _tempPolyline)
         {
             continue;
@@ -6445,6 +6624,9 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene,
 
 QJsonObject MainWindow::serializeSelectedItemsToJson(QGraphicsScene* scene)
 {
+    Document::Ptr doc = currentDocument();
+    qgraph::VideoRect* videoRect = doc->videoRect;
+
     QJsonObject root;
     QJsonArray shapesArray;
 
@@ -6460,7 +6642,7 @@ QJsonObject MainWindow::serializeSelectedItemsToJson(QGraphicsScene* scene)
     for (QGraphicsItem* item : items)
     {
         // Пропускаем само изображение и временные элементы
-        if (item == _videoRect || item == _tempRectItem ||
+        if (item == videoRect || item == _tempRectItem ||
             item == _tempCircleItem || item == _tempPolyline)
         {
             continue;
@@ -6568,6 +6750,9 @@ void MainWindow::copySelectedShapes()
 void MainWindow::pasteCopiedShapesToCurrentScene()
 {
     Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+    qgraph::VideoRect* videoRect = doc->videoRect;
+
     if (!doc) return;
 
     QJsonObject json = readShapesJsonFromClipboard();
@@ -6576,8 +6761,6 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     if (json.isEmpty())
         return;
-
-    QGraphicsScene* scene = doc->scene;
 
     // Запоминаем, что было на сцене ДО вставки
     QList<QGraphicsItem*> beforeItems = scene->items();
@@ -6606,8 +6789,8 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     {
         QSize imageSize = doc->pixmap.size();
 
-        if (!imageSize.isValid() && _videoRect)
-            imageSize = _videoRect->pixmap().size();
+        if (!imageSize.isValid() && videoRect)
+            imageSize = videoRect->pixmap().size();
 
         const qreal imageSide = qMin(imageSize.width(), imageSize.height());
 
@@ -6628,7 +6811,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
         if (!item)
             continue;
 
-        if (item == _videoRect ||
+        if (item == videoRect ||
             item == _tempRectItem ||
             item == _tempCircleItem ||
             item == _tempPolyline)
@@ -6683,7 +6866,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
         if (!item)
             continue;
 
-        if (item == _videoRect ||
+        if (item == videoRect ||
             item == _tempRectItem ||
             item == _tempCircleItem ||
             item == _tempPolyline)
@@ -7547,13 +7730,13 @@ void MainWindow::saveCurrentViewState(Document::Ptr doc)
 
 void MainWindow::restoreViewState(Document::Ptr doc)
 {
-    if (!doc || !ui->graphView || !_scene || !_videoRect)
+    if (!doc)
     {
         fitImageToView();
         return;
     }
 
-    _scene->setSceneRect(_videoRect->boundingRect().translated(_videoRect->pos()));
+    doc->scene->setSceneRect(doc->videoRect->boundingRect().translated(doc->videoRect->pos()));
 
     // Если viewState еще не был сохранен
     if (doc->viewState.zoom <= 0.000001)
@@ -7826,12 +8009,28 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
         if (!sc)
             return;
 
-        for (QGraphicsItem* item : sc->items())
+        qgraph::VideoRect* videoRect = nullptr;
+
+        for (QMap<QString, Document::Ptr>::iterator it = _documentsMap.begin();
+             it != _documentsMap.end(); ++it)
+        {
+            Document::Ptr document = it.value();
+
+            if (document && document->scene == sc)
+            {
+                videoRect = document->videoRect;
+                break;
+            }
+        }
+
+        const QList<QGraphicsItem*> items = sc->items();
+
+        for (QGraphicsItem* item : items)
         {
             if (!item)
                 continue;
 
-            if (item == _videoRect
+            if (item == videoRect
                 || item == _tempRectItem
                 || item == _tempCircleItem
                 || item == _tempPolyline)
@@ -7843,6 +8042,7 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
                 continue;
 
             const QString cls = item->data(0).toString();
+
             if (!cls.isEmpty())
                 applyClassColorToItem(item, cls);
         }
@@ -7850,7 +8050,9 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
         sc->update();
     });
 
-    if (_scene)
+    Document::Ptr currentDoc = currentDocument();
+
+    if (currentDoc && currentDoc->scene)
         onSceneSelectionChanged();
 
     return true;
@@ -7908,21 +8110,29 @@ void MainWindow::onPolygonListItemDoubleClicked(const QModelIndex& index)
 
 void MainWindow::onSceneSelectionChanged()
 {
-    if (!_scene || !ui || !ui->polygonList)
-        return;
+    // if (!_scene || !ui || !ui->polygonList)
+    //     return;
 
     if (_syncingSelection)
         return;
 
     _syncingSelection = true;
 
+    Document::Ptr doc = currentDocument();
+
+    if (!doc || !doc->scene)
+        return;
+
+    QGraphicsScene* scene = doc->scene;
+    qgraph::VideoRect* videoRect = doc->videoRect;
+
     // Обновляем цвета/заливку всех фигур с учетом текущего выделения
-    for (QGraphicsItem* item : _scene->items())
+    for (QGraphicsItem* item : scene->items())
     {
         if (!item)
             continue;
 
-        if (item == _videoRect
+        if (item == videoRect
             || item == _tempRectItem
             || item == _tempCircleItem
             || item == _tempPolyline)
@@ -7940,14 +8150,14 @@ void MainWindow::onSceneSelectionChanged()
 
     {
         QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
-        Document::Ptr doc = currentDocument();
+        //Document::Ptr doc = currentDocument();
 
         if (selectionModel && doc) // && doc->polygonList.model)
         {
             QSignalBlocker blocker {selectionModel}; (void) blocker;
             selectionModel->clearSelection();
 
-            const QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+            const QList<QGraphicsItem*> selectedItems = scene->selectedItems();
 
             for (QGraphicsItem* sceneItem : selectedItems)
             {
@@ -7978,7 +8188,7 @@ void MainWindow::onSceneSelectionChanged()
 
     updateCoordinateList();
     raiseSelectedShapesTemporarily();
-    _scene->update();
+    scene->update();
 
     updateShapeListButtons();
     _syncingSelection = false;
@@ -7986,15 +8196,20 @@ void MainWindow::onSceneSelectionChanged()
 
 void MainWindow::updateCoordinateList()
 {
-    if (!ui || !ui->coordinateList)
-        return;
+    // if (!ui || !ui->coordinateList)
+    //     return;
 
     ui->coordinateList->clear();
 
-    if (!_scene)
+    Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene)
+        return;
+    QGraphicsScene* scene = doc->scene;
+
+    if (!scene)
         return;
 
-    QList<QGraphicsItem*> selectedItems = _scene->selectedItems();
+    QList<QGraphicsItem*> selectedItems = scene->selectedItems();
     if (selectedItems.isEmpty())
         return;
 
@@ -8248,8 +8463,11 @@ void MainWindow::removePolygonListRow(int row)
     if (!sceneItem)
         return;
 
-    if (sceneItem->scene() == _scene)
-        _scene->removeItem(sceneItem);
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+
+    if (sceneItem->scene() == scene)
+        scene->removeItem(sceneItem);
 
     clearLinePolylineStateForDeletedItem(sceneItem);
     delete sceneItem;
@@ -8321,8 +8539,8 @@ void MainWindow::renumberPolygonList()
 
     updateShapeListButtons();
 
-    if (_scene)
-        _scene->update();
+    if (doc->scene)
+        doc->scene->update();
 }
 
 void MainWindow::renumberPolygonListTextOnly()
@@ -8465,25 +8683,52 @@ QString MainWindow::getAnnotationFilePath(const QString& imagePath) const
 
 void MainWindow::raiseAllHandlesToTop()
 {
-    if (!_scene) return;
+    QList<QGraphicsScene*> scenes;
 
-    // Проходим по всем элементам и поднимаем их ручки
-    for (QGraphicsItem* item : _scene->items())
+    Document::Ptr currentDoc = currentDocument();
+
+    if (currentDoc && currentDoc->scene)
     {
-        if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+        scenes.append(currentDoc->scene);
+    }
+    else
+    {
+        for (QMap<QString, Document::Ptr>::iterator it = _documentsMap.begin();
+             it != _documentsMap.end(); ++it)
         {
-            rectangle->raiseHandlesToTop();
+            Document::Ptr doc = it.value();
+
+            if (doc && doc->scene)
+                scenes.append(doc->scene);
         }
-        else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
+    }
+
+    for (QGraphicsScene* scene : scenes)
+    {
+        if (!scene)
+            continue;
+
+        const QList<QGraphicsItem*> items = scene->items();
+
+        for (QGraphicsItem* item : items)
         {
-            polyline->raiseHandlesToTop();
+            if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+            {
+                rectangle->raiseHandlesToTop();
+            }
+            else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
+            {
+                polyline->raiseHandlesToTop();
+            }
+            else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
+            {
+                circle->raiseHandlesToTop();
+            }
+            else if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
+            {
+                point->raiseHandlesToTop();
+            }
         }
-        else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
-        {
-            circle->raiseHandlesToTop();
-        }
-        else if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
-            point->raiseHandlesToTop();
     }
 }
 
@@ -8492,7 +8737,10 @@ bool MainWindow::isRootShapeItem(QGraphicsItem* item) const
     if (!item)
         return false;
 
-    if (item == _videoRect ||
+    Document::Ptr doc = currentDocument();
+    qgraph::VideoRect* videoRect = doc ? doc->videoRect : nullptr;
+
+    if (item == videoRect ||
         item == _tempRectItem ||
         item == _tempCircleItem ||
         item == _tempPolyline)
@@ -8539,23 +8787,28 @@ void MainWindow::restoreTemporaryRaisedZValues()
 
         item->setZValue(it.value());
     }
+    Document::Ptr doc = currentDocument();
 
-    if (_scene)
-        _scene->update();
+    if (doc && doc->scene)
+        doc->scene->update();
 }
 
 void MainWindow::raiseSelectedShapesTemporarily()
 {
-    if (!_scene)
+    Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene)
         return;
+
+    QGraphicsScene* scene = doc->scene;
+    qgraph::VideoRect* videoRect = doc->videoRect;
 
     restoreTemporaryRaisedZValues();
 
     QList<QGraphicsItem*> selectedRoots;
 
-    qreal maxZ = _videoRect ? _videoRect->zValue() : 0.0;
+    qreal maxZ = videoRect ? videoRect->zValue() : 0.0;
 
-    for (QGraphicsItem* item : _scene->items())
+    for (QGraphicsItem* item : scene->items())
     {
         if (!isRootShapeItem(item))
             continue;
@@ -8586,13 +8839,17 @@ void MainWindow::raiseSelectedShapesTemporarily()
 
     raiseAllHandlesToTop();
 
-    if (_scene)
-        _scene->update();
+    if (scene)
+        scene->update();
 }
 
 void MainWindow::moveSelectedItemsToBack()
 {
-    if (!_scene)
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+    qgraph::VideoRect* videoRect = doc->videoRect;
+
+    if (!scene)
         return;
 
     restoreTemporaryRaisedZValues();
@@ -8605,7 +8862,10 @@ void MainWindow::moveSelectedItemsToBack()
         if (!item)
             return false;
 
-        if (item == _videoRect ||
+        Document::Ptr doc = currentDocument();
+        qgraph::VideoRect* videoRect = doc->videoRect;
+
+        if (item == videoRect ||
             item == _tempRectItem ||
             item == _tempCircleItem ||
             item == _tempPolyline)
@@ -8623,7 +8883,7 @@ void MainWindow::moveSelectedItemsToBack()
                dynamic_cast<qgraph::Point*>(item);
     };
 
-    for (QGraphicsItem* item : _scene->items())
+    for (QGraphicsItem* item : scene->items())
     {
         if (!isRootShape(item))
             continue;
@@ -8657,7 +8917,7 @@ void MainWindow::moveSelectedItemsToBack()
     orderedRoots.append(selectedRoots);
     orderedRoots.append(nonSelectedRoots);
 
-    const qreal imageZ = (_videoRect ? _videoRect->zValue() : 0.0);
+    const qreal imageZ = (videoRect ? videoRect->zValue() : 0.0);
     qreal z = imageZ + 1.0;
 
     for (QGraphicsItem* item : orderedRoots)
@@ -8667,7 +8927,7 @@ void MainWindow::moveSelectedItemsToBack()
     }
 
     {
-        QSignalBlocker blockScene(_scene);
+        QSignalBlocker blockScene(scene);
         QSignalBlocker blockList(ui->polygonList);
 
         for (QGraphicsItem* item : selectedRoots)
@@ -8685,8 +8945,8 @@ void MainWindow::moveSelectedItemsToBack()
 
     raiseAllHandlesToTop();
 
-    if (_scene)
-        _scene->update();
+    if (scene)
+        scene->update();
 }
 bool MainWindow::hasUnsavedChanges() const
 {
@@ -8752,8 +9012,11 @@ void MainWindow::saveAllDocuments()
 
 qgraph::DragCircle* MainWindow::pickHiddenHandle(const QPointF& scenePos, bool& topIsHandle) const
 {
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+
     topIsHandle = false;
-    if (!_scene) return nullptr;
+    if (!scene) return nullptr;
 
     GraphicsView* view = ui ? ui->graphView : nullptr;
     const qreal radiusScene = viewPixelsToSceneRadius(view, effectiveViewPickPx(_ghostPickRadius));
@@ -8763,7 +9026,7 @@ qgraph::DragCircle* MainWindow::pickHiddenHandle(const QPointF& scenePos, bool& 
     const QRectF pickRect(scenePos - QPointF(radiusScene, radiusScene),
                         QSizeF(2 * radiusScene, 2 * radiusScene));
 
-    const QList<QGraphicsItem*> items = _scene->items(pickRect, Qt::IntersectsItemShape, Qt::DescendingOrder);
+    const QList<QGraphicsItem*> items = scene->items(pickRect, Qt::IntersectsItemShape, Qt::DescendingOrder);
 
     // Если верхний элемент уже ручка - «обманка» не нужна, пусть работает стандартный drag
     if (!items.isEmpty())
@@ -8818,16 +9081,24 @@ qgraph::DragCircle* MainWindow::pickHiddenHandle(const QPointF& scenePos, bool& 
 
 void MainWindow::ensureGhostAllocated()
 {
+    Document::Ptr doc = currentDocument();
+
+    if (!doc || !doc->scene)
+        return;
+
+    QGraphicsScene* scene = doc->scene;
+
     if (!_ghostHandle)
     {
         _ghostHandle = new QGraphicsRectItem();
     }
-    if (_ghostHandle->scene() != _scene)
+
+    if (_ghostHandle->scene() != scene)
     {
         if (_ghostHandle->scene())
             _ghostHandle->scene()->removeItem(_ghostHandle);
-        if (_scene)
-            _scene->addItem(_ghostHandle);
+        if (scene)
+            scene->addItem(_ghostHandle);
     }
 
     // Всегда (пере)настраиваем, чтобы гарантировать корректный Z и поведение
@@ -9026,7 +9297,10 @@ qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
 
 qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos, qreal customRadius) const
 {
-    if (!_scene)
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+
+    if (!scene)
         return nullptr;
 
     GraphicsView* view = ui ? ui->graphView : nullptr;
@@ -9040,7 +9314,7 @@ qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos, qreal cust
     qgraph::DragCircle* best = nullptr;
     qreal bestD2 = std::numeric_limits<qreal>::max();
 
-    for (QGraphicsItem* item : _scene->items(probe, Qt::IntersectsItemShape))
+    for (QGraphicsItem* item : scene->items(probe, Qt::IntersectsItemShape))
     {
         if (!item || !item->scene())
             continue;
@@ -9102,15 +9376,19 @@ QGraphicsItem* MainWindow::pickItemByEdgeAt(GraphicsView* view, const QPoint& vi
     const QRectF probe(scenePos - QPointF(radiusScene, radiusScene),
                        QSizeF(radiusScene * 2.0, radiusScene * 2.0));
 
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+    qgraph::VideoRect* videoRect = doc->videoRect;
+
     const QList<QGraphicsItem*> items =
-        _scene->items(probe, Qt::IntersectsItemBoundingRect, Qt::DescendingOrder);
+        scene->items(probe, Qt::IntersectsItemBoundingRect, Qt::DescendingOrder);
 
     for (QGraphicsItem* item : items)
     {
         if (!item || !item->isVisible() || !item->scene())
             continue;
 
-        if (item == _videoRect)
+        if (item == videoRect)
             continue;
 
         if (dynamic_cast<qgraph::DragCircle*>(item))
@@ -9302,9 +9580,12 @@ void MainWindow::hideGhost()
 
 void MainWindow::updateAllPointNumbers()
 {
-    if (!_scene) return;
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
 
-    for (QGraphicsItem* item : _scene->items())
+    if (!scene) return;
+
+    for (QGraphicsItem* item : scene->items())
     {
         if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
         {
@@ -9473,25 +9754,6 @@ void MainWindow::applyStyle_AllDocuments()
                 applyClassColorToItem(item, cls);
         }
         doc->scene->update();
-    }
-    if (_scene)
-    {
-        _scene->setProperty("fillShapeWhenSelected", _vstyle.fillShapeWhenSelected);
-
-        apply_LineWidth_ToScene(_scene);
-        apply_PointSize_ToScene(_scene);
-        apply_NumberSize_ToScene(_scene);
-        updateLineColorsForScene(_scene);
-
-        for (QGraphicsItem* item : _scene->items())
-        {
-            apply_PointStyle_ToItem(item);
-
-            const QString cls = item ? item->data(0).toString() : QString();
-            if (!cls.isEmpty())
-                applyClassColorToItem(item, cls);
-        }
-        _scene->update();
     }
 }
 
@@ -10078,11 +10340,14 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& backup)
             ensureShapeNumber(item);
     };
 
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+
     switch (backup.kind)
     {
         case ShapeKind::Rectangle:
         {
-            qgraph::Rectangle* rect = new qgraph::Rectangle(_scene);
+            qgraph::Rectangle* rect = new qgraph::Rectangle(scene);
 
             applyBackupUid(rect, backup.uid);
             rect->setRealSceneRect(backup.rect);
@@ -10101,7 +10366,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& backup)
         }
         case ShapeKind::Circle:
         {
-            qgraph::Circle* circle = new qgraph::Circle(_scene, backup.circleCenter);
+            qgraph::Circle* circle = new qgraph::Circle(scene, backup.circleCenter);
 
             applyBackupUid(circle, backup.uid);
             circle->setRealRadius(backup.circleRadius);
@@ -10122,12 +10387,12 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& backup)
             if (backup.points.isEmpty())
                 break;
 
-            qgraph::Polyline* polyline = new qgraph::Polyline(_scene, backup.points.front());
+            qgraph::Polyline* polyline = new qgraph::Polyline(scene, backup.points.front());
 
             applyBackupUid(polyline, backup.uid);
             polyline->beginBulkLoad();
             for (int i = 1; i < backup.points.size(); ++i)
-                polyline->addPoint(backup.points[i], _scene);
+                polyline->addPoint(backup.points[i], scene);
 
             polyline->endBulkLoad();
 
@@ -10152,12 +10417,12 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& backup)
         {
             if (backup.points.isEmpty())
                 break;
-            qgraph::Line* line = new qgraph::Line(_scene, backup.points.front());
+            qgraph::Line* line = new qgraph::Line(scene, backup.points.front());
             applyBackupUid(line, backup.uid);
 
             line->beginBulkLoad();
             for (int i = 1; i < backup.points.size(); ++i)
-                line->addPoint(backup.points[i], _scene);
+                line->addPoint(backup.points[i], scene);
 
             line->endBulkLoad();
 
@@ -10180,7 +10445,7 @@ QGraphicsItem* MainWindow::recreateFromBackup(const ShapeBackup& backup)
         }
         case ShapeKind::Point:
         {
-            qgraph::Point* point = new qgraph::Point(_scene);
+            qgraph::Point* point = new qgraph::Point(scene);
 
             applyBackupUid(point, backup.uid);
             apply_PointSize_ToItem(point);
@@ -10470,15 +10735,17 @@ void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString
         if (payload->uid == 0)
             return;
 
+        Document::Ptr doc = currentDocument();
+
         if (QGraphicsItem* item = findItemByUid(payload->uid))
         {
-            _scene->removeItem(item);
+            doc->scene->removeItem(item);
             removeListEntryBySceneItem(item);
             clearLinePolylineStateForDeletedItem(item);
             delete item;
         }
 
-        if (Document::Ptr doc = currentDocument())
+        if (doc)
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -10683,7 +10950,7 @@ void MainWindow::pushMoveImageCommand(const QPointF& before,
                                       const QString& description)
 {
     Document::Ptr doc = currentDocument();
-    if (!doc || !doc->_undoStack || !_videoRect)
+    if (!doc || !doc->_undoStack || !doc->videoRect)
         return;
 
     if (before == after)
@@ -10699,31 +10966,48 @@ void MainWindow::pushMoveImageCommand(const QPointF& before,
     payload->before = before;
     payload->after = after;
 
-    std::function<void(const QPointF&)> applyPos =
-        [this](const QPointF& pos)
+    // std::function<void(const QPointF&)> applyPos =
+    //     [this](const QPointF& pos)
+    // {
+    //     if (_videoRect)
+    //         _videoRect->setPos(pos);
+    // };
+    std::function<void(const QPointF&)> applyPos = [doc](const QPointF& pos)
     {
-        if (_videoRect)
-            _videoRect->setPos(pos);
+        if (doc->videoRect)
+            doc->videoRect->setPos(pos);
     };
 
-    std::function<void()> redoFn = [this, payload, applyPos]()
+    // std::function<void()> redoFn = [this, payload, applyPos]()
+    // {
+    //     applyPos(payload->after);
+    //     if (Document::Ptr doc = currentDocument())
+    //     {
+    //         doc->isModified = true;
+    //         updateFileListDisplay(doc->filePath);
+    //     }
+    // };
+    std::function<void()> redoFn = [this, doc, payload, applyPos]()
     {
         applyPos(payload->after);
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
+        doc->isModified = true;
+        updateFileListDisplay(doc->filePath);
     };
 
-    std::function<void()> undoFn = [this, payload, applyPos]()
+    // std::function<void()> undoFn = [this, payload, applyPos]()
+    // {
+    //     applyPos(payload->before);
+    //     if (Document::Ptr doc = currentDocument())
+    //     {
+    //         doc->isModified = true;
+    //         updateFileListDisplay(doc->filePath);
+    //     }
+    // };
+    std::function<void()> undoFn = [this, doc, payload, applyPos]()
     {
         applyPos(payload->before);
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
+        doc->isModified = true;
+        updateFileListDisplay(doc->filePath);
     };
 
     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
@@ -10911,10 +11195,16 @@ int MainWindow::polygonListRowByItem(QGraphicsItem* sceneItem) const
 
 QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
 {
-    if (!_scene || uid == 0)
+    if (uid == 0)
         return nullptr;
 
-    const QList<QGraphicsItem*> itemsList = _scene->items();
+    Document::Ptr doc = currentDocument();
+
+    if (!doc || !doc->scene)
+        return nullptr;
+
+    const QList<QGraphicsItem*> itemsList = doc->scene->items();
+
     for (QGraphicsItem* item : itemsList)
     {
         if (!item)
@@ -10923,6 +11213,7 @@ QGraphicsItem* MainWindow::findItemByUid(qulonglong uid) const
         if (item->data(_roleUid).toULongLong() == uid)
             return item;
     }
+
     return nullptr;
 }
 
@@ -10991,14 +11282,28 @@ void MainWindow::cancelRulerMode()
 
     if (_rulerLine)
     {
-        _scene->removeItem(_rulerLine);
+        // _scene->removeItem(_rulerLine);
+        // delete _rulerLine;
+        // _rulerLine = nullptr;
+        QGraphicsScene* scene = _rulerLine->scene();
+
+        if (scene)
+            scene->removeItem(_rulerLine);
+
         delete _rulerLine;
         _rulerLine = nullptr;
     }
 
     if (_rulerText)
     {
-        _scene->removeItem(_rulerText);
+        // _scene->removeItem(_rulerText);
+        // delete _rulerText;
+        // _rulerText = nullptr;
+        QGraphicsScene* scene = _rulerText->scene();
+
+        if (scene)
+            scene->removeItem(_rulerText);
+
         delete _rulerText;
         _rulerText = nullptr;
     }
@@ -11008,8 +11313,8 @@ void MainWindow::cancelRulerMode()
 
 void MainWindow::toggleMenuBarVisible()
 {
-    if (!ui || !ui->menuBar)
-        return;
+    // if (!ui || !ui->menuBar)
+    //     return;
 
     const bool newVisible = !ui->menuBar->isVisible();
     ui->menuBar->setVisible(newVisible);
@@ -11379,13 +11684,16 @@ bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line
 
     std::function<void()> redoFn = [this, payload]()
     {
+        Document::Ptr doc = currentDocument();
+        QGraphicsScene* scene = doc->scene;
+
         // Удаляем А и В по uid
         for (qulonglong uid : {payload->aBackup.uid, payload->bBackup.uid})
         {
             if (!uid) continue;
             if (QGraphicsItem* gi = findItemByUid(uid))
             {
-                _scene->removeItem(gi);
+                scene->removeItem(gi);
                 removeListEntryBySceneItem(gi);
                 clearLinePolylineStateForDeletedItem(gi);
                 delete gi;
@@ -11395,11 +11703,11 @@ bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line
         if (payload->mergedPts.isEmpty())
             return;
 
-        qgraph::Line* line = new qgraph::Line(_scene, payload->mergedPts.front());
+        qgraph::Line* line = new qgraph::Line(scene, payload->mergedPts.front());
         line->setData(_roleUid, QVariant::fromValue<qulonglong>(payload->mergedUid));
 
         for (int i = 1; i < payload->mergedPts.size(); ++i)
-            line->addPoint(payload->mergedPts[i], _scene);
+            line->addPoint(payload->mergedPts[i], scene);
         line->setNumberingFromLast(payload->numberingFromLast);
 
         apply_LineWidth_ToItem(line);
@@ -11422,11 +11730,13 @@ bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line
 
     std::function<void()> undoFn = [this, payload]()
     {
+        Document::Ptr doc = currentDocument();
+
         if (payload->mergedUid)
         {
             if (QGraphicsItem* gi = findItemByUid(payload->mergedUid))
             {
-                _scene->removeItem(gi);
+                doc->scene->removeItem(gi);
                 removeListEntryBySceneItem(gi);
                 clearLinePolylineStateForDeletedItem(gi);
                 delete gi;
@@ -11546,12 +11856,14 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scene
 
     std::function<void()> redoFn = [this, payload]()
     {
+        Document::Ptr doc = currentDocument();
+
         // Удалить старую линию
         if (payload->oldBackup.uid)
         {
             if (QGraphicsItem* gi = findItemByUid(payload->oldBackup.uid))
             {
-                _scene->removeItem(gi);
+                doc->scene->removeItem(gi);
                 removeListEntryBySceneItem(gi);
                 clearLinePolylineStateForDeletedItem(gi);
                 delete gi;
@@ -11563,10 +11875,13 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scene
         {
             if (pts.size() < 2) return;
 
-            qgraph::Line* line = new qgraph::Line(_scene, pts.front());
+            Document::Ptr doc = currentDocument();
+            QGraphicsScene* scene = doc->scene;
+
+            qgraph::Line* line = new qgraph::Line(scene, pts.front());
             line->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
             for (int i = 1; i < pts.size(); ++i)
-                line->addPoint(pts[i], _scene);
+                line->addPoint(pts[i], scene);
 
             line->setNumberingFromLast(payload->numberingFromLast);
 
@@ -11594,13 +11909,15 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scene
 
     std::function<void()> undoFn = [this, payload]()
     {
+        Document::Ptr doc = currentDocument();
+
         // Удалить две новые линии
         for (qulonglong uid : {payload->uid1, payload->uid2})
         {
             if (!uid) continue;
             if (QGraphicsItem* gi = findItemByUid(uid))
             {
-                _scene->removeItem(gi);
+                doc->scene->removeItem(gi);
                 removeListEntryBySceneItem(gi);
                 clearLinePolylineStateForDeletedItem(gi);
                 delete gi;
@@ -11610,7 +11927,7 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scene
         // Восстановить старую
         recreateFromBackup(payload->oldBackup);
 
-        if (Document::Ptr doc = currentDocument())
+        if (doc)
         {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
@@ -11747,12 +12064,15 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
     updateModeLabel();
     _startPoint = scenePos;
 
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+
     if (!_polyline)
     {
         _resumeEditing = false;
         _resumeUid = 0;
         // Если полилиния еще не создана, создаем объект
-        _polyline = new qgraph::Polyline(_scene, _startPoint);
+        _polyline = new qgraph::Polyline(scene, _startPoint);
         ensureUid(_polyline);
         apply_LineWidth_ToItem(_polyline);
         apply_PointSize_ToItem(_polyline);
@@ -11980,8 +12300,11 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
             if (!polyline)
                 return;
 
+            Document::Ptr doc = currentDocument();
+            QGraphicsScene* scene = doc->scene;
+
             const int before = polyline->_circles.size();
-            polyline->addPoint(payload->pt, _scene);
+            polyline->addPoint(payload->pt, scene);
 
             polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
             polyline->setSelected(true);
@@ -11990,7 +12313,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
             payload->didAdd = (polyline->_circles.size() > before);
 
-            if (Document::Ptr doc = currentDocument())
+            if (doc)
             {
                 doc->isModified = true;
                 updateFileListDisplay(doc->filePath);
@@ -12036,6 +12359,9 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
     Q_UNUSED(mods);
     Q_UNUSED(graphView);
 
+    Document::Ptr doc = currentDocument();
+    QGraphicsScene* scene = doc->scene;
+
      _isInDrawingMode = true;
     setSceneItemsMovable(false);
     updateModeLabel();
@@ -12045,7 +12371,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
         _resumeEditing = false;
         _resumeUid = 0;
         // Если линия еще не создана, создаем объект
-        _line = new qgraph::Line(_scene, _startPoint);
+        _line = new qgraph::Line(scene, _startPoint);
         ensureUid(_line);
         apply_LineWidth_ToItem(_line);
         apply_PointSize_ToItem(_line);
@@ -12266,8 +12592,10 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
             qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(payload->uid));
             if (!line) return;
 
+            Document::Ptr doc = currentDocument();
+
             const int before = line->_circles.count();
-            line->addPoint(payload->pt, _scene);
+            line->addPoint(payload->pt, doc->scene);
 
             line->setSelected(true);
             line->setFocus();
@@ -12275,7 +12603,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
             payload->didAdd = (line->_circles.size() > before);
 
-            if (Document::Ptr doc = currentDocument())
+            if (doc)
             {
                 doc->isModified = true;
                 updateFileListDisplay(doc->filePath);
@@ -12426,8 +12754,9 @@ void MainWindow::movePolygonListRow(int fromRow, int toRow)
     onPolygonListSelectionChanged();
     updateShapeListButtons();
 
-    if (_scene)
-        _scene->update();
+    // if (_scene)
+    //     _scene->update();
+    doc->scene->update();
 }
 
 // int MainWindow::polygonListRowByUid(QGraphicsItem* sceneItem) const

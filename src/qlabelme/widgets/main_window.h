@@ -525,9 +525,9 @@ private:
     Ui::MainWindow* ui;
     static QUuidEx _applId;
 
-    qgraph::VideoRect* _videoRect = {nullptr};
+    //qgraph::VideoRect* _videoRect = {nullptr};
 
-    QGraphicsScene* _scene = {nullptr};
+    //QGraphicsScene* _scene = {nullptr};
     //GraphicsView* _graphView;
 
     QLabel* _imageSizeLabel = {nullptr}; // Размер изображения в statusBar
@@ -608,13 +608,13 @@ private:
     qgraph::Line* _line = {nullptr};
     qgraph::Point* _currPoint = {nullptr};
 
-    struct ImageData
-    {
-        QGraphicsScene* scene;
-        QPixmap pixmap;
-        QList<QGraphicsItem*> shapes;
-    };
-    QMap<QString, ImageData> _imageDataMap; // Ключ - путь к файлу
+    // struct ImageData
+    // {
+    //     QGraphicsScene* scene;
+    //     QPixmap pixmap;
+    //     QList<QGraphicsItem*> shapes;
+    // };
+    // QMap<QString, ImageData> _imageDataMap; // Ключ - путь к файлу
 
     //QMap<QString, QGraphicsScene*> _scenesMap; // Ключ - путь к файлу, значение - сцена
     QMap<QString, Document::Ptr> _documentsMap;
