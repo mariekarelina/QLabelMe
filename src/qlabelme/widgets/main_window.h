@@ -369,6 +369,10 @@ private:
     qgraph::DragCircle* pickHandleAt(const QPointF& scenePos) const;
     qgraph::DragCircle* pickHandleAt(const QPointF& scenePos, qreal customRadius) const;
     QGraphicsItem* pickItemByEdgeAt(GraphicsView* view, const QPoint& viewPos) const;
+
+    void startHandleEditState(qgraph::DragCircle* handle);
+    void pushHandleEditCommandToStack();
+
     void startHandleDrag(qgraph::DragCircle* handle, const QPointF& scenePos);
     void updateHandleDrag(const QPointF& scenePos);
     void finishHandleDrag();
@@ -433,11 +437,11 @@ private:
                               const ShapeBackup& before,
                               const ShapeBackup& after,
                               const QString& description);
-    // Для узлов
-    void pushHandleEditCommand(QGraphicsItem* item,
-                               const ShapeBackup& before,
-                               const ShapeBackup& after,
-                               const QString& description);
+    // // Для узлов
+    // void pushHandleEditCommand(QGraphicsItem* item,
+    //                            const ShapeBackup& before,
+    //                            const ShapeBackup& after,
+    //                            const QString& description);
 
     // Добавление/удаление узлов у линий
     void pushModifyShapeCommand(qulonglong uid,
@@ -743,10 +747,19 @@ private:
     bool _moveIsGroup = {false}; // true, если тянем сразу несколько фигур
     QPointF _movePressScenePos; // Позиция курсора в сцене в момент захвата
 
-    // Для узлов
+    // // Для узлов
+    // QGraphicsItem* _handleEditedItem = {nullptr}; // Владелец перетаскиваемой ручки
+    // ShapeBackup    _handleBeforeSnap;             // Снимок "до"
+    // bool           _handleDragHadChanges = {false};
     QGraphicsItem* _handleEditedItem = {nullptr}; // Владелец перетаскиваемой ручки
-    ShapeBackup    _handleBeforeSnap;             // Снимок "до"
-    bool           _handleDragHadChanges = {false};
+
+    // Минимальное состояние редактирования ручки
+    int     _handleEditedIndex = {-1};
+    QPointF _handlePointBefore;
+    QRectF  _handleRectBefore;
+    qreal   _handleCircleRadiusBefore = {0};
+
+    bool    _handleDragHadChanges = {false};
 
     // Соединение линий
     bool _mergeLinesMode = {false};

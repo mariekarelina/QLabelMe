@@ -8,6 +8,7 @@
 #include "qgraphics2/point.h"
 #include "qgraphics2/polyline.h"
 #include "qgraphics2/rectangle.h"
+#include "qgraphics2/drag_circle.h"
 
 // UndoAction::UndoAction(QGraphicsScene* scene, Type type, const QString& text,
 //                        const ShapeBackup2& before, const ShapeBackup2& after,
@@ -668,6 +669,225 @@ void Move::redo()
             point->updateHandlePosition();
         }
     }
+}
+
+Edit::Edit(Document* doc, QGraphicsItem* shape,
+           const Data& data, const QString& text)
+{
+    _doc = doc;
+    _shape = shape;
+    _data = data;
+    QUndoCommand::setText(text);
+}
+
+void Edit::undo()
+{
+    bool changed = false;
+
+    switch (_data.type)
+    {
+    case Type::MovePoint:
+    {
+        if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(_shape))
+        {
+            point->setCenter(point->center() - _data.delta);
+            point->updateHandlePosition();
+            changed = true;
+        }
+
+        break;
+    }
+
+    case Type::MoveLineNode:
+    {
+        if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(_shape))
+        {
+            const QVector<qgraph::DragCircle*> circles = line->circles();
+
+            if (_data.pointIndex < 0 || _data.pointIndex >= circles.size())
+                break;
+
+            qgraph::DragCircle* circle = circles[_data.pointIndex];
+
+            if (!circle)
+                break;
+
+            const QPointF newScenePos = circle->scenePos() - _data.delta;
+            circle->setPos(line->mapFromScene(newScenePos));
+
+            line->updatePath();
+            line->updatePointNumbers();
+
+            changed = true;
+        }
+
+        break;
+    }
+
+    case Type::MovePolylineNode:
+    {
+        if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_shape))
+        {
+            const QVector<qgraph::DragCircle*> circles = polyline->circles();
+
+            if (_data.pointIndex < 0 || _data.pointIndex >= circles.size())
+                break;
+
+            qgraph::DragCircle* circle = circles[_data.pointIndex];
+
+            if (!circle)
+                break;
+
+            const QPointF newScenePos = circle->scenePos() - _data.delta;
+            circle->setPos(polyline->mapFromScene(newScenePos));
+
+            polyline->updatePath();
+            polyline->updatePointNumbers();
+
+            changed = true;
+        }
+
+        break;
+    }
+
+    case Type::EditRectangle:
+    {
+        if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(_shape))
+        {
+            rectangle->setRealSceneRect(_data.rectBefore);
+            rectangle->updateHandlePosition();
+            rectangle->updatePointNumbers();
+
+            changed = true;
+        }
+
+        break;
+    }
+
+    case Type::EditCircle:
+    {
+        if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(_shape))
+        {
+            circle->setRealRadius(_data.circleRadiusBefore);
+            circle->updateHandlePosition();
+            circle->updateCrossLines();
+
+            changed = true;
+        }
+
+        break;
+    }
+    }
+
+    if (changed)
+        _doc->isModified = true;
+}
+
+void Edit::redo()
+{
+    // Первый redo вызывается автоматически при push()
+    if (firstRedo())
+        return;
+
+    bool changed = false;
+
+    switch (_data.type)
+    {
+    case Type::MovePoint:
+    {
+        if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(_shape))
+        {
+            point->setCenter(point->center() + _data.delta);
+            point->updateHandlePosition();
+            changed = true;
+        }
+
+        break;
+    }
+
+    case Type::MoveLineNode:
+    {
+        if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(_shape))
+        {
+            const QVector<qgraph::DragCircle*> circles = line->circles();
+
+            if (_data.pointIndex < 0 || _data.pointIndex >= circles.size())
+                break;
+
+            qgraph::DragCircle* circle = circles[_data.pointIndex];
+
+            if (!circle)
+                break;
+
+            const QPointF newScenePos = circle->scenePos() + _data.delta;
+            circle->setPos(line->mapFromScene(newScenePos));
+
+            line->updatePath();
+            line->updatePointNumbers();
+
+            changed = true;
+        }
+
+        break;
+    }
+
+    case Type::MovePolylineNode:
+    {
+        if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_shape))
+        {
+            const QVector<qgraph::DragCircle*> circles = polyline->circles();
+
+            if (_data.pointIndex < 0 || _data.pointIndex >= circles.size())
+                break;
+
+            qgraph::DragCircle* circle = circles[_data.pointIndex];
+
+            if (!circle)
+                break;
+
+            const QPointF newScenePos = circle->scenePos() + _data.delta;
+            circle->setPos(polyline->mapFromScene(newScenePos));
+
+            polyline->updatePath();
+            polyline->updatePointNumbers();
+
+            changed = true;
+        }
+
+        break;
+    }
+
+    case Type::EditRectangle:
+    {
+        if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(_shape))
+        {
+            rectangle->setRealSceneRect(_data.rectAfter);
+            rectangle->updateHandlePosition();
+            rectangle->updatePointNumbers();
+
+            changed = true;
+        }
+
+        break;
+    }
+
+    case Type::EditCircle:
+    {
+        if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(_shape))
+        {
+            circle->setRealRadius(_data.circleRadiusAfter);
+            circle->updateHandlePosition();
+            circle->updateCrossLines();
+
+            changed = true;
+        }
+
+        break;
+    }
+    }
+
+    if (changed)
+        _doc->isModified = true;
 }
 
 } // namespace undo

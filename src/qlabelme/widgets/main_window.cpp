@@ -9151,6 +9151,8 @@ void MainWindow::moveGhostTo(const QPointF& scenePos)
             setGhostStyleHover();
     }
     _ghostTarget->setPos(newLocalTopLeft); // это триггерит itemChange() -> dragCircleMove()
+    _handleDragHadChanges = true;
+    updateCoordinateList();
 }
 
 void MainWindow::endGhost()
@@ -9161,7 +9163,7 @@ void MainWindow::endGhost()
     }
     if (_lastHoverHandle)
     {
-        _ghostTarget->setHoverStyle(false);
+        _lastHoverHandle->setHoverStyle(false);
         _lastHoverHandle = nullptr;
     }
 
@@ -9169,21 +9171,36 @@ void MainWindow::endGhost()
     {
         if (qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(_ghostTarget->parentItem()))
             shape->dragCircleRelease(_ghostTarget);
+
+        pushHandleEditCommandToStack();
+
         _ghostTarget->setHoverStyle(false);
         _ghostTarget->setGhostDriven(false);
 
         // Помечаем документ как измененный после завершения перетаскивания
-        Document::Ptr doc = currentDocument();
-        if (doc && !doc->isModified)
+        if (_handleDragHadChanges)
         {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
+            Document::Ptr doc = currentDocument();
+
+            if (doc && !doc->isModified)
+            {
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
+            }
         }
     }
+
+    _handleEditedItem = nullptr;
+    _handleEditedIndex = -1;
+    _handlePointBefore = QPointF();
+    _handleRectBefore = QRectF();
+    _handleCircleRadiusBefore = 0;
+    _handleDragHadChanges = false;
 
     _ghostActive = false;
     _ghostHover  = false;
     _ghostTarget = nullptr;
+
     _handleDragging = false; // Завершение перетаскивания
     updateModeLabel();
     if (_ghostHandle)
@@ -9255,11 +9272,16 @@ void MainWindow::startGhostDrag(const QPointF& scenePos)
         return;
 
     _ghostActive = true;
-    _ghostActive = true;
     _ghostHover  = false;
 
     _ghostGrabOffset = scenePos - _ghostHandle->pos();
     _ghostTarget->setGhostDriven(true);
+
+    startHandleEditState(_ghostTarget);
+
+    _handleDragging = true;
+    updateModeLabel();
+
     setGhostStyleHover();
 }
 
@@ -9423,6 +9445,151 @@ QGraphicsItem* MainWindow::pickItemByEdgeAt(GraphicsView* view, const QPoint& vi
     return nullptr;
 }
 
+void MainWindow::startHandleEditState(qgraph::DragCircle* handle)
+{
+    // Запоминаем владельца ручки и минимальное состояние до редактирования
+    _handleEditedItem = handle ? handle->parentItem() : nullptr;
+    _handleEditedIndex = -1;
+    _handlePointBefore = QPointF();
+    _handleRectBefore = QRectF();
+    _handleCircleRadiusBefore = 0;
+    _handleDragHadChanges = false;
+
+    if (!_handleEditedItem)
+        return;
+
+    if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(_handleEditedItem))
+    {
+        // Для точки достаточно запомнить ее центр
+        _handlePointBefore = point->center();
+    }
+    else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_handleEditedItem))
+    {
+        _handleEditedIndex = polyline->circles().indexOf(handle);
+
+        const QVector<QPointF> points = polyline->points();
+
+        if (_handleEditedIndex >= 0 && _handleEditedIndex < points.size())
+            _handlePointBefore = points[_handleEditedIndex];
+    }
+    else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(_handleEditedItem))
+    {
+        _handleEditedIndex = line->circles().indexOf(handle);
+
+        const QVector<QPointF> points = line->points();
+
+        if (_handleEditedIndex >= 0 && _handleEditedIndex < points.size())
+            _handlePointBefore = points[_handleEditedIndex];
+    }
+    else if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(_handleEditedItem))
+    {
+        _handleRectBefore = rectangle->mapRectToScene(rectangle->rect());
+    }
+    else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(_handleEditedItem))
+    {
+        _handleCircleRadiusBefore = circle->realRadius();
+    }
+}
+
+void MainWindow::pushHandleEditCommandToStack()
+{
+    // Если перетаскивания не было или фигура не определена, команду в стек не добавляем
+    if (!_handleEditedItem || !_handleDragHadChanges)
+        return;
+
+    undo::Edit::Data data;
+    QString description;
+    bool hasEditData = false;
+
+    if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(_handleEditedItem))
+    {
+        const QPointF delta = point->center() - _handlePointBefore;
+
+        if (!qFuzzyIsNull(delta.x()) || !qFuzzyIsNull(delta.y()))
+        {
+            data.type = undo::Edit::Type::MovePoint;
+            data.delta = delta;
+            hasEditData = true;
+            description = u8"Перемещение точки";
+        }
+    }
+    else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_handleEditedItem))
+    {
+        // Для полилинии сохраняем только индекс узла и смещение этого узла
+        const QVector<QPointF> points = polyline->points();
+
+        if (_handleEditedIndex >= 0 && _handleEditedIndex < points.size())
+        {
+            const QPointF delta = points[_handleEditedIndex] - _handlePointBefore;
+
+            if (!qFuzzyIsNull(delta.x()) || !qFuzzyIsNull(delta.y()))
+            {
+                data.type = undo::Edit::Type::MovePolylineNode;
+                data.pointIndex = _handleEditedIndex;
+                data.delta = delta;
+                hasEditData = true;
+                description = u8"Перемещение узла полилинии";
+            }
+        }
+    }
+    else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(_handleEditedItem))
+    {
+        const QVector<QPointF> points = line->points();
+
+        if (_handleEditedIndex >= 0 && _handleEditedIndex < points.size())
+        {
+            const QPointF delta = points[_handleEditedIndex] - _handlePointBefore;
+
+            if (!qFuzzyIsNull(delta.x()) || !qFuzzyIsNull(delta.y()))
+            {
+                data.type = undo::Edit::Type::MoveLineNode;
+                data.pointIndex = _handleEditedIndex;
+                data.delta = delta;
+                hasEditData = true;
+                description = u8"Перемещение узла линии";
+            }
+        }
+    }
+    else if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(_handleEditedItem))
+    {
+        const QRectF rectAfter = rectangle->mapRectToScene(rectangle->rect());
+
+        if (_handleRectBefore != rectAfter)
+        {
+            data.type = undo::Edit::Type::EditRectangle;
+            data.rectBefore = _handleRectBefore;
+            data.rectAfter = rectAfter;
+            hasEditData = true;
+            description = u8"Редактирование прямоугольника";
+        }
+    }
+    else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(_handleEditedItem))
+    {
+        const qreal radiusAfter = circle->realRadius();
+
+        if (!qFuzzyIsNull(radiusAfter - _handleCircleRadiusBefore))
+        {
+            data.type = undo::Edit::Type::EditCircle;
+            data.circleRadiusBefore = _handleCircleRadiusBefore;
+            data.circleRadiusAfter = radiusAfter;
+            hasEditData = true;
+            description = u8"Изменение радиуса круга";
+        }
+    }
+
+    if (!hasEditData)
+        return;
+
+    if (description.isEmpty())
+        description = u8"Редактирование фигуры";
+
+    if (Document::Ptr doc = currentDocument())
+    {
+        if (QUndoStack* stack = activeUndoStack())
+            stack->push(new undo::Edit(doc.get(), _handleEditedItem, data, description));
+    }
+}
+
 void MainWindow::startHandleDrag(qgraph::DragCircle* handle, const QPointF& scenePos)
 {    
     _m_isDraggingHandle = true;
@@ -9430,13 +9597,15 @@ void MainWindow::startHandleDrag(qgraph::DragCircle* handle, const QPointF& scen
     _handleDragging = true; // Начало перетаскивания ручки
     updateModeLabel();
 
-    // UNDO: запомним владельца и снимок "до"
-    _handleEditedItem = handle ? handle->parentItem() : nullptr;
-    _handleDragHadChanges = false;
-    if (_handleEditedItem)
-    {
-        _handleBeforeSnap = makeBackupFromItem(_handleEditedItem);
-    }
+    // // UNDO: запомним владельца и снимок "до"
+    // _handleEditedItem = handle ? handle->parentItem() : nullptr;
+    // _handleDragHadChanges = false;
+    // if (_handleEditedItem)
+    // {
+    //     _handleBeforeSnap = makeBackupFromItem(_handleEditedItem);
+    // }
+
+    startHandleEditState(handle);
 
     const QPointF handleCenter = handle->sceneBoundingRect().center();
     _m_pressLocalOffset = scenePos - handleCenter;
@@ -9469,26 +9638,39 @@ void MainWindow::finishHandleDrag()
                                              _m_dragHandle->scenePos());
 
         // Помечаем документ как измененный после завершения перетаскивания
-        Document::Ptr doc = currentDocument();
-        if (doc && !doc->isModified)
+        if (_handleDragHadChanges)
         {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
+            Document::Ptr doc = currentDocument();
+
+            if (doc && !doc->isModified)
+            {
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
+            }
         }
         _m_dragHandle->restoreBaseStyle();
     }
-    // UNDO: если что-то реально поменяли - пушим команду
-    if (_handleEditedItem && _handleDragHadChanges)
-    {
-        ShapeBackup after = makeBackupFromItem(_handleEditedItem);
-        if (!sameGeometry(_handleBeforeSnap, after))
-        {
-            // красивое имя действия
-            QString what = u8"Перемещение узла";
-            pushHandleEditCommand(_handleEditedItem, _handleBeforeSnap, after, what);
-        }
-    }
+    // // UNDO: если что-то реально поменяли - пушим команду
+    // if (_handleEditedItem && _handleDragHadChanges)
+    // {
+    //     ShapeBackup after = makeBackupFromItem(_handleEditedItem);
+    //     if (!sameGeometry(_handleBeforeSnap, after))
+    //     {
+    //         // красивое имя действия
+    //         QString what = u8"Перемещение узла";
+    //         pushHandleEditCommand(_handleEditedItem, _handleBeforeSnap, after, what);
+    //     }
+    // }
+    // _handleEditedItem = nullptr;
+    // _handleDragHadChanges = false;
+
+    pushHandleEditCommandToStack();
+
     _handleEditedItem = nullptr;
+    _handleEditedIndex = -1;
+    _handlePointBefore = QPointF();
+    _handleRectBefore = QRectF();
+    _handleCircleRadiusBefore = 0;
     _handleDragHadChanges = false;
 
     _m_isDraggingHandle = false;
@@ -10822,73 +11004,73 @@ void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
         stack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
-void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
-                                       const ShapeBackup& before,
-                                       const ShapeBackup& after,
-                                       const QString& description)
-{
-    struct Payload
-    {
-        ShapeBackup before;
-        ShapeBackup after;
-        qulonglong uid = 0;
-    };
+// void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
+//                                        const ShapeBackup& before,
+//                                        const ShapeBackup& after,
+//                                        const QString& description)
+// {
+//     struct Payload
+//     {
+//         ShapeBackup before;
+//         ShapeBackup after;
+//         qulonglong uid = 0;
+//     };
 
-    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
-    payload->before = before;
-    payload->after = after;
+//     std::shared_ptr<Payload> payload = std::make_shared<Payload>();
+//     payload->before = before;
+//     payload->after = after;
 
-    // Сохраняем uid
-    qulonglong uid = 0;
-    if (item)
-        uid = item->data(_roleUid).toULongLong();
-    if (uid == 0 && item)
-        uid = ensureUid(item);
-    payload->uid = uid;
+//     // Сохраняем uid
+//     qulonglong uid = 0;
+//     if (item)
+//         uid = item->data(_roleUid).toULongLong();
+//     if (uid == 0 && item)
+//         uid = ensureUid(item);
+//     payload->uid = uid;
 
-    // Найти актуальный item по uid; если нет - пересоздать из снапшота
-    std::function<bool(qulonglong, const ShapeBackup&)> apply =
-        [this](qulonglong uid, const ShapeBackup& snap)
-    {
-        QGraphicsItem* item = findItemByUid(uid);
-        if (item)
-        {
-            applyBackupToExisting(item, snap);
-            return true;
-        }
-        // Не нашли - пересоздаем (и привязываем тот же uid)
-        QGraphicsItem* created = recreateFromBackup(snap);
-        if (created)
-        {
-            created->setData(_roleUid, QVariant::fromValue<qulonglong>(snap.uid ? snap.uid : uid));
-            return true;
-        }
-        return false;
-    };
+//     // Найти актуальный item по uid; если нет - пересоздать из снапшота
+//     std::function<bool(qulonglong, const ShapeBackup&)> apply =
+//         [this](qulonglong uid, const ShapeBackup& snap)
+//     {
+//         QGraphicsItem* item = findItemByUid(uid);
+//         if (item)
+//         {
+//             applyBackupToExisting(item, snap);
+//             return true;
+//         }
+//         // Не нашли - пересоздаем (и привязываем тот же uid)
+//         QGraphicsItem* created = recreateFromBackup(snap);
+//         if (created)
+//         {
+//             created->setData(_roleUid, QVariant::fromValue<qulonglong>(snap.uid ? snap.uid : uid));
+//             return true;
+//         }
+//         return false;
+//     };
 
-    std::function<void()> redoFn = [this, payload, apply]()
-    {
-        apply(payload->uid, payload->after);
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-    };
+//     std::function<void()> redoFn = [this, payload, apply]()
+//     {
+//         apply(payload->uid, payload->after);
+//         if (Document::Ptr doc = currentDocument())
+//         {
+//             doc->isModified = true;
+//             updateFileListDisplay(doc->filePath);
+//         }
+//     };
 
-    std::function<void()> undoFn = [this, payload, apply]()
-    {
-        apply(payload->uid, payload->before);
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-    };
+//     std::function<void()> undoFn = [this, payload, apply]()
+//     {
+//         apply(payload->uid, payload->before);
+//         if (Document::Ptr doc = currentDocument())
+//         {
+//             doc->isModified = true;
+//             updateFileListDisplay(doc->filePath);
+//         }
+//     };
 
-    if (QUndoStack* stack = activeUndoStack())
-        stack->push(new LambdaCommand(redoFn, undoFn, description));
-}
+//     if (QUndoStack* stack = activeUndoStack())
+//         stack->push(new LambdaCommand(redoFn, undoFn, description));
+// }
 
 void MainWindow::pushModifyShapeCommand(qulonglong uid,
                                         const ShapeBackup& before,

@@ -229,7 +229,44 @@ private:
 
 class Edit : public BaseUndo
 {
+public:
+    // Тип редактируемой фигуры
+    enum class Type
+    {
+        MovePoint,
+        MoveLineNode,
+        MovePolylineNode,
+        EditRectangle,
+        EditCircle
+    };
 
+    // Храним данные конкретного редактирования
+    struct Data
+    {
+        Type type = {Type::MovePoint};
+
+        // Для полилинии, линии и точки достаточно индекса и смещения
+        int pointIndex = {-1};
+        QPointF delta;
+
+        // Для прямоугольника нужна вся геометрия
+        QRectF rectBefore;
+        QRectF rectAfter;
+
+        // Для круга нужно изменения радиуса
+        qreal circleRadiusBefore = {0};
+        qreal circleRadiusAfter = {0};
+    };
+
+    Edit(Document* doc, QGraphicsItem* shape,
+         const Data& data, const QString& text);
+
+    void undo() override;
+    void redo() override;
+
+private:
+    QGraphicsItem* _shape = {nullptr};
+    Data _data;
 };
 
 
