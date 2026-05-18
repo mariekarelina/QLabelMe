@@ -37,6 +37,13 @@ public:
 
     void removePoint(QPointF position);
     void insertPoint(QPointF position);
+
+    bool insertPointAtIndex(int index, const QPointF& scenePos);
+    bool removePointAtIndex(int index);
+    bool findInsertPointAt(const QPointF& scenePos,
+                           int* pointIndex,
+                           QPointF* point) const;
+
     void closePolyline();
     bool isClickOnFirstPoint(const QPointF& scenePos) const; // точка 0
     bool isClickOnAnyPoint(const QPointF& scenePos, int* idx = nullptr) const;

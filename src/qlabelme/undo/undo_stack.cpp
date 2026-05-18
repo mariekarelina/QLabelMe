@@ -195,13 +195,23 @@ BaseUndo::~BaseUndo()
 {
     for (QGraphicsItem* shape : _shapesCollector)
     {
-        if (shape && shape->scene())
-        {
-            // Отладить
-            break_point
-        }
+        // if (shape && shape->scene())
+        // {
+        //     // Отладить TODO
+        //     //break_point
 
-        if (shape && !shape->scene())
+        // }
+
+        // if (shape && !shape->scene())
+        //     delete shape;
+
+        if (!shape)
+            continue;
+
+        // Если фигура находится на сцене, ее владельцем считается сцена
+        // Здесь удаляем только те фигуры, которые были вынуты из сцены
+        // и больше никем не будут уничтожены
+        if (!shape->scene())
             delete shape;
     }
 }
@@ -432,12 +442,13 @@ Delete::~Delete()
     // for (const ListItemState& state : _listItems)
     //     if (state.item && !state.item->listWidget())
     //         delete state.item;
-    for (const RowState& state : _rows)
+    for (RowState& state : _rows)
     {
         for (QStandardItem* item : state.modelItems)
         {
             if (item && !item->model())
                 delete item;
+            state.modelItems.clear();
         }
     }
 }
@@ -511,7 +522,10 @@ void Delete::undo()
 
         // Возвращаем строку модели обратно в QListView
         if (!state.modelItems.isEmpty())
+        {
             _doc->polygonList.model.insertRow(row, state.modelItems);
+            state.modelItems.clear();
+        }
     }
 
     _doc->isModified = true;
@@ -682,8 +696,6 @@ Edit::Edit(Document* doc, QGraphicsItem* shape,
 
 void Edit::undo()
 {
-    bool changed = false;
-
     switch (_data.type)
     {
     case Type::MovePoint:
@@ -692,7 +704,6 @@ void Edit::undo()
         {
             point->setCenter(point->center() - _data.delta);
             point->updateHandlePosition();
-            changed = true;
         }
 
         break;
@@ -717,8 +728,6 @@ void Edit::undo()
 
             line->updatePath();
             line->updatePointNumbers();
-
-            changed = true;
         }
 
         break;
@@ -743,8 +752,6 @@ void Edit::undo()
 
             polyline->updatePath();
             polyline->updatePointNumbers();
-
-            changed = true;
         }
 
         break;
@@ -757,8 +764,6 @@ void Edit::undo()
             rectangle->setRealSceneRect(_data.rectBefore);
             rectangle->updateHandlePosition();
             rectangle->updatePointNumbers();
-
-            changed = true;
         }
 
         break;
@@ -771,16 +776,11 @@ void Edit::undo()
             circle->setRealRadius(_data.circleRadiusBefore);
             circle->updateHandlePosition();
             circle->updateCrossLines();
-
-            changed = true;
         }
 
         break;
     }
     }
-
-    if (changed)
-        _doc->isModified = true;
 }
 
 void Edit::redo()
@@ -788,8 +788,6 @@ void Edit::redo()
     // Первый redo вызывается автоматически при push()
     if (firstRedo())
         return;
-
-    bool changed = false;
 
     switch (_data.type)
     {
@@ -799,7 +797,6 @@ void Edit::redo()
         {
             point->setCenter(point->center() + _data.delta);
             point->updateHandlePosition();
-            changed = true;
         }
 
         break;
@@ -824,8 +821,6 @@ void Edit::redo()
 
             line->updatePath();
             line->updatePointNumbers();
-
-            changed = true;
         }
 
         break;
@@ -850,8 +845,6 @@ void Edit::redo()
 
             polyline->updatePath();
             polyline->updatePointNumbers();
-
-            changed = true;
         }
 
         break;
@@ -864,8 +857,6 @@ void Edit::redo()
             rectangle->setRealSceneRect(_data.rectAfter);
             rectangle->updateHandlePosition();
             rectangle->updatePointNumbers();
-
-            changed = true;
         }
 
         break;
@@ -878,16 +869,116 @@ void Edit::redo()
             circle->setRealRadius(_data.circleRadiusAfter);
             circle->updateHandlePosition();
             circle->updateCrossLines();
-
-            changed = true;
         }
 
         break;
     }
     }
+}
 
-    if (changed)
-        _doc->isModified = true;
+NodeEdit::NodeEdit(Document* doc, QGraphicsItem* shape,
+                   const Data& data, const QString& text)
+{
+    _doc = doc;
+    _shape = shape;
+    _data = data;
+
+    QUndoCommand::setText(text);
+}
+
+void NodeEdit::undo()
+{
+    switch (_data.type)
+    {
+    case Type::InsertLineNode:
+    {
+        qgraph::Line* line = dynamic_cast<qgraph::Line*>(_shape);
+
+        if (line)
+            line->removePointAtIndex(_data.pointIndex);
+
+        break;
+    }
+
+    case Type::RemoveLineNode:
+    {
+        qgraph::Line* line = dynamic_cast<qgraph::Line*>(_shape);
+
+        if (line)
+            line->insertPointAtIndex(_data.pointIndex, _data.point);
+
+        break;
+    }
+
+    case Type::InsertPolylineNode:
+    {
+        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_shape);
+
+        if (polyline)
+            polyline->removePointAtIndex(_data.pointIndex);
+
+        break;
+    }
+
+    case Type::RemovePolylineNode:
+    {
+        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_shape);
+
+        if (polyline)
+            polyline->insertPointAtIndex(_data.pointIndex, _data.point);
+
+        break;
+    }
+    }
+}
+
+void NodeEdit::redo()
+{
+    if (firstRedo())
+        return;
+
+    switch (_data.type)
+    {
+    case Type::InsertLineNode:
+    {
+        qgraph::Line* line = dynamic_cast<qgraph::Line*>(_shape);
+
+        if (line)
+            line->insertPointAtIndex(_data.pointIndex, _data.point);
+
+        break;
+    }
+
+    case Type::RemoveLineNode:
+    {
+        qgraph::Line* line = dynamic_cast<qgraph::Line*>(_shape);
+
+        if (line)
+            line->removePointAtIndex(_data.pointIndex);
+
+        break;
+    }
+
+    case Type::InsertPolylineNode:
+    {
+        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_shape);
+
+        if (polyline)
+            polyline->insertPointAtIndex(_data.pointIndex, _data.point);
+
+        break;
+    }
+
+    case Type::RemovePolylineNode:
+    {
+        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_shape);
+
+        if (polyline)
+            polyline->removePointAtIndex(_data.pointIndex);
+
+        break;
+    }
+    }
 }
 
 } // namespace undo

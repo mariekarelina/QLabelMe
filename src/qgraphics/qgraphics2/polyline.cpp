@@ -241,6 +241,164 @@ void Polyline::insertPoint(QPointF position)
     updatePointNumbers();
 }
 
+bool Polyline::insertPointAtIndex(int index, const QPointF& scenePos)
+{
+    if (!scene())
+        return false;
+
+    if (index < 0 || index > _circles.size())
+        return false;
+
+    DragCircle* newCircle = new DragCircle(scene());
+    newCircle->setParentItem(this);
+    newCircle->setVisible(true);
+
+    if (!_circles.isEmpty())
+    {
+        DragCircle* existingCircle = _circles.first();
+
+        newCircle->setPen(existingCircle->basePen());
+        newCircle->setBrush(existingCircle->baseBrush());
+        newCircle->setRect(existingCircle->baseRect());
+        newCircle->setBaseStyle(existingCircle->baseColor(),
+                                existingCircle->baseSize());
+        newCircle->setSelectedHandleColor(existingCircle->selectedHandleColor());
+        newCircle->restoreBaseStyle();
+        newCircle->setZValue(existingCircle->zValue());
+    }
+
+    newCircle->setPos(mapFromScene(scenePos));
+    DragCircle::rememberCurrentAsBase(newCircle);
+
+    _circles.insert(index, newCircle);
+
+    updateConnections();
+    updatePath();
+    updatePointNumbers();
+
+    if (_modificationCallback)
+        _modificationCallback();
+
+    return true;
+}
+
+bool Polyline::removePointAtIndex(int index)
+{
+    if (!scene())
+        return false;
+
+    // У замкнутой полилинии минимум 3 точки.
+    if (_isClosed && _circles.size() <= 3)
+        return false;
+
+    // У незамкнутой полилинии минимум 2 точки.
+    if (!_isClosed && _circles.size() <= 2)
+        return false;
+
+    if (index < 0 || index >= _circles.size())
+        return false;
+
+    DragCircle* circle = _circles.takeAt(index);
+    if (!circle)
+        return false;
+
+    circle->invalidate();
+    circle->disconnect();
+
+    scene()->removeItem(circle);
+    delete circle;
+
+    updateConnections();
+    updatePath();
+    updatePointNumbers();
+
+    if (_modificationCallback)
+        _modificationCallback();
+
+    return true;
+}
+
+bool Polyline::findInsertPointAt(const QPointF& scenePos,
+                                 int* pointIndex,
+                                 QPointF* point) const
+{
+    if (_circles.size() < 2)
+        return false;
+
+    const QPointF localPos = mapFromScene(scenePos);
+
+    int insertIndex = -1;
+    qreal minDistance = std::numeric_limits<qreal>::max();
+    QPointF closestPoint;
+
+    for (int i = 0; i < _circles.size() - 1; ++i)
+    {
+        const QPointF p1 = _circles[i]->pos();
+        const QPointF p2 = _circles[i + 1]->pos();
+
+        const qreal dx = p2.x() - p1.x();
+        const qreal dy = p2.y() - p1.y();
+        const qreal lengthSquared = dx * dx + dy * dy;
+
+        if (qFuzzyIsNull(lengthSquared))
+            continue;
+
+        qreal u = ((localPos.x() - p1.x()) * dx +
+                   (localPos.y() - p1.y()) * dy) / lengthSquared;
+
+        u = qBound(0.0, u, 1.0);
+
+        const QPointF projectedPoint = p1 + u * (p2 - p1);
+        const qreal distance = QLineF(localPos, projectedPoint).length();
+
+        if (distance < minDistance)
+        {
+            minDistance = distance;
+            insertIndex = i + 1;
+            closestPoint = projectedPoint;
+        }
+    }
+
+    if (_isClosed && _circles.size() > 2)
+    {
+        const QPointF p1 = _circles.last()->pos();
+        const QPointF p2 = _circles.first()->pos();
+
+        const qreal dx = p2.x() - p1.x();
+        const qreal dy = p2.y() - p1.y();
+        const qreal lengthSquared = dx * dx + dy * dy;
+
+        if (!qFuzzyIsNull(lengthSquared))
+        {
+            qreal u = ((localPos.x() - p1.x()) * dx +
+                       (localPos.y() - p1.y()) * dy) / lengthSquared;
+
+            u = qBound(0.0, u, 1.0);
+
+            const QPointF projectedPoint = p1 + u * (p2 - p1);
+            const qreal distance = QLineF(localPos, projectedPoint).length();
+
+            if (distance < minDistance)
+            {
+                minDistance = distance;
+                insertIndex = _circles.size();
+                closestPoint = projectedPoint;
+            }
+        }
+    }
+
+    if (insertIndex < 0 || minDistance >= 20.0)
+        return false;
+
+    if (pointIndex)
+        *pointIndex = insertIndex;
+
+    if (point)
+        *point = mapToScene(closestPoint);
+
+    return true;
+}
+
 void Polyline::closePolyline()
 {
     setClosed(true, true);

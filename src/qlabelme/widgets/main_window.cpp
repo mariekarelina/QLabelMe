@@ -755,8 +755,60 @@ MainWindow::MainWindow(QWidget* parent) :
     }
 }
 
+// MainWindow::~MainWindow()
+// {
+//     delete ui;
+// }
 MainWindow::~MainWindow()
 {
+    _loadingNow = true;
+
+    if (ui)
+    {
+        if (ui->graphView)
+            ui->graphView->setScene(nullptr);
+
+        if (ui->polygonList)
+            ui->polygonList->setModel(nullptr);
+
+        if (ui->coordinateList)
+            ui->coordinateList->clear();
+    }
+
+    if (_undoView)
+        _undoView->setStack(nullptr);
+
+    if (_undoGroup)
+        _undoGroup->setActiveStack(nullptr);
+
+    for (QMap<QString, Document::Ptr>::iterator it = _documentsMap.begin();
+         it != _documentsMap.end(); ++it)
+    {
+        Document::Ptr doc = it.value();
+
+        if (!doc)
+            continue;
+
+        if (doc->_undoStack)
+        {
+            QObject::disconnect(doc->_undoStack.get(), nullptr, this, nullptr);
+
+            if (_undoGroup)
+                _undoGroup->removeStack(doc->_undoStack.get());
+        }
+
+        QObject::disconnect(&doc->undoStack2, nullptr, this, nullptr);
+
+        QGraphicsScene* scene = doc->scene;
+        if (scene)
+            QObject::disconnect(scene, nullptr, this, nullptr);
+    }
+
+    if (ui && ui->fileList)
+        ui->fileList->clear();
+
+    _documentsMap.clear();
+
     delete ui;
 }
 
@@ -821,6 +873,53 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         const Qt::KeyboardModifiers mods = mouseEvent->modifiers();
         const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
         // Удаление в eventFilter()
+        // // Alt + ЛКМ добавить узел на ребро
+        // if ((mods & Qt::AltModifier) && !(mods & Qt::ShiftModifier))
+        // {
+        //     QGraphicsItem* item = pickItemByEdgeAt(graphView, mouseEvent->pos());
+
+        //     if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        //     {
+        //         ShapeBackup before = makeBackupFromItem(polyline);
+        //         const qulonglong uid = before.uid;
+
+        //         polyline->insertPoint(scenePos);
+
+        //         ShapeBackup after = makeBackupFromItem(polyline);
+        //         if (!sameGeometry(before, after))
+        //             pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
+
+        //         if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+        //         {
+        //             doc->isModified = true;
+        //             updateFileListDisplay(doc->filePath);
+        //         }
+
+        //         mouseEvent->accept();
+        //         return;
+        //     }
+
+        //     if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
+        //     {
+        //         ShapeBackup before = makeBackupFromItem(line);
+        //         const qulonglong uid = before.uid;
+
+        //         line->insertPoint(scenePos);
+
+        //         ShapeBackup after = makeBackupFromItem(line);
+        //         if (!sameGeometry(before, after))
+        //             pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
+
+        //         if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+        //         {
+        //             doc->isModified = true;
+        //             updateFileListDisplay(doc->filePath);
+        //         }
+
+        //         mouseEvent->accept();
+        //         return;
+        //     }
+        // }
         // Alt + ЛКМ добавить узел на ребро
         if ((mods & Qt::AltModifier) && !(mods & Qt::ShiftModifier))
         {
@@ -828,44 +927,74 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
             if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
             {
-                ShapeBackup before = makeBackupFromItem(polyline);
-                const qulonglong uid = before.uid;
+                int pointIndex = -1;
+                QPointF point;
 
-                polyline->insertPoint(scenePos);
-
-                ShapeBackup after = makeBackupFromItem(polyline);
-                if (!sameGeometry(before, after))
-                    pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
-
-                if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                if (polyline->findInsertPointAt(scenePos, &pointIndex, &point))
                 {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
+                    QUndoStack* stack = activeUndoStack();
 
-                mouseEvent->accept();
-                return;
+                    if (!stack)
+                        return;
+
+                    if (polyline->insertPointAtIndex(pointIndex, point))
+                    {
+                        undo::NodeEdit::Data data;
+                        data.type = undo::NodeEdit::Type::InsertPolylineNode;
+                        data.pointIndex = pointIndex;
+                        data.point = point;
+
+                        stack->push(new undo::NodeEdit(doc.get(),
+                                                       polyline,
+                                                       data,
+                                                       u8"Добавление узла"));
+
+                        if (!doc->isModified)
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+
+                        mouseEvent->accept();
+                        return;
+                    }
+                }
             }
 
             if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
             {
-                ShapeBackup before = makeBackupFromItem(line);
-                const qulonglong uid = before.uid;
+                int pointIndex = -1;
+                QPointF point;
 
-                line->insertPoint(scenePos);
-
-                ShapeBackup after = makeBackupFromItem(line);
-                if (!sameGeometry(before, after))
-                    pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
-
-                if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                if (line->findInsertPointAt(scenePos, &pointIndex, &point))
                 {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
+                    QUndoStack* stack = activeUndoStack();
 
-                mouseEvent->accept();
-                return;
+                    if (!stack)
+                        return;
+
+                    if (line->insertPointAtIndex(pointIndex, point))
+                    {
+                        undo::NodeEdit::Data data;
+                        data.type = undo::NodeEdit::Type::InsertLineNode;
+                        data.pointIndex = pointIndex;
+                        data.point = point;
+
+                        stack->push(new undo::NodeEdit(doc.get(),
+                                                       line,
+                                                       data,
+                                                       u8"Добавление узла"));
+
+                        if (!doc->isModified)
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+
+                        mouseEvent->accept();
+                        return;
+                    }
+                }
             }
         }
     }
@@ -2803,6 +2932,62 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 hideGhost();
                 break;
             }
+            // // Alt + Shift + ЛКМ удалить узел
+            // if ((me->modifiers() & Qt::AltModifier) && (me->modifiers() & Qt::ShiftModifier))
+            // {
+            //     qgraph::DragCircle* handle = pickHandleAt(sp);
+
+            //     if (!handle)
+            //     {
+            //         bool topIsHandle = false;
+            //         handle = pickHiddenHandle(sp, topIsHandle);
+            //     }
+
+            //     if (handle && handle->parentItem())
+            //     {
+            //         if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(handle->parentItem()))
+            //         {
+            //             ShapeBackup before = makeBackupFromItem(polyline);
+            //             const qulonglong uid = before.uid;
+
+            //             polyline->handlePointDeletion(handle);
+
+            //             ShapeBackup after = makeBackupFromItem(polyline);
+            //             if (!sameGeometry(before, after))
+            //                 pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
+
+            //             if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+            //             {
+            //                 doc->isModified = true;
+            //                 updateFileListDisplay(doc->filePath);
+            //             }
+
+            //             event->accept();
+            //             return true;
+            //         }
+
+            //         if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(handle->parentItem()))
+            //         {
+            //             ShapeBackup before = makeBackupFromItem(line);
+            //             const qulonglong uid = before.uid;
+
+            //             line->handlePointDeletion(handle);
+
+            //             ShapeBackup after = makeBackupFromItem(line);
+            //             if (!sameGeometry(before, after))
+            //                 pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
+
+            //             if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+            //             {
+            //                 doc->isModified = true;
+            //                 updateFileListDisplay(doc->filePath);
+            //             }
+
+            //             event->accept();
+            //             return true;
+            //         }
+            //     }
+            // }
             // Alt + Shift + ЛКМ удалить узел
             if ((me->modifiers() & Qt::AltModifier) && (me->modifiers() & Qt::ShiftModifier))
             {
@@ -2818,19 +3003,57 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 {
                     if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(handle->parentItem()))
                     {
-                        ShapeBackup before = makeBackupFromItem(polyline);
-                        const qulonglong uid = before.uid;
+                        const QVector<qgraph::DragCircle*>& circles = polyline->circles();
+                        const int pointIndex = circles.indexOf(handle);
 
-                        polyline->handlePointDeletion(handle);
-
-                        ShapeBackup after = makeBackupFromItem(polyline);
-                        if (!sameGeometry(before, after))
-                            pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
-
-                        if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                        if (pointIndex < 0)
                         {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
+                            event->accept();
+                            return true;
+                        }
+
+                        const QPointF point = handle->scenePos();
+
+                        if (_currentHoveredHandle == handle)
+                            _currentHoveredHandle = nullptr;
+
+                        if (_lastHoverHandle == handle)
+                            _lastHoverHandle = nullptr;
+
+                        if (_ghostTarget == handle)
+                        {
+                            _ghostTarget = nullptr;
+
+                            if (_ghostHandle)
+                                _ghostHandle->setVisible(false);
+                        }
+
+                        if (_m_dragHandle == handle)
+                        {
+                            _m_dragHandle = nullptr;
+                            _m_isDraggingHandle = false;
+                        }
+
+                        if (polyline->removePointAtIndex(pointIndex))
+                        {
+                            if (QUndoStack* stack = activeUndoStack())
+                            {
+                                undo::NodeEdit::Data data;
+                                data.type = undo::NodeEdit::Type::RemovePolylineNode;
+                                data.pointIndex = pointIndex;
+                                data.point = point;
+
+                                stack->push(new undo::NodeEdit(currentDocument().get(),
+                                                               polyline,
+                                                               data,
+                                                               u8"Удаление узла"));
+                            }
+
+                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
                         }
 
                         event->accept();
@@ -2839,19 +3062,57 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                     if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(handle->parentItem()))
                     {
-                        ShapeBackup before = makeBackupFromItem(line);
-                        const qulonglong uid = before.uid;
+                        const QVector<qgraph::DragCircle*>& circles = line->circles();
+                        const int pointIndex = circles.indexOf(handle);
 
-                        line->handlePointDeletion(handle);
-
-                        ShapeBackup after = makeBackupFromItem(line);
-                        if (!sameGeometry(before, after))
-                            pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
-
-                        if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                        if (pointIndex < 0)
                         {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
+                            event->accept();
+                            return true;
+                        }
+
+                        const QPointF point = handle->scenePos();
+
+                        if (_currentHoveredHandle == handle)
+                            _currentHoveredHandle = nullptr;
+
+                        if (_lastHoverHandle == handle)
+                            _lastHoverHandle = nullptr;
+
+                        if (_ghostTarget == handle)
+                        {
+                            _ghostTarget = nullptr;
+
+                            if (_ghostHandle)
+                                _ghostHandle->setVisible(false);
+                        }
+
+                        if (_m_dragHandle == handle)
+                        {
+                            _m_dragHandle = nullptr;
+                            _m_isDraggingHandle = false;
+                        }
+
+                        if (line->removePointAtIndex(pointIndex))
+                        {
+                            if (QUndoStack* stack = activeUndoStack())
+                            {
+                                undo::NodeEdit::Data data;
+                                data.type = undo::NodeEdit::Type::RemoveLineNode;
+                                data.pointIndex = pointIndex;
+                                data.point = point;
+
+                                stack->push(new undo::NodeEdit(currentDocument().get(),
+                                                               line,
+                                                               data,
+                                                               u8"Удаление узла"));
+                            }
+
+                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
                         }
 
                         event->accept();
@@ -3384,21 +3645,76 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                         QAction* chosen = menu.exec(ce->globalPos());
 
+                        // if (chosen == actRemove)
+                        // {
+                        //     ShapeBackup before = makeBackupFromItem(polyline);
+                        //     qulonglong uid = before.uid;
+
+                        //     polyline->handlePointDeletion(circle);
+
+                        //     ShapeBackup after = makeBackupFromItem(polyline);
+                        //     if (!sameGeometry(before, after))
+                        //         pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
+
+                        //     if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                        //     {
+                        //         doc->isModified = true;
+                        //         updateFileListDisplay(doc->filePath);
+                        //     }
+                        // }
                         if (chosen == actRemove)
                         {
-                            ShapeBackup before = makeBackupFromItem(polyline);
-                            qulonglong uid = before.uid;
+                            const QVector<qgraph::DragCircle*>& circles = polyline->circles();
+                            const int pointIndex = circles.indexOf(circle);
 
-                            polyline->handlePointDeletion(circle);
-
-                            ShapeBackup after = makeBackupFromItem(polyline);
-                            if (!sameGeometry(before, after))
-                                pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
-
-                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            if (pointIndex < 0)
                             {
-                                doc->isModified = true;
-                                updateFileListDisplay(doc->filePath);
+                                ce->accept();
+                                return true;
+                            }
+
+                            const QPointF point = circle->scenePos();
+
+                            if (_currentHoveredHandle == circle)
+                                _currentHoveredHandle = nullptr;
+
+                            if (_lastHoverHandle == circle)
+                                _lastHoverHandle = nullptr;
+
+                            if (_ghostTarget == circle)
+                            {
+                                _ghostTarget = nullptr;
+
+                                if (_ghostHandle)
+                                    _ghostHandle->setVisible(false);
+                            }
+
+                            if (_m_dragHandle == circle)
+                            {
+                                _m_dragHandle = nullptr;
+                                _m_isDraggingHandle = false;
+                            }
+
+                            if (polyline->removePointAtIndex(pointIndex))
+                            {
+                                if (QUndoStack* stack = activeUndoStack())
+                                {
+                                    undo::NodeEdit::Data data;
+                                    data.type = undo::NodeEdit::Type::RemovePolylineNode;
+                                    data.pointIndex = pointIndex;
+                                    data.point = point;
+
+                                    stack->push(new undo::NodeEdit(currentDocument().get(),
+                                                                   polyline,
+                                                                   data,
+                                                                   u8"Удаление узла"));
+                                }
+
+                                if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
                             }
                         }
                         else if (chosen == actResume)
@@ -3521,21 +3837,76 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                         QAction* chosen = menu.exec(ce->globalPos());
 
+                        // if (chosen == actRemove)
+                        // {
+                        //     ShapeBackup before = makeBackupFromItem(line);
+                        //     qulonglong uid = before.uid;
+
+                        //     line->handlePointDeletion(circle);
+
+                        //     ShapeBackup after = makeBackupFromItem(line);
+                        //     if (!sameGeometry(before, after))
+                        //         pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
+
+                        //     if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                        //     {
+                        //         doc->isModified = true;
+                        //         updateFileListDisplay(doc->filePath);
+                        //     }
+                        // }
                         if (chosen == actRemove)
                         {
-                            ShapeBackup before = makeBackupFromItem(line);
-                            qulonglong uid = before.uid;
+                            const QVector<qgraph::DragCircle*>& circles = line->circles();
+                            const int pointIndex = circles.indexOf(circle);
 
-                            line->handlePointDeletion(circle);
-
-                            ShapeBackup after = makeBackupFromItem(line);
-                            if (!sameGeometry(before, after))
-                                pushModifyShapeCommand(uid, before, after, u8"Удаление узла");
-
-                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            if (pointIndex < 0)
                             {
-                                doc->isModified = true;
-                                updateFileListDisplay(doc->filePath);
+                                ce->accept();
+                                return true;
+                            }
+
+                            const QPointF point = circle->scenePos();
+
+                            if (_currentHoveredHandle == circle)
+                                _currentHoveredHandle = nullptr;
+
+                            if (_lastHoverHandle == circle)
+                                _lastHoverHandle = nullptr;
+
+                            if (_ghostTarget == circle)
+                            {
+                                _ghostTarget = nullptr;
+
+                                if (_ghostHandle)
+                                    _ghostHandle->setVisible(false);
+                            }
+
+                            if (_m_dragHandle == circle)
+                            {
+                                _m_dragHandle = nullptr;
+                                _m_isDraggingHandle = false;
+                            }
+
+                            if (line->removePointAtIndex(pointIndex))
+                            {
+                                if (QUndoStack* stack = activeUndoStack())
+                                {
+                                    undo::NodeEdit::Data data;
+                                    data.type = undo::NodeEdit::Type::RemoveLineNode;
+                                    data.pointIndex = pointIndex;
+                                    data.point = point;
+
+                                    stack->push(new undo::NodeEdit(currentDocument().get(),
+                                                                   line,
+                                                                   data,
+                                                                   u8"Удаление узла"));
+                                }
+
+                                if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
                             }
                         }
                         else if (chosen == actResume)
@@ -3659,21 +4030,50 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 QAction* actToLine = menu.addAction(u8"Полилиния -> линия");
 
                 QAction* chosen = menu.exec(ce->globalPos());
+                // if (chosen == actAdd)
+                // {
+                //     ShapeBackup before = makeBackupFromItem(polyline);
+                //     qulonglong uid = before.uid;
+
+                //     polyline->insertPoint(scenePos);
+
+                //     ShapeBackup after = makeBackupFromItem(polyline);
+                //     if (!sameGeometry(before, after))
+                //         pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
+
+                //     if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                //     {
+                //         doc->isModified = true;
+                //         updateFileListDisplay(doc->filePath);
+                //     }
+                // }
                 if (chosen == actAdd)
                 {
-                    ShapeBackup before = makeBackupFromItem(polyline);
-                    qulonglong uid = before.uid;
+                    int pointIndex = -1;
+                    QPointF point;
 
-                    polyline->insertPoint(scenePos);
-
-                    ShapeBackup after = makeBackupFromItem(polyline);
-                    if (!sameGeometry(before, after))
-                        pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
-
-                    if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                    if (polyline->findInsertPointAt(scenePos, &pointIndex, &point))
                     {
-                        doc->isModified = true;
-                        updateFileListDisplay(doc->filePath);
+                        QUndoStack* stack = activeUndoStack();
+
+                        if (stack && polyline->insertPointAtIndex(pointIndex, point))
+                        {
+                            undo::NodeEdit::Data data;
+                            data.type = undo::NodeEdit::Type::InsertPolylineNode;
+                            data.pointIndex = pointIndex;
+                            data.point = point;
+
+                            stack->push(new undo::NodeEdit(currentDocument().get(),
+                                                           polyline,
+                                                           data,
+                                                           u8"Добавление узла"));
+
+                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
+                        }
                     }
                 }
                 else if (chosen == actToLine)
@@ -3770,21 +4170,50 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 QAction* actToPolyline = menu.addAction(u8"Линия -> полилиния");
 
                 QAction* chosen = menu.exec(ce->globalPos());
+                // if (chosen == actAdd)
+                // {
+                //     ShapeBackup before = makeBackupFromItem(line);
+                //     qulonglong uid = before.uid;
+
+                //     line->insertPoint(scenePos);
+
+                //     ShapeBackup after = makeBackupFromItem(line);
+                //     if (!sameGeometry(before, after))
+                //         pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
+
+                //     if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                //     {
+                //         doc->isModified = true;
+                //         updateFileListDisplay(doc->filePath);
+                //     }
+                // }
                 if (chosen == actAdd)
                 {
-                    ShapeBackup before = makeBackupFromItem(line);
-                    qulonglong uid = before.uid;
+                    int pointIndex = -1;
+                    QPointF point;
 
-                    line->insertPoint(scenePos);
-
-                    ShapeBackup after = makeBackupFromItem(line);
-                    if (!sameGeometry(before, after))
-                        pushModifyShapeCommand(uid, before, after, u8"Добавление узла");
-
-                    if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                    if (line->findInsertPointAt(scenePos, &pointIndex, &point))
                     {
-                        doc->isModified = true;
-                        updateFileListDisplay(doc->filePath);
+                        QUndoStack* stack = activeUndoStack();
+
+                        if (stack && line->insertPointAtIndex(pointIndex, point))
+                        {
+                            undo::NodeEdit::Data data;
+                            data.type = undo::NodeEdit::Type::InsertLineNode;
+                            data.pointIndex = pointIndex;
+                            data.point = point;
+
+                            stack->push(new undo::NodeEdit(currentDocument().get(),
+                                                           line,
+                                                           data,
+                                                           u8"Добавление узла"));
+
+                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            {
+                                doc->isModified = true;
+                                updateFileListDisplay(doc->filePath);
+                            }
+                        }
                     }
                 }
                 else if (chosen == actMerge)

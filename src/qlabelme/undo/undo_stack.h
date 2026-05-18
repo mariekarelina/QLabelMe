@@ -269,8 +269,71 @@ private:
     Data _data;
 };
 
+class NodeEdit : public BaseUndo
+{
+public:
+    enum class Type
+    {
+        InsertLineNode,
+        RemoveLineNode,
+        InsertPolylineNode,
+        RemovePolylineNode
+    };
 
+    struct Data
+    {
+        Type type = {Type::InsertLineNode};
+
+        // Индекс узла, который был добавлен или удален
+        int pointIndex = {-1};
+
+        // Координата добавленного или удаленного узла
+        QPointF point;
+    };
+
+    NodeEdit(Document* doc, QGraphicsItem* shape,
+             const Data& data, const QString& text);
+
+    void undo() override;
+    void redo() override;
+
+private:
+    QGraphicsItem* _shape = {nullptr};
+    Data _data;
+};
+
+// Линию в полилинию и обратно, также объединения и разрыв линии
+class Replace : public BaseUndo
+{
+
+};
+
+// Показать/скрыть фигуру
+class Visibility : public BaseUndo
+{
+
+};
+
+// Смена класса фигуры
 class ChangeClass : public BaseUndo
+{
+
+};
+
+// Операции с нумерацией
+class NumberingEdit : public BaseUndo
+{
+
+};
+
+// Возобновление рисования линии/полилинии
+class ResumeEdit : public BaseUndo
+{
+
+};
+
+// Перемещение фигуры в списке
+class ListOrder  : public BaseUndo
 {
 
 };

@@ -9,6 +9,8 @@ Document::Document()
 Document::~Document()
 {
     //delete scene;
+    undoStack2.clear();
+    _undoStack.reset();
 }
 
 Document::Ptr Document::create(const QString& path)

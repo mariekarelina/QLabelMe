@@ -41,10 +41,10 @@ struct Document
     QGraphicsPixmapItem* pixmapItem = {nullptr}; // Элемент на сцене
     bool isModified = {false};                   // Есть ли несохраненные изменения
 
+    PolygonListData polygonList; // Данные списка фигур для текущего документа
+
     std::unique_ptr<QUndoStack> _undoStack;
     QUndoStack undoStack2;
-
-    PolygonListData polygonList; // Данные списка фигур для текущего документа
 
     struct
     {
