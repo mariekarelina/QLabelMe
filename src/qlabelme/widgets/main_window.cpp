@@ -6398,6 +6398,50 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
             }
         });
 
+        QObject::connect(stack, &QUndoStack::indexChanged,
+                         this, [this, stack](int)
+        {
+            if (_loadingNow)
+                return;
+
+            if (_undoGroup && _undoGroup->activeStack() != stack)
+                return;
+
+            Document::Ptr doc = currentDocument();
+
+            if (!doc || !doc->scene)
+                return;
+
+            const QList<QGraphicsItem*> items = doc->scene->items();
+
+            for (QGraphicsItem* item : items)
+            {
+                if (!item)
+                    continue;
+
+                if (item == doc->videoRect
+                    || item == _tempRectItem
+                    || item == _tempCircleItem
+                    || item == _tempPolyline)
+                {
+                    continue;
+                }
+
+                if (item->parentItem() != nullptr)
+                    continue;
+
+                const QString className = item->data(0).toString();
+
+                if (!className.isEmpty())
+                    applyClassColorToItem(item, className);
+            }
+
+            updatePolygonListForCurrentScene();
+            updateCoordinateList();
+
+            doc->scene->update();
+        });
+
         // Убираем чекбоксы
         //item->setFlags(item->flags() & ~Qt::ItemIsUserCheckable);
 
@@ -6471,9 +6515,56 @@ void MainWindow::updatePolygonListForCurrentScene()
     renumberPolygonList();
 }
 
+// void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
+// {
+//     if (!item)
+//         return;
+
+//     const QString oldClass = item->data(0).toString();
+
+//     if (_projectClasses.isEmpty())
+//         return;
+
+//     SelectClass dialog(_projectClasses, this);
+//     if (dialog.exec() != QDialog::Accepted)
+//         return;
+
+//     const QString newClass = dialog.selectedClass();
+//     if (newClass.isEmpty() || newClass == oldClass)
+//         return;
+
+//     ShapeBackup before = makeBackupFromItem(item);
+//     const qulonglong uid = before.uid;
+
+//     item->setData(0, newClass);
+//     applyClassColorToItem(item, newClass);
+
+//     if (polygonListRowByItem(item) < 0)
+//         linkSceneItemToList(item);
+//     else
+//         renumberPolygonList();
+
+//     ShapeBackup after = makeBackupFromItem(item);
+//     if (!sameGeometry(before, after))
+//         pushModifyShapeCommand(uid, before, after, u8"Смена класса");
+
+//     if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+//     {
+//         doc->isModified = true;
+//         updateFileListDisplay(doc->filePath);
+//     }
+// }
 void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
 {
     if (!item)
+        return;
+
+    Document::Ptr doc = currentDocument();
+    if (!doc)
+        return;
+
+    QUndoStack* stack = activeUndoStack();
+    if (!stack)
         return;
 
     const QString oldClass = item->data(0).toString();
@@ -6489,8 +6580,9 @@ void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
     if (newClass.isEmpty() || newClass == oldClass)
         return;
 
-    ShapeBackup before = makeBackupFromItem(item);
-    const qulonglong uid = before.uid;
+    undo::ChangeClass::Data data;
+    data.classBefore = oldClass;
+    data.classAfter = newClass;
 
     item->setData(0, newClass);
     applyClassColorToItem(item, newClass);
@@ -6500,11 +6592,15 @@ void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
     else
         renumberPolygonList();
 
-    ShapeBackup after = makeBackupFromItem(item);
-    if (!sameGeometry(before, after))
-        pushModifyShapeCommand(uid, before, after, u8"Смена класса");
+    if (item->scene())
+        item->scene()->update();
 
-    if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+    stack->push(new undo::ChangeClass(doc.get(),
+                                      item,
+                                      data,
+                                      u8"Смена класса"));
+
+    if (!doc->isModified)
     {
         doc->isModified = true;
         updateFileListDisplay(doc->filePath);

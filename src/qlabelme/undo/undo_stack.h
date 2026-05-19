@@ -317,7 +317,22 @@ class Visibility : public BaseUndo
 // Смена класса фигуры
 class ChangeClass : public BaseUndo
 {
+public:
+    struct Data
+    {
+        QString classBefore;
+        QString classAfter;
+    };
 
+    ChangeClass(Document* doc, QGraphicsItem* shape,
+                const Data& data, const QString& text);
+
+    void undo() override;
+    void redo() override;
+
+private:
+    QGraphicsItem* _shape = {nullptr};
+    Data _data;
 };
 
 // Операции с нумерацией

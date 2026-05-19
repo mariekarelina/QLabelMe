@@ -981,4 +981,39 @@ void NodeEdit::redo()
     }
 }
 
+ChangeClass::ChangeClass(Document* doc, QGraphicsItem* shape,
+                         const Data& data, const QString& text)
+{
+    _doc = doc;
+    _shape = shape;
+    _data = data;
+
+    QUndoCommand::setText(text);
+}
+
+void ChangeClass::undo()
+{
+    if (!_shape)
+        return;
+
+    _shape->setData(0, _data.classBefore);
+
+    if (_shape->scene())
+        _shape->scene()->update();
+}
+
+void ChangeClass::redo()
+{
+    if (firstRedo())
+        return;
+
+    if (!_shape)
+        return;
+
+    _shape->setData(0, _data.classAfter);
+
+    if (_shape->scene())
+        _shape->scene()->update();
+}
+
 } // namespace undo
