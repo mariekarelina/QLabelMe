@@ -2868,29 +2868,56 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
             ? ((targets.size() == 1) ? u8"Скрытие фигуры" : u8"Скрытие фигур")
             : ((targets.size() == 1) ? u8"Показ фигуры"   : u8"Показ фигур");
 
-    if (QUndoStack* st = activeUndoStack())
-        st->beginMacro(description);
+    // if (QUndoStack* st = activeUndoStack())
+    //     st->beginMacro(description);
+
+    // for (QGraphicsItem* target : targets)
+    // {
+    //     if (!target)
+    //         continue;
+
+    //     ShapeBackup before = makeBackupFromItem(target);
+    //     const qulonglong uid = before.uid;
+
+    //     target->setVisible(!hideMode);
+
+    //     if (hideMode)
+    //         target->setSelected(false);
+
+    //     ShapeBackup after = makeBackupFromItem(target);
+    //     if (!sameGeometry(before, after))
+    //         pushModifyShapeCommand(uid, before, after, description);
+    // }
+
+    // if (QUndoStack* st = activeUndoStack())
+    //     st->endMacro();
+    QUndoStack* stack = activeUndoStack();
+
+    if (!stack)
+        return;
+
+    QVector<QGraphicsItem*> shapes;
 
     for (QGraphicsItem* target : targets)
     {
         if (!target)
             continue;
 
-        ShapeBackup before = makeBackupFromItem(target);
-        const qulonglong uid = before.uid;
-
         target->setVisible(!hideMode);
 
         if (hideMode)
             target->setSelected(false);
 
-        ShapeBackup after = makeBackupFromItem(target);
-        if (!sameGeometry(before, after))
-            pushModifyShapeCommand(uid, before, after, description);
+        shapes.append(target);
     }
 
-    if (QUndoStack* st = activeUndoStack())
-        st->endMacro();
+    if (shapes.isEmpty())
+        return;
+
+    stack->push(new undo::Visibility(doc.get(),
+                                     shapes,
+                                     !hideMode,
+                                     description));
 
     updatePolygonListTexts();
 

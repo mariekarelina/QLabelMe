@@ -981,6 +981,55 @@ void NodeEdit::redo()
     }
 }
 
+Visibility::Visibility(Document* doc,
+                       const QVector<QGraphicsItem*>& shapes,
+                       bool visible,
+                       const QString& text)
+{
+    _doc = doc;
+    _shapes = shapes;
+    _visible = visible;
+
+    QUndoCommand::setText(text);
+}
+
+void Visibility::undo()
+{
+    for (QGraphicsItem* shape : _shapes)
+    {
+        if (!shape)
+            continue;
+
+        shape->setVisible(!_visible);
+
+        if (_visible)
+            shape->setSelected(false);
+    }
+
+    if (_doc && _doc->scene)
+        _doc->scene->update();
+}
+
+void Visibility::redo()
+{
+    if (firstRedo())
+        return;
+
+    for (QGraphicsItem* shape : _shapes)
+    {
+        if (!shape)
+            continue;
+
+        shape->setVisible(_visible);
+
+        if (!_visible)
+            shape->setSelected(false);
+    }
+
+    if (_doc && _doc->scene)
+        _doc->scene->update();
+}
+
 ChangeClass::ChangeClass(Document* doc, QGraphicsItem* shape,
                          const Data& data, const QString& text)
 {

@@ -311,7 +311,18 @@ class Replace : public BaseUndo
 // Показать/скрыть фигуру
 class Visibility : public BaseUndo
 {
+public:
+    Visibility(Document* doc,
+               const QVector<QGraphicsItem*>& shapes,
+               bool visible,
+               const QString& text);
 
+    void undo() override;
+    void redo() override;
+
+private:
+    QVector<QGraphicsItem*> _shapes;
+    bool _visible = {true};
 };
 
 // Смена класса фигуры
