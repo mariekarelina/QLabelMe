@@ -1208,4 +1208,96 @@ void NumberingEdit::redo()
         _doc->scene->update();
 }
 
+ListOrder::ListOrder(Document* doc,
+                     QGraphicsItem* shape,
+                     int fromRow,
+                     int toRow,
+                     const QString& text)
+{
+    _doc = doc;
+    _shape = shape;
+    _fromRow = fromRow;
+    _toRow = toRow;
+
+    QUndoCommand::setText(text);
+}
+
+void ListOrder::undo()
+{
+    if (!_doc || !_shape)
+        return;
+
+    QVector<QGraphicsItem*>& items = _doc->polygonList.items;
+    QStandardItemModel& model = _doc->polygonList.model;
+
+    const int currentRow = items.indexOf(_shape);
+
+    if (currentRow < 0)
+        return;
+
+    if (_fromRow < 0 || _fromRow >= items.size())
+        return;
+
+    if (currentRow == _fromRow)
+        return;
+
+    if (currentRow >= model.rowCount())
+        return;
+
+    if (_fromRow >= model.rowCount())
+        return;
+
+    QList<QStandardItem*> modelRow = model.takeRow(currentRow);
+
+    if (modelRow.isEmpty())
+        return;
+
+    QGraphicsItem* shape = items.takeAt(currentRow);
+    items.insert(_fromRow, shape);
+
+    model.insertRow(_fromRow, modelRow);
+
+    if (_doc->scene)
+        _doc->scene->update();
+}
+
+void ListOrder::redo()
+{
+    if (!_doc || !_shape)
+        return;
+
+    QVector<QGraphicsItem*>& items = _doc->polygonList.items;
+    QStandardItemModel& model = _doc->polygonList.model;
+
+    const int currentRow = items.indexOf(_shape);
+
+    if (currentRow < 0)
+        return;
+
+    if (_toRow < 0 || _toRow >= items.size())
+        return;
+
+    if (currentRow == _toRow)
+        return;
+
+    if (currentRow >= model.rowCount())
+        return;
+
+    if (_toRow >= model.rowCount())
+        return;
+
+    QList<QStandardItem*> modelRow = model.takeRow(currentRow);
+
+    if (modelRow.isEmpty())
+        return;
+
+    QGraphicsItem* shape = items.takeAt(currentRow);
+    items.insert(_toRow, shape);
+
+    model.insertRow(_toRow, modelRow);
+
+    if (_doc->scene)
+        _doc->scene->update();
+}
+
 } // namespace undo

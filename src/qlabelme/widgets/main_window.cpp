@@ -6782,6 +6782,7 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
                     applyClassColorToItem(item, className);
             }
 
+            refreshShapeListOrderRole();
             updatePolygonListForCurrentScene();
             updateCoordinateList();
 
@@ -13738,42 +13739,83 @@ void MainWindow::moveCurrentShapeInList(int direction)
     if (!sceneItem)
         return;
 
-    std::function<void()> redoFn = [this, sceneItem, toRow]()
+    // std::function<void()> redoFn = [this, sceneItem, toRow]()
+    // {
+    //     const int currentRow = polygonListRowByItem(sceneItem);
+
+    //     if (currentRow < 0)
+    //         return;
+
+    //     movePolygonListRow(currentRow, toRow);
+
+    //     if (Document::Ptr doc = currentDocument())
+    //     {
+    //         doc->isModified = true;
+    //         updateFileListDisplay(doc->filePath);
+    //     }
+    // };
+
+    // std::function<void()> undoFn = [this, sceneItem, fromRow]()
+    // {
+    //     const int currentRow = polygonListRowByItem(sceneItem);
+
+    //     if (currentRow < 0)
+    //         return;
+
+    //     movePolygonListRow(currentRow, fromRow);
+
+    //     if (Document::Ptr doc = currentDocument())
+    //     {
+    //         doc->isModified = true;
+    //         updateFileListDisplay(doc->filePath);
+    //     }
+    // };
+
+    // if (doc->_undoStack)
+    //     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, u8"Перемещение фигуры в списке"));
+    // else
+    //     redoFn();
+    QUndoStack* stack = activeUndoStack();
+
+    if (!stack)
+        return;
+
+    stack->push(new undo::ListOrder(doc.get(),
+                                    sceneItem,
+                                    fromRow,
+                                    toRow,
+                                    u8"Перемещение фигуры в списке"));
+
+    refreshShapeListOrderRole();
+
+    const int movedRow = polygonListRowByItem(sceneItem);
+
+    if (movedRow >= 0)
     {
-        const int currentRow = polygonListRowByItem(sceneItem);
+        const QModelIndex movedIndex = doc->polygonList.model.index(movedRow, 0);
 
-        if (currentRow < 0)
-            return;
+        ui->polygonList->clearSelection();
+        ui->polygonList->setCurrentIndex(movedIndex);
 
-        movePolygonListRow(currentRow, toRow);
-
-        if (Document::Ptr doc = currentDocument())
+        if (QItemSelectionModel* selectionModel = ui->polygonList->selectionModel())
         {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
+            selectionModel->select(movedIndex,
+                                   QItemSelectionModel::Select
+                                   | QItemSelectionModel::Rows);
         }
-    };
+    }
 
-    std::function<void()> undoFn = [this, sceneItem, fromRow]()
+    if (!doc->isModified)
     {
-        const int currentRow = polygonListRowByItem(sceneItem);
+        doc->isModified = true;
+        updateFileListDisplay(doc->filePath);
+    }
 
-        if (currentRow < 0)
-            return;
+    onPolygonListSelectionChanged();
+    updateShapeListButtons();
 
-        movePolygonListRow(currentRow, fromRow);
-
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-    };
-
-    if (doc->_undoStack)
-        doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, u8"Перемещение фигуры в списке"));
-    else
-        redoFn();
+    if (doc->scene)
+        doc->scene->update();
 }
 
 void MainWindow::movePolygonListRow(int fromRow, int toRow)

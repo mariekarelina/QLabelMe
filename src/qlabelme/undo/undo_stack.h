@@ -394,9 +394,24 @@ class ResumeEdit : public BaseUndo
 };
 
 // Перемещение фигуры в списке
-class ListOrder  : public BaseUndo
+class ListOrder : public BaseUndo
 {
+public:
+    ListOrder(Document* doc,
+              QGraphicsItem* shape,
+              int fromRow,
+              int toRow,
+              const QString& text);
 
+    void undo() override;
+    void redo() override;
+
+private:
+    Document* _doc = {nullptr};
+    QGraphicsItem* _shape = {nullptr};
+
+    int _fromRow = {-1};
+    int _toRow = {-1};
 };
 
 } // namespace undo
