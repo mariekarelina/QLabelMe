@@ -433,10 +433,10 @@ private:
     void pushCreateShapeCommand(const ShapeBackup& backup, const QString& description);
 
     // Перемещение фигур
-    void pushMoveShapeCommand(QGraphicsItem* item,
-                              const ShapeBackup& before,
-                              const ShapeBackup& after,
-                              const QString& description);
+    // void pushMoveShapeCommand(QGraphicsItem* item,
+    //                           const ShapeBackup& before,
+    //                           const ShapeBackup& after,
+    //                           const QString& description);
     // // Для узлов
     // void pushHandleEditCommand(QGraphicsItem* item,
     //                            const ShapeBackup& before,
@@ -450,9 +450,9 @@ private:
                                 const QString& description);
 
     // Изменение положения изображения
-    void pushMoveImageCommand(const QPointF& before,
-                              const QPointF& after,
-                              const QString& description);
+    // void pushMoveImageCommand(const QPointF& before,
+    //                           const QPointF& after,
+    //                           const QString& description);
     // Полилиния->линия
     void pushReplaceShapeCommand(qulonglong uid,
                                  const ShapeBackup& before,

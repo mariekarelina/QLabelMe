@@ -850,4 +850,15 @@ void Rectangle::recalcNumberingFromHandle(DragCircle* handle)
     updatePointNumbers();
 }
 
+int Rectangle::numberingOffset() const
+{
+    return _numberingOffset;
+}
+
+void Rectangle::setNumberingOffset(int offset)
+{
+    _numberingOffset = ((offset % 4) + 4) % 4;
+    updatePointNumbers();
+}
+
 } // namespace qgraph

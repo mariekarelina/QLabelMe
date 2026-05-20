@@ -54,6 +54,8 @@ public:
     void raiseHandlesToTop() override;
     void moveToBack();
     void recalcNumberingFromHandle(DragCircle* handle);
+    int numberingOffset() const;
+    void setNumberingOffset(int offset);
 
 public slots:
     void deleteItem();

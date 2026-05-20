@@ -3789,62 +3789,309 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         }
                         else if (chosen == actRecalc)
                         {
-                            ShapeBackup before = makeBackupFromItem(polyline);
-                            qulonglong uid = before.uid;
+                        //     ShapeBackup before = makeBackupFromItem(polyline);
+                        //     qulonglong uid = before.uid;
 
-                            const  QVector<qgraph::DragCircle*>& circles = polyline->circles();
+                        //     const  QVector<qgraph::DragCircle*>& circles = polyline->circles();
+                        //     const int idx = circles.indexOf(circle);
+                        //     if (idx < 0)
+                        //     {
+                        //         ce->accept();
+                        //         return true;
+                        //     }
+
+                        //     for (int i = 0; i < idx; ++i)
+                        //         polyline->rotatePointsClockwise();
+
+                        //     ShapeBackup after = makeBackupFromItem(polyline);
+                        //     if (!sameGeometry(before, after))
+                        //         pushModifyShapeCommand(uid, before, after, u8"Пересчет нумерации");
+
+                        //     if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                        //     {
+                        //         doc->isModified = true;
+                        //         updateFileListDisplay(doc->filePath);
+                        //     }
+                            Document::Ptr doc = currentDocument();
+                            QUndoStack* stack = activeUndoStack();
+
+                            if (!doc || !stack)
+                            {
+                                ce->accept();
+                                return true;
+                            }
+
+                            const QVector<qgraph::DragCircle*>& circles = polyline->circles();
                             const int idx = circles.indexOf(circle);
+
                             if (idx < 0)
                             {
                                 ce->accept();
                                 return true;
                             }
 
+                            const QVector<QPointF> pointsBefore = polyline->points();
+
+                            if (pointsBefore.isEmpty())
+                            {
+                                ce->accept();
+                                return true;
+                            }
+
+                            double areaBefore = 0.0;
+
+                            for (int i = 0; i < pointsBefore.size(); ++i)
+                            {
+                                const QPointF& firstPoint = pointsBefore[i];
+                                const QPointF& secondPoint = pointsBefore[(i + 1) % pointsBefore.size()];
+
+                                areaBefore += firstPoint.x() * secondPoint.y()
+                                            - secondPoint.x() * firstPoint.y();
+                            }
+
+                            const QPointF firstPointBefore = pointsBefore.first();
+                            const bool clockwiseBefore = (areaBefore > 0.0);
+
                             for (int i = 0; i < idx; ++i)
                                 polyline->rotatePointsClockwise();
 
-                            ShapeBackup after = makeBackupFromItem(polyline);
-                            if (!sameGeometry(before, after))
-                                pushModifyShapeCommand(uid, before, after, u8"Пересчет нумерации");
+                            const QVector<QPointF> pointsAfter = polyline->points();
 
-                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            if (pointsAfter.isEmpty())
                             {
-                                doc->isModified = true;
-                                updateFileListDisplay(doc->filePath);
+                                ce->accept();
+                                return true;
+                            }
+
+                            double areaAfter = 0.0;
+
+                            for (int i = 0; i < pointsAfter.size(); ++i)
+                            {
+                                const QPointF& firstPoint = pointsAfter[i];
+                                const QPointF& secondPoint = pointsAfter[(i + 1) % pointsAfter.size()];
+
+                                areaAfter += firstPoint.x() * secondPoint.y()
+                                           - secondPoint.x() * firstPoint.y();
+                            }
+
+                            const QPointF firstPointAfter = pointsAfter.first();
+                            const bool clockwiseAfter = (areaAfter > 0.0);
+
+                            if (firstPointBefore != firstPointAfter
+                                || clockwiseBefore != clockwiseAfter)
+                            {
+                                undo::NumberingEdit::Data data;
+                                data.type = undo::NumberingEdit::Type::Polyline;
+                                data.polylineFirstPointBefore = firstPointBefore;
+                                data.polylineFirstPointAfter = firstPointAfter;
+                                data.polylineClockwiseBefore = clockwiseBefore;
+                                data.polylineClockwiseAfter = clockwiseAfter;
+
+                                stack->push(new undo::NumberingEdit(doc.get(),
+                                                                    polyline,
+                                                                    data,
+                                                                    u8"Пересчет нумерации"));
+
+                                if (!doc->isModified)
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
+
+                                if (doc->scene)
+                                    doc->scene->update();
                             }
                         }
                         else if (chosen == actClockwise)
                         {
-                            ShapeBackup before = makeBackupFromItem(polyline);
-                            qulonglong uid = before.uid;
+                            // ShapeBackup before = makeBackupFromItem(polyline);
+                            // qulonglong uid = before.uid;
+
+                            // polyline->renumberFromHandleClockwise(circle);
+
+                            // ShapeBackup after = makeBackupFromItem(polyline);
+                            // if (!sameGeometry(before, after))
+                            //     pushModifyShapeCommand(uid, before, after, u8"Нумерация по часовой стрелке");
+
+                            // if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            // {
+                            //     doc->isModified = true;
+                            //     updateFileListDisplay(doc->filePath);
+                            // }
+                            Document::Ptr doc = currentDocument();
+                            QUndoStack* stack = activeUndoStack();
+
+                            if (!doc || !stack)
+                            {
+                                ce->accept();
+                                return true;
+                            }
+
+                            const QVector<QPointF> pointsBefore = polyline->points();
+
+                            if (pointsBefore.isEmpty())
+                            {
+                                ce->accept();
+                                return true;
+                            }
+
+                            double areaBefore = 0.0;
+
+                            for (int i = 0; i < pointsBefore.size(); ++i)
+                            {
+                                const QPointF& firstPoint = pointsBefore[i];
+                                const QPointF& secondPoint = pointsBefore[(i + 1) % pointsBefore.size()];
+
+                                areaBefore += firstPoint.x() * secondPoint.y()
+                                            - secondPoint.x() * firstPoint.y();
+                            }
+
+                            const QPointF firstPointBefore = pointsBefore.first();
+                            const bool clockwiseBefore = (areaBefore > 0.0);
 
                             polyline->renumberFromHandleClockwise(circle);
 
-                            ShapeBackup after = makeBackupFromItem(polyline);
-                            if (!sameGeometry(before, after))
-                                pushModifyShapeCommand(uid, before, after, u8"Нумерация по часовой стрелке");
+                            const QVector<QPointF> pointsAfter = polyline->points();
 
-                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            if (pointsAfter.isEmpty())
                             {
-                                doc->isModified = true;
-                                updateFileListDisplay(doc->filePath);
+                                ce->accept();
+                                return true;
+                            }
+
+                            double areaAfter = 0.0;
+
+                            for (int i = 0; i < pointsAfter.size(); ++i)
+                            {
+                                const QPointF& firstPoint = pointsAfter[i];
+                                const QPointF& secondPoint = pointsAfter[(i + 1) % pointsAfter.size()];
+
+                                areaAfter += firstPoint.x() * secondPoint.y()
+                                           - secondPoint.x() * firstPoint.y();
+                            }
+
+                            const QPointF firstPointAfter = pointsAfter.first();
+                            const bool clockwiseAfter = (areaAfter > 0.0);
+
+                            if (firstPointBefore != firstPointAfter
+                                || clockwiseBefore != clockwiseAfter)
+                            {
+                                undo::NumberingEdit::Data data;
+                                data.type = undo::NumberingEdit::Type::Polyline;
+                                data.polylineFirstPointBefore = firstPointBefore;
+                                data.polylineFirstPointAfter = firstPointAfter;
+                                data.polylineClockwiseBefore = clockwiseBefore;
+                                data.polylineClockwiseAfter = clockwiseAfter;
+
+                                stack->push(new undo::NumberingEdit(doc.get(),
+                                                                    polyline,
+                                                                    data,
+                                                                    u8"Нумерация по часовой стрелке"));
+
+                                if (!doc->isModified)
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
+
+                                if (doc->scene)
+                                    doc->scene->update();
                             }
                         }
                         else if (chosen == actCounterClockwise)
                         {
-                            ShapeBackup before = makeBackupFromItem(polyline);
-                            qulonglong uid = before.uid;
+                            // ShapeBackup before = makeBackupFromItem(polyline);
+                            // qulonglong uid = before.uid;
+
+                            // polyline->renumberFromHandleCounterClockwise(circle);
+
+                            // ShapeBackup after = makeBackupFromItem(polyline);
+                            // if (!sameGeometry(before, after))
+                            //     pushModifyShapeCommand(uid, before, after, u8"Нумерация против часовой стрелки");
+
+                            // if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            // {
+                            //     doc->isModified = true;
+                            //     updateFileListDisplay(doc->filePath);
+                            // }
+                            Document::Ptr doc = currentDocument();
+                            QUndoStack* stack = activeUndoStack();
+
+                            if (!doc || !stack)
+                            {
+                               ce->accept();
+                               return true;
+                            }
+
+                            const QVector<QPointF> pointsBefore = polyline->points();
+
+                            if (pointsBefore.isEmpty())
+                            {
+                                ce->accept();
+                                return true;
+                            }
+
+                            double areaBefore = 0.0;
+
+                            for (int i = 0; i < pointsBefore.size(); ++i)
+                            {
+                                const QPointF& firstPoint = pointsBefore[i];
+                                const QPointF& secondPoint = pointsBefore[(i + 1) % pointsBefore.size()];
+
+                                areaBefore += firstPoint.x() * secondPoint.y()
+                                            - secondPoint.x() * firstPoint.y();
+                            }
+
+                            const QPointF firstPointBefore = pointsBefore.first();
+                            const bool clockwiseBefore = (areaBefore > 0.0);
 
                             polyline->renumberFromHandleCounterClockwise(circle);
 
-                            ShapeBackup after = makeBackupFromItem(polyline);
-                            if (!sameGeometry(before, after))
-                                pushModifyShapeCommand(uid, before, after, u8"Нумерация против часовой стрелки");
+                            const QVector<QPointF> pointsAfter = polyline->points();
 
-                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            if (pointsAfter.isEmpty())
                             {
-                                doc->isModified = true;
-                                updateFileListDisplay(doc->filePath);
+                                ce->accept();
+                                return true;
+                            }
+
+                            double areaAfter = 0.0;
+
+                            for (int i = 0; i < pointsAfter.size(); ++i)
+                            {
+                                const QPointF& firstPoint = pointsAfter[i];
+                                const QPointF& secondPoint = pointsAfter[(i + 1) % pointsAfter.size()];
+
+                                areaAfter += firstPoint.x() * secondPoint.y()
+                                          - secondPoint.x() * firstPoint.y();
+                            }
+
+                            const QPointF firstPointAfter = pointsAfter.first();
+                            const bool clockwiseAfter = (areaAfter > 0.0);
+
+                            if (firstPointBefore != firstPointAfter
+                                || clockwiseBefore != clockwiseAfter)
+                            {
+                                undo::NumberingEdit::Data data;
+                                data.type = undo::NumberingEdit::Type::Polyline;
+                                data.polylineFirstPointBefore = firstPointBefore;
+                                data.polylineFirstPointAfter = firstPointAfter;
+                                data.polylineClockwiseBefore = clockwiseBefore;
+                                data.polylineClockwiseAfter = clockwiseAfter;
+
+                                stack->push(new undo::NumberingEdit(doc.get(),
+                                                                    polyline,
+                                                                    data,
+                                                                    u8"Нумерация против часовой стрелки"));
+
+                                if (!doc->isModified)
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
+
+                                if (doc->scene)
+                                    doc->scene->update();
                             }
                         }
                         ce->accept();
@@ -3983,20 +4230,56 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         }
                         else if (actRecalc && chosen == actRecalc)
                         {
-                            ShapeBackup before = makeBackupFromItem(line);
-                            qulonglong uid = before.uid;
+                            // ShapeBackup before = makeBackupFromItem(line);
+                            // qulonglong uid = before.uid;
 
-                            const bool fromLast = (idx == circles.size() - 1);
-                            line->setNumberingFromLast(fromLast);
+                            // const bool fromLast = (idx == circles.size() - 1);
+                            // line->setNumberingFromLast(fromLast);
 
-                            ShapeBackup after = makeBackupFromItem(line);
-                            if (!sameGeometry(before, after))
-                                pushModifyShapeCommand(uid, before, after, u8"Пересчет нумерации");
+                            // ShapeBackup after = makeBackupFromItem(line);
+                            // if (!sameGeometry(before, after))
+                            //     pushModifyShapeCommand(uid, before, after, u8"Пересчет нумерации");
 
-                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            // if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            // {
+                            //     doc->isModified = true;
+                            //     updateFileListDisplay(doc->filePath);
+                            // }
+                            Document::Ptr doc = currentDocument();
+                            QUndoStack* stack = activeUndoStack();
+
+                            if (!doc || !stack)
                             {
-                                doc->isModified = true;
-                                updateFileListDisplay(doc->filePath);
+                                ce->accept();
+                                return true;
+                            }
+
+                            const bool numberingBefore = line->isNumberingFromLast();
+                            const bool numberingAfter = (idx == circles.size() - 1);
+
+                            if (numberingBefore != numberingAfter)
+                            {
+                                line->setNumberingFromLast(numberingAfter);
+                                line->updatePointNumbers();
+
+                                undo::NumberingEdit::Data data;
+                                data.type = undo::NumberingEdit::Type::Line;
+                                data.lineNumberingFromLastBefore = numberingBefore;
+                                data.lineNumberingFromLastAfter = numberingAfter;
+
+                                stack->push(new undo::NumberingEdit(doc.get(),
+                                                                    line,
+                                                                    data,
+                                                                    u8"Пересчет нумерации"));
+
+                                if (!doc->isModified)
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
+
+                                if (doc->scene)
+                                    doc->scene->update();
                             }
                         }
                         ce->accept();
@@ -4010,19 +4293,55 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         QAction* chosen = menu.exec(ce->globalPos());
                         if (chosen == actRecalc)
                         {
-                            ShapeBackup before = makeBackupFromItem(rect);
-                            qulonglong uid = before.uid;
+                            // ShapeBackup before = makeBackupFromItem(rect);
+                            // qulonglong uid = before.uid;
+
+                            // rect->recalcNumberingFromHandle(circle);
+
+                            // ShapeBackup after = makeBackupFromItem(rect);
+                            // if (!sameGeometry(before, after))
+                            //     pushModifyShapeCommand(uid, before, after, u8"Пересчет нумерации");
+
+                            // if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            // {
+                            //     doc->isModified = true;
+                            //     updateFileListDisplay(doc->filePath);
+                            // }
+                            Document::Ptr doc = currentDocument();
+                            QUndoStack* stack = activeUndoStack();
+
+                            if (!doc || !stack)
+                            {
+                                ce->accept();
+                                return true;
+                            }
+
+                            const int numberingBefore = rect->numberingOffset();
 
                             rect->recalcNumberingFromHandle(circle);
 
-                            ShapeBackup after = makeBackupFromItem(rect);
-                            if (!sameGeometry(before, after))
-                                pushModifyShapeCommand(uid, before, after, u8"Пересчет нумерации");
+                            const int numberingAfter = rect->numberingOffset();
 
-                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            if (numberingBefore != numberingAfter)
                             {
-                                doc->isModified = true;
-                                updateFileListDisplay(doc->filePath);
+                                undo::NumberingEdit::Data data;
+                                data.type = undo::NumberingEdit::Type::Rectangle;
+                                data.rectangleNumberingOffsetBefore = numberingBefore;
+                                data.rectangleNumberingOffsetAfter = numberingAfter;
+
+                                stack->push(new undo::NumberingEdit(doc.get(),
+                                                                    rect,
+                                                                    data,
+                                                                    u8"Пересчет нумерации"));
+
+                                if (!doc->isModified)
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
+
+                                if (doc->scene)
+                                    doc->scene->update();
                             }
                         }
                         ce->accept();
@@ -7669,6 +7988,7 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
             {
                 conf->setValue(yshape, "type", QString("line"));
                 savePointsArray(conf, yshape, line->points());
+                conf->setValue(yshape, "numbering_from_last", line->isNumberingFromLast());
             }
             else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
             {
@@ -7682,6 +8002,7 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
                 const QRectF sceneRect = rect->realSceneRect();
                 savePointNode(conf, yshape, "point1", sceneRect.topLeft());
                 savePointNode(conf, yshape, "point2", sceneRect.bottomRight());
+                conf->setValue(yshape, "numbering_offset", rect->numberingOffset());
             }
             else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
             {
@@ -8179,6 +8500,13 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
                 ensureUid(rect);
                 rect->setRealSceneRect(QRectF(p1, p2));
 
+                int numberingOffset = 0;
+
+                if (yshape["numbering_offset"])
+                    conf->getValue(yshape, "numbering_offset", numberingOffset);
+
+                rect->setNumberingOffset(numberingOffset);
+
                 apply_LineWidth_ToItem(rect);
                 apply_PointSize_ToItem(rect);
                 apply_NumberSize_ToItem(rect);
@@ -8220,6 +8548,13 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
 
                 line->closeLine();
                 line->updatePath();
+
+                bool numberingFromLast = false;
+
+                if (yshape["numbering_from_last"])
+                    conf->getValue(yshape, "numbering_from_last", numberingFromLast);
+
+                line->setNumberingFromLast(numberingFromLast);
 
                 apply_LineWidth_ToItem(line);
                 apply_PointSize_ToItem(line);
@@ -11490,71 +11825,71 @@ void MainWindow::pushCreateShapeCommand(const ShapeBackup& backup, const QString
         stack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
-void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
-                                      const ShapeBackup& before,
-                                      const ShapeBackup& after,
-                                      const QString& description)
-{
-    struct Payload
-    {
-        ShapeBackup before;
-        ShapeBackup after;
-        qulonglong uid = 0;
-        bool skipFirstRedo = false;
-    };
+// void MainWindow::pushMoveShapeCommand(QGraphicsItem* item,
+//                                       const ShapeBackup& before,
+//                                       const ShapeBackup& after,
+//                                       const QString& description)
+// {
+//     struct Payload
+//     {
+//         ShapeBackup before;
+//         ShapeBackup after;
+//         qulonglong uid = 0;
+//         bool skipFirstRedo = false;
+//     };
 
-    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
-    payload->before = before;
-    payload->after  = after;
+//     std::shared_ptr<Payload> payload = std::make_shared<Payload>();
+//     payload->before = before;
+//     payload->after  = after;
 
-    qulonglong uid = 0;
-    if (item)
-        uid = item->data(_roleUid).toULongLong();
-    if (uid == 0 && item)
-        uid = ensureUid(item);
-    payload->uid = uid;
+//     qulonglong uid = 0;
+//     if (item)
+//         uid = item->data(_roleUid).toULongLong();
+//     if (uid == 0 && item)
+//         uid = ensureUid(item);
+//     payload->uid = uid;
 
-    std::function<bool(qulonglong, const ShapeBackup&)> apply =
-        [this](qulonglong uid, const ShapeBackup& snap)
-    {
-        QGraphicsItem* item = findItemByUid(uid);
-        if (item)
-        {
-            applyBackupToExisting(item, snap);
-            return true;
-        }
-        QGraphicsItem* created = recreateFromBackup(snap);
-        if (created)
-        {
-            created->setData(_roleUid, QVariant::fromValue<qulonglong>(snap.uid ? snap.uid : uid));
-            return true;
-        }
-        return false;
-    };
+//     std::function<bool(qulonglong, const ShapeBackup&)> apply =
+//         [this](qulonglong uid, const ShapeBackup& snap)
+//     {
+//         QGraphicsItem* item = findItemByUid(uid);
+//         if (item)
+//         {
+//             applyBackupToExisting(item, snap);
+//             return true;
+//         }
+//         QGraphicsItem* created = recreateFromBackup(snap);
+//         if (created)
+//         {
+//             created->setData(_roleUid, QVariant::fromValue<qulonglong>(snap.uid ? snap.uid : uid));
+//             return true;
+//         }
+//         return false;
+//     };
 
-    std::function<void()> redoFn = [this, payload, apply]()
-    {
-        apply(payload->uid, payload->after);
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-    };
+//     std::function<void()> redoFn = [this, payload, apply]()
+//     {
+//         apply(payload->uid, payload->after);
+//         if (Document::Ptr doc = currentDocument())
+//         {
+//             doc->isModified = true;
+//             updateFileListDisplay(doc->filePath);
+//         }
+//     };
 
-    std::function<void()> undoFn = [this, payload, apply]()
-    {
-        apply(payload->uid, payload->before);
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-    };
+//     std::function<void()> undoFn = [this, payload, apply]()
+//     {
+//         apply(payload->uid, payload->before);
+//         if (Document::Ptr doc = currentDocument())
+//         {
+//             doc->isModified = true;
+//             updateFileListDisplay(doc->filePath);
+//         }
+//     };
 
-    if (QUndoStack* stack = activeUndoStack())
-        stack->push(new LambdaCommand(redoFn, undoFn, description));
-}
+//     if (QUndoStack* stack = activeUndoStack())
+//         stack->push(new LambdaCommand(redoFn, undoFn, description));
+// }
 
 // void MainWindow::pushHandleEditCommand(QGraphicsItem* item,
 //                                        const ShapeBackup& before,
@@ -11679,73 +12014,73 @@ void MainWindow::pushModifyShapeCommand(qulonglong uid,
     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
 }
 
-void MainWindow::pushMoveImageCommand(const QPointF& before,
-                                      const QPointF& after,
-                                      const QString& description)
-{
-    Document::Ptr doc = currentDocument();
-    if (!doc || !doc->_undoStack || !doc->videoRect)
-        return;
+// void MainWindow::pushMoveImageCommand(const QPointF& before,
+//                                       const QPointF& after,
+//                                       const QString& description)
+// {
+//     Document::Ptr doc = currentDocument();
+//     if (!doc || !doc->_undoStack || !doc->videoRect)
+//         return;
 
-    if (before == after)
-        return;
+//     if (before == after)
+//         return;
 
-    struct Payload
-    {
-        QPointF before;
-        QPointF after;
-    };
+//     struct Payload
+//     {
+//         QPointF before;
+//         QPointF after;
+//     };
 
-    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
-    payload->before = before;
-    payload->after = after;
+//     std::shared_ptr<Payload> payload = std::make_shared<Payload>();
+//     payload->before = before;
+//     payload->after = after;
 
-    // std::function<void(const QPointF&)> applyPos =
-    //     [this](const QPointF& pos)
-    // {
-    //     if (_videoRect)
-    //         _videoRect->setPos(pos);
-    // };
-    std::function<void(const QPointF&)> applyPos = [doc](const QPointF& pos)
-    {
-        if (doc->videoRect)
-            doc->videoRect->setPos(pos);
-    };
+//     // std::function<void(const QPointF&)> applyPos =
+//     //     [this](const QPointF& pos)
+//     // {
+//     //     if (_videoRect)
+//     //         _videoRect->setPos(pos);
+//     // };
+//     std::function<void(const QPointF&)> applyPos = [doc](const QPointF& pos)
+//     {
+//         if (doc->videoRect)
+//             doc->videoRect->setPos(pos);
+//     };
 
-    // std::function<void()> redoFn = [this, payload, applyPos]()
-    // {
-    //     applyPos(payload->after);
-    //     if (Document::Ptr doc = currentDocument())
-    //     {
-    //         doc->isModified = true;
-    //         updateFileListDisplay(doc->filePath);
-    //     }
-    // };
-    std::function<void()> redoFn = [this, doc, payload, applyPos]()
-    {
-        applyPos(payload->after);
-        doc->isModified = true;
-        updateFileListDisplay(doc->filePath);
-    };
+//     // std::function<void()> redoFn = [this, payload, applyPos]()
+//     // {
+//     //     applyPos(payload->after);
+//     //     if (Document::Ptr doc = currentDocument())
+//     //     {
+//     //         doc->isModified = true;
+//     //         updateFileListDisplay(doc->filePath);
+//     //     }
+//     // };
+//     std::function<void()> redoFn = [this, doc, payload, applyPos]()
+//     {
+//         applyPos(payload->after);
+//         doc->isModified = true;
+//         updateFileListDisplay(doc->filePath);
+//     };
 
-    // std::function<void()> undoFn = [this, payload, applyPos]()
-    // {
-    //     applyPos(payload->before);
-    //     if (Document::Ptr doc = currentDocument())
-    //     {
-    //         doc->isModified = true;
-    //         updateFileListDisplay(doc->filePath);
-    //     }
-    // };
-    std::function<void()> undoFn = [this, doc, payload, applyPos]()
-    {
-        applyPos(payload->before);
-        doc->isModified = true;
-        updateFileListDisplay(doc->filePath);
-    };
+//     // std::function<void()> undoFn = [this, payload, applyPos]()
+//     // {
+//     //     applyPos(payload->before);
+//     //     if (Document::Ptr doc = currentDocument())
+//     //     {
+//     //         doc->isModified = true;
+//     //         updateFileListDisplay(doc->filePath);
+//     //     }
+//     // };
+//     std::function<void()> undoFn = [this, doc, payload, applyPos]()
+//     {
+//         applyPos(payload->before);
+//         doc->isModified = true;
+//         updateFileListDisplay(doc->filePath);
+//     };
 
-    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
-}
+//     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+// }
 
 void MainWindow::pushReplaceShapeCommand(qulonglong uid,
                                         const ShapeBackup& before,

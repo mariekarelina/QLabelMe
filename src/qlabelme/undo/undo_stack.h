@@ -349,7 +349,42 @@ private:
 // Операции с нумерацией
 class NumberingEdit : public BaseUndo
 {
+public:
+    enum class Type
+    {
+        Line,
+        Polyline,
+        Rectangle
+    };
 
+    struct Data
+    {
+        Type type = {Type::Line};
+
+        // Для линии нумерация определяется направлением обхода
+        bool lineNumberingFromLastBefore = {false};
+        bool lineNumberingFromLastAfter = {false};
+
+        // Для полилинии сохраняем первую точку и направление обхода
+        QPointF polylineFirstPointBefore;
+        QPointF polylineFirstPointAfter;
+
+        bool polylineClockwiseBefore = {true};
+        bool polylineClockwiseAfter = {true};
+
+        // Для прямоугольника сохраняем смещение стартовой точки нумерации
+        int rectangleNumberingOffsetBefore = {0};
+        int rectangleNumberingOffsetAfter = {0};
+    };
+    NumberingEdit(Document* doc, QGraphicsItem* shape,
+                  const Data& data, const QString& text);
+
+    void undo() override;
+    void redo() override;
+
+private:
+    QGraphicsItem* _shape = {nullptr};
+    Data _data;
 };
 
 // Возобновление рисования линии/полилинии

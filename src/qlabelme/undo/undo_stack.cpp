@@ -1065,4 +1065,147 @@ void ChangeClass::redo()
         _shape->scene()->update();
 }
 
+NumberingEdit::NumberingEdit(Document* doc, QGraphicsItem* shape,
+                             const Data& data, const QString& text)
+{
+    _doc = doc;
+    _shape = shape;
+    _data = data;
+
+    QUndoCommand::setText(text);
+}
+
+void NumberingEdit::undo()
+{
+    switch (_data.type)
+    {
+    case Type::Line:
+    {
+        qgraph::Line* line = dynamic_cast<qgraph::Line*>(_shape);
+
+        if (!line)
+            break;
+
+        line->setNumberingFromLast(_data.lineNumberingFromLastBefore);
+        line->updatePointNumbers();
+
+        break;
+    }
+    case Type::Polyline:
+    {
+        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_shape);
+
+        if (!polyline)
+            break;
+
+        qgraph::DragCircle* start = nullptr;
+        const QVector<qgraph::DragCircle*>& circles = polyline->circles();
+
+        for (qgraph::DragCircle* circle : circles)
+        {
+            if (!circle)
+                continue;
+
+            if (QLineF(circle->scenePos(), _data.polylineFirstPointBefore).length() < 0.001)
+            {
+                start = circle;
+                break;
+            }
+        }
+
+        if (!start)
+            break;
+
+        if (_data.polylineClockwiseBefore)
+            polyline->renumberFromHandleClockwise(start);
+        else
+            polyline->renumberFromHandleCounterClockwise(start);
+
+        break;
+    }
+    case Type::Rectangle:
+    {
+        qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(_shape);
+
+        if (!rectangle)
+            break;
+
+        rectangle->setNumberingOffset(_data.rectangleNumberingOffsetBefore);
+
+        break;
+    }
+    }
+
+    if (_doc && _doc->scene)
+        _doc->scene->update();
+}
+
+void NumberingEdit::redo()
+{
+    if (firstRedo())
+        return;
+
+    switch (_data.type)
+    {
+    case Type::Line:
+    {
+        qgraph::Line* line = dynamic_cast<qgraph::Line*>(_shape);
+
+        if (!line)
+            break;
+
+        line->setNumberingFromLast(_data.lineNumberingFromLastAfter);
+        line->updatePointNumbers();
+
+        break;
+    }
+    case Type::Polyline:
+    {
+        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_shape);
+
+        if (!polyline)
+            break;
+
+        qgraph::DragCircle* start = nullptr;
+        const QVector<qgraph::DragCircle*>& circles = polyline->circles();
+
+        for (qgraph::DragCircle* circle : circles)
+        {
+            if (!circle)
+                continue;
+
+            if (QLineF(circle->scenePos(), _data.polylineFirstPointAfter).length() < 0.001)
+            {
+                start = circle;
+                break;
+            }
+        }
+
+        if (!start)
+            break;
+
+        if (_data.polylineClockwiseAfter)
+            polyline->renumberFromHandleClockwise(start);
+        else
+            polyline->renumberFromHandleCounterClockwise(start);
+
+        break;
+    }
+    case Type::Rectangle:
+    {
+        qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(_shape);
+
+        if (!rectangle)
+            break;
+
+        rectangle->setNumberingOffset(_data.rectangleNumberingOffsetAfter);
+
+        break;
+    }
+    }
+
+    if (_doc && _doc->scene)
+        _doc->scene->update();
+}
+
 } // namespace undo
