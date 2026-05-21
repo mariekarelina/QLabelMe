@@ -454,10 +454,10 @@ private:
     //                           const QPointF& after,
     //                           const QString& description);
     // Полилиния->линия
-    void pushReplaceShapeCommand(qulonglong uid,
-                                 const ShapeBackup& before,
-                                 const ShapeBackup& after,
-                                 const QString& description);
+    // void pushReplaceShapeCommand(qulonglong uid,
+    //                              const ShapeBackup& before,
+    //                              const ShapeBackup& after,
+    //                              const QString& description);
 
     void setPolygonListModelForCurrentDocument();
     // Удаляет несколько фигур сразу

@@ -138,43 +138,43 @@ static QGraphicsItem* findMovableAncestor(QGraphicsItem* item)
 }
 
 // Простое сравнение геометрии снапшотов, чтобы не совершать no-op команды
-static bool sameGeometry(const ShapeBackup& firstBackup, const ShapeBackup& secondBackup)
-{
-    if (firstBackup.kind != secondBackup.kind)
-        return false;
+// static bool sameGeometry(const ShapeBackup& firstBackup, const ShapeBackup& secondBackup)
+// {
+//     if (firstBackup.kind != secondBackup.kind)
+//         return false;
 
-    switch (firstBackup.kind)
-    {
-        case ShapeKind::Rectangle:
-            return firstBackup.rect == secondBackup.rect
-                && firstBackup.visible == secondBackup.visible
-                && firstBackup.className == secondBackup.className;
+//     switch (firstBackup.kind)
+//     {
+//         case ShapeKind::Rectangle:
+//             return firstBackup.rect == secondBackup.rect
+//                 && firstBackup.visible == secondBackup.visible
+//                 && firstBackup.className == secondBackup.className;
 
-        case ShapeKind::Circle:
-            return firstBackup.circleCenter == secondBackup.circleCenter
-                && firstBackup.circleRadius == secondBackup.circleRadius
-                && firstBackup.visible == secondBackup.visible
-                && firstBackup.className == secondBackup.className;
+//         case ShapeKind::Circle:
+//             return firstBackup.circleCenter == secondBackup.circleCenter
+//                 && firstBackup.circleRadius == secondBackup.circleRadius
+//                 && firstBackup.visible == secondBackup.visible
+//                 && firstBackup.className == secondBackup.className;
 
-        case ShapeKind::Polyline:
-            return firstBackup.points == secondBackup.points
-                && firstBackup.closed == secondBackup.closed
-                && firstBackup.visible == secondBackup.visible
-                && firstBackup.className == secondBackup.className;
+//         case ShapeKind::Polyline:
+//             return firstBackup.points == secondBackup.points
+//                 && firstBackup.closed == secondBackup.closed
+//                 && firstBackup.visible == secondBackup.visible
+//                 && firstBackup.className == secondBackup.className;
 
-        case ShapeKind::Line:
-            return firstBackup.points == secondBackup.points
-                && firstBackup.numberingFromLast == secondBackup.numberingFromLast
-                && firstBackup.visible == secondBackup.visible
-                && firstBackup.className == secondBackup.className;
+//         case ShapeKind::Line:
+//             return firstBackup.points == secondBackup.points
+//                 && firstBackup.numberingFromLast == secondBackup.numberingFromLast
+//                 && firstBackup.visible == secondBackup.visible
+//                 && firstBackup.className == secondBackup.className;
 
-        case ShapeKind::Point:
-            return firstBackup.pointCenter == secondBackup.pointCenter
-                && firstBackup.visible == secondBackup.visible
-                && firstBackup.className == secondBackup.className;
-    }
-    return false;
-}
+//         case ShapeKind::Point:
+//             return firstBackup.pointCenter == secondBackup.pointCenter
+//                 && firstBackup.visible == secondBackup.visible
+//                 && firstBackup.className == secondBackup.className;
+//     }
+//     return false;
+// }
 
 MainWindow::MainWindow(QWidget* parent) :
     QMainWindow(parent),
@@ -870,7 +870,9 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     // Alt + ЛКМ / Alt + Shift + ЛКМ для редактирования узлов
     if (mouseEvent->button() == Qt::LeftButton && graphView)
     {
-        const Qt::KeyboardModifiers mods = mouseEvent->modifiers();
+        //const Qt::KeyboardModifiers mods = mouseEvent->modifiers();
+        const Qt::KeyboardModifiers mods =
+                mouseEvent->modifiers() | QApplication::keyboardModifiers();
         const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
         // Удаление в eventFilter()
         // // Alt + ЛКМ добавить узел на ребро
@@ -3375,18 +3377,46 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
             // Во время рисования line/polyline не даем ближайшему узлу перехватывать клик
             // Захватываем существующий узел только при очень точном попадании
+            // if (drawingLineLike)
+            // {
+            //     if (qgraph::DragCircle* preciseHandle = pickHandleAt(sp, _drawHandleCommitRadius))
+            //     {
+            //         if (preciseHandle->scene() && doc->scene && doc->scene->items().contains(preciseHandle))
+            //         {
+            //             startHandleDrag(preciseHandle, sp);
+            //             return true;
+            //         }
+            //     }
+
+            //     break; // иначе пусть клик дойдет до handleLineLmbClick / handlePolylineLmbClick
+            // }
             if (drawingLineLike)
             {
-                if (qgraph::DragCircle* preciseHandle = pickHandleAt(sp, _drawHandleCommitRadius))
+                const bool finishPolylineByCtrl =
+                        _drawingPolyline
+                        && _polyline
+                        && qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::CtrlModifier
+                        && (me->modifiers() & Qt::ControlModifier);
+
+                const bool finishLineByCtrl =
+                        _drawingLine
+                        && _line
+                        && qgraph::Line::globalCloseMode() == qgraph::Line::CloseMode::CtrlModifier
+                        && (me->modifiers() & Qt::ControlModifier);
+
+                if (!finishPolylineByCtrl && !finishLineByCtrl)
                 {
-                    if (preciseHandle->scene() && doc->scene && doc->scene->items().contains(preciseHandle))
+                    if (qgraph::DragCircle* preciseHandle = pickHandleAt(sp, _drawHandleCommitRadius))
                     {
-                        startHandleDrag(preciseHandle, sp);
-                        return true;
+                        if (preciseHandle->scene() && doc->scene && doc->scene->items().contains(preciseHandle))
+                        {
+                            startHandleDrag(preciseHandle, sp);
+                            return true;
+                        }
                     }
                 }
 
-                break; // иначе пусть клик дойдет до handleLineLmbClick / handlePolylineLmbClick
+                break; // пусть клик дойдет до handleLineLmbClick / handlePolylineLmbClick
             }
 
             if (qgraph::DragCircle* target = pickHiddenHandle(sp, topIsHandle))
@@ -3746,41 +3776,108 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         }
                         else if (chosen == actResume)
                         {
-                            _resumeBefore = makeBackupFromItem(polyline);
-                            _resumeUid = _resumeBefore.uid;
+                            // _polyline->setModificationCallback([this]()
+                            // {
+                            //     if (_drawingPolyline && _polyline && _polyline->isClosed())
+                            //     {
+                            //         _drawingPolyline = false;
+                            //         updateModeLabel();
+
+                            //         _polyline->updatePointNumbers();
+                            //         apply_LineWidth_ToItem(_polyline);
+                            //         apply_PointSize_ToItem(_polyline);
+                            //         apply_NumberSize_ToItem(_polyline);
+
+                            //         ShapeBackup after = makeBackupFromItem(_polyline);
+                            //         if (!sameGeometry(_resumeBefore, after))
+                            //             pushModifyShapeCommand(_resumeUid, _resumeBefore, after, u8"Продолжение полилинии");
+
+                            //         _polyline = nullptr;
+                            //         _resumeEditing = false;
+                            //         _resumeUid = 0;
+
+                            //         if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
+                            //         {
+                            //             doc->isModified = true;
+                            //             updateFileListDisplay(doc->filePath);
+                            //         }
+
+                            //         raiseAllHandlesToTop();
+                            //         setSceneItemsMovable(true);
+                            //     }
+                            // });
+                            const QVector<qgraph::DragCircle*>& circles = polyline->circles();
+                            const int resumeIndex = circles.indexOf(circle);
+
+                            if (resumeIndex < 0)
+                            {
+                                ce->accept();
+                                return true;
+                            }
+
+                            const QVector<QPointF> pointsBefore = polyline->points();
+                            const QVector<QPointF> removedPoints = pointsBefore.mid(resumeIndex + 1);
+
                             _resumeEditing = true;
-                            polyline->resumeFromHandle(circle);
+
+                            // Возобновление редактирования: выбранная точка остается,
+                            // все точки после нее удаляются и будут нарисованы заново.
+                            polyline->setClosed(false, false);
+
+                            for (int i = 0; i < removedPoints.size(); ++i)
+                                polyline->removeLastPointForce(false);
 
                             _drawingPolyline = true;
                             _polyline = polyline;
                             setSceneItemsMovable(false);
                             updateModeLabel();
 
-                            _polyline->setModificationCallback([this]()
+                            _polyline->setModificationCallback([this,
+                                                                resumeIndex,
+                                                                removedPoints]()
                             {
                                 if (_drawingPolyline && _polyline && _polyline->isClosed())
                                 {
                                     _drawingPolyline = false;
                                     updateModeLabel();
 
-                                    _polyline->updatePointNumbers();
-                                    apply_LineWidth_ToItem(_polyline);
-                                    apply_PointSize_ToItem(_polyline);
-                                    apply_NumberSize_ToItem(_polyline);
+                                    // _polyline->updatePointNumbers();
+                                    // apply_LineWidth_ToItem(_polyline);
+                                    // apply_PointSize_ToItem(_polyline);
+                                    // apply_NumberSize_ToItem(_polyline);
 
-                                    ShapeBackup after = makeBackupFromItem(_polyline);
-                                    if (!sameGeometry(_resumeBefore, after))
-                                        pushModifyShapeCommand(_resumeUid, _resumeBefore, after, u8"Продолжение полилинии");
+                                    // Document::Ptr doc = currentDocument();
+                                    // QUndoStack* stack = activeUndoStack();
+
+                                    // if (doc && stack)
+                                    // {
+                                    //     const QVector<QPointF> pointsAfter = _polyline->points();
+                                    //     const QVector<QPointF> addedPoints = pointsAfter.mid(resumeIndex + 1);
+
+                                    //     if (removedPoints != addedPoints)
+                                    //     {
+                                    //         undo::ResumeEdit::Data data;
+                                    //         data.type = undo::ResumeEdit::Type::Polyline;
+                                    //         data.resumeIndex = resumeIndex;
+                                    //         data.removedPoints = removedPoints;
+                                    //         data.addedPoints = addedPoints;
+
+                                    //         stack->push(new undo::ResumeEdit(doc.get(),
+                                    //                                          _polyline,
+                                    //                                          data,
+                                    //                                          u8"Продолжение полилинии"));
+
+                                    //         if (!doc->isModified)
+                                    //         {
+                                    //             doc->isModified = true;
+                                    //             updateFileListDisplay(doc->filePath);
+                                    //         }
+                                    //     }
+                                    // }
 
                                     _polyline = nullptr;
                                     _resumeEditing = false;
-                                    _resumeUid = 0;
-
-                                    if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
-                                    {
-                                        doc->isModified = true;
-                                        updateFileListDisplay(doc->filePath);
-                                    }
+                                    //_resumeUid = 0;
 
                                     raiseAllHandlesToTop();
                                     setSceneItemsMovable(true);
@@ -4185,11 +4282,39 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         }
                         else if (chosen == actResume)
                         {
-                            _resumeBefore = makeBackupFromItem(line);
-                            _resumeUid = _resumeBefore.uid;
+                            // qgraph::DragCircle* resumeCircle = circle;
+
+                            // if (line->isNumberingFromLast())
+                            // {
+                            //     std::reverse(line->_circles.begin(), line->_circles.end());
+                            //     line->setNumberingFromLast(false);
+                            //     line->updatePath();
+                            //     line->updatePointNumbers();
+                            // }
+
+                            // const QVector<qgraph::DragCircle*>& circles = line->circles();
+                            // const int resumeIndex = circles.indexOf(resumeCircle);
+
+                            const QVector<qgraph::DragCircle*>& circles = line->circles();
+                            const int resumeIndex = circles.indexOf(circle);
+
+                            if (resumeIndex < 0)
+                            {
+                                ce->accept();
+                                return true;
+                            }
+
+                            const QVector<QPointF> pointsBefore = line->points();
+                            const QVector<QPointF> removedPoints = pointsBefore.mid(resumeIndex + 1);
+
                             _resumeEditing = true;
 
-                            line->resumeFromHandle(circle);
+                            line->setClosed(false, false);
+
+                            for (int i = 0; i < removedPoints.size(); ++i)
+                                line->removeLastPointForce(false);
+
+                            line->updatePointNumbers();
 
                             _drawingLine = true;
                             _line = line;
@@ -4197,31 +4322,52 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             setSceneItemsMovable(false);
 
-                            _line->setModificationCallback([this]()
+                            _line->setModificationCallback([this,
+                                                            resumeIndex,
+                                                            removedPoints]()
                             {
                                 if (_drawingLine && _line && _line->isClosed())
                                 {
                                     _drawingLine = false;
                                     updateModeLabel();
 
-                                    _line->updatePointNumbers();
-                                    apply_LineWidth_ToItem(_line);
-                                    apply_PointSize_ToItem(_line);
-                                    apply_NumberSize_ToItem(_line);
+                                    // _line->updatePointNumbers();
+                                    // apply_LineWidth_ToItem(_line);
+                                    // apply_PointSize_ToItem(_line);
+                                    // apply_NumberSize_ToItem(_line);
 
-                                    ShapeBackup after = makeBackupFromItem(_line);
-                                    if (!sameGeometry(_resumeBefore, after))
-                                        pushModifyShapeCommand(_resumeUid, _resumeBefore, after, u8"Продолжение линии");
+                                    // Document::Ptr doc = currentDocument();
+                                    // QUndoStack* stack = activeUndoStack();
+
+                                    // if (doc && stack)
+                                    // {
+                                    //     const QVector<QPointF> pointsAfter = _line->points();
+                                    //     const QVector<QPointF> addedPoints = pointsAfter.mid(resumeIndex + 1);
+
+                                    //     if (removedPoints != addedPoints)
+                                    //     {
+                                    //         undo::ResumeEdit::Data data;
+                                    //         data.type = undo::ResumeEdit::Type::Line;
+                                    //         data.resumeIndex = resumeIndex;
+                                    //         data.removedPoints = removedPoints;
+                                    //         data.addedPoints = addedPoints;
+
+                                    //         stack->push(new undo::ResumeEdit(doc.get(),
+                                    //                                          _line,
+                                    //                                          data,
+                                    //                                          u8"Продолжение линии"));
+
+                                    //         if (!doc->isModified)
+                                    //         {
+                                    //             doc->isModified = true;
+                                    //             updateFileListDisplay(doc->filePath);
+                                    //         }
+                                    //     }
+                                    // }
 
                                     _line = nullptr;
                                     _resumeEditing = false;
-                                    _resumeUid = 0;
-
-                                    if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
-                                    {
-                                        doc->isModified = true;
-                                        updateFileListDisplay(doc->filePath);
-                                    }
+                                    //_resumeUid = 0;
 
                                     raiseAllHandlesToTop();
                                     setSceneItemsMovable(true);
@@ -4422,69 +4568,157 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         }
                     }
                 }
+            //     else if (chosen == actToLine)
+            //     {
+            //         ShapeBackup before = makeBackupFromItem(polyline);
+            //         const int n = before.points.size();
+            //         if (n < 2)
+            //         {
+            //             ce->accept();
+            //             return true;
+            //         }
+
+            //         ShapeBackup after = before;
+            //         after.kind = ShapeKind::Line;
+            //         after.closed = true;
+            //         after.numberingFromLast = false;
+
+            //         // Если полилиния замкнута, разрываем именно то ребро, по которому был ПКМ
+            //         if (polyline->isClosed() && n >= 3)
+            //         {
+            //             double (*dist2PointToSegment)(const QPointF&, const QPointF&, const QPointF&) =
+            //                 [](const QPointF& p, const QPointF& a, const QPointF& b) -> double
+            //             {
+            //                 const double vx = b.x() - a.x();
+            //                 const double vy = b.y() - a.y();
+            //                 const double wx = p.x() - a.x();
+            //                 const double wy = p.y() - a.y();
+            //                 const double vv = vx*vx + vy*vy;
+            //                 double t = 0.0;
+            //                 if (vv > 1e-12)
+            //                     t = (wx*vx + wy*vy) / vv;
+            //                 if (t < 0.0) t = 0.0;
+            //                 if (t > 1.0) t = 1.0;
+            //                 const double px = a.x() + t*vx;
+            //                 const double py = a.y() + t*vy;
+            //                 const double dx = p.x() - px;
+            //                 const double dy = p.y() - py;
+            //                 return dx*dx + dy*dy;
+            //             };
+
+            //             int bestIdx = 0;
+            //             double bestD2 = std::numeric_limits<double>::infinity();
+
+            //             // Ищем ближайший сегмент
+            //             for (int i = 0; i < n; ++i)
+            //             {
+            //                 const QPointF& firstPt = before.points[i];
+            //                 const QPointF& secondPt = before.points[(i + 1) % n];
+            //                 const double d2 = dist2PointToSegment(scenePos, firstPt, secondPt);
+            //                 if (d2 < bestD2)
+            //                 {
+            //                     bestD2 = d2;
+            //                     bestIdx = i;
+            //                 }
+            //             }
+            //             QVector<QPointF> reordered;
+            //             reordered.reserve(n);
+            //             const int start = (bestIdx + 1) % n; // Новая первая точка
+            //             for (int k = 0; k < n; ++k)
+            //                 reordered.push_back(before.points[(start + k) % n]);
+
+            //             after.points = reordered;
+            //         }
+
+            //         //pushReplaceShapeCommand(before.uid, before, after, u8"Полилиния -> линия");
+            //         Document::Ptr doc = currentDocument();
+            //         QUndoStack* stack = activeUndoStack();
+
+            //         if (!doc || !doc->scene || !stack)
+            //         {
+            //             ce->accept();
+            //             return true;
+            //         }
+
+            //         after.uid = before.uid;
+            //         after.listRow = before.listRow;
+            //         after.shapeNumber = before.shapeNumber;
+
+            //         QGraphicsItem* afterItem = recreateFromBackup(after);
+
+            //         if (!afterItem)
+            //         {
+            //             ce->accept();
+            //             return true;
+            //         }
+
+            //         // recreateFromBackup() сразу добавляет фигуру на сцену и в список.
+            //         // Для undo::Replace новая фигура должна быть только подготовлена.
+            //         removeListEntryBySceneItem(afterItem);
+
+            //         if (afterItem->scene())
+            //             afterItem->scene()->removeItem(afterItem);
+
+            //         afterItem->setSelected(false);
+
+            //         stack->push(new undo::Replace(doc.get(),
+            //                                       polyline,
+            //                                       afterItem,
+            //                                       before.listRow,
+            //                                       u8"Полилиния -> линия"));
+
+            //         if (!doc->isModified)
+            //         {
+            //             doc->isModified = true;
+            //             updateFileListDisplay(doc->filePath);
+            //         }
+
+            //         if (doc->scene)
+            //             doc->scene->update();
+            //     }
+            //     ce->accept();
+            //     return true;
+            // }
                 else if (chosen == actToLine)
                 {
-                    ShapeBackup before = makeBackupFromItem(polyline);
-                    const int n = before.points.size();
-                    if (n < 2)
+                    Document::Ptr doc = currentDocument();
+                    QUndoStack* stack = activeUndoStack();
+
+                    if (!doc || !doc->scene || !stack)
                     {
                         ce->accept();
                         return true;
                     }
 
-                    ShapeBackup after = before;
-                    after.kind = ShapeKind::Line;
-                    after.closed = true;
-                    after.numberingFromLast = false;
-
-                    // Если полилиния замкнута, разрываем именно то ребро, по которому был ПКМ
-                    if (polyline->isClosed() && n >= 3)
+                    if (polyline->points().size() < 2)
                     {
-                        double (*dist2PointToSegment)(const QPointF&, const QPointF&, const QPointF&) =
-                            [](const QPointF& p, const QPointF& a, const QPointF& b) -> double
-                        {
-                            const double vx = b.x() - a.x();
-                            const double vy = b.y() - a.y();
-                            const double wx = p.x() - a.x();
-                            const double wy = p.y() - a.y();
-                            const double vv = vx*vx + vy*vy;
-                            double t = 0.0;
-                            if (vv > 1e-12)
-                                t = (wx*vx + wy*vy) / vv;
-                            if (t < 0.0) t = 0.0;
-                            if (t > 1.0) t = 1.0;
-                            const double px = a.x() + t*vx;
-                            const double py = a.y() + t*vy;
-                            const double dx = p.x() - px;
-                            const double dy = p.y() - py;
-                            return dx*dx + dy*dy;
-                        };
-
-                        int bestIdx = 0;
-                        double bestD2 = std::numeric_limits<double>::infinity();
-
-                        // Ищем ближайший сегмент
-                        for (int i = 0; i < n; ++i)
-                        {
-                            const QPointF& firstPt = before.points[i];
-                            const QPointF& secondPt = before.points[(i + 1) % n];
-                            const double d2 = dist2PointToSegment(scenePos, firstPt, secondPt);
-                            if (d2 < bestD2)
-                            {
-                                bestD2 = d2;
-                                bestIdx = i;
-                            }
-                        }
-                        QVector<QPointF> reordered;
-                        reordered.reserve(n);
-                        const int start = (bestIdx + 1) % n; // Новая первая точка
-                        for (int k = 0; k < n; ++k)
-                            reordered.push_back(before.points[(start + k) % n]);
-
-                        after.points = reordered;
+                        ce->accept();
+                        return true;
                     }
 
-                    pushReplaceShapeCommand(before.uid, before, after, u8"Полилиния -> линия");
+                    undo::Replace::Data data;
+                    data.type = undo::Replace::Type::PolylineToLine;
+                    data.scenePos = scenePos;
+
+                    undo::Replace* command = new undo::Replace(doc.get(),
+                                                               polyline,
+                                                               data,
+                                                               u8"Полилиния -> линия");
+
+                    if (command->isValid())
+                    {
+                        stack->push(command);
+
+                        if (!doc->isModified)
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                    }
+                    else
+                    {
+                        delete command;
+                    }
                 }
                 ce->accept();
                 return true;
@@ -4572,21 +4806,106 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 {
                     performSplitLineByEdge(line, scenePos);
                 }
+                // else if (chosen == actToPolyline)
+                // {
+                //     ShapeBackup before = makeBackupFromItem(line);
+                //     if (before.points.size() < 2)
+                //     {
+                //         ce->accept();
+                //         return true;
+                //     }
+
+                //     ShapeBackup after = before;
+                //     after.kind = ShapeKind::Polyline;
+                //     after.closed = true;
+                //     after.numberingFromLast = false;
+
+                //     //pushReplaceShapeCommand(before.uid, before, after, u8"Линия -> полилиния");
+                //     Document::Ptr doc = currentDocument();
+                //     QUndoStack* stack = activeUndoStack();
+
+                //     if (!doc || !doc->scene || !stack)
+                //     {
+                //         ce->accept();
+                //         return true;
+                //     }
+
+                //     after.uid = before.uid;
+                //     after.listRow = before.listRow;
+                //     after.shapeNumber = before.shapeNumber;
+
+                //     QGraphicsItem* afterItem = recreateFromBackup(after);
+
+                //     if (!afterItem)
+                //     {
+                //         ce->accept();
+                //         return true;
+                //     }
+
+                //     // recreateFromBackup() сразу добавляет фигуру на сцену и в список.
+                //     // Для undo::Replace новая фигура должна быть только подготовлена.
+                //     removeListEntryBySceneItem(afterItem);
+
+                //     if (afterItem->scene())
+                //         afterItem->scene()->removeItem(afterItem);
+
+                //     afterItem->setSelected(false);
+
+                //     stack->push(new undo::Replace(doc.get(),
+                //                                   line,
+                //                                   afterItem,
+                //                                   before.listRow,
+                //                                   u8"Линия -> полилиния"));
+
+                //     if (!doc->isModified)
+                //     {
+                //         doc->isModified = true;
+                //         updateFileListDisplay(doc->filePath);
+                //     }
+
+                //     if (doc->scene)
+                //         doc->scene->update();
+                // }
                 else if (chosen == actToPolyline)
                 {
-                    ShapeBackup before = makeBackupFromItem(line);
-                    if (before.points.size() < 2)
+                    Document::Ptr doc = currentDocument();
+                    QUndoStack* stack = activeUndoStack();
+
+                    if (!doc || !doc->scene || !stack)
                     {
                         ce->accept();
                         return true;
                     }
 
-                    ShapeBackup after = before;
-                    after.kind = ShapeKind::Polyline;
-                    after.closed = true;
-                    after.numberingFromLast = false;
+                    if (line->points().size() < 2)
+                    {
+                        ce->accept();
+                        return true;
+                    }
 
-                    pushReplaceShapeCommand(before.uid, before, after, u8"Линия -> полилиния");
+                    undo::Replace::Data data;
+                    data.type = undo::Replace::Type::LineToPolyline;
+                    data.scenePos = scenePos;
+
+                    undo::Replace* command = new undo::Replace(doc.get(),
+                                                               line,
+                                                               data,
+                                                               u8"Линия -> полилиния");
+
+                    if (command->isValid())
+                    {
+                        stack->push(command);
+
+                        if (!doc->isModified)
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                    }
+                    else
+                    {
+                        delete command;
+                    }
                 }
                 ce->accept();
                 return true;
@@ -6780,6 +7099,17 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
 
                 if (!className.isEmpty())
                     applyClassColorToItem(item, className);
+
+                apply_PointSize_ToItem(item);
+
+                if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
+                    polyline->updatePointNumbers();
+                else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
+                    line->updatePointNumbers();
+                else if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+                    rectangle->updatePointNumbers();
+
+               apply_NumberSize_ToItem(item);
             }
 
             refreshShapeListOrderRole();
@@ -12083,73 +12413,73 @@ void MainWindow::pushModifyShapeCommand(qulonglong uid,
 //     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
 // }
 
-void MainWindow::pushReplaceShapeCommand(qulonglong uid,
-                                        const ShapeBackup& before,
-                                        const ShapeBackup& after,
-                                        const QString& description)
-{
-    Document::Ptr doc = currentDocument();
-    if (!doc || !doc->_undoStack)
-        return;
+// void MainWindow::pushReplaceShapeCommand(qulonglong uid,
+//                                         const ShapeBackup& before,
+//                                         const ShapeBackup& after,
+//                                         const QString& description)
+// {
+//     Document::Ptr doc = currentDocument();
+//     if (!doc || !doc->_undoStack)
+//         return;
 
-    struct Payload
-    {
-        qulonglong uid = 0;
-        ShapeBackup before;
-        ShapeBackup after;
-    };
+//     struct Payload
+//     {
+//         qulonglong uid = 0;
+//         ShapeBackup before;
+//         ShapeBackup after;
+//     };
 
-    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
-    payload->uid = uid;
-    payload->before = before;
-    payload->after  = after;
+//     std::shared_ptr<Payload> payload = std::make_shared<Payload>();
+//     payload->uid = uid;
+//     payload->before = before;
+//     payload->after  = after;
 
-    payload->before.uid = uid;
-    payload->after.uid  = uid;
+//     payload->before.uid = uid;
+//     payload->after.uid  = uid;
 
-    std::function<void(qulonglong, const ShapeBackup&)> replaceBySnap =
-        [this](qulonglong uid, const ShapeBackup& snap)
-    {
-        if (!uid)
-            return;
+//     std::function<void(qulonglong, const ShapeBackup&)> replaceBySnap =
+//         [this](qulonglong uid, const ShapeBackup& snap)
+//     {
+//         if (!uid)
+//             return;
 
-        if (QGraphicsItem* item = findItemByUid(uid))
-        {
-            if (QGraphicsScene* sc = item->scene())
-                sc->removeItem(item);
+//         if (QGraphicsItem* item = findItemByUid(uid))
+//         {
+//             if (QGraphicsScene* sc = item->scene())
+//                 sc->removeItem(item);
 
-            removeListEntryBySceneItem(item);
-            clearLinePolylineStateForDeletedItem(item);
-            delete item;
-        }
+//             removeListEntryBySceneItem(item);
+//             clearLinePolylineStateForDeletedItem(item);
+//             delete item;
+//         }
 
-        QGraphicsItem* created = recreateFromBackup(snap);
-        if (created)
-            created->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
-    };
+//         QGraphicsItem* created = recreateFromBackup(snap);
+//         if (created)
+//             created->setData(_roleUid, QVariant::fromValue<qulonglong>(uid));
+//     };
 
-    std::function<void()> redoFn = [this, payload, replaceBySnap]()
-    {
-        replaceBySnap(payload->uid, payload->after);
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-    };
+//     std::function<void()> redoFn = [this, payload, replaceBySnap]()
+//     {
+//         replaceBySnap(payload->uid, payload->after);
+//         if (Document::Ptr doc = currentDocument())
+//         {
+//             doc->isModified = true;
+//             updateFileListDisplay(doc->filePath);
+//         }
+//     };
 
-    std::function<void()> undoFn = [this, payload, replaceBySnap]()
-    {
-        replaceBySnap(payload->uid, payload->before);
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-    };
+//     std::function<void()> undoFn = [this, payload, replaceBySnap]()
+//     {
+//         replaceBySnap(payload->uid, payload->before);
+//         if (Document::Ptr doc = currentDocument())
+//         {
+//             doc->isModified = true;
+//             updateFileListDisplay(doc->filePath);
+//         }
+//     };
 
-    doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
-}
+//     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, description));
+// }
 
 void MainWindow::setPolygonListModelForCurrentDocument()
 {
@@ -13126,8 +13456,10 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
                                         Qt::KeyboardModifiers mods,
                                         GraphicsView* graphView)
 {
-    Q_UNUSED(mods);
+    //Q_UNUSED(mods);
     Q_UNUSED(graphView);
+
+    const Qt::KeyboardModifiers closeMods = mods | QApplication::keyboardModifiers();
 
     _isInDrawingMode = true;
     setSceneItemsMovable(false);
@@ -13136,6 +13468,22 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
     Document::Ptr doc = currentDocument();
     QGraphicsScene* scene = doc->scene;
+
+    //const Qt::KeyboardModifiers closeMods = mods | QApplication::keyboardModifiers();
+
+    // if (_resumeEditing
+    //     && _polyline
+    //     && qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::CtrlModifier
+    //     && (mods & Qt::ControlModifier))
+    // {
+    //     if (!_polyline->isClosed())
+    //         _polyline->closePolyline();
+
+    //     apply_PointSize_ToItem(_polyline);
+    //     raiseAllHandlesToTop();
+
+    //     return;
+    // }
 
     if (!_polyline)
     {
@@ -13351,6 +13699,39 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
     {
         // Ничего
     }
+    else if (_resumeEditing)
+    {
+        const int pointIndex = _polyline->circles().size();
+
+        _polyline->addPoint(p, scene);
+
+        if (_polyline->circles().size() > pointIndex)
+        {
+            _polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
+            _polyline->setSelected(true);
+            _polyline->setFocus();
+            _polyline->updatePointNumbers();
+
+            if (QUndoStack* stack = activeUndoStack())
+            {
+                undo::NodeEdit::Data data;
+                data.type = undo::NodeEdit::Type::InsertPolylineNode;
+                data.pointIndex = pointIndex;
+                data.point = p;
+
+                stack->push(new undo::NodeEdit(doc.get(),
+                                               _polyline,
+                                               data,
+                                               u8"Узел полилинии"));
+            }
+
+            if (doc && !doc->isModified)
+            {
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
+            }
+        }
+    }
     else if (QUndoStack* stack = activeUndoStack())
     {
         struct Payload
@@ -13410,24 +13791,38 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
     }
 
     // Закрытие полилинии по Ctrl
-    if (qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::CtrlModifier
-        && (mods & Qt::ControlModifier))
-    {
-        //_polyline->closePolyline();
-        if (_polyline && !_polyline->isClosed())
-        {
-            _polyline->closePolyline();
-        }
+    // if (qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::CtrlModifier
+    //     && (closeMods & Qt::ControlModifier))
+    // {
+    //     //_polyline->closePolyline();
+    //     if (_polyline && !_polyline->isClosed())
+    //     {
+    //         _polyline->closePolyline();
+    //     }
 
+    // }
+    bool finishPolyline = false;
+
+    if (qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::CtrlModifier
+        && (closeMods & Qt::ControlModifier))
+    {
+        finishPolyline = true;
     }
-    apply_PointSize_ToItem(_polyline);
+
+    if (finishPolyline && _polyline && !_polyline->isClosed())
+        _polyline->closePolyline();
+
+    if (_polyline)
+        apply_PointSize_ToItem(_polyline);
     raiseAllHandlesToTop();
 }
 
 void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers mods, GraphicsView* graphView)
 {
-    Q_UNUSED(mods);
+    //Q_UNUSED(mods);
     Q_UNUSED(graphView);
+
+    const Qt::KeyboardModifiers closeMods = mods | QApplication::keyboardModifiers();
 
     Document::Ptr doc = currentDocument();
     QGraphicsScene* scene = doc->scene;
@@ -13644,6 +14039,38 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
     {
         // Ничего
     }
+    else if (_resumeEditing)
+    {
+        const int pointIndex = _line->circles().size();
+
+        _line->addPoint(p, scene);
+
+        if (_line->circles().size() > pointIndex)
+        {
+            _line->setSelected(true);
+            _line->setFocus();
+            _line->updatePointNumbers();
+
+            if (QUndoStack* stack = activeUndoStack())
+            {
+                undo::NodeEdit::Data data;
+                data.type = undo::NodeEdit::Type::InsertLineNode;
+                data.pointIndex = pointIndex;
+                data.point = p;
+
+                stack->push(new undo::NodeEdit(doc.get(),
+                                               _line,
+                                               data,
+                                               u8"Узел линии"));
+            }
+
+            if (doc && !doc->isModified)
+            {
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
+            }
+        }
+    }
     else if (QUndoStack* stack = activeUndoStack())
     {
         struct Payload
@@ -13699,12 +14126,24 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
     }
 
     // Завершение линии по Ctrl
-    if (qgraph::Line::globalCloseMode() == qgraph::Line::CloseMode::CtrlModifier &&
-        (mods & Qt::ControlModifier))
+    // if (qgraph::Line::globalCloseMode() == qgraph::Line::CloseMode::CtrlModifier &&
+    //     (mods & Qt::ControlModifier))
+    // {
+    //     _line->closeLine();
+    // }
+    bool finishLine = false;
+
+    if (qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::CtrlModifier
+        && (closeMods & Qt::ControlModifier))
     {
-        _line->closeLine();
+        finishLine = true;
     }
-    apply_PointSize_ToItem(_line);
+
+    if (finishLine && _line && !_line->isClosed())
+        _line->closeLine();
+
+    if (_line)
+        apply_PointSize_ToItem(_line);
     raiseAllHandlesToTop();
 }
 

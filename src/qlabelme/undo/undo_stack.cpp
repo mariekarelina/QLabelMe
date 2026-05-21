@@ -187,6 +187,154 @@
 // {
 //     applyBackup(_before);
 // }
+namespace {
+
+double distanceSquaredToSegment(const QPointF& point,
+                                const QPointF& first,
+                                const QPointF& second)
+{
+    const double vx = second.x() - first.x();
+    const double vy = second.y() - first.y();
+    const double wx = point.x() - first.x();
+    const double wy = point.y() - first.y();
+
+    const double segmentLengthSquared = vx * vx + vy * vy;
+
+    double t = 0.0;
+
+    if (segmentLengthSquared > 1e-12)
+        t = (wx * vx + wy * vy) / segmentLengthSquared;
+
+    if (t < 0.0)
+        t = 0.0;
+
+    if (t > 1.0)
+        t = 1.0;
+
+    const double px = first.x() + t * vx;
+    const double py = first.y() + t * vy;
+
+    const double dx = point.x() - px;
+    const double dy = point.y() - py;
+
+    return dx * dx + dy * dy;
+}
+
+QVector<QPointF> reorderedPolylinePoints(qgraph::Polyline* polyline,
+                                         const QPointF& scenePos)
+{
+    QVector<QPointF> points = polyline->points();
+
+    const int pointsCount = points.size();
+
+    if (!polyline->isClosed() || pointsCount < 3)
+        return points;
+
+    int bestIndex = 0;
+    double bestDistance = -1.0;
+
+    for (int i = 0; i < pointsCount; ++i)
+    {
+        const QPointF& first = points[i];
+        const QPointF& second = points[(i + 1) % pointsCount];
+
+        const double distance = distanceSquaredToSegment(scenePos, first, second);
+
+        if (bestDistance < 0.0 || distance < bestDistance)
+        {
+            bestDistance = distance;
+            bestIndex = i;
+        }
+    }
+
+    QVector<QPointF> reordered;
+    reordered.reserve(pointsCount);
+
+    const int startIndex = (bestIndex + 1) % pointsCount;
+
+    for (int i = 0; i < pointsCount; ++i)
+        reordered.append(points[(startIndex + i) % pointsCount]);
+
+    return reordered;
+}
+
+void copyCommonShapeState(QGraphicsItem* sourceShape,
+                          QGraphicsItem* targetShape)
+{
+    if (!sourceShape || !targetShape)
+        return;
+
+    // Класс фигуры в проекте хранится в data(0).
+    // Служебные роли MainWindow здесь не трогаем.
+    targetShape->setData(0, sourceShape->data(0));
+
+    targetShape->setZValue(sourceShape->zValue());
+    targetShape->setVisible(sourceShape->isVisible());
+    targetShape->setFlags(sourceShape->flags());
+
+    if (qgraph::Polyline* sourcePolyline = dynamic_cast<qgraph::Polyline*>(sourceShape))
+    {
+        if (qgraph::Line* targetLine = dynamic_cast<qgraph::Line*>(targetShape))
+        {
+            targetLine->setPen(sourcePolyline->pen());
+        }
+    }
+    else if (qgraph::Line* sourceLine = dynamic_cast<qgraph::Line*>(sourceShape))
+    {
+        if (qgraph::Polyline* targetPolyline = dynamic_cast<qgraph::Polyline*>(targetShape))
+        {
+            targetPolyline->setPen(sourceLine->pen());
+        }
+    }
+}
+
+bool hasVisiblePointNumbers(QGraphicsItem* shape)
+{
+    if (!shape)
+        return false;
+
+    const QList<QGraphicsItem*> children = shape->childItems();
+
+    for (QGraphicsItem* child : children)
+    {
+        QGraphicsSimpleTextItem* text = dynamic_cast<QGraphicsSimpleTextItem*>(child);
+
+        if (text && text->isVisible() && !text->text().isEmpty())
+            return true;
+    }
+
+    return false;
+}
+
+void setPointNumbersVisible(qgraph::Line* line, bool visible)
+{
+    if (!line)
+        return;
+
+    line->updatePointNumbers();
+
+    if (hasVisiblePointNumbers(line) != visible)
+    {
+        line->togglePointNumbers();
+        line->updatePointNumbers();
+    }
+}
+
+void setPointNumbersVisible(qgraph::Polyline* polyline, bool visible)
+{
+    if (!polyline)
+        return;
+
+    polyline->updatePointNumbers();
+
+    if (hasVisiblePointNumbers(polyline) != visible)
+    {
+        polyline->togglePointNumbers();
+        polyline->updatePointNumbers();
+    }
+}
+
+} // namespace
 
 
 namespace undo {
@@ -414,7 +562,7 @@ Delete::Delete(Document* doc, const QSet<QGraphicsItem*>& shapes,
         if (!shape)
             continue;
 
-        RowState state;
+        Data state;
         state.shape = shape;
 
         // Запоминаем строку до удаления
@@ -427,7 +575,7 @@ Delete::Delete(Document* doc, const QSet<QGraphicsItem*>& shapes,
     }
     // Храним строки по возрастанию
     std::sort(_rows.begin(), _rows.end(),
-              [](const RowState& left, const RowState& right)
+              [](const Data& left, const Data& right)
     {
         return left.row < right.row;
     });
@@ -442,7 +590,7 @@ Delete::~Delete()
     // for (const ListItemState& state : _listItems)
     //     if (state.item && !state.item->listWidget())
     //         delete state.item;
-    for (RowState& state : _rows)
+    for (Data& state : _rows)
     {
         for (QStandardItem* item : state.modelItems)
         {
@@ -499,7 +647,7 @@ void Delete::undo()
     //    return;
 
     // Восстанавливаем по возрастанию строк
-    for (RowState& state : _rows)
+    for (Data& state : _rows)
     {
         if (!state.shape)
             continue;
@@ -577,7 +725,7 @@ void Delete::redo()
     // Удаляем с конца, чтобы индексы строк не смещались
     for (int i = _rows.size() - 1; i >= 0; --i)
     {
-        RowState& state = _rows[i];
+        Data& state = _rows[i];
 
         if (!state.shape)
             continue;
@@ -981,6 +1129,157 @@ void NodeEdit::redo()
     }
 }
 
+Replace::Replace(Document* doc,
+                 QGraphicsItem* shape,
+                 const Data& data,
+                 const QString& text)
+{
+    _doc = doc;
+    _beforeShape = shape;
+    _data = data;
+
+    if (_doc)
+        _row = _doc->polygonList.items.indexOf(_beforeShape);
+
+    _afterShape = createReplacement();
+
+    if (_afterShape)
+        _shapesCollector.insert(_afterShape);
+
+    QUndoCommand::setText(text);
+}
+
+bool Replace::isValid() const
+{
+    return _doc && _doc->scene && _beforeShape && _afterShape && _row >= 0;
+}
+
+QGraphicsItem* Replace::createReplacement() const
+{
+    if (!_doc || !_doc->scene || !_beforeShape)
+        return nullptr;
+
+    if (_data.type == Type::PolylineToLine)
+    {
+        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_beforeShape);
+
+        if (!polyline)
+            return nullptr;
+
+        const bool pointNumbersVisible = hasVisiblePointNumbers(polyline);
+
+        const QVector<QPointF> points = reorderedPolylinePoints(polyline, _data.scenePos);
+
+        if (points.size() < 2)
+            return nullptr;
+
+        qgraph::Line* line = new qgraph::Line(_doc->scene, points.first());
+
+        line->beginBulkLoad();
+
+        for (int i = 1; i < points.size(); ++i)
+            line->addPoint(points[i], _doc->scene);
+
+        line->endBulkLoad();
+        line->closeLine();
+        line->setNumberingFromLast(false);
+
+        copyCommonShapeState(polyline, line);
+
+        line->updateHandlePosition();
+        setPointNumbersVisible(line, pointNumbersVisible);
+
+        if (line->scene())
+            line->scene()->removeItem(line);
+
+        line->setSelected(false);
+
+        return line;
+    }
+
+    if (_data.type == Type::LineToPolyline)
+    {
+        qgraph::Line* line = dynamic_cast<qgraph::Line*>(_beforeShape);
+
+        if (!line)
+            return nullptr;
+
+        const bool pointNumbersVisible = hasVisiblePointNumbers(line);
+
+        const QVector<QPointF> points = line->points();
+
+        if (points.size() < 2)
+            return nullptr;
+
+        qgraph::Polyline* polyline = new qgraph::Polyline(_doc->scene, points.first());
+
+        polyline->beginBulkLoad();
+
+        for (int i = 1; i < points.size(); ++i)
+            polyline->addPoint(points[i], _doc->scene);
+
+        polyline->endBulkLoad();
+        polyline->closePolyline();
+
+        copyCommonShapeState(line, polyline);
+
+        polyline->updateHandlePosition();
+        setPointNumbersVisible(polyline, pointNumbersVisible);
+
+        if (polyline->scene())
+            polyline->scene()->removeItem(polyline);
+
+        polyline->setSelected(false);
+
+        return polyline;
+    }
+
+    return nullptr;
+}
+
+void Replace::undo()
+{
+    replace(_afterShape, _beforeShape);
+}
+
+void Replace::redo()
+{
+    replace(_beforeShape, _afterShape);
+}
+
+void Replace::replace(QGraphicsItem* leavingShape, QGraphicsItem* enteringShape)
+{
+    if (!isValid() || !leavingShape || !enteringShape)
+        return;
+
+    int row = _doc->polygonList.items.indexOf(leavingShape);
+
+    if (row < 0)
+        row = _row;
+
+    if (row < 0 || row >= _doc->polygonList.items.size())
+        return;
+
+    leavingShape->setSelected(false);
+
+    if (leavingShape->scene())
+        _doc->scene->removeItem(leavingShape);
+
+    if (!enteringShape->scene())
+        _doc->scene->addItem(enteringShape);
+
+    enteringShape->setSelected(true);
+    enteringShape->setFocus();
+
+    _doc->polygonList.items[row] = enteringShape;
+
+    _shapesCollector.insert(leavingShape);
+    _shapesCollector.remove(enteringShape);
+
+    if (_doc->scene)
+        _doc->scene->update();
+}
+
 Visibility::Visibility(Document* doc,
                        const QVector<QGraphicsItem*>& shapes,
                        bool visible,
@@ -1199,6 +1498,137 @@ void NumberingEdit::redo()
             break;
 
         rectangle->setNumberingOffset(_data.rectangleNumberingOffsetAfter);
+
+        break;
+    }
+    }
+
+    if (_doc && _doc->scene)
+        _doc->scene->update();
+}
+
+ResumeEdit::ResumeEdit(Document* doc, QGraphicsItem* shape,
+                       const Data& data, const QString& text)
+{
+    _doc = doc;
+    _shape = shape;
+    _data = data;
+
+    QUndoCommand::setText(text);
+}
+
+void ResumeEdit::undo()
+{
+    if (_data.resumeIndex < 0)
+        return;
+
+    switch (_data.type)
+    {
+    case Type::Line:
+    {
+        qgraph::Line* line = dynamic_cast<qgraph::Line*>(_shape);
+
+        if (!line)
+            break;
+
+        const int insertIndex = _data.resumeIndex + 1;
+
+        for (int i = 0; i < _data.removedPoints.size(); ++i)
+            line->insertPointAtIndex(insertIndex + i, _data.removedPoints[i]);
+
+        const int removeIndex = insertIndex + _data.removedPoints.size();
+
+        for (int i = 0; i < _data.addedPoints.size(); ++i)
+            line->removePointAtIndex(removeIndex);
+
+        line->setNumberingFromLast(false);
+        line->updatePath();
+        line->updatePointNumbers();
+
+        break;
+    }
+
+    case Type::Polyline:
+    {
+        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_shape);
+
+        if (!polyline)
+            break;
+
+        const int insertIndex = _data.resumeIndex + 1;
+
+        for (int i = 0; i < _data.removedPoints.size(); ++i)
+            polyline->insertPointAtIndex(insertIndex + i, _data.removedPoints[i]);
+
+        const int removeIndex = insertIndex + _data.removedPoints.size();
+
+        for (int i = 0; i < _data.addedPoints.size(); ++i)
+            polyline->removePointAtIndex(removeIndex);
+
+        polyline->updatePath();
+        polyline->updatePointNumbers();
+
+        break;
+    }
+    }
+
+    if (_doc && _doc->scene)
+        _doc->scene->update();
+}
+
+void ResumeEdit::redo()
+{
+    if (firstRedo())
+        return;
+
+    if (_data.resumeIndex < 0)
+        return;
+
+    switch (_data.type)
+    {
+    case Type::Line:
+    {
+        qgraph::Line* line = dynamic_cast<qgraph::Line*>(_shape);
+
+        if (!line)
+            break;
+
+        const int insertIndex = _data.resumeIndex + 1;
+
+        for (int i = 0; i < _data.addedPoints.size(); ++i)
+            line->insertPointAtIndex(insertIndex + i, _data.addedPoints[i]);
+
+        const int removeIndex = insertIndex + _data.addedPoints.size();
+
+        for (int i = 0; i < _data.removedPoints.size(); ++i)
+            line->removePointAtIndex(removeIndex);
+
+        line->setNumberingFromLast(false);
+        line->updatePath();
+        line->updatePointNumbers();
+
+        break;
+    }
+
+    case Type::Polyline:
+    {
+        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_shape);
+
+        if (!polyline)
+            break;
+
+        const int insertIndex = _data.resumeIndex + 1;
+
+        for (int i = 0; i < _data.addedPoints.size(); ++i)
+            polyline->insertPointAtIndex(insertIndex + i, _data.addedPoints[i]);
+
+        const int removeIndex = insertIndex + _data.addedPoints.size();
+
+        for (int i = 0; i < _data.removedPoints.size(); ++i)
+            polyline->removePointAtIndex(removeIndex);
+
+        polyline->updatePath();
+        polyline->updatePointNumbers();
 
         break;
     }

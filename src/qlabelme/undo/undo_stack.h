@@ -190,7 +190,7 @@ public:
     //     int row = -1;
     // };
 
-    struct RowState
+    struct Data
     {
         QGraphicsItem* shape = {nullptr};
 
@@ -209,7 +209,7 @@ public:
     void redo() override;
 
 private:
-    QVector<RowState> _rows;
+    QVector<Data> _rows;
 };
 
 class Move : public BaseUndo
@@ -302,10 +302,47 @@ private:
     Data _data;
 };
 
-// Линию в полилинию и обратно, также объединения и разрыв линии
+// Линию в полилинию и обратно
 class Replace : public BaseUndo
 {
+public:
+    enum class Type
+    {
+        PolylineToLine,
+        LineToPolyline
+    };
 
+    struct Data
+    {
+        Type type = {Type::PolylineToLine};
+
+        // Позиция клика нужна, чтобы при преобразовании замкнутой
+        // полилинии в линию разорвать именно выбранное ребро
+        QPointF scenePos;
+    };
+
+    Replace(Document* doc,
+            QGraphicsItem* shape,
+            const Data& data,
+            const QString& text);
+
+    bool isValid() const;
+
+    void undo() override;
+    void redo() override;
+
+private:
+    QGraphicsItem* createReplacement() const;
+    void replace(QGraphicsItem* leavingShape, QGraphicsItem* enteringShape);
+
+private:
+    QGraphicsItem* _beforeShape = {nullptr};
+    QGraphicsItem* _afterShape = {nullptr};
+
+    Data _data;
+
+    // Строка фигуры в списке на момент замены
+    int _row = {-1};
 };
 
 // Показать/скрыть фигуру
@@ -390,7 +427,36 @@ private:
 // Возобновление рисования линии/полилинии
 class ResumeEdit : public BaseUndo
 {
+public:
+    enum class Type
+    {
+        Line,
+        Polyline
+    };
 
+    struct Data
+    {
+        Type type = {Type::Line};
+
+        // Индекс узла, от которого было возобновлено рисование
+        int resumeIndex = {-1};
+
+        // Старые точки после resumeIndex, удаленные при возобновлении
+        QVector<QPointF> removedPoints;
+
+        // Точки, добавленные во время возобновленного рисования
+        QVector<QPointF> addedPoints;
+    };
+
+    ResumeEdit(Document* doc, QGraphicsItem* shape,
+               const Data& data, const QString& text);
+
+    void undo() override;
+    void redo() override;
+
+private:
+    QGraphicsItem* _shape = {nullptr};
+    Data _data;
 };
 
 // Перемещение фигуры в списке
