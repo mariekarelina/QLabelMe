@@ -446,6 +446,11 @@ public:
 
         // Точки, добавленные во время возобновленного рисования
         QVector<QPointF> addedPoints;
+        // До продолжения фигура уже была завершенной фигурой
+        bool closedBefore = {true};
+
+        // После завершения продолжения фигура снова должна быть замкнута
+        bool closedAfter = {true};
     };
 
     ResumeEdit(Document* doc, QGraphicsItem* shape,

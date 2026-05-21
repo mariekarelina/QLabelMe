@@ -1519,9 +1519,6 @@ ResumeEdit::ResumeEdit(Document* doc, QGraphicsItem* shape,
 
 void ResumeEdit::undo()
 {
-    if (_data.resumeIndex < 0)
-        return;
-
     switch (_data.type)
     {
     case Type::Line:
@@ -1531,23 +1528,29 @@ void ResumeEdit::undo()
         if (!line)
             break;
 
-        const int insertIndex = _data.resumeIndex + 1;
+        line->setClosed(false, false);
 
-        for (int i = 0; i < _data.removedPoints.size(); ++i)
-            line->insertPointAtIndex(insertIndex + i, _data.removedPoints[i]);
+        if (_data.resumeIndex >= 0)
+        {
+            const int insertIndex = _data.resumeIndex + 1;
 
-        const int removeIndex = insertIndex + _data.removedPoints.size();
+            for (int i = 0; i < _data.removedPoints.size(); ++i)
+                line->insertPointAtIndex(insertIndex + i, _data.removedPoints[i]);
 
-        for (int i = 0; i < _data.addedPoints.size(); ++i)
-            line->removePointAtIndex(removeIndex);
+            const int removeIndex = insertIndex + _data.removedPoints.size();
 
-        line->setNumberingFromLast(false);
+            for (int i = 0; i < _data.addedPoints.size(); ++i)
+                line->removePointAtIndex(removeIndex);
+        }
+
+        line->setClosed(_data.closedBefore, false);
+        line->setFlag(QGraphicsItem::ItemIsMovable, _data.closedBefore);
+
         line->updatePath();
         line->updatePointNumbers();
 
         break;
     }
-
     case Type::Polyline:
     {
         qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_shape);
@@ -1555,15 +1558,23 @@ void ResumeEdit::undo()
         if (!polyline)
             break;
 
-        const int insertIndex = _data.resumeIndex + 1;
+        polyline->setClosed(false, false);
 
-        for (int i = 0; i < _data.removedPoints.size(); ++i)
-            polyline->insertPointAtIndex(insertIndex + i, _data.removedPoints[i]);
+        if (_data.resumeIndex >= 0)
+        {
+            const int insertIndex = _data.resumeIndex + 1;
 
-        const int removeIndex = insertIndex + _data.removedPoints.size();
+            for (int i = 0; i < _data.removedPoints.size(); ++i)
+                polyline->insertPointAtIndex(insertIndex + i, _data.removedPoints[i]);
 
-        for (int i = 0; i < _data.addedPoints.size(); ++i)
-            polyline->removePointAtIndex(removeIndex);
+            const int removeIndex = insertIndex + _data.removedPoints.size();
+
+            for (int i = 0; i < _data.addedPoints.size(); ++i)
+                polyline->removePointAtIndex(removeIndex);
+        }
+
+        polyline->setClosed(_data.closedBefore, false);
+        polyline->setFlag(QGraphicsItem::ItemIsMovable, _data.closedBefore);
 
         polyline->updatePath();
         polyline->updatePointNumbers();
@@ -1581,9 +1592,6 @@ void ResumeEdit::redo()
     if (firstRedo())
         return;
 
-    if (_data.resumeIndex < 0)
-        return;
-
     switch (_data.type)
     {
     case Type::Line:
@@ -1593,23 +1601,29 @@ void ResumeEdit::redo()
         if (!line)
             break;
 
-        const int insertIndex = _data.resumeIndex + 1;
+        line->setClosed(false, false);
 
-        for (int i = 0; i < _data.addedPoints.size(); ++i)
-            line->insertPointAtIndex(insertIndex + i, _data.addedPoints[i]);
+        if (_data.resumeIndex >= 0)
+        {
+            const int insertIndex = _data.resumeIndex + 1;
 
-        const int removeIndex = insertIndex + _data.addedPoints.size();
+            for (int i = 0; i < _data.addedPoints.size(); ++i)
+                line->insertPointAtIndex(insertIndex + i, _data.addedPoints[i]);
 
-        for (int i = 0; i < _data.removedPoints.size(); ++i)
-            line->removePointAtIndex(removeIndex);
+            const int removeIndex = insertIndex + _data.addedPoints.size();
 
-        line->setNumberingFromLast(false);
+            for (int i = 0; i < _data.removedPoints.size(); ++i)
+                line->removePointAtIndex(removeIndex);
+        }
+
+        line->setClosed(_data.closedAfter, false);
+        line->setFlag(QGraphicsItem::ItemIsMovable, _data.closedAfter);
+
         line->updatePath();
         line->updatePointNumbers();
 
         break;
     }
-
     case Type::Polyline:
     {
         qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_shape);
@@ -1617,15 +1631,23 @@ void ResumeEdit::redo()
         if (!polyline)
             break;
 
-        const int insertIndex = _data.resumeIndex + 1;
+        polyline->setClosed(false, false);
 
-        for (int i = 0; i < _data.addedPoints.size(); ++i)
-            polyline->insertPointAtIndex(insertIndex + i, _data.addedPoints[i]);
+        if (_data.resumeIndex >= 0)
+        {
+            const int insertIndex = _data.resumeIndex + 1;
 
-        const int removeIndex = insertIndex + _data.addedPoints.size();
+            for (int i = 0; i < _data.addedPoints.size(); ++i)
+                polyline->insertPointAtIndex(insertIndex + i, _data.addedPoints[i]);
 
-        for (int i = 0; i < _data.removedPoints.size(); ++i)
-            polyline->removePointAtIndex(removeIndex);
+            const int removeIndex = insertIndex + _data.addedPoints.size();
+
+            for (int i = 0; i < _data.removedPoints.size(); ++i)
+                polyline->removePointAtIndex(removeIndex);
+        }
+
+        polyline->setClosed(_data.closedAfter, false);
+        polyline->setFlag(QGraphicsItem::ItemIsMovable, _data.closedAfter);
 
         polyline->updatePath();
         polyline->updatePointNumbers();
