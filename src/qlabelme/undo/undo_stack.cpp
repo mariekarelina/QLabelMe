@@ -525,6 +525,118 @@ void Create::redo()
     // }
 }
 
+FinishDrawing::FinishDrawing(Document* doc,
+                             QGraphicsItem* shape,
+                             Type type,
+                             const QString& text)
+{
+    _doc = doc;
+    _shape = shape;
+    _type = type;
+
+    if (_doc)
+        _row = _doc->polygonList.items.indexOf(_shape);
+
+    QUndoCommand::setText(text);
+}
+
+void FinishDrawing::undo()
+{
+    if (!_doc || !_shape)
+        return;
+
+    setClosed(false);
+    removeFromList();
+
+    if (_doc->scene)
+        _doc->scene->update();
+}
+
+void FinishDrawing::redo()
+{
+    if (firstRedo())
+        return;
+
+    if (!_doc || !_shape)
+        return;
+
+    setClosed(true);
+    restoreToList();
+
+    if (_doc->scene)
+        _doc->scene->update();
+}
+
+void FinishDrawing::setClosed(bool closed)
+{
+    if (_type == Type::Line)
+    {
+        qgraph::Line* line = dynamic_cast<qgraph::Line*>(_shape);
+
+        if (!line)
+            return;
+
+        line->setClosed(closed, false);
+        line->setFlag(QGraphicsItem::ItemIsMovable, closed);
+        line->setSelected(true);
+        line->setFocus();
+
+        line->setNumberingFromLast(false);
+        line->updatePath();
+        line->updateHandlePosition();
+        line->updatePointNumbers();
+
+        return;
+    }
+
+    if (_type == Type::Polyline)
+    {
+        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_shape);
+
+        if (!polyline)
+            return;
+
+        polyline->setClosed(closed, false);
+        polyline->setFlag(QGraphicsItem::ItemIsMovable, closed);
+        polyline->setSelected(true);
+        polyline->setFocus();
+
+        polyline->updatePath();
+        polyline->updateHandlePosition();
+        polyline->updatePointNumbers();
+    }
+}
+
+void FinishDrawing::removeFromList()
+{
+    if (!_doc || !_shape)
+        return;
+
+    const int currentRow = _doc->polygonList.items.indexOf(_shape);
+
+    if (currentRow >= 0)
+    {
+        _row = currentRow;
+        _doc->polygonList.items.removeAt(currentRow);
+    }
+}
+
+void FinishDrawing::restoreToList()
+{
+    if (!_doc || !_shape)
+        return;
+
+    if (_doc->polygonList.items.contains(_shape))
+        return;
+
+    int row = _row;
+
+    if (row < 0 || row > _doc->polygonList.items.size())
+        row = _doc->polygonList.items.size();
+
+    _doc->polygonList.items.insert(row, _shape);
+}
+
 // Delete::Delete(QGraphicsScene* scene,
 //                const QSet<QGraphicsItem*>& shapes,
 //                QListWidget* listWidget,
@@ -546,6 +658,127 @@ void Create::redo()
 
 //     QUndoCommand::setText(text);
 // }
+
+Paste::Paste(Document* doc,
+             const QList<QGraphicsItem*>& shapes,
+             const QString& text)
+{
+    _doc = doc;
+
+    QUndoCommand::setText(text);
+
+    if (!_doc)
+        return;
+
+    for (QGraphicsItem* shape : shapes)
+    {
+        if (!shape)
+            continue;
+
+        Data state;
+        state.shape = shape;
+        state.row = _doc->polygonList.items.indexOf(shape);
+
+        if (state.row < 0)
+            continue;
+
+        _rows.append(state);
+    }
+
+    std::sort(_rows.begin(), _rows.end(),
+              [](const Data& left, const Data& right)
+    {
+        return left.row < right.row;
+    });
+}
+
+Paste::~Paste()
+{
+    for (Data& state : _rows)
+    {
+        for (QStandardItem* item : state.modelItems)
+        {
+            if (item && !item->model())
+                delete item;
+        }
+
+        state.modelItems.clear();
+    }
+}
+
+void Paste::undo()
+{
+    if (!_doc || !_doc->scene)
+        return;
+
+    // Удаляем с конца, чтобы строки списка не смещались
+    for (int i = _rows.size() - 1; i >= 0; --i)
+    {
+        Data& state = _rows[i];
+
+        if (!state.shape)
+            continue;
+
+        const int currentRow = _doc->polygonList.items.indexOf(state.shape);
+
+        if (currentRow >= 0)
+        {
+            state.row = currentRow;
+            _doc->polygonList.items.removeAt(currentRow);
+
+            if (currentRow < _doc->polygonList.model.rowCount())
+                state.modelItems = _doc->polygonList.model.takeRow(currentRow);
+        }
+
+        if (state.shape->scene())
+            _doc->scene->removeItem(state.shape);
+
+        // После undo фигура временно принадлежит команде
+        _shapesCollector.insert(state.shape);
+    }
+
+    if (_doc->scene)
+        _doc->scene->update();
+}
+
+void Paste::redo()
+{
+    if (firstRedo())
+        return;
+
+    if (!_doc || !_doc->scene)
+        return;
+
+    // Восстанавливаем по возрастанию строк.
+    for (Data& state : _rows)
+    {
+        if (!state.shape)
+            continue;
+
+        if (!state.shape->scene())
+            _doc->scene->addItem(state.shape);
+
+        _shapesCollector.remove(state.shape);
+
+        int row = state.row;
+
+        if (row < 0 || row > _doc->polygonList.items.size())
+            row = _doc->polygonList.items.size();
+
+        if (!_doc->polygonList.items.contains(state.shape))
+            _doc->polygonList.items.insert(row, state.shape);
+
+        if (!state.modelItems.isEmpty())
+        {
+            _doc->polygonList.model.insertRow(row, state.modelItems);
+            state.modelItems.clear();
+        }
+    }
+
+    if (_doc->scene)
+        _doc->scene->update();
+}
+
 Delete::Delete(Document* doc, const QSet<QGraphicsItem*>& shapes,
                const QString& text)
 {

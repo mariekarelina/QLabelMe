@@ -174,6 +174,65 @@ private:
     //QList<qgraph::Shape*> _shapes;
 };
 
+// Завершение рисования новой линии/полилинии
+class FinishDrawing : public BaseUndo
+{
+public:
+    enum class Type
+    {
+        Line,
+        Polyline
+    };
+
+    FinishDrawing(Document* doc,
+                  QGraphicsItem* shape,
+                  Type type,
+                  const QString& text);
+
+    void undo() override;
+    void redo() override;
+
+private:
+    void setClosed(bool closed);
+    void removeFromList();
+    void restoreToList();
+
+private:
+    QGraphicsItem* _shape = {nullptr};
+    Type _type = {Type::Line};
+
+    // Строка фигуры в списке после завершения рисования
+    int _row = {-1};
+};
+
+// Вставка одного или нескольких примитивов
+class Paste : public BaseUndo
+{
+public:
+    Paste(Document* doc,
+          const QList<QGraphicsItem*>& shapes,
+          const QString& text);
+
+    ~Paste();
+
+    void undo() override;
+    void redo() override;
+
+private:
+    struct Data
+    {
+        QGraphicsItem* shape = {nullptr};
+
+        // Строка фигуры в списке после вставки
+        int row = {-1};
+
+        // Строка модели QListView, снятая при undo
+        QList<QStandardItem*> modelItems;
+    };
+
+private:
+    QVector<Data> _rows;
+};
 
 class Delete : public BaseUndo
 {

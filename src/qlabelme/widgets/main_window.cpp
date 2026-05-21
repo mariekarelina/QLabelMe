@@ -1493,8 +1493,17 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 applyClassColorToItem(_currPoint, selectedClass);
                 linkSceneItemToList(_currPoint);
 
-                ShapeBackup backup = makeBackupFromItem(_currPoint);
-                pushAdoptExistingShapeCommand(_currPoint, backup, u8"Добавление точки");
+                // ShapeBackup backup = makeBackupFromItem(_currPoint);
+                // pushAdoptExistingShapeCommand(_currPoint, backup, u8"Добавление точки");
+                if (Document::Ptr doc = currentDocument())
+                {
+                    if (QUndoStack* stack = activeUndoStack())
+                    {
+                        stack->push(new undo::Create(doc.get(),
+                                                     _currPoint,
+                                                     u8"Добавление точки"));
+                    }
+                }
             }
         }
 
@@ -2261,193 +2270,20 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                 applyClassColorToItem(circle, selectedClass);
                 linkSceneItemToList(circle); // Связываем новый элемент с списком
 
-                ShapeBackup b = makeBackupFromItem(circle);
-                pushAdoptExistingShapeCommand(circle, b, u8"Добавление круга");
-
-            }
-        }
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-        raiseAllHandlesToTop();
-    }
-    else if (_drawingPolyline && _polyline && _polyline->isClosed())
-    {
-        _drawingPolyline = false;
-        updateModeLabel();
-        if (_polyline)
-            _polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
-
-        _polyline->updatePointNumbers();
-        apply_LineWidth_ToItem(_polyline);
-        apply_PointSize_ToItem(_polyline);
-        apply_NumberSize_ToItem(_polyline);
-
-        // Получаем список классов из listWidget_PolygonLabel
-        // QStringList classes;
-        // for (int i = 0; i < ui->polygonLabel->count(); ++i)
-        //     classes << ui->polygonLabel->item(i)->text();
-        // // Показываем диалог выбора класса
-        // SelectClass dialog(classes, this);
-
-        if (!_resumeEditing)
-        {
-            SelectClass dialog(_projectClasses, this);
-            if (dialog.exec() == QDialog::Accepted)
-            {
-                const QString selectedClass = dialog.selectedClass();
-                if (!selectedClass.isEmpty())
+                // ShapeBackup b = makeBackupFromItem(circle);
+                // pushAdoptExistingShapeCommand(circle, b, u8"Добавление круга");
+                if (Document::Ptr doc = currentDocument())
                 {
-                    // _polyline->setData(0, selectedClass);
-                    // applyClassColorToItem(_polyline, selectedClass);
-                    // linkSceneItemToList(_polyline);
-
-                    // ShapeBackup b = makeBackupFromItem(_polyline);
-                    // pushAdoptExistingShapeCommand(_polyline, b, u8"Добавление полилинии"));
-                    const qulonglong uid = ensureUid(_polyline);
-                    const QString cls = selectedClass;
-
-                    std::function<void()> redoFn = [this, uid, cls]()
-                    {
-                        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
-                        if (!polyline)
-                            return;
-
-                        polyline->setClosed(true, true);
-                        polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
-
-                        polyline->setData(0, cls);
-                        applyClassColorToItem(polyline, cls);
-                        linkSceneItemToList(polyline);
-
-                        if (_polyline && ensureUid(_polyline) == uid)
-                            _polyline = nullptr;
-
-                        _drawingPolyline = false;
-                        _resumeEditing = false;
-                        _resumeUid = 0;
-                        updateModeLabel();
-
-                        if (Document::Ptr doc = currentDocument())
-                        {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
-                        }
-                    };
-
-                    std::function<void()> undoFn = [this, uid]()
-                    {
-                        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
-                        if (!polyline)
-                            return;
-
-                        polyline->setClosed(false, false);
-                        polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
-                        _drawingPolyline = true;
-                        _polyline = polyline;
-                        updateModeLabel();
-
-                        _resumeEditing = true;
-                        _resumeUid = uid;
-
-                        polyline->setSelected(true);
-                        polyline->setFocus();
-
-                        removeListEntryBySceneItem(polyline);
-
-                        if (Document::Ptr doc = currentDocument())
-                        {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
-                        }
-
-                        raiseAllHandlesToTop();
-                    };
                     if (QUndoStack* stack = activeUndoStack())
-                        stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
-                    else
-                        redoFn();
+                    {
+                        stack->push(new undo::Create(doc.get(),
+                                                     circle,
+                                                     u8"Добавление круга"));
+                    }
                 }
+
             }
         }
-        else
-        {
-            const QString cls = _polyline->data(0).toString();
-            const qulonglong uid = ensureUid(_polyline);
-
-            _drawingPolyline = false;
-            updateModeLabel();
-
-            std::function<void()> redoFn = [this, uid, cls]()
-            {
-                qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
-                if (!polyline)
-                    return;
-
-                polyline->setClosed(true, false);
-                polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
-
-                if (!cls.isEmpty())
-                {
-                    polyline->setData(0, cls);
-                    applyClassColorToItem(polyline, cls);
-                }
-                linkSceneItemToList(polyline);
-
-                if (_polyline && ensureUid(_polyline) == uid)
-                    _polyline = nullptr;
-
-                _drawingPolyline = false;
-                _resumeEditing = false;
-                _resumeUid = 0;
-                updateModeLabel();
-
-                if (Document::Ptr doc = currentDocument())
-                {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
-                raiseAllHandlesToTop();
-            };
-
-            std::function<void()> undoFn = [this, uid]()
-            {
-                qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
-                if (!polyline)
-                    return;
-
-                polyline->setClosed(false, false);
-                polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
-
-                _drawingPolyline = true;
-                _polyline = polyline;
-                updateModeLabel();
-
-                _resumeEditing = true;
-                _resumeUid = uid;
-
-                polyline->setSelected(true);
-                polyline->setFocus();
-
-                removeListEntryBySceneItem(polyline);
-
-                if (Document::Ptr doc = currentDocument())
-                {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
-                raiseAllHandlesToTop();
-            };
-
-            if (QUndoStack* stack = activeUndoStack())
-                stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
-            else
-                redoFn();
-        }
-        _polyline = nullptr;
-
         if (Document::Ptr doc = currentDocument())
         {
             doc->isModified = true;
@@ -2455,195 +2291,377 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         }
         raiseAllHandlesToTop();
     }
-    else if (_drawingLine && _line && _line->isClosed())
-    {
-        _drawingLine = false;
-        updateModeLabel();
-        if (_line)
-                _line->setFlag(QGraphicsItem::ItemIsMovable, true);
+    // else if (_drawingPolyline && _polyline && _polyline->isClosed())
+    // {
+    //     _drawingPolyline = false;
+    //     updateModeLabel();
+    //     if (_polyline)
+    //         _polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
 
-        _line->updatePointNumbers();
-        apply_LineWidth_ToItem(_line);
-        apply_PointSize_ToItem(_line);
-        apply_NumberSize_ToItem(_line);
+    //     _polyline->updatePointNumbers();
+    //     apply_LineWidth_ToItem(_polyline);
+    //     apply_PointSize_ToItem(_polyline);
+    //     apply_NumberSize_ToItem(_polyline);
 
-        // Получаем список классов из listWidget_PolygonLabel
-        // QStringList classes;
-        // for (int i = 0; i < ui->polygonLabel->count(); ++i)
-        //     classes << ui->polygonLabel->item(i)->text();
+    //     // Получаем список классов из listWidget_PolygonLabel
+    //     // QStringList classes;
+    //     // for (int i = 0; i < ui->polygonLabel->count(); ++i)
+    //     //     classes << ui->polygonLabel->item(i)->text();
+    //     // // Показываем диалог выбора класса
+    //     // SelectClass dialog(classes, this);
 
-        // // Показываем диалог выбора класса
-        // SelectClass dialog(classes, this);
+    //     if (!_resumeEditing)
+    //     {
+    //         SelectClass dialog(_projectClasses, this);
+    //         if (dialog.exec() == QDialog::Accepted)
+    //         {
+    //             const QString selectedClass = dialog.selectedClass();
+    //             if (!selectedClass.isEmpty())
+    //             {
+    //                 // _polyline->setData(0, selectedClass);
+    //                 // applyClassColorToItem(_polyline, selectedClass);
+    //                 // linkSceneItemToList(_polyline);
 
-        if (!_resumeEditing)
-        {
-            SelectClass dialog(_projectClasses, this);
-            if (dialog.exec() == QDialog::Accepted)
-            {
-                const QString selectedClass = dialog.selectedClass();
-                if (!selectedClass.isEmpty())
-                {
-                    // _line->setData(0, selectedClass);
-                    // applyClassColorToItem(_line, selectedClass);
-                    // linkSceneItemToList(_line);
+    //                 // ShapeBackup b = makeBackupFromItem(_polyline);
+    //                 // pushAdoptExistingShapeCommand(_polyline, b, u8"Добавление полилинии"));
+    //                 const qulonglong uid = ensureUid(_polyline);
+    //                 const QString cls = selectedClass;
 
-                    // ShapeBackup b = makeBackupFromItem(_line);
-                    // pushAdoptExistingShapeCommand(_line, b, u8"Добавление линии"));
-                    const qulonglong uid = ensureUid(_line);
-                    const QString cls = selectedClass;
+    //                 std::function<void()> redoFn = [this, uid, cls]()
+    //                 {
+    //                     qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
+    //                     if (!polyline)
+    //                         return;
 
-                    _drawingLine = false;
-                    updateModeLabel();
+    //                     polyline->setClosed(true, true);
+    //                     polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
 
-                    std::function<void()> redoFn = [this, uid, cls]()
-                    {
-                        qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
-                        if (!line)
-                            return;
+    //                     polyline->setData(0, cls);
+    //                     applyClassColorToItem(polyline, cls);
+    //                     linkSceneItemToList(polyline);
 
-                        line->setClosed(true, false);
-                        line->setFlag(QGraphicsItem::ItemIsMovable, true);
+    //                     if (_polyline && ensureUid(_polyline) == uid)
+    //                         _polyline = nullptr;
 
-                        line->setData(0, cls);
-                        applyClassColorToItem(line, cls);
-                        linkSceneItemToList(line);
+    //                     _drawingPolyline = false;
+    //                     _resumeEditing = false;
+    //                     _resumeUid = 0;
+    //                     updateModeLabel();
 
-                        if (_line && ensureUid(_line) == uid)
-                            _line = nullptr;
+    //                     if (Document::Ptr doc = currentDocument())
+    //                     {
+    //                         doc->isModified = true;
+    //                         updateFileListDisplay(doc->filePath);
+    //                     }
+    //                 };
 
-                        _drawingLine = false;
-                        _resumeEditing = false;
-                        _resumeUid = 0;
-                        updateModeLabel();
+    //                 std::function<void()> undoFn = [this, uid]()
+    //                 {
+    //                     qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
+    //                     if (!polyline)
+    //                         return;
 
-                        if (Document::Ptr doc = currentDocument())
-                        {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
-                        }
-                        raiseAllHandlesToTop();
-                    };
+    //                     polyline->setClosed(false, false);
+    //                     polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
+    //                     _drawingPolyline = true;
+    //                     _polyline = polyline;
+    //                     updateModeLabel();
 
-                    std::function<void()> undoFn = [this, uid]()
-                    {
-                        qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
-                        if (!line)
-                            return;
+    //                     _resumeEditing = true;
+    //                     _resumeUid = uid;
 
-                        line->setClosed(false, false);
-                        line->setFlag(QGraphicsItem::ItemIsMovable, false);
+    //                     polyline->setSelected(true);
+    //                     polyline->setFocus();
 
-                        _drawingLine = true;
-                        _line = line;
-                        updateModeLabel();
+    //                     removeListEntryBySceneItem(polyline);
 
-                        _resumeEditing = true;
-                        _resumeUid = uid;
+    //                     if (Document::Ptr doc = currentDocument())
+    //                     {
+    //                         doc->isModified = true;
+    //                         updateFileListDisplay(doc->filePath);
+    //                     }
 
-                        line->setSelected(true);
-                        line->setFocus();
+    //                     raiseAllHandlesToTop();
+    //                 };
+    //                 if (QUndoStack* stack = activeUndoStack())
+    //                     stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
+    //                 else
+    //                     redoFn();
+    //             }
+    //         }
+    //     }
+    //     else
+    //     {
+    //         const QString cls = _polyline->data(0).toString();
+    //         const qulonglong uid = ensureUid(_polyline);
 
-                        removeListEntryBySceneItem(line);
+    //         _drawingPolyline = false;
+    //         updateModeLabel();
 
-                        if (Document::Ptr doc = currentDocument())
-                        {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
-                        }
-                        raiseAllHandlesToTop();
-                    };
+    //         std::function<void()> redoFn = [this, uid, cls]()
+    //         {
+    //             qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
+    //             if (!polyline)
+    //                 return;
 
-                    if (QUndoStack* stack = activeUndoStack())
-                        stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
-                    else
-                        redoFn();
-                }
-            }
-        }
-        else
-        {
-            const qulonglong uid = ensureUid(_line);
-            const QString cls = _line->data(0).toString();
+    //             polyline->setClosed(true, false);
+    //             polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
 
-            _drawingLine = false;
-            updateModeLabel();
+    //             if (!cls.isEmpty())
+    //             {
+    //                 polyline->setData(0, cls);
+    //                 applyClassColorToItem(polyline, cls);
+    //             }
+    //             linkSceneItemToList(polyline);
 
-            std::function<void()> redoFn = [this, uid, cls]()
-            {
-                qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
-                if (!line)
-                    return;
+    //             if (_polyline && ensureUid(_polyline) == uid)
+    //                 _polyline = nullptr;
 
-                line->setClosed(true, false);
-                line->setFlag(QGraphicsItem::ItemIsMovable, true);
+    //             _drawingPolyline = false;
+    //             _resumeEditing = false;
+    //             _resumeUid = 0;
+    //             updateModeLabel();
 
-                if (!cls.isEmpty())
-                {
-                    line->setData(0, cls);
-                    applyClassColorToItem(line, cls);
-                }
-                linkSceneItemToList(line);
+    //             if (Document::Ptr doc = currentDocument())
+    //             {
+    //                 doc->isModified = true;
+    //                 updateFileListDisplay(doc->filePath);
+    //             }
+    //             raiseAllHandlesToTop();
+    //         };
 
-                if (_line && ensureUid(_line) == uid)
-                    _line = nullptr;
+    //         std::function<void()> undoFn = [this, uid]()
+    //         {
+    //             qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
+    //             if (!polyline)
+    //                 return;
 
-                _drawingLine = false;
-                _resumeEditing = false;
-                _resumeUid = 0;
-                updateModeLabel();
+    //             polyline->setClosed(false, false);
+    //             polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
 
-                if (Document::Ptr doc = currentDocument())
-                {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
-                raiseAllHandlesToTop();
-            };
+    //             _drawingPolyline = true;
+    //             _polyline = polyline;
+    //             updateModeLabel();
 
-            std::function<void()> undoFn = [this, uid]()
-            {
-                qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
-                if (!line)
-                    return;
+    //             _resumeEditing = true;
+    //             _resumeUid = uid;
 
-                line->setClosed(false, false);
-                line->setFlag(QGraphicsItem::ItemIsMovable, false);
+    //             polyline->setSelected(true);
+    //             polyline->setFocus();
 
-                _drawingLine = true;
-                _line = line;
-                updateModeLabel();
+    //             removeListEntryBySceneItem(polyline);
 
-                _resumeEditing = true;
-                _resumeUid = uid;
+    //             if (Document::Ptr doc = currentDocument())
+    //             {
+    //                 doc->isModified = true;
+    //                 updateFileListDisplay(doc->filePath);
+    //             }
+    //             raiseAllHandlesToTop();
+    //         };
 
-                line->setSelected(true);
-                line->setFocus();
+    //         if (QUndoStack* stack = activeUndoStack())
+    //             stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
+    //         else
+    //             redoFn();
+    //     }
+    //     _polyline = nullptr;
 
-                removeListEntryBySceneItem(line);
+    //     if (Document::Ptr doc = currentDocument())
+    //     {
+    //         doc->isModified = true;
+    //         updateFileListDisplay(doc->filePath);
+    //     }
+    //     raiseAllHandlesToTop();
+    // }
+    // else if (_drawingLine && _line && _line->isClosed())
+    // {
+    //     _drawingLine = false;
+    //     updateModeLabel();
+    //     if (_line)
+    //             _line->setFlag(QGraphicsItem::ItemIsMovable, true);
 
-                if (Document::Ptr doc = currentDocument())
-                {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
-                raiseAllHandlesToTop();
-            };
+    //     _line->updatePointNumbers();
+    //     apply_LineWidth_ToItem(_line);
+    //     apply_PointSize_ToItem(_line);
+    //     apply_NumberSize_ToItem(_line);
 
-            if (QUndoStack* stack = activeUndoStack())
-                stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
-            else
-                redoFn();
-        }
+    //     // Получаем список классов из listWidget_PolygonLabel
+    //     // QStringList classes;
+    //     // for (int i = 0; i < ui->polygonLabel->count(); ++i)
+    //     //     classes << ui->polygonLabel->item(i)->text();
 
-        _line = nullptr;
+    //     // // Показываем диалог выбора класса
+    //     // SelectClass dialog(classes, this);
 
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-        raiseAllHandlesToTop();
-    }
+    //     if (!_resumeEditing)
+    //     {
+    //         SelectClass dialog(_projectClasses, this);
+    //         if (dialog.exec() == QDialog::Accepted)
+    //         {
+    //             const QString selectedClass = dialog.selectedClass();
+    //             if (!selectedClass.isEmpty())
+    //             {
+    //                 // _line->setData(0, selectedClass);
+    //                 // applyClassColorToItem(_line, selectedClass);
+    //                 // linkSceneItemToList(_line);
+
+    //                 // ShapeBackup b = makeBackupFromItem(_line);
+    //                 // pushAdoptExistingShapeCommand(_line, b, u8"Добавление линии"));
+    //                 const qulonglong uid = ensureUid(_line);
+    //                 const QString cls = selectedClass;
+
+    //                 _drawingLine = false;
+    //                 updateModeLabel();
+
+    //                 std::function<void()> redoFn = [this, uid, cls]()
+    //                 {
+    //                     qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
+    //                     if (!line)
+    //                         return;
+
+    //                     line->setClosed(true, false);
+    //                     line->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+    //                     line->setData(0, cls);
+    //                     applyClassColorToItem(line, cls);
+    //                     linkSceneItemToList(line);
+
+    //                     if (_line && ensureUid(_line) == uid)
+    //                         _line = nullptr;
+
+    //                     _drawingLine = false;
+    //                     _resumeEditing = false;
+    //                     _resumeUid = 0;
+    //                     updateModeLabel();
+
+    //                     if (Document::Ptr doc = currentDocument())
+    //                     {
+    //                         doc->isModified = true;
+    //                         updateFileListDisplay(doc->filePath);
+    //                     }
+    //                     raiseAllHandlesToTop();
+    //                 };
+
+    //                 std::function<void()> undoFn = [this, uid]()
+    //                 {
+    //                     qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
+    //                     if (!line)
+    //                         return;
+
+    //                     line->setClosed(false, false);
+    //                     line->setFlag(QGraphicsItem::ItemIsMovable, false);
+
+    //                     _drawingLine = true;
+    //                     _line = line;
+    //                     updateModeLabel();
+
+    //                     _resumeEditing = true;
+    //                     _resumeUid = uid;
+
+    //                     line->setSelected(true);
+    //                     line->setFocus();
+
+    //                     removeListEntryBySceneItem(line);
+
+    //                     if (Document::Ptr doc = currentDocument())
+    //                     {
+    //                         doc->isModified = true;
+    //                         updateFileListDisplay(doc->filePath);
+    //                     }
+    //                     raiseAllHandlesToTop();
+    //                 };
+
+    //                 if (QUndoStack* stack = activeUndoStack())
+    //                     stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
+    //                 else
+    //                     redoFn();
+    //             }
+    //         }
+    //     }
+    //     else
+    //     {
+    //         const qulonglong uid = ensureUid(_line);
+    //         const QString cls = _line->data(0).toString();
+
+    //         _drawingLine = false;
+    //         updateModeLabel();
+
+    //         std::function<void()> redoFn = [this, uid, cls]()
+    //         {
+    //             qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
+    //             if (!line)
+    //                 return;
+
+    //             line->setClosed(true, false);
+    //             line->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+    //             if (!cls.isEmpty())
+    //             {
+    //                 line->setData(0, cls);
+    //                 applyClassColorToItem(line, cls);
+    //             }
+    //             linkSceneItemToList(line);
+
+    //             if (_line && ensureUid(_line) == uid)
+    //                 _line = nullptr;
+
+    //             _drawingLine = false;
+    //             _resumeEditing = false;
+    //             _resumeUid = 0;
+    //             updateModeLabel();
+
+    //             if (Document::Ptr doc = currentDocument())
+    //             {
+    //                 doc->isModified = true;
+    //                 updateFileListDisplay(doc->filePath);
+    //             }
+    //             raiseAllHandlesToTop();
+    //         };
+
+    //         std::function<void()> undoFn = [this, uid]()
+    //         {
+    //             qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
+    //             if (!line)
+    //                 return;
+
+    //             line->setClosed(false, false);
+    //             line->setFlag(QGraphicsItem::ItemIsMovable, false);
+
+    //             _drawingLine = true;
+    //             _line = line;
+    //             updateModeLabel();
+
+    //             _resumeEditing = true;
+    //             _resumeUid = uid;
+
+    //             line->setSelected(true);
+    //             line->setFocus();
+
+    //             removeListEntryBySceneItem(line);
+
+    //             if (Document::Ptr doc = currentDocument())
+    //             {
+    //                 doc->isModified = true;
+    //                 updateFileListDisplay(doc->filePath);
+    //             }
+    //             raiseAllHandlesToTop();
+    //         };
+
+    //         if (QUndoStack* stack = activeUndoStack())
+    //             stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
+    //         else
+    //             redoFn();
+    //     }
+
+    //     _line = nullptr;
+
+    //     if (Document::Ptr doc = currentDocument())
+    //     {
+    //         doc->isModified = true;
+    //         updateFileListDisplay(doc->filePath);
+    //     }
+    //     raiseAllHandlesToTop();
+    // }
     else if (mouseEvent->button() == Qt::LeftButton && _isDrawingRuler)
     {
         // Фиксируем конечную точку и окончательно считаем расстояние
@@ -8279,17 +8297,23 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     QString descr = (newItems.count() == 1) ? u8"Вставка примитива"
                                             : u8"Вставка примитивов";
 
-    if (QUndoStack* st = activeUndoStack())
-        st->beginMacro(descr);
+    // if (QUndoStack* st = activeUndoStack())
+    //     st->beginMacro(descr);
 
-    for (QGraphicsItem* item : newItems)
+    // for (QGraphicsItem* item : newItems)
+    // {
+    //     ShapeBackup backup = makeBackupFromItem(item);
+    //     pushAdoptExistingShapeCommand(item, backup, descr);
+    // }
+
+    // if (QUndoStack* st = activeUndoStack())
+    //     st->endMacro();
+    if (QUndoStack* stack = activeUndoStack())
     {
-        ShapeBackup backup = makeBackupFromItem(item);
-        pushAdoptExistingShapeCommand(item, backup, descr);
+        stack->push(new undo::Paste(doc.get(),
+                                    newItems,
+                                    descr));
     }
-
-    if (QUndoStack* st = activeUndoStack())
-        st->endMacro();
 
     doc->isModified = true;
     updateFileListDisplay(doc->filePath);
@@ -13639,8 +13663,24 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
         _polyline->setFocus();
         _polyline->updatePointNumbers();
 
-        ShapeBackup b0 = makeBackupFromItem(_polyline);
-        pushAdoptExistingShapeCommand(_polyline, b0, u8"Узел полилинии");
+        // ShapeBackup b0 = makeBackupFromItem(_polyline);
+        // pushAdoptExistingShapeCommand(_polyline, b0, u8"Узел полилинии");
+        if (doc)
+        {
+            if (QUndoStack* stack = activeUndoStack())
+            {
+                stack->push(new undo::Create(doc.get(),
+                                             _polyline,
+                                             u8"Узел полилинии"));
+            }
+
+            if (!doc->isModified)
+            {
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
+            }
+        }
+
         _polyline->setModificationCallback([this]()
         {
             if (_drawingPolyline && _polyline && _polyline->isClosed())
@@ -13658,6 +13698,91 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
                 //     classes << ui->polygonLabel->item(i)->text();
 
                 // SelectClass dialog(classes, this);
+                // if (!_resumeEditing)
+                // {
+                //     SelectClass dialog(_projectClasses, this);
+
+                //     if (dialog.exec() == QDialog::Accepted)
+                //     {
+                //         const QString selectedClass = dialog.selectedClass();
+                //         if (!selectedClass.isEmpty())
+                //         {
+                //             // _polyline->setData(0, selectedClass);
+                //             // applyClassColorToItem(_polyline, selectedClass);
+                //             // linkSceneItemToList(_polyline);
+
+                //             // ShapeBackup b = makeBackupFromItem(_polyline);
+                //             // pushAdoptExistingShapeCommand(_polyline, b, u8"Добавление полилинии"));
+                //             const qulonglong uid = ensureUid(_polyline);
+                //             const QString cls = selectedClass;
+
+                //             _drawingPolyline = false;
+                //             updateModeLabel();
+
+                //             std::function<void()> redoFn = [this, uid, cls]()
+                //             {
+                //                 qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
+                //                 if (!polyline)
+                //                     return;
+
+                //                 polyline->setClosed(true, false);
+                //                 polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+                //                 polyline->setData(0, cls);
+                //                 applyClassColorToItem(polyline, cls);
+                //                 linkSceneItemToList(polyline);
+
+                //                 if (_polyline && ensureUid(_polyline) == uid)
+                //                     _polyline = nullptr;
+
+                //                 _drawingPolyline = false;
+                //                 _resumeEditing = false;
+                //                 _resumeUid = 0;
+                //                 updateModeLabel();
+
+                //                 if (Document::Ptr doc = currentDocument())
+                //                 {
+                //                     doc->isModified = true;
+                //                     updateFileListDisplay(doc->filePath);
+                //                 }
+                //             };
+
+                //             std::function<void()> undoFn = [this, uid]()
+                //             {
+                //                 qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
+                //                 if (!polyline)
+                //                     return;
+
+                //                 polyline->setClosed(false, false);
+                //                 polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
+
+                //                 _drawingPolyline = true;
+                //                 _polyline = polyline;
+                //                 updateModeLabel();
+
+                //                 _resumeEditing = true;
+                //                 _resumeUid = uid;
+
+                //                 polyline->setSelected(true);
+                //                 polyline->setFocus();
+
+                //                 removeListEntryBySceneItem(polyline);
+
+                //                 if (Document::Ptr doc = currentDocument())
+                //                 {
+                //                     doc->isModified = true;
+                //                     updateFileListDisplay(doc->filePath);
+                //                 }
+
+                //                 raiseAllHandlesToTop();
+                //             };
+                //             if (QUndoStack* stack = activeUndoStack())
+                //                 stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
+                //             else
+                //                 redoFn();
+                //         }
+                //     }
+                // }
                 if (!_resumeEditing)
                 {
                     SelectClass dialog(_projectClasses, this);
@@ -13665,156 +13790,169 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
                     if (dialog.exec() == QDialog::Accepted)
                     {
                         const QString selectedClass = dialog.selectedClass();
+
                         if (!selectedClass.isEmpty())
                         {
-                            // _polyline->setData(0, selectedClass);
-                            // applyClassColorToItem(_polyline, selectedClass);
-                            // linkSceneItemToList(_polyline);
+                            _polyline->setClosed(true, false);
+                            _polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
 
-                            // ShapeBackup b = makeBackupFromItem(_polyline);
-                            // pushAdoptExistingShapeCommand(_polyline, b, u8"Добавление полилинии"));
-                            const qulonglong uid = ensureUid(_polyline);
-                            const QString cls = selectedClass;
+                            _polyline->setData(0, selectedClass);
+                            applyClassColorToItem(_polyline, selectedClass);
+                            linkSceneItemToList(_polyline);
+
+                            Document::Ptr doc = currentDocument();
+
+                            if (doc)
+                            {
+                                if (QUndoStack* stack = activeUndoStack())
+                                {
+                                    stack->push(new undo::FinishDrawing(doc.get(),
+                                                                        _polyline,
+                                                                        undo::FinishDrawing::Type::Polyline,
+                                                                        u8"Добавление полилинии"));
+                                }
+
+                                if (!doc->isModified)
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
+                            }
 
                             _drawingPolyline = false;
+                            _resumeEditing = false;
+                            _resumeUid = 0;
+                            _polyline = nullptr;
+
                             updateModeLabel();
-
-                            std::function<void()> redoFn = [this, uid, cls]()
-                            {
-                                qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
-                                if (!polyline)
-                                    return;
-
-                                polyline->setClosed(true, false);
-                                polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
-
-                                polyline->setData(0, cls);
-                                applyClassColorToItem(polyline, cls);
-                                linkSceneItemToList(polyline);
-
-                                if (_polyline && ensureUid(_polyline) == uid)
-                                    _polyline = nullptr;
-
-                                _drawingPolyline = false;
-                                _resumeEditing = false;
-                                _resumeUid = 0;
-                                updateModeLabel();
-
-                                if (Document::Ptr doc = currentDocument())
-                                {
-                                    doc->isModified = true;
-                                    updateFileListDisplay(doc->filePath);
-                                }
-                            };
-
-                            std::function<void()> undoFn = [this, uid]()
-                            {
-                                qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
-                                if (!polyline)
-                                    return;
-
-                                polyline->setClosed(false, false);
-                                polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
-
-                                _drawingPolyline = true;
-                                _polyline = polyline;
-                                updateModeLabel();
-
-                                _resumeEditing = true;
-                                _resumeUid = uid;
-
-                                polyline->setSelected(true);
-                                polyline->setFocus();
-
-                                removeListEntryBySceneItem(polyline);
-
-                                if (Document::Ptr doc = currentDocument())
-                                {
-                                    doc->isModified = true;
-                                    updateFileListDisplay(doc->filePath);
-                                }
-
-                                raiseAllHandlesToTop();
-                            };
-                            if (QUndoStack* stack = activeUndoStack())
-                                stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
-                            else
-                                redoFn();
+                            raiseAllHandlesToTop();
                         }
                     }
                 }
+                // else
+                // {
+                //     const QString cls = _polyline->data(0).toString();
+                //     const qulonglong uid = ensureUid(_polyline);
+                //     _drawingPolyline = false;
+                //     updateModeLabel();
+
+                //     std::function<void()> redoFn = [this, uid, cls]()
+                //     {
+                //         qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
+                //         if (!polyline)
+                //             return;
+
+                //         polyline->setClosed(true, false);
+                //         polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+                //         if (!cls.isEmpty())
+                //         {
+                //             polyline->setData(0, cls);
+                //             applyClassColorToItem(polyline, cls);
+                //         }
+                //         linkSceneItemToList(polyline);
+
+                //         if (_polyline && ensureUid(_polyline) == uid)
+                //             _polyline = nullptr;
+
+                //         _drawingPolyline = false;
+                //         _resumeEditing = false;
+                //         _resumeUid = 0;
+                //         updateModeLabel();
+
+                //         if (Document::Ptr doc = currentDocument())
+                //         {
+                //             doc->isModified = true;
+                //             updateFileListDisplay(doc->filePath);
+                //         }
+                //         raiseAllHandlesToTop();
+                //     };
+
+                //     std::function<void()> undoFn = [this, uid]()
+                //     {
+                //         qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
+                //         if (!polyline)
+                //             return;
+
+                //         polyline->setClosed(false, false);
+                //         polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
+
+                //         _drawingPolyline = true;
+                //         _polyline = polyline;
+                //         updateModeLabel();
+
+                //         _resumeEditing = true;
+                //         _resumeUid = uid;
+
+                //         polyline->setSelected(true);
+                //         polyline->setFocus();
+
+                //         removeListEntryBySceneItem(polyline);
+
+                //         if (Document::Ptr doc = currentDocument())
+                //         {
+                //             doc->isModified = true;
+                //             updateFileListDisplay(doc->filePath);
+                //         }
+                //         raiseAllHandlesToTop();
+                //     };
+
+                //     if (QUndoStack* stack = activeUndoStack())
+                //         stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
+                //     else
+                //         redoFn();
+                // }
                 else
                 {
-                    const QString cls = _polyline->data(0).toString();
-                    const qulonglong uid = ensureUid(_polyline);
+                    _polyline->setClosed(true, false);
+                    _polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+                    const QString className = _polyline->data(0).toString();
+
+                    if (!className.isEmpty())
+                        applyClassColorToItem(_polyline, className);
+
+                    _polyline->updatePointNumbers();
+                    apply_LineWidth_ToItem(_polyline);
+                    apply_PointSize_ToItem(_polyline);
+                    apply_NumberSize_ToItem(_polyline);
+
+                    Document::Ptr doc = currentDocument();
+
+                    if (doc)
+                    {
+                        if (QUndoStack* stack = activeUndoStack())
+                        {
+                            undo::ResumeEdit::Data data;
+                            data.type = undo::ResumeEdit::Type::Polyline;
+                            data.resumeIndex = -1;
+                            data.removedPoints.clear();
+                            data.addedPoints.clear();
+
+                            data.closedBefore = false;
+                            data.closedAfter = true;
+
+                            stack->push(new undo::ResumeEdit(doc.get(),
+                                                             _polyline,
+                                                             data,
+                                                             u8"Завершение продолжения полилинии"));
+                        }
+
+                        if (!doc->isModified)
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                    }
+
                     _drawingPolyline = false;
+                    _resumeEditing = false;
+                    _resumeUid = 0;
+                    _polyline = nullptr;
+
                     updateModeLabel();
-
-                    std::function<void()> redoFn = [this, uid, cls]()
-                    {
-                        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
-                        if (!polyline)
-                            return;
-
-                        polyline->setClosed(true, false);
-                        polyline->setFlag(QGraphicsItem::ItemIsMovable, true);
-
-                        if (!cls.isEmpty())
-                        {
-                            polyline->setData(0, cls);
-                            applyClassColorToItem(polyline, cls);
-                        }
-                        linkSceneItemToList(polyline);
-
-                        if (_polyline && ensureUid(_polyline) == uid)
-                            _polyline = nullptr;
-
-                        _drawingPolyline = false;
-                        _resumeEditing = false;
-                        _resumeUid = 0;
-                        updateModeLabel();
-
-                        if (Document::Ptr doc = currentDocument())
-                        {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
-                        }
-                        raiseAllHandlesToTop();
-                    };
-
-                    std::function<void()> undoFn = [this, uid]()
-                    {
-                        qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(findItemByUid(uid));
-                        if (!polyline)
-                            return;
-
-                        polyline->setClosed(false, false);
-                        polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
-
-                        _drawingPolyline = true;
-                        _polyline = polyline;
-                        updateModeLabel();
-
-                        _resumeEditing = true;
-                        _resumeUid = uid;
-
-                        polyline->setSelected(true);
-                        polyline->setFocus();
-
-                        removeListEntryBySceneItem(polyline);
-
-                        if (Document::Ptr doc = currentDocument())
-                        {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
-                        }
-                        raiseAllHandlesToTop();
-                    };
-
-                    if (QUndoStack* stack = activeUndoStack())
-                        stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление полилинии"));
-                    else
-                        redoFn();
+                    raiseAllHandlesToTop();
+                    setSceneItemsMovable(true);
                 }
 
 
@@ -14064,8 +14202,23 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
         _line->setSelected(true);
         _line->setFocus();
         _line->updatePointNumbers();
-        ShapeBackup b0 = makeBackupFromItem(_line);
-        pushAdoptExistingShapeCommand(_line, b0, u8"Узел линии");
+        // ShapeBackup b0 = makeBackupFromItem(_line);
+        // pushAdoptExistingShapeCommand(_line, b0, u8"Узел линии");
+        if (doc)
+        {
+            if (QUndoStack* stack = activeUndoStack())
+            {
+                stack->push(new undo::Create(doc.get(),
+                                             _line,
+                                             u8"Узел линии"));
+            }
+
+            if (!doc->isModified)
+            {
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
+            }
+        }
         _line->setModificationCallback([this]()
         {
             if (_drawingLine && _line && _line->isClosed())
@@ -14084,6 +14237,90 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
                 // SelectClass dialog(classes, this);
 
+                // if (!_resumeEditing)
+                // {
+                //     SelectClass dialog(_projectClasses, this);
+
+                //     if (dialog.exec() == QDialog::Accepted)
+                //     {
+                //         const QString selectedClass = dialog.selectedClass();
+                //         if (!selectedClass.isEmpty())
+                //         {
+                //             // _line->setData(0, selectedClass);
+                //             // applyClassColorToItem(_line, selectedClass);
+                //             // linkSceneItemToList(_line);
+
+                //             // ShapeBackup b = makeBackupFromItem(_line);
+                //             // pushAdoptExistingShapeCommand(_line, b, u8"Добавление линии"));
+                //             const qulonglong uid = ensureUid(_line);
+                //             const QString cls = selectedClass;
+
+                //             _drawingLine = false;
+                //             updateModeLabel();
+
+                //             std::function<void()> redoFn = [this, uid, cls]()
+                //             {
+                //                 qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
+                //                 if (!line) return;
+
+                //                 line->setClosed(true, false);
+                //                 line->setFlag(QGraphicsItem::ItemIsMovable, true);
+                //                 line->setData(0, cls);
+                //                 applyClassColorToItem(line, cls);
+                //                 linkSceneItemToList(line);
+
+                //                 if (_line && ensureUid(_line) == uid)
+                //                     _line = nullptr;
+
+                //                 _drawingLine = false;
+                //                 _resumeEditing = false;
+                //                 _resumeUid = 0;
+                //                 updateModeLabel();
+
+                //                 if (Document::Ptr doc = currentDocument())
+                //                 {
+                //                     doc->isModified = true;
+                //                     updateFileListDisplay(doc->filePath);
+                //                 }
+                //                 raiseAllHandlesToTop();
+                //             };
+
+                //             std::function<void()> undoFn = [this, uid]()
+                //             {
+                //                 qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
+                //                 if (!line) return;
+
+                //                 line->setClosed(false, false);
+                //                 line->setFlag(QGraphicsItem::ItemIsMovable, false);
+
+                //                 _drawingLine = true;
+                //                 _line = line;
+                //                 updateModeLabel();
+
+                //                 _resumeEditing = true;
+                //                 _resumeUid = uid;
+
+                //                 line->setSelected(true);
+                //                 line->setFocus();
+
+                //                 removeListEntryBySceneItem(line);
+
+                //                 if (Document::Ptr doc = currentDocument())
+                //                 {
+                //                     doc->isModified = true;
+                //                     updateFileListDisplay(doc->filePath);
+                //                 }
+                //                 raiseAllHandlesToTop();
+                //             };
+
+                //             if (QUndoStack* stack = activeUndoStack())
+                //                 stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
+                //             else
+                //                 redoFn();
+
+                //         }
+                //     }
+                // }
                 if (!_resumeEditing)
                 {
                     SelectClass dialog(_projectClasses, this);
@@ -14091,154 +14328,170 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                     if (dialog.exec() == QDialog::Accepted)
                     {
                         const QString selectedClass = dialog.selectedClass();
+
                         if (!selectedClass.isEmpty())
                         {
-                            // _line->setData(0, selectedClass);
-                            // applyClassColorToItem(_line, selectedClass);
-                            // linkSceneItemToList(_line);
+                            _line->setClosed(true, false);
+                            _line->setFlag(QGraphicsItem::ItemIsMovable, true);
 
-                            // ShapeBackup b = makeBackupFromItem(_line);
-                            // pushAdoptExistingShapeCommand(_line, b, u8"Добавление линии"));
-                            const qulonglong uid = ensureUid(_line);
-                            const QString cls = selectedClass;
+                            _line->setData(0, selectedClass);
+                            applyClassColorToItem(_line, selectedClass);
+                            linkSceneItemToList(_line);
+
+                            Document::Ptr doc = currentDocument();
+
+                            if (doc)
+                            {
+                                if (QUndoStack* stack = activeUndoStack())
+                                {
+                                    stack->push(new undo::FinishDrawing(doc.get(),
+                                                                        _line,
+                                                                        undo::FinishDrawing::Type::Line,
+                                                                        u8"Добавление линии"));
+                                }
+
+                                if (!doc->isModified)
+                                {
+                                    doc->isModified = true;
+                                    updateFileListDisplay(doc->filePath);
+                                }
+                            }
 
                             _drawingLine = false;
+                            _resumeEditing = false;
+                            _resumeUid = 0;
+                            _line = nullptr;
+
                             updateModeLabel();
-
-                            std::function<void()> redoFn = [this, uid, cls]()
-                            {
-                                qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
-                                if (!line) return;
-
-                                line->setClosed(true, false);
-                                line->setFlag(QGraphicsItem::ItemIsMovable, true);
-                                line->setData(0, cls);
-                                applyClassColorToItem(line, cls);
-                                linkSceneItemToList(line);
-
-                                if (_line && ensureUid(_line) == uid)
-                                    _line = nullptr;
-
-                                _drawingLine = false;
-                                _resumeEditing = false;
-                                _resumeUid = 0;
-                                updateModeLabel();
-
-                                if (Document::Ptr doc = currentDocument())
-                                {
-                                    doc->isModified = true;
-                                    updateFileListDisplay(doc->filePath);
-                                }
-                                raiseAllHandlesToTop();
-                            };
-
-                            std::function<void()> undoFn = [this, uid]()
-                            {
-                                qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
-                                if (!line) return;
-
-                                line->setClosed(false, false);
-                                line->setFlag(QGraphicsItem::ItemIsMovable, false);
-
-                                _drawingLine = true;
-                                _line = line;
-                                updateModeLabel();
-
-                                _resumeEditing = true;
-                                _resumeUid = uid;
-
-                                line->setSelected(true);
-                                line->setFocus();
-
-                                removeListEntryBySceneItem(line);
-
-                                if (Document::Ptr doc = currentDocument())
-                                {
-                                    doc->isModified = true;
-                                    updateFileListDisplay(doc->filePath);
-                                }
-                                raiseAllHandlesToTop();
-                            };
-
-                            if (QUndoStack* stack = activeUndoStack())
-                                stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
-                            else
-                                redoFn();
-
+                            raiseAllHandlesToTop();
                         }
                     }
                 }
+                // else
+                // {
+                //     const qulonglong uid = ensureUid(_line);
+                //     const QString cls = _line->data(0).toString();
+
+                //     _drawingLine = false;
+                //     updateModeLabel();
+
+                //     std::function<void()> redoFn = [this, uid, cls]()
+                //     {
+                //         qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
+                //         if (!line) return;
+
+                //         line->setClosed(true, false);
+                //         line->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+                //         if (!cls.isEmpty())
+                //         {
+                //             line->setData(0, cls);
+                //             applyClassColorToItem(line, cls);
+                //         }
+                //         linkSceneItemToList(line);
+
+                //         if (_line && ensureUid(_line) == uid)
+                //             _line = nullptr;
+
+                //         _drawingLine = false;
+                //         _resumeEditing = false;
+                //         _resumeUid = 0;
+                //         updateModeLabel();
+
+                //         if (Document::Ptr doc = currentDocument())
+                //         {
+                //             doc->isModified = true;
+                //             updateFileListDisplay(doc->filePath);
+                //         }
+                //         raiseAllHandlesToTop();
+                //     };
+
+                //     std::function<void()> undoFn = [this, uid]()
+                //     {
+                //         qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
+                //         if (!line) return;
+
+                //         line->setClosed(false, false);
+                //         line->setFlag(QGraphicsItem::ItemIsMovable, false);
+
+                //         _drawingLine = true;
+                //         _line = line;
+                //         updateModeLabel();
+
+                //         _resumeEditing = true;
+                //         _resumeUid = uid;
+
+                //         line->setSelected(true);
+                //         line->setFocus();
+
+                //         removeListEntryBySceneItem(line);
+
+                //         if (Document::Ptr doc = currentDocument())
+                //         {
+                //             doc->isModified = true;
+                //             updateFileListDisplay(doc->filePath);
+                //         }
+                //         raiseAllHandlesToTop();
+                //     };
+
+                //     if (QUndoStack* stack = activeUndoStack())
+                //         stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
+                //     else
+                //         redoFn();
+                // }
                 else
                 {
-                    const qulonglong uid = ensureUid(_line);
-                    const QString cls = _line->data(0).toString();
+                    _line->setClosed(true, false);
+                    _line->setFlag(QGraphicsItem::ItemIsMovable, true);
+
+                    const QString className = _line->data(0).toString();
+
+                    if (!className.isEmpty())
+                        applyClassColorToItem(_line, className);
+
+                    _line->updatePointNumbers();
+                    apply_LineWidth_ToItem(_line);
+                    apply_PointSize_ToItem(_line);
+                    apply_NumberSize_ToItem(_line);
+
+                    Document::Ptr doc = currentDocument();
+
+                    if (doc)
+                    {
+                        if (QUndoStack* stack = activeUndoStack())
+                        {
+                            undo::ResumeEdit::Data data;
+                            data.type = undo::ResumeEdit::Type::Line;
+                            data.resumeIndex = -1;
+                            data.removedPoints.clear();
+                            data.addedPoints.clear();
+
+                            // Было: открытая линия после продолжения.
+                            // Стало: закрытая линия.
+                            data.closedBefore = false;
+                            data.closedAfter = true;
+
+                            stack->push(new undo::ResumeEdit(doc.get(),
+                                                             _line,
+                                                             data,
+                                                             u8"Завершение продолжения линии"));
+                        }
+
+                        if (!doc->isModified)
+                        {
+                            doc->isModified = true;
+                            updateFileListDisplay(doc->filePath);
+                        }
+                    }
 
                     _drawingLine = false;
+                    _resumeEditing = false;
+                    _resumeUid = 0;
+                    _line = nullptr;
+
                     updateModeLabel();
-
-                    std::function<void()> redoFn = [this, uid, cls]()
-                    {
-                        qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
-                        if (!line) return;
-
-                        line->setClosed(true, false);
-                        line->setFlag(QGraphicsItem::ItemIsMovable, true);
-
-                        if (!cls.isEmpty())
-                        {
-                            line->setData(0, cls);
-                            applyClassColorToItem(line, cls);
-                        }
-                        linkSceneItemToList(line);
-
-                        if (_line && ensureUid(_line) == uid)
-                            _line = nullptr;
-
-                        _drawingLine = false;
-                        _resumeEditing = false;
-                        _resumeUid = 0;
-                        updateModeLabel();
-
-                        if (Document::Ptr doc = currentDocument())
-                        {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
-                        }
-                        raiseAllHandlesToTop();
-                    };
-
-                    std::function<void()> undoFn = [this, uid]()
-                    {
-                        qgraph::Line* line = dynamic_cast<qgraph::Line*>(findItemByUid(uid));
-                        if (!line) return;
-
-                        line->setClosed(false, false);
-                        line->setFlag(QGraphicsItem::ItemIsMovable, false);
-
-                        _drawingLine = true;
-                        _line = line;
-                        updateModeLabel();
-
-                        _resumeEditing = true;
-                        _resumeUid = uid;
-
-                        line->setSelected(true);
-                        line->setFocus();
-
-                        removeListEntryBySceneItem(line);
-
-                        if (Document::Ptr doc = currentDocument())
-                        {
-                            doc->isModified = true;
-                            updateFileListDisplay(doc->filePath);
-                        }
-                        raiseAllHandlesToTop();
-                    };
-
-                    if (QUndoStack* stack = activeUndoStack())
-                        stack->push(new LambdaCommand(redoFn, undoFn, u8"Добавление линии"));
-                    else
-                        redoFn();
+                    raiseAllHandlesToTop();
+                    setSceneItemsMovable(true);
                 }
 
                 _line = nullptr;
