@@ -6973,70 +6973,96 @@ void MainWindow::on_actResetAnnotation_triggered()
     //         allItems.push_back(it);
     // }
     // restoreTemporaryRaisedZValues();
-    const QVector<ShapeBackup> backups = collectBackupsForItems(doc->polygonList.items);
+    // const QVector<ShapeBackup> backups = collectBackupsForItems(doc->polygonList.items);
 
-    // Снимки для восстановления
-    // const QVector<ShapeBackup> backups = collectBackupsForItems(allItems);
+    // // Снимки для восстановления
+    // // const QVector<ShapeBackup> backups = collectBackupsForItems(allItems);
 
-    struct Payload
+    // struct Payload
+    // {
+    //     QVector<ShapeBackup>  backups;
+    //     QVector<qulonglong>   uids;
+    // };
+
+    // std::shared_ptr<Payload> payload = std::make_shared<Payload>();
+    // payload->backups = backups;
+    // payload->uids.reserve(backups.size());
+
+    // for (const ShapeBackup& b : backups)
+    // {
+    //     if (b.uid != 0)
+    //         payload->uids.push_back(b.uid);
+    // }
+
+    // // redo: удалить все элементы по uid
+    // std::function<void()> redoFn = [this, payload]()
+    // {
+    //     Document::Ptr doc = currentDocument();
+    //     for (qulonglong uid : std::as_const(payload->uids))
+    //     {
+    //         if (!uid)
+    //             continue;
+
+    //         if (QGraphicsItem* gi = findItemByUid(uid))
+    //         {
+    //             doc->scene->removeItem(gi);
+    //             removeListEntryBySceneItem(gi);
+    //             clearLinePolylineStateForDeletedItem(gi);
+    //             delete gi;
+    //         }
+    //     }
+
+    //     if (Document::Ptr doc = currentDocument())
+    //     {
+    //         doc->isModified = true;
+    //         updateFileListDisplay(doc->filePath);
+    //     }
+    // };
+
+    // // undo: восстановить по снапшотам
+    // std::function<void()> undoFn = [this, payload]()
+    // {
+    //     for (const ShapeBackup& b : std::as_const(payload->backups))
+    //     {
+    //         QGraphicsItem* created = recreateFromBackup(b);
+    //         Q_UNUSED(created);
+    //     }
+
+    //     if (Document::Ptr doc = currentDocument())
+    //     {
+    //         doc->isModified = true;
+    //         updateFileListDisplay(doc->filePath);
+    //     }
+    // };
+
+    // if (doc->_undoStack)
+    //     doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, u8"Сброс разметки"));
+    QVector<QGraphicsItem*> shapes = doc->polygonList.items;
+
+    for (QGraphicsItem* shape : shapes)
     {
-        QVector<ShapeBackup>  backups;
-        QVector<qulonglong>   uids;
-    };
+        if (!shape)
+            continue;
 
-    std::shared_ptr<Payload> payload = std::make_shared<Payload>();
-    payload->backups = backups;
-    payload->uids.reserve(backups.size());
-
-    for (const ShapeBackup& b : backups)
-    {
-        if (b.uid != 0)
-            payload->uids.push_back(b.uid);
+        clearLinePolylineStateForDeletedItem(shape);
+        shape->setSelected(false);
     }
 
-    // redo: удалить все элементы по uid
-    std::function<void()> redoFn = [this, payload]()
-    {
-        Document::Ptr doc = currentDocument();
-        for (qulonglong uid : std::as_const(payload->uids))
-        {
-            if (!uid)
-                continue;
+    QUndoStack* stack = activeUndoStack();
 
-            if (QGraphicsItem* gi = findItemByUid(uid))
-            {
-                doc->scene->removeItem(gi);
-                removeListEntryBySceneItem(gi);
-                clearLinePolylineStateForDeletedItem(gi);
-                delete gi;
-            }
-        }
+    if (!stack)
+        return;
 
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-    };
+    stack->push(new undo::ResetAnnotation(doc.get(),
+                                          shapes,
+                                          u8"Сброс разметки"));
 
-    // undo: восстановить по снапшотам
-    std::function<void()> undoFn = [this, payload]()
-    {
-        for (const ShapeBackup& b : std::as_const(payload->backups))
-        {
-            QGraphicsItem* created = recreateFromBackup(b);
-            Q_UNUSED(created);
-        }
+    doc->isModified = true;
+    updateFileListDisplay(doc->filePath);
+    updateShapeListButtons();
 
-        if (Document::Ptr doc = currentDocument())
-        {
-            doc->isModified = true;
-            updateFileListDisplay(doc->filePath);
-        }
-    };
-
-    if (doc->_undoStack)
-        doc->_undoStack->push(new LambdaCommand(redoFn, undoFn, u8"Сброс разметки"));
+    if (doc->scene)
+        doc->scene->update();
 }
 
 void MainWindow::on_actRestoreAnnotation_triggered()

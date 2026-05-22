@@ -271,6 +271,30 @@ private:
     QVector<Data> _rows;
 };
 
+// Сброс всей разметки текущего документа
+class ResetAnnotation : public BaseUndo
+{
+public:
+    ResetAnnotation(Document* doc,
+                    const QVector<QGraphicsItem*>& shapes,
+                    const QString& text);
+
+    void undo() override;
+    void redo() override;
+
+private:
+    struct Data
+    {
+        QGraphicsItem* shape = {nullptr};
+
+        // Строка фигуры в списке до сброса
+        int row = {-1};
+    };
+
+private:
+    QVector<Data> _rows;
+};
+
 class Move : public BaseUndo
 {
 public:

@@ -982,6 +982,99 @@ void Delete::redo()
     _doc->isModified = true;
 }
 
+ResetAnnotation::ResetAnnotation(Document* doc,
+                                 const QVector<QGraphicsItem*>& shapes,
+                                 const QString& text)
+{
+    _doc = doc;
+
+    QUndoCommand::setText(text);
+
+    if (!_doc)
+        return;
+
+    for (QGraphicsItem* shape : shapes)
+    {
+        if (!shape)
+            continue;
+
+        Data state;
+        state.shape = shape;
+        state.row = _doc->polygonList.items.indexOf(shape);
+
+        if (state.row < 0)
+            continue;
+
+        _rows.append(state);
+    }
+
+    std::sort(_rows.begin(), _rows.end(),
+              [](const Data& left, const Data& right)
+    {
+        return left.row < right.row;
+    });
+}
+
+void ResetAnnotation::undo()
+{
+    if (!_doc || !_doc->scene)
+        return;
+
+    // Восстанавливаем по возрастанию строк,
+    // чтобы сохранить исходный порядок списка
+    for (Data& state : _rows)
+    {
+        if (!state.shape)
+            continue;
+
+        if (!state.shape->scene())
+            _doc->scene->addItem(state.shape);
+
+        _shapesCollector.remove(state.shape);
+
+        int row = state.row;
+
+        if (row < 0 || row > _doc->polygonList.items.size())
+            row = _doc->polygonList.items.size();
+
+        if (!_doc->polygonList.items.contains(state.shape))
+            _doc->polygonList.items.insert(row, state.shape);
+
+        state.shape->setSelected(false);
+    }
+
+    _doc->scene->update();
+}
+
+void ResetAnnotation::redo()
+{
+    if (!_doc || !_doc->scene)
+        return;
+
+    // Удаляем с конца, чтобы индексы строк не смещались
+    for (int i = _rows.size() - 1; i >= 0; --i)
+    {
+        Data& state = _rows[i];
+
+        if (!state.shape)
+            continue;
+
+        state.shape->setSelected(false);
+
+        const int currentRow = _doc->polygonList.items.indexOf(state.shape);
+
+        if (currentRow >= 0)
+            _doc->polygonList.items.removeAt(currentRow);
+
+        if (state.shape->scene())
+            _doc->scene->removeItem(state.shape);
+
+        _shapesCollector.insert(state.shape);
+    }
+
+    _doc->scene->update();
+}
+
 Move::Move(Document* doc, QSet<QGraphicsItem*> shapes, const QString& text,
            const QPointF& delta)
 {
