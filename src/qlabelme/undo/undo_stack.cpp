@@ -10,183 +10,7 @@
 #include "qgraphics2/rectangle.h"
 #include "qgraphics2/drag_circle.h"
 
-// UndoAction::UndoAction(QGraphicsScene* scene, Type type, const QString& text,
-//                        const ShapeBackup2& before, const ShapeBackup2& after,
-//                        ApplyCallback onApplied)
-// {
-//     _scene = scene;
-//     _type = type;
-//     _text = text;
-//     _before = before;
-//     _after = after;
-//     _onApplied = onApplied;
-// }
 
-// bool UndoAction::applyBackup(const ShapeBackup2& backup)
-// {
-//     qgraph::Shape* shape = findItem(backup.id);
-//     if (!shape)
-//         return false;
-
-//     restoreFromBackup(shape, backup);
-
-//     if (_onApplied)
-//         _onApplied(shape);
-
-//     return true;
-// }
-
-// void UndoAction::restoreFromBackup(qgraph::Shape* item, const ShapeBackup2& backup)
-// {
-//     QGraphicsItem* graphicsItem = dynamic_cast<QGraphicsItem*>(item);
-
-//     if (!graphicsItem)
-//         return;
-
-//     // shapeNumber здесь пока не трогаем:
-//     // _roleShapeNumber находится в MainWindow, а undo_stack.cpp его не видит.
-
-//     graphicsItem->setData(0, backup.className);
-//     item->setZLevel(backup.zValue);
-//     item->shapeVisible(backup.visible);
-
-//     switch (backup.kind)
-//     {
-//         case ShapeKind2::Rectangle:
-//             if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
-//             {
-//                 rect->setRealSceneRect(backup.rect);
-
-//                 rect->updateHandlePosition();
-//                 rect->updatePointNumbers();
-//             }
-//             break;
-
-//         case ShapeKind2::Circle:
-//             if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
-//             {
-//                 circle->setRealRadius(backup.circleRadius);
-
-//                 const QPointF currentCenter = circle->sceneBoundingRect().center();
-//                 const QPointF targetCenter = backup.circleCenter;
-//                 const QPointF delta = targetCenter - currentCenter;
-
-//                 if (!qFuzzyIsNull(delta.x()) || !qFuzzyIsNull(delta.y()))
-//                     circle->moveBy(delta.x(), delta.y());
-
-//                 circle->updateHandlePosition();
-//             }
-//             break;
-
-//         case ShapeKind2::Polyline:
-//             if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
-//             {
-//                 polyline->replaceScenePoints(backup.points, backup.closed);
-
-//                 polyline->updateHandlePosition();
-//                 polyline->updatePointNumbers();
-//             }
-//             break;
-
-//         case ShapeKind2::Line:
-//             if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
-//             {
-//                 line->replaceScenePoints(backup.points, backup.closed);
-//                 line->setNumberingFromLast(backup.numberingFromLast);
-
-//                 line->updateHandlePosition();
-//                 line->updatePointNumbers();
-//             }
-//             break;
-
-//         case ShapeKind2::Point:
-//             if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
-//             {
-//                     point->setCenter(backup.pointCenter);
-
-//                 point->updateHandlePosition();
-//             }
-//             break;
-//     }
-//     // TODO - отображение в ui
-
-//     // if (ui && ui->polygonList)
-//     // {
-//     //     int currentRow = -1;
-//     //     QListWidgetItem* currentItem = nullptr;
-
-//     //     for (int i = 0; i < ui->polygonList->count(); ++i)
-//     //     {
-//     //         QListWidgetItem* li = ui->polygonList->item(i);
-//     //         if (!li)
-//     //             continue;
-
-//     //         if (li->data(Qt::UserRole).value<QGraphicsItem*>() == item)
-//     //         {
-//     //             currentRow = i;
-//     //             currentItem = li;
-//     //             break;
-//     //         }
-//     //     }
-
-//     //     if (!currentItem && !backup.className.isEmpty())
-//     //     {
-//     //         linkSceneItemToList(item, backup.listRow);
-//     //     }
-//     //     else if (currentItem)
-//     //     {
-//     //         const int targetRow = (backup.listRow < 0) ? currentRow : backup.listRow;
-//     //         if (targetRow != currentRow &&
-//     //             targetRow >= 0 &&
-//     //             targetRow < ui->polygonList->count())
-//     //         {
-//     //             QListWidgetItem* moved = ui->polygonList->takeItem(currentRow);
-//     //             ui->polygonList->insertItem(targetRow, moved);
-//     //         }
-//     //         renumberPolygonList();
-//     //     }
-//     // }
-// }
-
-// qgraph::Shape* UndoAction::findItem(const QUuidEx id) const
-// {
-//     if (!_scene || id.isNull())
-//         return nullptr;
-
-//     for (QGraphicsItem* item : _scene->items())
-//     {
-//         if (!item)
-//             continue;
-
-//         if (qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(item))
-//         {
-//             if (shape->id() == id)
-//                 return shape;
-//         }
-//     }
-//     return nullptr;
-// }
-
-// MoveShapeAction::MoveShapeAction(QGraphicsScene* scene,
-//                                  const QString& text,
-//                                  const ShapeBackup2& before,
-//                                  const ShapeBackup2& after,
-//                                  ApplyCallback onApplied)
-//     : UndoAction(scene, Type::Move, text, before, after, onApplied)
-// {
-// }
-
-// // redo() применяет состояние после перемещения
-// void MoveShapeAction::redo()
-// {
-//     applyBackup(_after);
-// }
-
-// // undo() возвращает состояние до перемещения
-// void MoveShapeAction::undo()
-// {
-//     applyBackup(_before);
-// }
 namespace {
 
 double distanceSquaredToSegment(const QPointF& point,
@@ -264,8 +88,8 @@ void copyCommonShapeState(QGraphicsItem* sourceShape,
     if (!sourceShape || !targetShape)
         return;
 
-    // Класс фигуры в проекте хранится в data(0).
-    // Служебные роли MainWindow здесь не трогаем.
+    // Класс фигуры в проекте хранится в data(0)
+    // Служебные роли MainWindow здесь не трогаем
     targetShape->setData(0, sourceShape->data(0));
 
     targetShape->setZValue(sourceShape->zValue());
@@ -343,16 +167,6 @@ BaseUndo::~BaseUndo()
 {
     for (QGraphicsItem* shape : _shapesCollector)
     {
-        // if (shape && shape->scene())
-        // {
-        //     // Отладить TODO
-        //     //break_point
-
-        // }
-
-        // if (shape && !shape->scene())
-        //     delete shape;
-
         if (!shape)
             continue;
 
@@ -374,27 +188,6 @@ bool BaseUndo::firstRedo()
     return false;
 }
 
-// qgraph::Shape* BaseUndo::findItem(const QUuidEx id) const
-// {
-//     if (!_scene || id.isNull())
-//         return nullptr;
-
-//     for (QGraphicsItem* item : _scene->items())
-//     {
-//         if (!item)
-//             continue;
-
-//         if (qgraph::Shape* shape = dynamic_cast<qgraph::Shape*>(item))
-//         {
-//             if (shape->id() == id)
-//                 return shape;
-//         }
-//     }
-//     return nullptr;
-// }
-
-// Create::Create(QGraphicsScene* doc, const QUuidEx& shape, const QString& text,
-//                ShapeData::Ptr data)
 Create::Create(Document* doc, QGraphicsItem* shape, const QString& text)
 {
     _doc = doc;
@@ -408,121 +201,17 @@ Create::~Create()
 
 void Create::undo()
 {
-    //_scene->removeItem(_shape);
     _doc->scene->removeItem(_shape);
     _shapesCollector.insert(_shape);
-
-    // //QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(_shape);
-    // for (const QUuidEx& shapeId : _shapeIds)
-    //     if (qgraph::Shape* shape = findItem(shapeId))
-    //     {
-    //         QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
-    //         _scene->removeItem(item);
-    //         //_shape = shape;
-    //         _shapes.append(shape);
-    //     }
-
-
-    // if (!item || !item->scene())
-    //     return;
-
-    // item->scene()->removeItem(item);
-    // if (RectangleData::Ptr rect = _data.dynamic_cast_to<RectangleData::Ptr>())
-    // {
-    //     qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(_shape);
-
-    //     if (rectangle && rectangle->scene())
-    //         rectangle->scene()->removeItem(rectangle);
-
-    //     return;
-    // }
-    // else if (CircleData::Ptr circle = _data.dynamic_cast_to<CircleData::Ptr>())
-    // {
-
-    // }
-    // else if (LineData::Ptr line = _data.dynamic_cast_to<LineData::Ptr>())
-    // {
-
-    // }
-    // else if (PolylineData::Ptr pline = _data.dynamic_cast_to<PolylineData::Ptr>())
-    // {
-
-    // }
-    // else if (PointData::Ptr point = _data.dynamic_cast_to<PointData::Ptr>())
-    // {
-
-    // }
 }
 
 void Create::redo()
 {
-    //if (!_scene /*|| !_data*/)
-    //    return;
-
     if (firstRedo())
         return;
 
     _doc->scene->addItem(_shape);
     _shapesCollector.remove(_shape);
-
-    // for (qgraph::Shape* shape : _shapes)
-    //     if (shape)
-    //     {
-    //         QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
-    //         _scene->addItem(item);
-    //         // _shape = nullptr;
-    //         _shapes.removeAll(shape);
-    //     }
-
-    // QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(_shape);
-
-    // if (!item)
-    //     return;
-
-    // if (!item->scene())
-    //     _scene->addItem(item);
-
-    // if (RectangleData::Ptr rect = _data.dynamic_cast_to<RectangleData::Ptr>())
-    // {
-    //     qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(_shape);
-
-    //     if (!rectangle)
-    //     {
-    //        rectangle = new qgraph::Rectangle(_scene);
-    //        rectangle->setId(rect->id);
-
-    //        _shape = rectangle;
-    //        _shapeId = rectangle->id();
-    //     }
-    //     else if (!rectangle->scene())
-    //     {
-    //        _scene->addItem(rectangle);
-    //     }
-
-    //     rectangle->setData(0, rect->className);
-    //     rectangle->setZLevel(rect->zLevel);
-    //     rectangle->shapeVisible(rect->visible);
-
-    //     rectangle->setRealSceneRect(rect->rect);
-    //     rectangle->updateHandlePosition();
-    //     rectangle->updatePointNumbers();
-    // }
-    // else if (CircleData::Ptr circle = _data.dynamic_cast_to<CircleData::Ptr>())
-    // {
-
-    // }
-    // else if (LineData::Ptr line = _data.dynamic_cast_to<LineData::Ptr>())
-    // {
-
-    // }
-    // else if (PolylineData::Ptr pline = _data.dynamic_cast_to<PolylineData::Ptr>())
-    // {
-
-    // }
-    // else if (PointData::Ptr point = _data.dynamic_cast_to<PointData::Ptr>())
-    // {
-
-    // }
 }
 
 FinishDrawing::FinishDrawing(Document* doc,
@@ -636,28 +325,6 @@ void FinishDrawing::restoreToList()
 
     _doc->polygonList.items.insert(row, _shape);
 }
-
-// Delete::Delete(QGraphicsScene* scene,
-//                const QSet<QGraphicsItem*>& shapes,
-//                QListWidget* listWidget,
-//                const QList<ListItemState>& listItems,
-//                const QString& text)
-// {
-//     _scene = scene;
-//     _shapes = shapes;
-//     _shapesCollector = shapes;
-//     _listWidget = listWidget;
-//     _listItems = listItems;
-//     //_text = text;
-
-//     // for (qgraph::Shape* shape : shapes)
-//     // {
-//     //     if (shape && !shape->id().isNull())
-//     //         _shapeIds.append(shape->id());
-//     // }
-
-//     QUndoCommand::setText(text);
-// }
 
 Paste::Paste(Document* doc,
              const QList<QGraphicsItem*>& shapes,
@@ -786,10 +453,6 @@ Delete::Delete(Document* doc, const QSet<QGraphicsItem*>& shapes,
 
     QUndoCommand::setText(text);
 
-    // Проверяем состояние документа
-    //if (!_doc || !_doc->scene || !_doc->polygonList.model)
-    //    return;
-
     for (QGraphicsItem* shape : shapes)
     {
         if (!shape)
@@ -816,13 +479,6 @@ Delete::Delete(Document* doc, const QSet<QGraphicsItem*>& shapes,
 
 Delete::~Delete()
 {
-    // for (qgraph::Shape* shape : _shapes)
-    //     if (shape)
-    //         delete shape;
-
-    // for (const ListItemState& state : _listItems)
-    //     if (state.item && !state.item->listWidget())
-    //         delete state.item;
     for (Data& state : _rows)
     {
         for (QStandardItem* item : state.modelItems)
@@ -834,51 +490,8 @@ Delete::~Delete()
     }
 }
 
-// void Delete::undo()
-// {
-//     if (!_scene)
-//         return;
-
-//     for (QGraphicsItem* shape : _shapes)
-//     {
-//         _scene->addItem(shape);
-//         _shapesCollector.remove(shape);
-
-//         QVariant vdata = shape->data(SHAPE_UNDO_DELETE_DATA);
-//         if (vdata.canConvert<undo::Delete::Data>())
-//         {
-//             undo::Delete::Data data = vdata.value<undo::Delete::Data>();
-//             // ...
-
-//         }
-//     }
-
-//     if (!_listWidget)
-//         return;
-
-//     QList<ListItemState> listItems = _listItems;
-
-//     for (const ListItemState& state : listItems)
-//     {
-//         if (QListWidgetItem* listItem = state.item)
-//         {
-//             int row = state.row;
-
-//             //if (row < 0 || row > _listWidget->count())
-//             if (!lst::inRange(row, 0, _listWidget->count()))
-//                 row = _listWidget->count();
-
-//             _listWidget->insertItem(row, listItem);
-//             listItem->setSelected(true);
-//         }
-//     }
-// }
 void Delete::undo()
 {
-    //if (!_doc || !_doc->scene || !_doc->polygonList.model)
-    //if (!_doc || !_doc->scene)
-    //    return;
-
     // Восстанавливаем по возрастанию строк
     for (Data& state : _rows)
     {
@@ -912,49 +525,8 @@ void Delete::undo()
     _doc->isModified = true;
 }
 
-// void Delete::redo()
-// {
-//     if (!_scene)
-//         return;
-
-//     if (firstRedo())
-//         return;
-
-//     for (QGraphicsItem* shape : _shapes)
-//     {
-//         _scene->removeItem(shape);
-//         _shapesCollector.insert(shape);
-//     }
-
-//     // for (const QUuidEx& shapeId : _shapeIds)
-//     // {
-//     //     if (qgraph::Shape* shape = findItem(shapeId))
-//     //     {
-//     //         QGraphicsItem* item = dynamic_cast<QGraphicsItem*>(shape);
-//     //         _scene->removeItem(item);
-
-//     //         // После removeItem() фигура больше не принадлежит сцене
-//     //         _shapes.append(shape);
-//     //     }
-//     // }
-//     if (!_listWidget)
-//         return;
-
-//     for (int i = _listItems.size() - 1; i >= 0; --i)
-//     {
-//         QListWidgetItem* listItem = _listItems[i].item;
-
-//         const int row = _listWidget->row(listItem);
-
-//         if (row >= 0)
-//             _listWidget->takeItem(row);
-//     }
-// }
 void Delete::redo()
 {
-    //if (!_doc || !_doc->scene || !_doc->polygonList.model)
-    //    return;
-
     // Удаляем с конца, чтобы индексы строк не смещались
     for (int i = _rows.size() - 1; i >= 0; --i)
     {
@@ -1086,11 +658,6 @@ Move::Move(Document* doc, QSet<QGraphicsItem*> shapes, const QString& text,
 
 void Move::undo()
 {    
-    // if (!_scene || _shapeId.isNull())
-    //     return;
-
-    //qgraph::Shape* shape = nullptr;
-
     for (QGraphicsItem* shape : _shapes)
     {
         shape->moveBy(-_delta.x(), -_delta.y());
@@ -1123,9 +690,6 @@ void Move::undo()
 
 void Move::redo()
 {
-    // if (!_scene || _shapeId.isNull())
-    //     return;
-
     if (firstRedo())
         return;
 
@@ -1661,7 +1225,6 @@ LineTopology::LineTopology(Document* doc,
         if (line->scene())
             _doc->scene->removeItem(line);
 
-        // До первого redo новые линии принадлежат команде.
         _shapesCollector.insert(line);
     }
 }
