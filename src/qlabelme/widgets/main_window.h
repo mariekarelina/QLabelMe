@@ -415,22 +415,22 @@ private:
     QUndoStack* activeUndoStack() const;
 
     // Снять снимок с произвольного QGraphicsItem
-    ShapeBackup makeBackupFromItem(QGraphicsItem* graphicsItem) const;
+    // ShapeBackup makeBackupFromItem(QGraphicsItem* graphicsItem) const;
 
     // Создаем снимки, по которому потом будем восстанавливать фигуры
-    QVector<ShapeBackup> collectBackupsForItems(const QVector<QGraphicsItem*>& items) const;
+    // QVector<ShapeBackup> collectBackupsForItems(const QVector<QGraphicsItem*>& items) const;
 
     // Создаем фигуру из снимка
-    QGraphicsItem* recreateFromBackup(const ShapeBackup&);
-    void applyBackupToExisting(QGraphicsItem*, const ShapeBackup&);
+    //QGraphicsItem* recreateFromBackup(const ShapeBackup&);
+    // void applyBackupToExisting(QGraphicsItem*, const ShapeBackup&);
 
     // Привязать уже созданную фигуру к Undo/Redo
-    void pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
-                                       const ShapeBackup& ,
-                                       const QString& description);
+    // void pushAdoptExistingShapeCommand(QGraphicsItem* createdNow,
+    //                                    const ShapeBackup& ,
+    //                                    const QString& description);
 
     // Создание фигуры через undo/redo по заранее собранному ShapeBackup
-    void pushCreateShapeCommand(const ShapeBackup& backup, const QString& description);
+    // void pushCreateShapeCommand(const ShapeBackup& backup, const QString& description);
 
     // Перемещение фигур
     // void pushMoveShapeCommand(QGraphicsItem* item,
@@ -444,10 +444,10 @@ private:
     //                            const QString& description);
 
     // Добавление/удаление узлов у линий
-    void pushModifyShapeCommand(qulonglong uid,
-                                const ShapeBackup& before,
-                                const ShapeBackup& after,
-                                const QString& description);
+    // void pushModifyShapeCommand(qulonglong uid,
+    //                             const ShapeBackup& before,
+    //                             const ShapeBackup& after,
+    //                             const QString& description);
 
     // Изменение положения изображения
     // void pushMoveImageCommand(const QPointF& before,

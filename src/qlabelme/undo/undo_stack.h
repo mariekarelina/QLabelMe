@@ -4,6 +4,7 @@
 #include "shared/clife_ptr.h"
 #include "shared/qt/quuidex.h"
 #include "qgraphics2/shape.h"
+#include "qgraphics2/line.h"
 #include "widgets/document.h"
 
 #include <QGraphicsScene>
@@ -426,6 +427,66 @@ private:
 
     // Строка фигуры в списке на момент замены
     int _row = {-1};
+};
+
+// Топологические операции с линиями: объединение и разрыв
+class LineTopology : public BaseUndo
+{
+public:
+    enum class Type
+    {
+        Merge,
+        Split
+    };
+
+    struct Data
+    {
+        Type type = {Type::Merge};
+
+        // Новые линии создаются по наборам точек
+        // Для Merge здесь будет один набор точек
+        // Для Split здесь будет два набора точек
+        QVector<QVector<QPointF>> resultPoints;
+
+        QString className;
+        bool visible = {true};
+        qreal zValue = {0.0};
+        bool numberingFromLast = {false};
+    };
+
+    LineTopology(Document* doc,
+                 const QVector<qgraph::Line*>& sourceLines,
+                 const Data& data,
+                 const QString& text);
+
+    bool isValid() const;
+
+    void undo() override;
+    void redo() override;
+
+private:
+    struct LineState
+    {
+        qgraph::Line* line = {nullptr};
+
+        // Строка линии в списке до операции
+        int row = {-1};
+    };
+
+private:
+    qgraph::Line* createLine(const QVector<QPointF>& points) const;
+
+    void removeSources();
+    void restoreSources();
+
+    void removeResults();
+    void restoreResults();
+
+private:
+    QVector<LineState> _sourceLines;
+    QVector<LineState> _resultLines;
+
+    Data _data;
 };
 
 // Показать/скрыть фигуру

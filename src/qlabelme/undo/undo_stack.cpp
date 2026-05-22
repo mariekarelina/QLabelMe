@@ -1606,6 +1606,268 @@ void Replace::replace(QGraphicsItem* leavingShape, QGraphicsItem* enteringShape)
         _doc->scene->update();
 }
 
+LineTopology::LineTopology(Document* doc,
+                           const QVector<qgraph::Line*>& sourceLines,
+                           const Data& data,
+                           const QString& text)
+{
+    _doc = doc;
+    _data = data;
+
+    QUndoCommand::setText(text);
+
+    if (!_doc || !_doc->scene)
+        return;
+
+    for (qgraph::Line* line : sourceLines)
+    {
+        if (!line)
+            continue;
+
+        LineState state;
+        state.line = line;
+        state.row = _doc->polygonList.items.indexOf(line);
+
+        if (state.row < 0)
+            continue;
+
+        _sourceLines.append(state);
+    }
+
+    std::sort(_sourceLines.begin(), _sourceLines.end(),
+              [](const LineState& left, const LineState& right)
+    {
+        return left.row < right.row;
+    });
+
+    int resultRow = _doc->polygonList.items.size();
+
+    if (!_sourceLines.isEmpty())
+        resultRow = _sourceLines.first().row;
+
+    for (int i = 0; i < _data.resultPoints.size(); ++i)
+    {
+        qgraph::Line* line = createLine(_data.resultPoints[i]);
+
+        if (!line)
+            continue;
+
+        LineState state;
+        state.line = line;
+        state.row = resultRow + i;
+
+        _resultLines.append(state);
+
+        if (line->scene())
+            _doc->scene->removeItem(line);
+
+        // До первого redo новые линии принадлежат команде.
+        _shapesCollector.insert(line);
+    }
+}
+
+bool LineTopology::isValid() const
+{
+    if (!_doc || !_doc->scene)
+        return false;
+
+    if (_sourceLines.isEmpty())
+        return false;
+
+    if (_resultLines.isEmpty())
+        return false;
+
+    if (_data.type == Type::Merge)
+        return _sourceLines.size() == 2 && _resultLines.size() == 1;
+
+    if (_data.type == Type::Split)
+        return _sourceLines.size() == 1 && _resultLines.size() == 2;
+
+    return false;
+}
+
+qgraph::Line* LineTopology::createLine(const QVector<QPointF>& points) const
+{
+    if (!_doc || !_doc->scene || points.size() < 2)
+        return nullptr;
+
+    qgraph::Line* line = new qgraph::Line(_doc->scene, points.first());
+
+    line->beginBulkLoad();
+
+    for (int i = 1; i < points.size(); ++i)
+        line->addPoint(points[i], _doc->scene);
+
+    line->endBulkLoad();
+    line->closeLine();
+
+    line->setData(0, _data.className);
+    line->setZValue(_data.zValue);
+    line->setVisible(_data.visible);
+    line->setNumberingFromLast(_data.numberingFromLast);
+
+    if (!_sourceLines.isEmpty() && _sourceLines.first().line)
+    {
+        qgraph::Line* sourceLine = _sourceLines.first().line;
+
+        line->setPen(sourceLine->pen());
+        line->setFlags(sourceLine->flags());
+    }
+
+    line->setFlag(QGraphicsItem::ItemIsMovable, true);
+    line->setSelected(false);
+
+    line->updatePath();
+    line->updateHandlePosition();
+    line->updatePointNumbers();
+
+    return line;
+}
+
+void LineTopology::undo()
+{
+    if (!isValid())
+        return;
+
+    removeResults();
+    restoreSources();
+
+    if (_doc->scene)
+        _doc->scene->update();
+}
+
+void LineTopology::redo()
+{
+    if (!isValid())
+        return;
+
+    removeSources();
+    restoreResults();
+
+    if (_doc->scene)
+        _doc->scene->update();
+}
+
+void LineTopology::removeSources()
+{
+    if (!_doc || !_doc->scene)
+        return;
+
+    for (int i = _sourceLines.size() - 1; i >= 0; --i)
+    {
+        LineState& state = _sourceLines[i];
+
+        if (!state.line)
+            continue;
+
+        state.line->setSelected(false);
+
+        const int currentRow = _doc->polygonList.items.indexOf(state.line);
+
+        if (currentRow >= 0)
+        {
+            state.row = currentRow;
+            _doc->polygonList.items.removeAt(currentRow);
+        }
+
+        if (state.line->scene())
+            _doc->scene->removeItem(state.line);
+
+        _shapesCollector.insert(state.line);
+    }
+}
+
+void LineTopology::restoreSources()
+{
+    if (!_doc || !_doc->scene)
+        return;
+
+    for (LineState& state : _sourceLines)
+    {
+        if (!state.line)
+            continue;
+
+        if (!state.line->scene())
+            _doc->scene->addItem(state.line);
+
+        _shapesCollector.remove(state.line);
+
+        int row = state.row;
+
+        if (row < 0 || row > _doc->polygonList.items.size())
+            row = _doc->polygonList.items.size();
+
+        if (!_doc->polygonList.items.contains(state.line))
+            _doc->polygonList.items.insert(row, state.line);
+
+        state.line->setSelected(false);
+        state.line->updatePath();
+        state.line->updateHandlePosition();
+        state.line->updatePointNumbers();
+    }
+}
+
+void LineTopology::removeResults()
+{
+    if (!_doc || !_doc->scene)
+        return;
+
+    for (int i = _resultLines.size() - 1; i >= 0; --i)
+    {
+        LineState& state = _resultLines[i];
+
+        if (!state.line)
+            continue;
+
+        state.line->setSelected(false);
+
+        const int currentRow = _doc->polygonList.items.indexOf(state.line);
+
+        if (currentRow >= 0)
+        {
+            state.row = currentRow;
+            _doc->polygonList.items.removeAt(currentRow);
+        }
+
+        if (state.line->scene())
+            _doc->scene->removeItem(state.line);
+
+        _shapesCollector.insert(state.line);
+    }
+}
+
+void LineTopology::restoreResults()
+{
+    if (!_doc || !_doc->scene)
+        return;
+
+    for (LineState& state : _resultLines)
+    {
+        if (!state.line)
+            continue;
+
+        if (!state.line->scene())
+            _doc->scene->addItem(state.line);
+
+        _shapesCollector.remove(state.line);
+
+        int row = state.row;
+
+        if (row < 0 || row > _doc->polygonList.items.size())
+            row = _doc->polygonList.items.size();
+
+        if (!_doc->polygonList.items.contains(state.line))
+            _doc->polygonList.items.insert(row, state.line);
+
+        state.line->setSelected(true);
+        state.line->setFocus();
+
+        state.line->updatePath();
+        state.line->updateHandlePosition();
+        state.line->updatePointNumbers();
+    }
+}
+
 Visibility::Visibility(Document* doc,
                        const QVector<QGraphicsItem*>& shapes,
                        bool visible,
