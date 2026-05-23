@@ -1330,7 +1330,6 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
 
             _movingItem = nullptr;
             _movingItems.clear();
-            _moveGroupBefore.clear();
             _moveGroupInitialPos.clear();
             _moveIsGroup = false;
             _moveHadChanges = false;
@@ -1649,8 +1648,16 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         _isDraggingImage = false;
         _draggingItem    = nullptr;
 
-        const bool keepLineLikeDrawing =
-                _drawingPolyline || _drawingLine || _isDrawingPolyline || _isDrawingLine;
+        const bool hasOpenLine = _line && !_line->isClosed();
+
+        const bool hasOpenPolyline = _polyline && !_polyline->isClosed();
+
+        const bool keepLineLikeDrawing = _drawingPolyline
+                                        || _drawingLine
+                                        || _isDrawingPolyline
+                                        || _isDrawingLine
+                                        || hasOpenLine
+                                        || hasOpenPolyline;
 
         if (_isInDrawingMode)
         {
@@ -5181,6 +5188,8 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
             updatePolygonListForCurrentScene();
             updateCoordinateList();
 
+            restoreDrawingStateAfterStackChange();
+
             doc->scene->update();
         });
 
@@ -5227,6 +5236,20 @@ void MainWindow::updatePolygonListForCurrentScene()
 
         if (item->parentItem() != nullptr)
             continue;
+
+        // Открытая линия/полилиния после undo "Добавление линии/полилинии"
+        // снова становится текущим объектом рисования и не должна попадать
+        // в список завершенных фигур
+        if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            if (!polyline->isClosed())
+                continue;
+        }
+        else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            if (!line->isClosed())
+                continue;
+        }
 
         const QString className = item->data(0).toString();
         if (!className.isEmpty())
@@ -9545,6 +9568,123 @@ QUndoStack* MainWindow::activeUndoStack() const
     return nullptr;
 }
 
+void MainWindow::restoreDrawingStateAfterStackChange()
+{
+    Document::Ptr doc = currentDocument();
+
+    if (!doc || !doc->scene)
+        return;
+
+    qgraph::Line* openLine = nullptr;
+    qgraph::Polyline* openPolyline = nullptr;
+
+    if (_polyline && _polyline->scene() == doc->scene && !_polyline->isClosed())
+        openPolyline = _polyline;
+
+    if (_line && _line->scene() == doc->scene && !_line->isClosed())
+        openLine = _line;
+
+    if (!openPolyline && !openLine)
+    {
+        const QList<QGraphicsItem*> sceneItems = doc->scene->items();
+
+        for (QGraphicsItem* item : sceneItems)
+        {
+            if (!item)
+                continue;
+
+            if (doc->polygonList.items.contains(item))
+                continue;
+
+            qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item);
+
+            if (polyline && !polyline->isClosed())
+            {
+                openPolyline = polyline;
+                break;
+            }
+
+            qgraph::Line* line = dynamic_cast<qgraph::Line*>(item);
+
+            if (line && !line->isClosed())
+                openLine = line;
+        }
+    }
+
+    if (openPolyline)
+    {
+        _line = nullptr;
+        _polyline = openPolyline;
+
+        _drawingLine = false;
+        _drawingPolyline = true;
+        _isInDrawingMode = true;
+
+        _resumeEditing = false;
+        _resumeUid = 0;
+        _pendingDrawTool = PendingDrawTool::None;
+
+        _polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
+        _polyline->setSelected(true);
+        _polyline->setFocus();
+        _polyline->updatePointNumbers();
+
+        apply_LineWidth_ToItem(_polyline);
+        apply_PointSize_ToItem(_polyline);
+        apply_NumberSize_ToItem(_polyline);
+
+        setSceneItemsMovable(false);
+        updateModeLabel();
+
+        return;
+    }
+
+    if (openLine)
+    {
+        _polyline = nullptr;
+        _line = openLine;
+
+        _drawingPolyline = false;
+        _drawingLine = true;
+        _isInDrawingMode = true;
+
+        _resumeEditing = false;
+        _resumeUid = 0;
+        _pendingDrawTool = PendingDrawTool::None;
+
+        _line->setFlag(QGraphicsItem::ItemIsMovable, false);
+        _line->setSelected(true);
+        _line->setFocus();
+        _line->updatePointNumbers();
+
+        apply_LineWidth_ToItem(_line);
+        apply_PointSize_ToItem(_line);
+        apply_NumberSize_ToItem(_line);
+
+        setSceneItemsMovable(false);
+        updateModeLabel();
+
+        return;
+    }
+
+    if (_drawingLine || _drawingPolyline)
+    {
+        _line = nullptr;
+        _polyline = nullptr;
+
+        _drawingLine = false;
+        _drawingPolyline = false;
+        _isInDrawingMode = false;
+
+        _resumeEditing = false;
+        _resumeUid = 0;
+        _pendingDrawTool = PendingDrawTool::None;
+
+        setSceneItemsMovable(true);
+        updateModeLabel();
+    }
+}
+
 void MainWindow::setPolygonListModelForCurrentDocument()
 {
     Document::Ptr doc = currentDocument();
@@ -10368,37 +10508,27 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
         _resumeUid = 0;
         // Если полилиния еще не создана, создаем объект
         _polyline = new qgraph::Polyline(scene, _startPoint);
-        ensureUid(_polyline);
-        apply_LineWidth_ToItem(_polyline);
-        apply_PointSize_ToItem(_polyline);
-        apply_NumberSize_ToItem(_polyline);
+        qgraph::Polyline* createdPolyline = _polyline;
 
-        _polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
-        _polyline->setSelected(true);
-        _polyline->setFocus();
-        _polyline->updatePointNumbers();
+        ensureUid(createdPolyline);
+        apply_LineWidth_ToItem(createdPolyline);
+        apply_PointSize_ToItem(createdPolyline);
+        apply_NumberSize_ToItem(createdPolyline);
 
-        if (doc)
-        {
-            if (QUndoStack* stack = activeUndoStack())
-            {
-                stack->push(new undo::Create(doc.get(),
-                                             _polyline,
-                                             u8"Узел полилинии"));
-            }
+        createdPolyline->setFlag(QGraphicsItem::ItemIsMovable, false);
+        createdPolyline->setSelected(true);
+        createdPolyline->setFocus();
+        createdPolyline->updatePointNumbers();
 
-            if (!doc->isModified)
-            {
-                doc->isModified = true;
-                updateFileListDisplay(doc->filePath);
-            }
-        }
-
-        _polyline->setModificationCallback([this]()
+        createdPolyline->setModificationCallback([this]()
         {
             if (_drawingPolyline && _polyline && _polyline->isClosed())
             {
                 _drawingPolyline = false;
+                _isDrawingPolyline = false;
+                _isInDrawingMode = false;
+
+                setSceneItemsMovable(true);
                 updateModeLabel();
 
                 _polyline->updatePointNumbers();
@@ -10446,6 +10576,9 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
                             _resumeEditing = false;
                             _resumeUid = 0;
                             _polyline = nullptr;
+
+                            _isInDrawingMode = false;
+                            setSceneItemsMovable(true);
 
                             updateModeLabel();
                             raiseAllHandlesToTop();
@@ -10500,22 +10633,41 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
                     _resumeUid = 0;
                     _polyline = nullptr;
 
+                    _isInDrawingMode = false;
+                    setSceneItemsMovable(true);
+
                     updateModeLabel();
                     raiseAllHandlesToTop();
                     setSceneItemsMovable(true);
                 }
-
-
-                _polyline = nullptr;
-
-                if (Document::Ptr doc = currentDocument())
-                {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
-                raiseAllHandlesToTop();
             }
         });
+        if (doc)
+        {
+            if (QUndoStack* stack = activeUndoStack())
+            {
+                stack->push(new undo::Create(doc.get(),
+                                             createdPolyline,
+                                             u8"Узел полилинии"));
+            }
+
+            _polyline = createdPolyline;
+
+            _drawingPolyline = true;
+            _drawingLine = false;
+            _resumeEditing = false;
+            _resumeUid = 0;
+
+            _isInDrawingMode = true;
+            setSceneItemsMovable(false);
+            updateModeLabel();
+
+            if (!doc->isModified)
+            {
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
+            }
+        }
     }
     const QPointF p = _startPoint;
 
@@ -10584,16 +10736,18 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
     }
     else
     {
-        const int pointIndex = _polyline->circles().size();
+        qgraph::Polyline* activePolyline = _polyline;
+
+        const int pointIndex = activePolyline->circles().size();
 
         _polyline->addPoint(p, scene);
 
-        if (_polyline->circles().size() > pointIndex)
+        if (activePolyline->circles().size() > pointIndex)
         {
-            _polyline->setFlag(QGraphicsItem::ItemIsMovable, false);
-            _polyline->setSelected(true);
-            _polyline->setFocus();
-            _polyline->updatePointNumbers();
+            activePolyline->setFlag(QGraphicsItem::ItemIsMovable, false);
+            activePolyline->setSelected(true);
+            activePolyline->setFocus();
+            activePolyline->updatePointNumbers();
 
             if (doc)
             {
@@ -10605,10 +10759,21 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
                     data.point = p;
 
                     stack->push(new undo::NodeEdit(doc.get(),
-                                                   _polyline,
+                                                   activePolyline,
                                                    data,
                                                    u8"Узел полилинии"));
                 }
+
+                _polyline = activePolyline;
+
+                _drawingPolyline = true;
+                _drawingLine = false;
+                _resumeEditing = false;
+                _resumeUid = 0;
+
+                _isInDrawingMode = true;
+                setSceneItemsMovable(false);
+                updateModeLabel();
 
                 if (!doc->isModified)
                 {
@@ -10654,33 +10819,23 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
         _resumeUid = 0;
         // Если линия еще не создана, создаем объект
         _line = new qgraph::Line(scene, _startPoint);
-        ensureUid(_line);
-        apply_LineWidth_ToItem(_line);
-        apply_PointSize_ToItem(_line);
-        apply_NumberSize_ToItem(_line);
-        _line->setSelected(true);
-        _line->setFocus();
-        _line->updatePointNumbers();
-        if (doc)
-        {
-            if (QUndoStack* stack = activeUndoStack())
-            {
-                stack->push(new undo::Create(doc.get(),
-                                             _line,
-                                             u8"Узел линии"));
-            }
+        qgraph::Line* createdLine = _line;
+        ensureUid(createdLine);
+        apply_LineWidth_ToItem(createdLine);
+        apply_PointSize_ToItem(createdLine);
+        apply_NumberSize_ToItem(createdLine);
 
-            if (!doc->isModified)
-            {
-                doc->isModified = true;
-                updateFileListDisplay(doc->filePath);
-            }
-        }
-        _line->setModificationCallback([this]()
+        createdLine->setSelected(true);
+        createdLine->setFocus();
+        createdLine->updatePointNumbers();
+
+        createdLine->setModificationCallback([this]()
         {
             if (_drawingLine && _line && _line->isClosed())
             {
                 _drawingLine = false;
+                _isInDrawingMode = false;
+                setSceneItemsMovable(true);
                 updateModeLabel();
 
                 _line->updatePointNumbers();
@@ -10729,6 +10884,9 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                             _resumeUid = 0;
                             _line = nullptr;
 
+                            _isInDrawingMode = false;
+                            setSceneItemsMovable(true);
+
                             updateModeLabel();
                             raiseAllHandlesToTop();
                         }
@@ -10761,8 +10919,6 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                             data.removedPoints.clear();
                             data.addedPoints.clear();
 
-                            // Было: открытая линия после продолжения.
-                            // Стало: закрытая линия.
                             data.closedBefore = false;
                             data.closedAfter = true;
 
@@ -10784,21 +10940,39 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                     _resumeUid = 0;
                     _line = nullptr;
 
+                    _isInDrawingMode = false;
+                    setSceneItemsMovable(true);
+
                     updateModeLabel();
                     raiseAllHandlesToTop();
-                    setSceneItemsMovable(true);
                 }
-
-                _line = nullptr;
-
-                if (Document::Ptr doc = currentDocument())
-                {
-                    doc->isModified = true;
-                    updateFileListDisplay(doc->filePath);
-                }
-                raiseAllHandlesToTop();
             }
         });
+        if (doc)
+        {
+            if (QUndoStack* stack = activeUndoStack())
+            {
+                stack->push(new undo::Create(doc.get(),
+                                             createdLine,
+                                             u8"Узел линии"));
+            }
+            _line = createdLine;
+
+            _drawingLine = true;
+            _drawingPolyline = false;
+            _resumeEditing = false;
+            _resumeUid = 0;
+
+            _isInDrawingMode = true;
+            setSceneItemsMovable(false);
+            updateModeLabel();
+
+            if (!doc->isModified)
+            {
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
+            }
+        }
     }
     const QPointF p = _startPoint;
     if (!_line->_circles.isEmpty() &&
@@ -10840,15 +11014,17 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
     }
     else
     {
-        const int pointIndex = _line->circles().size();
+        qgraph::Line* activeLine = _line;
 
-        _line->addPoint(p, scene);
+        const int pointIndex = activeLine->circles().size();
 
-        if (_line->circles().size() > pointIndex)
+        activeLine->addPoint(p, scene);
+
+        if (activeLine->circles().size() > pointIndex)
         {
-            _line->setSelected(true);
-            _line->setFocus();
-            _line->updatePointNumbers();
+            activeLine->setSelected(true);
+            activeLine->setFocus();
+            activeLine->updatePointNumbers();
 
             if (doc)
             {
@@ -10860,10 +11036,21 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                     data.point = p;
 
                     stack->push(new undo::NodeEdit(doc.get(),
-                                                   _line,
+                                                   activeLine,
                                                    data,
                                                    u8"Узел линии"));
                 }
+
+                _line = activeLine;
+
+                _drawingLine = true;
+                _drawingPolyline = false;
+                _resumeEditing = false;
+                _resumeUid = 0;
+
+                _isInDrawingMode = true;
+                setSceneItemsMovable(false);
+                updateModeLabel();
 
                 if (!doc->isModified)
                 {

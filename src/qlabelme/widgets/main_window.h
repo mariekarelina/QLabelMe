@@ -93,78 +93,6 @@ class MainWindow;
 
 class QLabel;
 
-// struct PolygonListData
-// {
-//     QVector<QGraphicsItem*> items;
-//     std::unique_ptr<QStandardItemModel> model;
-// };
-
-// struct Document
-// {
-//     typedef container_ptr<Document> Ptr;
-
-//     //DISABLE_DEFAULT_COPY(Document)
-
-//     QString filePath;  // Путь к файлу изображения
-//     QGraphicsScene* scene = {nullptr};  // Сцена с изображением и разметкой
-//     qgraph::VideoRect* videoRect = {nullptr};
-//     QPixmap pixmap;  // Само изображение
-//     QGraphicsPixmapItem* pixmapItem = {nullptr}; // Элемент на сцене
-//     bool isModified = {false}; // Флаг, указывающий на наличие несохраненных изменений
-//     std::unique_ptr<QUndoStack> _undoStack;
-
-//     QUndoStack undoStack2;
-
-//     PolygonListData polygonList;
-
-//     // Состояние просмотра
-//     struct
-//     {
-//         int hScroll = 0;
-//         int vScroll = 0;
-//         // qreal zoom = 1.0;
-//         qreal zoom = 0.0;
-//         QPointF center;
-//     } viewState;
-
-//     static Ptr create(const QString& path);
-
-//     bool loadImage();
-// };
-
-struct ShapeSnapshot
-{
-    QString type;      // circle/rectangle/polyline/point/line
-    QVariant state;    // То, что вернул shape->saveState()
-};
-
-// Тип фигур
-enum class ShapeKind {/*Unknown,*/ Rectangle, Circle, Polyline, Line, Point};
-
-struct ShapeBackup
-{
-    //ShapeKind kind = {ShapeKind::Unknown};
-    ShapeKind kind = {ShapeKind::Rectangle};
-    QString   className;
-    qreal     zValue = 0;
-    bool      visible = {true};
-
-    // Геометрия по типам
-    QRectF rect;
-    QPointF circleCenter;
-    qreal circleRadius = 0;
-    QVector<QPointF> points;
-    QPointF pointCenter;
-
-    bool closed = false;
-    qulonglong uid = 0;
-
-    bool numberingFromLast = false;
-    int listRow = -1;  // Номер в правой панели
-    int sceneRow = -1; // Порядок на сцене
-    int shapeNumber = -1; // Номер в списке
-};
-
 class MainWindow : public QMainWindow
 {
 public:
@@ -410,6 +338,7 @@ private:
 
     // Стек действий
     QUndoStack* activeUndoStack() const;
+    void restoreDrawingStateAfterStackChange();
 
     void setPolygonListModelForCurrentDocument();
     // Удаляет несколько фигур сразу
@@ -685,7 +614,6 @@ private:
 
     // Перемещение фигур
     QGraphicsItem* _movingItem = {nullptr};
-    ShapeBackup    _moveBeforeSnap;
     bool           _moveHadChanges = {false};
     bool           _moveInProgress = {false};
 
@@ -694,15 +622,10 @@ private:
 
     // Групповое перемещение фигур
     QVector<QGraphicsItem*> _movingItems; // Все фигуры, которые двигаем вместе
-    QVector<ShapeBackup> _moveGroupBefore; // Снимки фигур до перемещения
     QVector<QPointF> _moveGroupInitialPos; // Начальные позиции при захвате
     bool _moveIsGroup = {false}; // true, если тянем сразу несколько фигур
     QPointF _movePressScenePos; // Позиция курсора в сцене в момент захвата
 
-    // // Для узлов
-    // QGraphicsItem* _handleEditedItem = {nullptr}; // Владелец перетаскиваемой ручки
-    // ShapeBackup    _handleBeforeSnap;             // Снимок "до"
-    // bool           _handleDragHadChanges = {false};
     QGraphicsItem* _handleEditedItem = {nullptr}; // Владелец перетаскиваемой ручки
 
     // Минимальное состояние редактирования ручки
@@ -726,7 +649,6 @@ private:
     // Продолжение рисования
     bool _resumeEditing = {false};
     qulonglong _resumeUid = {0};
-    ShapeBackup _resumeBefore;
 
     // Зум прямоугольной области Ctrl + ЛКМ
     bool _zoomRectActive = {false};
