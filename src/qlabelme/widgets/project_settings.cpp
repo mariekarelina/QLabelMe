@@ -391,35 +391,27 @@ void ProjectSettings::onRemoveClass()
     const int row = ui->listClasses->currentRow();
     if (row < 0) return;
 
-    //const QString name = ui->listClasses->item(row)->text();
     const QString name = ui->listClasses->item(row)->data(RoleClassName).toString();
 
+    const QMessageBox::StandardButton answer = messageBox(
+        this,
+        QMessageBox::Question,
+        QString::fromUtf8("Удалить класс «%1» из списка?").arg(name),
+        0,
+        [](QMessageBox* box)
+        {
+            box->setWindowTitle(u8"Удаление класса");
+            box->setStandardButtons(QMessageBox::Yes | QMessageBox::No);
 
-    QMessageBox box(this);
-    box.setIcon(QMessageBox::Question);
-    box.setWindowTitle(u8"Удаление класса");
-    box.setText(QString::fromUtf8("Удалить класс «%1» из списка?").arg(name));
-    box.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+            if (QAbstractButton* button = box->button(QMessageBox::Yes))
+                button->setText(u8"Да");
 
-    if (QAbstractButton* b = box.button(QMessageBox::Yes)) b->setText(u8"Да");
-    if (QAbstractButton* b = box.button(QMessageBox::No))  b->setText(u8"Нет");
+            if (QAbstractButton* button = box->button(QMessageBox::No))
+                button->setText(u8"Нет");
+        }
+    );
 
-    const QSize sz(380, 160);
-    box.resize(sz);
-    box.setFixedSize(sz);
-    box.setSizeGripEnabled(false);
-
-    Qt::WindowFlags f = box.windowFlags();
-    f |= Qt::CustomizeWindowHint | Qt::WindowTitleHint | Qt::WindowCloseButtonHint;
-    f &= ~Qt::WindowContextHelpButtonHint;
-    f &= ~Qt::WindowMaximizeButtonHint;
-    f &= ~Qt::WindowMinimizeButtonHint;
-    box.setWindowFlags(f);
-
-    box.setWindowModality(Qt::WindowModal);
-    box.move(this->geometry().center() - QPoint(sz.width()/2, sz.height()/2));
-
-    if (box.exec() != QMessageBox::Yes)
+    if (answer != QMessageBox::Yes)
         return;
 
     delete ui->listClasses->takeItem(row);

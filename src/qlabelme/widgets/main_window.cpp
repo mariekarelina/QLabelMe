@@ -4912,21 +4912,26 @@ void MainWindow::on_actResetAnnotation_triggered()
     if (doc->polygonList.items.isEmpty())
         return;
 
-    // TODO переделать на messageBox() с использованеим BoxExtFunc, кнопки должны быть стандартными
+    const QMessageBox::StandardButton answer = messageBox(
+        this,
+        QMessageBox::Question,
+        u8"Удалить всю разметку на текущем снимке?",
+        0,
+        [](QMessageBox* box)
+        {
+            box->setWindowTitle(u8"Сбросить разметку");
+            box->setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+            box->setDefaultButton(QMessageBox::No);
 
-    // Подтверждение
-    QMessageBox msgBox(this);
-    msgBox.setWindowTitle(u8"Сбросить разметку");
-    msgBox.setText(u8"Удалить всю разметку на текущем снимке?");
-    msgBox.setIcon(QMessageBox::Question);
+            if (QAbstractButton* yesButton = box->button(QMessageBox::Yes))
+                yesButton->setText(u8"Да");
 
-    QPushButton* btnYes = msgBox.addButton(u8"Да",  QMessageBox::AcceptRole);
-    QPushButton* btnNo  = msgBox.addButton(u8"Нет", QMessageBox::RejectRole);
-    msgBox.setDefaultButton(btnNo);
+            if (QAbstractButton* noButton = box->button(QMessageBox::No))
+                noButton->setText(u8"Нет");
+        }
+    );
 
-    msgBox.exec();
-
-    if (msgBox.clickedButton() != btnYes)
+    if (answer != QMessageBox::Yes)
         return;
 
     QVector<QGraphicsItem*> shapes = doc->polygonList.items;
@@ -4980,20 +4985,26 @@ void MainWindow::on_actRestoreAnnotation_triggered()
 
     if (hasUnsaved || !doc->polygonList.items.isEmpty())
     {
-        // TODO переделать на messageBox() с использованеим BoxExtFunc, кнопки должны быть стандартными
+        const QMessageBox::StandardButton answer = messageBox(
+            this,
+            QMessageBox::Question,
+            u8"Восстановить разметку из файла .yaml?\nВсе несохранённые изменения будут потеряны",
+            0,
+            [](QMessageBox* box)
+            {
+                box->setWindowTitle(u8"Восстановить разметку");
+                box->setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+                box->setDefaultButton(QMessageBox::No);
 
-        QMessageBox msgBox(this);
-        msgBox.setWindowTitle(u8"Восстановить разметку");
-        msgBox.setText(u8"Восстановить разметку из файла .yaml?\nВсе несохранённые изменения будут потеряны");
-        msgBox.setIcon(QMessageBox::Question);
+                if (QAbstractButton* yesButton = box->button(QMessageBox::Yes))
+                    yesButton->setText(u8"Да");
 
-        QPushButton* btnYes = msgBox.addButton(u8"Да",  QMessageBox::AcceptRole);
-        QPushButton* btnNo  = msgBox.addButton(u8"Нет", QMessageBox::RejectRole);
-        msgBox.setDefaultButton(btnNo);
+                if (QAbstractButton* noButton = box->button(QMessageBox::No))
+                    noButton->setText(u8"Нет");
+            }
+        );
 
-        msgBox.exec();
-
-        if (msgBox.clickedButton() != btnYes)
+        if (answer != QMessageBox::Yes)
             return;
     }
 
