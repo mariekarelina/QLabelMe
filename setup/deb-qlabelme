@@ -14,11 +14,13 @@ rm -rf $package_dir
 mkdir -p $package_dir/DEBIAN
 mkdir -p $package_dir/usr/bin
 mkdir -p $package_dir/usr/share/applications
-mkdir -p $package_dir/usr/share/icons/hicolor/48x48/apps
+# mkdir -p $package_dir/usr/share/icons/hicolor/48x48/apps
+mkdir -p $package_dir/usr/share/icons/hicolor/scalable/apps
 
 cp $script_dir/setup/deb/qlabelme/DEBIAN/*          $package_dir/DEBIAN
 cp $script_dir/qlabelme.desktop                     $package_dir/usr/share/applications
-cp $script_dir/src/qlabelme/resources/qlabelme.png  $package_dir/usr/share/icons/hicolor/48x48/apps
+# cp $script_dir/src/qlabelme/resources/qlabelme.png  $package_dir/usr/share/icons/hicolor/48x48/apps
+cp $script_dir/src/qlabelme/resources/qlabelme.svg  $package_dir/usr/share/icons/hicolor/scalable/apps
 cp $build_dir/bin/qlabelme                          $package_dir/usr/bin
 
 chmod -R go-w        $package_dir
