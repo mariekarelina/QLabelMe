@@ -4301,6 +4301,11 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
         return;
     }
 
+    _ghostTarget = nullptr;
+    _ghostHandle = nullptr;
+    _lastHoverHandle = nullptr;
+    _ghostActive = false;
+
     // Отвязываем view от сцены старого документа до удаления документов
     ui->graphView->setScene(nullptr);
 
