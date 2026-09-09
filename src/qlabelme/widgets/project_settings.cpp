@@ -402,6 +402,7 @@ void ProjectSettings::onRemoveClass()
         {
             box->setWindowTitle(u8"Удаление класса");
             box->setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+            box->setDefaultButton(QMessageBox::No);
 
             if (QAbstractButton* button = box->button(QMessageBox::Yes))
                 button->setText(u8"Да");

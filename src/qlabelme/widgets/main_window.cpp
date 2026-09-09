@@ -4451,11 +4451,23 @@ void MainWindow::on_actDelete_triggered()
 
     if (shapes.size() > 1)
     {
-        const QMessageBox::StandardButton answer = QMessageBox::question(
+        const QMessageBox::StandardButton answer = messageBox(
             this,
-            QString::fromUtf8("Удаление фигур"),
-            QString::fromUtf8("Удалить выбранные фигуры?"),
-            QMessageBox::Yes | QMessageBox::No
+            QMessageBox::Question,
+            u8"Удалить выбранные фигуры?",
+            0,
+            [](QMessageBox* box)
+            {
+                box->setWindowTitle(u8"Удаление фигур");
+                box->setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+                box->setDefaultButton(QMessageBox::No);
+
+                if (QAbstractButton* yesButton = box->button(QMessageBox::Yes))
+                    yesButton->setText(u8"Да");
+
+                if (QAbstractButton* noButton = box->button(QMessageBox::No))
+                    noButton->setText(u8"Нет");
+            }
         );
 
         if (answer != QMessageBox::Yes)
