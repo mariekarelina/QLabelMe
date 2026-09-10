@@ -411,8 +411,6 @@ void ProjectSettings::onRemoveClass()
     const QString originalName =
         item->data(RoleOriginalClassName).toString();
 
-    //const QString name = ui->listClasses->item(row)->data(RoleClassName).toString();
-
     const QMessageBox::StandardButton answer = messageBox(
         this,
         QMessageBox::Question,

@@ -2119,6 +2119,91 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
 
 bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 {
+    // Перехватываем Shift + стрелка до передачи события выделенной фигуре
+    if ((obj == ui->graphView || obj == ui->graphView->viewport())
+        && event->type() == QEvent::KeyPress)
+    {
+        QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+
+        const bool isArrowKey =
+                keyEvent->key() == Qt::Key_Left
+                || keyEvent->key() == Qt::Key_Right
+                || keyEvent->key() == Qt::Key_Up
+                || keyEvent->key() == Qt::Key_Down;
+
+        if (keyEvent->modifiers() == Qt::ShiftModifier && isArrowKey)
+        {
+            QPointF delta;
+
+            switch (keyEvent->key())
+            {
+                case Qt::Key_Left:
+                    delta = QPointF(-1.0, 0.0);
+                    break;
+
+                case Qt::Key_Right:
+                    delta = QPointF(1.0, 0.0);
+                    break;
+
+                case Qt::Key_Up:
+                    delta = QPointF(0.0, -1.0);
+                    break;
+
+                case Qt::Key_Down:
+                    delta = QPointF(0.0, 1.0);
+                    break;
+            }
+
+            Document::Ptr doc = currentDocument();
+            QUndoStack* stack = activeUndoStack();
+
+            if (!doc || !doc->scene || !stack)
+                return false;
+
+            QSet<QGraphicsItem*> shapes;
+
+            for (QGraphicsItem* selectedItem : doc->scene->selectedItems())
+            {
+                QGraphicsItem* shape = findMovableAncestor(selectedItem);
+
+                if (!shape || shape == doc->videoRect)
+                    continue;
+
+                if (!shape->flags().testFlag(QGraphicsItem::ItemIsMovable))
+                    continue;
+
+                shapes.insert(shape);
+            }
+
+            if (shapes.isEmpty())
+            {
+                event->accept();
+                return true;
+            }
+
+            for (QGraphicsItem* shape : shapes)
+                shape->moveBy(delta.x(), delta.y());
+
+            const QString description = (shapes.size() == 1)
+                                        ? u8"Перемещение фигуры"
+                                        : u8"Перемещение фигур";
+
+            stack->push(new undo::Move(doc.get(), shapes, description, delta));
+
+            if (!doc->isModified)
+            {
+                doc->isModified = true;
+                updateFileListDisplay(doc->filePath);
+            }
+
+            updateCoordinateList();
+            doc->scene->update();
+
+            event->accept();
+            return true;
+        }
+    }
+
     if (obj != ui->graphView->viewport())
         return QMainWindow::eventFilter(obj, event);
 
@@ -10391,9 +10476,6 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scene
     double bestD2 = std::numeric_limits<double>::infinity();
     for (int i = 0; i < n - 1; ++i)
     {
-        // const QPointF& firstPt = before.points[i];
-        // const QPointF& secondPt = before.points[i + 1];
-
         const QPointF& firstPt = points[i];
         const QPointF& secondPt = points[i + 1];
 
