@@ -26,6 +26,7 @@ public:
 signals:
     void classesApplied(const QStringList& classes);
     void classColorsApplied(const QMap<QString, QColor>& colors);
+    void classRenamesApplied(const QMap<QString, QString>& renames);
 
 private slots:
     void on_buttonBox_clicked(QAbstractButton*);
@@ -47,10 +48,13 @@ private:
     QWidget* makeClassRowWidget(QListWidgetItem* item);
     void rebuildClassRowWidget(QListWidgetItem* item);
     void syncColorsFromUi();
+    void commitAppliedClassNames();
     void clearClassListWidgets();
 
 private:
     Ui::ProjectSettings* ui = {nullptr};
     QStringList _classes;
     QMap<QString, QColor> _classColors;
+    // Хранит исходное и новое названия переименованных классов
+    QMap<QString, QString> _classRenames;
 };

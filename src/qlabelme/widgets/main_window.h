@@ -369,6 +369,7 @@ private:
 
     QColor classColorFor(const QString& className) const;
     void applyClassColorToItem(QGraphicsItem* item, const QString& className);
+    void applyClassRenames(const QMap<QString, QString>& renames);
 
     void updateImageSizeLabel(const QSize& size);
 

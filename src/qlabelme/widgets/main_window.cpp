@@ -464,6 +464,11 @@ MainWindow::MainWindow(QWidget* parent) :
             }
         });
 
+    connect(_projPropsDialog,
+            &ProjectSettings::classRenamesApplied,
+            this,
+            &MainWindow::applyClassRenames);
+
     connect(_projPropsDialog, &ProjectSettings::classColorsApplied, this,
     [this](const QMap<QString, QColor>& colors)
     {
@@ -10044,6 +10049,64 @@ void MainWindow::applyClassColorToItem(QGraphicsItem* item, const QString& class
         const qreal diam = std::max(2, _vstyle.pointSize);
         point->setDotStyle(lineColor, diam, _vstyle.handleSize);
         return;
+    }
+}
+
+void MainWindow::applyClassRenames(
+    const QMap<QString, QString>& renames)
+{
+    if (renames.isEmpty())
+        return;
+
+    const Document::Ptr currentDoc = currentDocument();
+
+    for (QMap<QString, Document::Ptr>::const_iterator docIt =
+             _documentsMap.constBegin();
+         docIt != _documentsMap.constEnd();
+         ++docIt)
+    {
+        const Document::Ptr doc = docIt.value();
+
+        if (!doc || !doc->scene)
+            continue;
+
+        bool documentChanged = false;
+        const QList<QGraphicsItem*> items = doc->scene->items();
+
+        for (QGraphicsItem* item : items)
+        {
+            // Дочерние элементы являются узлами и подписями фигур
+            // Класс хранится только в корневом объекте фигуры
+            if (!item || item->parentItem() != nullptr)
+                continue;
+
+            const QString oldName = item->data(0).toString();
+
+            const QMap<QString, QString>::const_iterator rename =
+                renames.constFind(oldName);
+
+            if (rename == renames.constEnd())
+                continue;
+
+            const QString newName = rename.value();
+
+            item->setData(0, newName);
+            applyClassColorToItem(item, newName);
+
+            documentChanged = true;
+        }
+
+        if (!documentChanged)
+            continue;
+
+        doc->isModified = true;
+        updateFileListDisplay(doc->filePath);
+        doc->scene->update();
+
+        // Для остальных документов список перестроится при переходе
+        // на соответствующее изображение
+        if (doc == currentDoc)
+            updatePolygonListTexts();
     }
 }
 

@@ -18,6 +18,7 @@
 #include <algorithm>
 
 static constexpr int RoleClassName = Qt::UserRole + 1; // Имя класса для QLabel
+static constexpr int RoleOriginalClassName = Qt::UserRole + 2;
 
 static void applyColorToButton(QToolButton* btn, const QColor& c)
 {
@@ -99,6 +100,7 @@ ProjectSettings::~ProjectSettings()
 void ProjectSettings::setProjectClasses(const QStringList& classes)
 {
     _classes = classes;
+    _classRenames.clear();
     if (ui && ui->listClasses)
     {
         clearClassListWidgets();
@@ -109,6 +111,7 @@ void ProjectSettings::setProjectClasses(const QStringList& classes)
             QListWidgetItem* it = new QListWidgetItem();
             it->setText("");
             it->setData(RoleClassName, name);
+            it->setData(RoleOriginalClassName, name);
 
             QColor c = _classColors.value(name, QColor());
 
@@ -196,7 +199,10 @@ void ProjectSettings::on_buttonBox_clicked(QAbstractButton* btn)
         syncColorsFromUi();
 
         emit classesApplied(_classes);
+        emit classRenamesApplied(_classRenames);
         emit classColorsApplied(_classColors);
+
+        commitAppliedClassNames();
     }
 }
 
@@ -206,7 +212,10 @@ void ProjectSettings::on_buttonBox_accepted()
     syncColorsFromUi();
 
     emit classesApplied(_classes);
+    emit classRenamesApplied(_classRenames);
     emit classColorsApplied(_classColors);
+
+    commitAppliedClassNames();
 
     accept();
 }
@@ -376,6 +385,7 @@ void ProjectSettings::onAddClass()
     QListWidgetItem* it = new QListWidgetItem();
     it->setText("");
     it->setData(RoleClassName, name);
+    it->setData(RoleOriginalClassName, QString());
 
     it->setData(Qt::UserRole, QColor());
 
@@ -386,12 +396,22 @@ void ProjectSettings::onAddClass()
 
 void ProjectSettings::onRemoveClass()
 {
-    if (!ui || !ui->listClasses) return;
+    if (!ui || !ui->listClasses)
+        return;
 
     const int row = ui->listClasses->currentRow();
-    if (row < 0) return;
+    if (row < 0)
+        return;
 
-    const QString name = ui->listClasses->item(row)->data(RoleClassName).toString();
+    QListWidgetItem* item = ui->listClasses->item(row);
+
+    const QString name =
+        item->data(RoleClassName).toString();
+
+    const QString originalName =
+        item->data(RoleOriginalClassName).toString();
+
+    //const QString name = ui->listClasses->item(row)->data(RoleClassName).toString();
 
     const QMessageBox::StandardButton answer = messageBox(
         this,
@@ -414,6 +434,9 @@ void ProjectSettings::onRemoveClass()
 
     if (answer != QMessageBox::Yes)
         return;
+
+    if (!originalName.isEmpty())
+        _classRenames.remove(originalName);
 
     delete ui->listClasses->takeItem(row);
     const int newRow = qMin(row, ui->listClasses->count() - 1);
@@ -438,7 +461,6 @@ void ProjectSettings::onEditClass()
     const int row = ui->listClasses->currentRow();
     if (row < 0) return;
 
-    //const QString oldName = ui->listClasses->item(row)->text();
     const QString oldName = ui->listClasses->item(row)->data(RoleClassName).toString();
 
 
@@ -489,7 +511,7 @@ void ProjectSettings::onEditClass()
         );
         return;
     }
-    if (newName.compare(oldName, Qt::CaseInsensitive) == 0)
+    if (newName == oldName)
     {
         return;
     }
@@ -503,12 +525,22 @@ void ProjectSettings::onEditClass()
         return;
     }
 
-    // ui->listClasses->item(row)->setText(newName);
-    // ui->listClasses->setCurrentRow(row);
     QListWidgetItem* it = ui->listClasses->item(row);
-    //QColor c = it->data(Qt::UserRole).value<QColor>();
     it->setData(RoleClassName, newName);
     rebuildClassRowWidget(it);
+
+    // Для существующего класса сохраняем исходное и итоговое имена
+    // У только что добавленного класса еще нет фигур для обновления
+    const QString originalName =
+        it->data(RoleOriginalClassName).toString();
+
+    if (!originalName.isEmpty())
+    {
+        if (newName == originalName)
+            _classRenames.remove(originalName);
+        else
+            _classRenames[originalName] = newName;
+    }
 
     ui->listClasses->setCurrentRow(row);
 }
@@ -622,6 +654,24 @@ void ProjectSettings::syncColorsFromUi()
 
         if (!name.isEmpty() && c.isValid())
             _classColors[name] = c;
+    }
+}
+
+void ProjectSettings::commitAppliedClassNames()
+{
+    _classRenames.clear();
+
+    if (!ui || !ui->listClasses)
+        return;
+
+    for (int i = 0; i < ui->listClasses->count(); ++i)
+    {
+        QListWidgetItem* item = ui->listClasses->item(i);
+
+        item->setData(
+            RoleOriginalClassName,
+            item->data(RoleClassName).toString()
+        );
     }
 }
 
