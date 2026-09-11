@@ -314,8 +314,6 @@ MainWindow::MainWindow(QWidget* parent) :
     // Инициализация с пустой папкой
     _currentFolderPath = "";
 
-
-    // TODO все коннекты исправить на chk_connect_a
     chk_connect_a(ui->fileList, &QListWidget::currentItemChanged,
                   this, &MainWindow::fileList_ItemChanged);
 
@@ -423,7 +421,7 @@ MainWindow::MainWindow(QWidget* parent) :
 
     //config::base().getValue("view.keep_image_scale", init.keepImageScale);
 
-    // TODO Группа стеков действий для разных документов
+    // Группа стеков действий для разных документов
     _undoGroup = new QUndoGroup(this);
 
     // Включаемость по состоянию группы

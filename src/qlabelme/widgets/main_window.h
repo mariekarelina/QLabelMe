@@ -503,14 +503,14 @@ private:
     // QMap<QString, ImageData> _imageDataMap; // Ключ - путь к файлу
 
     //QMap<QString, QGraphicsScene*> _scenesMap; // Ключ - путь к файлу, значение - сцена
-    QMap<QString, Document::Ptr> _documentsMap;
+    QMap<QString /*file path*/, Document::Ptr> _documentsMap;
 
     // Текущее изображение
     QString _currentImagePath;
     // Буфер для копирования фигур между сценами
     QJsonObject _shapesClipboard;
 
-    QMap<QString, QColor> _projectClassColors;
+    QMap<QString /*class name*/, QColor> _projectClassColors;
 
     // Временные данные для рисования
     QGraphicsRectItem* _tempRectItem = {nullptr};
