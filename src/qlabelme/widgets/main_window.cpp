@@ -995,6 +995,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                         _moveHadChanges = false;
                         _moveInProgress = true;
 
+                        ui->graphView->viewport()->setCursor(Qt::ClosedHandCursor);
+
                         const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
                         _moveGrabOffsetScene = scenePos - _movingItem->scenePos();
                         _moveSavedFlags = _movingItem->flags();
@@ -1733,6 +1735,11 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             _moveHadChanges = false;
             _moveInProgress = false;
 
+            if (QApplication::keyboardModifiers() & Qt::ShiftModifier)
+                ui->graphView->viewport()->setCursor(Qt::OpenHandCursor);
+            else
+                ui->graphView->viewport()->unsetCursor();
+
             updateCoordinateList();
             mouseEvent->accept();
             updateModeLabel();
@@ -2119,6 +2126,31 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
 
 bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 {
+    // При зажатом Shift показываем готовность к перемещению фигуры
+    if ((obj == ui->graphView || obj == ui->graphView->viewport())
+        && event->type() == QEvent::KeyPress)
+    {
+        QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+
+        if (keyEvent->key() == Qt::Key_Shift)
+            ui->graphView->viewport()->setCursor(Qt::OpenHandCursor);
+    }
+
+    // После отпускания Shift возвращаем обычный курсор
+    if ((obj == ui->graphView || obj == ui->graphView->viewport())
+        && event->type() == QEvent::KeyRelease)
+    {
+        QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+
+        if (keyEvent->key() == Qt::Key_Shift)
+        {
+            if (_movingItem)
+                ui->graphView->viewport()->setCursor(Qt::ClosedHandCursor);
+            else
+                ui->graphView->viewport()->unsetCursor();
+        }
+    }
+
     // Перехватываем Shift + стрелка до передачи события выделенной фигуре
     if ((obj == ui->graphView || obj == ui->graphView->viewport())
         && event->type() == QEvent::KeyPress)
