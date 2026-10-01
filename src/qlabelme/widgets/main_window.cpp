@@ -318,13 +318,13 @@ MainWindow::MainWindow(QWidget* parent) :
                   this, &MainWindow::fileList_ItemChanged);
 
     chk_connect_a(ui->polygonList, &QListView::clicked,
-            this, &MainWindow::onPolygonListItemClicked);
+                  this, &MainWindow::onPolygonListItemClicked);
 
     chk_connect_a(ui->polygonList, &QListView::doubleClicked,
-            this, &MainWindow::onPolygonListItemDoubleClicked);
+                  this, &MainWindow::onPolygonListItemDoubleClicked);
 
     chk_connect_a(ui->polygonList, &QWidget::customContextMenuRequested,
-            this, &MainWindow::showPolygonListContextMenu);
+                  this, &MainWindow::showPolygonListContextMenu);
 
 
     QShortcut* shNext = new QShortcut(QKeySequence(Qt::Key_D), this);
@@ -446,56 +446,47 @@ MainWindow::MainWindow(QWidget* parent) :
     // Классы в настройках
     _projPropsDialog = new ProjectSettings(this);
 
-    connect(_projPropsDialog, &ProjectSettings::classesApplied, this,
-        [this](const QStringList& classes){
-            _projectClasses = classes;
+    connect(_projPropsDialog, &ProjectSettings::classesApplied,
+            this, [this](const QStringList& classes)
+    {
+        _projectClasses = classes;
+        _projectClassColors = _projPropsDialog->projectClassColors();
+        if (!saveProjectClasses(_projectClasses, _projectClassColors))
+        {
+            messageBox(
+                this,
+                QMessageBox::Warning,
+                u8"Не удалось сохранить classes.yaml"
+            );
+        }
+    });
 
-            _projectClassColors = _projPropsDialog->projectClassColors();
+    chk_connect_a(_projPropsDialog, &ProjectSettings::classRenamesApplied,
+                  this, &MainWindow::applyClassRenames)
 
-            if (!saveProjectClasses(_projectClasses, _projectClassColors))
-            {
-                messageBox(
-                    this,
-                    QMessageBox::Warning,
-                    u8"Не удалось сохранить classes.yaml"
-                );
-            }
-        });
-
-    connect(_projPropsDialog,
-            &ProjectSettings::classRenamesApplied,
-            this,
-            &MainWindow::applyClassRenames);
-
-    connect(_projPropsDialog, &ProjectSettings::classColorsApplied, this,
-    [this](const QMap<QString, QColor>& colors)
+    connect(_projPropsDialog, &ProjectSettings::classColorsApplied,
+            this, [this](const QMap<QString, QColor>& colors)
     {
         _projectClassColors = colors;
 
         QMap<QString, Document::Ptr>::const_iterator it = _documentsMap.constBegin();
-
         while (it != _documentsMap.constEnd())
         {
             Document::Ptr doc = it.value();
-
             if (doc && doc->scene)
             {
                 const QList<QGraphicsItem*> items = doc->scene->items();
-
                 for (QGraphicsItem* item : items)
                 {
                     if (!item)
                         continue;
 
                     const QString cls = item->data(0).toString();
-
                     if (!cls.isEmpty())
                         applyClassColorToItem(item, cls);
                 }
-
                 doc->scene->update();
             }
-
             ++it;
         }
     });
@@ -736,16 +727,16 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     }
 
     // Зум прямоугольной области Ctrl + ЛКМ
-    if (graphView &&
-        mouseEvent->button() == Qt::LeftButton &&
-        (mouseEvent->modifiers() & Qt::ControlModifier) &&
-        !(mouseEvent->modifiers() & Qt::ShiftModifier) &&
-        !_drawingPolyline &&
-        !_drawingLine &&
-        !_drawingRectangle &&
-        !_drawingCircle &&
-        !_drawingPoint &&
-        !_drawingRuler)
+    if (graphView
+        && (mouseEvent->button() == Qt::LeftButton)
+        && (mouseEvent->modifiers() & Qt::ControlModifier)
+        && !(mouseEvent->modifiers() & Qt::ShiftModifier)
+        && !_drawingPolyline
+        && !_drawingLine
+        && !_drawingRectangle
+        && !_drawingCircle
+        && !_drawingPoint
+        && !_drawingRuler)
     {
         _zoomRectActive = true;
         updateModeLabel();
@@ -1653,17 +1644,16 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         _isDraggingImage = false;
         _draggingItem    = nullptr;
 
-        const bool hasOpenLine = _line && !_line->isClosed();
+        const bool hasOpenLine = (_line && !_line->isClosed());
 
-        const bool hasOpenPolyline = _polyline && !_polyline->isClosed();
+        const bool hasOpenPolyline = (_polyline && !_polyline->isClosed());
 
         const bool keepLineLikeDrawing = _drawingPolyline
-                                        || _drawingLine
-                                        || _isDrawingPolyline
-                                        || _isDrawingLine
-                                        || hasOpenLine
-                                        || hasOpenPolyline;
-
+                                         || _drawingLine
+                                         || _isDrawingPolyline
+                                         || _isDrawingLine
+                                         || hasOpenLine
+                                         || hasOpenPolyline;
         if (_isInDrawingMode)
         {
             if (keepLineLikeDrawing)
@@ -4602,8 +4592,8 @@ void MainWindow::on_actDelete_triggered()
     }
 
     const QString description = (shapes.size() == 1)
-        ? QString::fromUtf8("Удаление фигуры")
-        : QString::fromUtf8("Удаление фигур");
+                                ? u8"Удаление фигуры"
+                                : u8"Удаление фигур";
 
     doc->_undoStack->push(new undo::Delete(doc, shapes, description));
 
@@ -4803,8 +4793,8 @@ void MainWindow::on_actSettingsApp_triggered()
         {
             if (!sc)
                 return;
-            Document::Ptr doc = currentDocument();
 
+            Document::Ptr doc = currentDocument();
             for (QGraphicsItem* item : sc->items())
             {
                 if (!item)
@@ -4839,13 +4829,16 @@ void MainWindow::on_actSettingsProj_triggered()
     _projPropsDialog->setProjectClasses(_projectClasses);
     _projPropsDialog->setProjectClassColors(_projectClassColors);
 
-    QVector<int> geom{ -1, -1, 520, 360 };
+    QVector<int> geom {-1, -1, 520, 360};
     config::base().getValue("windows.project_settings.geometry", geom);
-    if (geom.size() == 4) {
+    if (geom.size() == 4)
+    {
         if (geom[2] < 320) geom[2] = 320;
         if (geom[3] < 200) geom[3] = 200;
+
         if (geom[0] >= 0 && geom[1] >= 0)
             _projPropsDialog->move(geom[0], geom[1]);
+
         _projPropsDialog->resize(geom[2], geom[3]);
     }
 
@@ -4854,6 +4847,7 @@ void MainWindow::on_actSettingsProj_triggered()
     const QRect r = (_projPropsDialog->isMaximized() || _projPropsDialog->isFullScreen())
                     ? _projPropsDialog->normalGeometry()
                     : _projPropsDialog->geometry();
+
     QVector<int> out { r.x(), r.y(), r.width(), r.height() };
     config::base().setValue("windows.project_settings.geometry", out);
     config::base().saveFile();
@@ -5466,10 +5460,7 @@ void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
     if (item->scene())
         item->scene()->update();
 
-    stack->push(new undo::ChangeClass(doc.get(),
-                                      item,
-                                      data,
-                                      u8"Смена класса"));
+    stack->push(new undo::ChangeClass(doc.get(), item, data, u8"Смена класса"));
 
     if (!doc->isModified)
     {
@@ -5844,9 +5835,7 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene,
                                         const QPointF& offset)
 {
     if (!scene)
-    {
         return;
-    }
 
     QJsonArray shapesArray = json["shapes"].toArray();
     for (const QJsonValue& shapeValue : shapesArray)
@@ -5973,10 +5962,12 @@ void MainWindow::deserializeJsonToScene(QGraphicsScene* scene,
             apply_NumberSize_ToItem(p);
             apply_PointStyle_ToItem(p);
         }
-        else
-        {
-            continue;
-        }
+
+        // TODO какой смысл в этой конструкции ?
+        // else
+        // {
+        //     continue;
+        // }
     }
 }
 
@@ -6134,12 +6125,12 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     const QString sourcePath = normalizedImagePath(json["sourceImagePath"].toString());
     const QString currentPath = normalizedImagePath(doc->filePath);
 
-    #ifdef Q_OS_WIN
+#ifdef Q_OS_WIN
     const bool sameImage = !sourcePath.isEmpty() &&
                            QString::compare(sourcePath, currentPath, Qt::CaseInsensitive) == 0;
-    #else
+#else
     const bool sameImage = !sourcePath.isEmpty() && sourcePath == currentPath;
-    #endif
+#endif
 
     QPointF pasteOffset;
 
@@ -6169,10 +6160,10 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
         if (!item)
             continue;
 
-        if (item == videoRect ||
-            item == _tempRectItem ||
-            item == _tempCircleItem ||
-            item == _tempPolyline)
+        if (item == videoRect
+            || item == _tempRectItem
+            || item == _tempCircleItem
+            || item == _tempPolyline)
         {
             continue;
         }
@@ -6183,11 +6174,11 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
         if (beforeItems.contains(item))
             continue;
 
-        if (dynamic_cast<qgraph::Rectangle*>(item) ||
-            dynamic_cast<qgraph::Circle*>(item) ||
-            dynamic_cast<qgraph::Polyline*>(item) ||
-            dynamic_cast<qgraph::Line*>(item) ||
-            dynamic_cast<qgraph::Point*>(item))
+        if (dynamic_cast<qgraph::Rectangle*>(item)
+            || dynamic_cast<qgraph::Circle*>(item)
+            || dynamic_cast<qgraph::Polyline*>(item)
+            || dynamic_cast<qgraph::Line*>(item)
+            || dynamic_cast<qgraph::Point*>(item))
         {
             newItems.append(item);
         }
@@ -6224,10 +6215,10 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
         if (!item)
             continue;
 
-        if (item == videoRect ||
-            item == _tempRectItem ||
-            item == _tempCircleItem ||
-            item == _tempPolyline)
+        if (item == videoRect
+            || item == _tempRectItem
+            || item == _tempCircleItem
+            || item == _tempPolyline)
         {
             continue;
         }
@@ -6273,8 +6264,8 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     renumberPolygonListTextOnly();
 
-    {
-        QSignalBlocker blocker(ui->polygonList);
+    { //Block for QSignalBlocker
+        QSignalBlocker blocker {ui->polygonList}; (void) blocker;
         ui->polygonList->clearSelection();
 
         QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
@@ -6283,10 +6274,9 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
         {
             for (const QModelIndex& index : pastedIndexes)
             {
-                selectionModel->select(index,
-                                       QItemSelectionModel::Select | QItemSelectionModel::Rows);
+                selectionModel->select(index, QItemSelectionModel::Select
+                                              |QItemSelectionModel::Rows);
             }
-
             if (!pastedIndexes.isEmpty())
                 ui->polygonList->setCurrentIndex(pastedIndexes.last());
         }
@@ -6296,12 +6286,10 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     QString descr = (newItems.count() == 1) ? u8"Вставка примитива"
                                             : u8"Вставка примитивов";
+
     if (QUndoStack* stack = activeUndoStack())
-    {
-        stack->push(new undo::Paste(doc.get(),
-                                    newItems,
-                                    descr));
-    }
+        stack->push(new undo::Paste(doc.get(), newItems, descr));
+
     doc->isModified = true;
     updateFileListDisplay(doc->filePath);
 }
@@ -6309,16 +6297,12 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 qgraph::VideoRect* MainWindow::findVideoRect(QGraphicsScene* scene)
 {
     if (!scene)
-    {
         return nullptr;
-    }
 
-    foreach(QGraphicsItem* item, scene->items())
+    for (QGraphicsItem* item : scene->items())
     {
         if (qgraph::VideoRect* videoRect = dynamic_cast<qgraph::VideoRect*>(item))
-        {
             return videoRect;
-        }
     }
     return nullptr;
 }
@@ -8065,10 +8049,10 @@ bool MainWindow::isRootShapeItem(QGraphicsItem* item) const
     Document::Ptr doc = currentDocument();
     qgraph::VideoRect* videoRect = doc ? doc->videoRect : nullptr;
 
-    if (item == videoRect ||
-        item == _tempRectItem ||
-        item == _tempCircleItem ||
-        item == _tempPolyline)
+    if (item == videoRect
+        || item == _tempRectItem
+        || item == _tempCircleItem
+        || item == _tempPolyline)
     {
         return false;
     }
@@ -8076,11 +8060,11 @@ bool MainWindow::isRootShapeItem(QGraphicsItem* item) const
     if (item->parentItem() != nullptr)
         return false;
 
-    return dynamic_cast<qgraph::Rectangle*>(item) ||
-           dynamic_cast<qgraph::Circle*>(item) ||
-           dynamic_cast<qgraph::Polyline*>(item) ||
-           dynamic_cast<qgraph::Line*>(item) ||
-           dynamic_cast<qgraph::Point*>(item);
+    return dynamic_cast<qgraph::Rectangle*>(item)
+           || dynamic_cast<qgraph::Circle*>(item)
+           || dynamic_cast<qgraph::Polyline*>(item)
+           || dynamic_cast<qgraph::Line*>(item)
+           || dynamic_cast<qgraph::Point*>(item);
 }
 
 qreal MainWindow::originalZValueForItem(QGraphicsItem* item) const
@@ -9215,7 +9199,8 @@ void MainWindow::saveVisualStyle() const
 
 void MainWindow::applyStyle_AllDocuments()
 {
-    for (QMap<QString, Document::Ptr>::iterator it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
+    //for (QMap<QString, Document::Ptr>::iterator it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
+    for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
     {
         Document::Ptr doc = it.value();
         if (!doc || !doc->scene)
@@ -9242,7 +9227,8 @@ void MainWindow::applyStyle_AllDocuments()
 
 void MainWindow::forEachScene(std::function<void(QGraphicsScene*)> sceneHandler)
 {
-    for (QMap<QString, Document::Ptr>::iterator it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
+    //for (QMap<QString, Document::Ptr>::iterator it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
+    for (auto it = _documentsMap.begin(); it != _documentsMap.end(); ++it)
     {
         Document::Ptr doc = it.value();
         if (!doc)
