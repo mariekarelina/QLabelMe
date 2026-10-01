@@ -46,7 +46,6 @@ Product {
         "pproto/transport/tcp.h",
       //"pproto/transport/udp.cpp",
       //"pproto/transport/udp.h",
-        "pproto/bserialize_space.h",
         "pproto/error_sender.h",
         "pproto/func_invoker.h",
         "pproto/host_point.cpp",
