@@ -32,6 +32,7 @@
 #include "message_box.h"
 #include "unsaved_changes.h"
 
+#include <algorithm>
 #include <QApplication>
 #include <QMessageBox>
 #include <QFileDialog>
@@ -5507,574 +5508,68 @@ void MainWindow::saveGeometry()
     saveVisualStyle();
 }
 
-void MainWindow::writeShapesJsonToClipboard(const QJsonObject& json) const
+QString MainWindow::readShapesYamlFromClipboard() const
 {
-    if (json.isEmpty())
-        return;
-
-    // JSON-данные - для внутренней вставки
-    QJsonDocument doc(json);
-    QByteArray raw = doc.toJson(QJsonDocument::Compact);
-
-    QJsonArray shapesArray = json["shapes"].toArray();
-
-    struct Circle { QString label; double x, y, radius; };
-    struct Polyline { QString label; QVector<QPointF> points; };
-    struct Rectangle{ QString label; double x1, y1, x2, y2; };
-    struct Point { QString label; double x, y; };
-    struct Line { QString label; QVector<QPointF> points; };
-
-    QVector<Circle> circles;
-    QVector<Polyline> polylines;
-    QVector<Rectangle> rectangles;
-    QVector<Point> points;
-    QVector<Line> lines;
-
-    for (const QJsonValue& v : shapesArray)
-    {
-        QJsonObject o = v.toObject();
-        QString type  = o["type"].toString();
-        QString label = o["class"].toString();
-        if (label.isEmpty())
-            label = "none";
-
-        if (type == "circle")
-        {
-            Circle circle;
-            circle.label  = label;
-            circle.x = o["x"].toDouble();
-            circle.y = o["y"].toDouble();
-            circle.radius = o["radius"].toDouble();
-            circles.append(circle);
-        }
-        else if (type == "rectangle")
-        {
-            Rectangle rect;
-            rect.label = label;
-            double x = o["x"].toDouble();
-            double y = o["y"].toDouble();
-            double w = o["width"].toDouble();
-            double h = o["height"].toDouble();
-            rect.x1 = x;
-            rect.y1 = y;
-            rect.x2 = x + w;
-            rect.y2 = y + h;
-            rectangles.append(rect);
-        }
-        else if (type == "polyline")
-        {
-            Polyline polyline;
-            polyline.label = label;
-            QJsonArray pts = o["points"].toArray();
-            for (const QJsonValue& pv : pts)
-            {
-                QJsonObject po = pv.toObject();
-                polyline.points.append(QPointF(po["x"].toDouble(),
-                                         po["y"].toDouble()));
-            }
-            polylines.append(polyline);
-        }
-        else if (type == "line")
-        {
-            Line line;
-            line.label = label;
-            QJsonArray pts = o["points"].toArray();
-            for (const QJsonValue& pv : pts)
-            {
-                QJsonObject po = pv.toObject();
-                line.points.append(QPointF(po["x"].toDouble(),
-                                         po["y"].toDouble()));
-            }
-            lines.append(line);
-        }
-        else if (type == "point")
-        {
-            Point point;
-            point.label = label;
-            point.x = o["x"].toDouble();
-            point.y = o["y"].toDouble();
-            points.append(point);
-        }
-    }
-
-    QString yaml;
-    {
-        QTextStream out(&yaml);
-        out << "shapes:\n";
-
-        if (!circles.isEmpty())
-        {
-            out << "  circles:\n";
-            for (const Circle& c : circles)
-            {
-                int cx = static_cast<int>(std::round(c.x));
-                int cy = static_cast<int>(std::round(c.y));
-                int r  = static_cast<int>(std::round(c.radius));
-
-                out << "    - label: " << c.label << "\n";
-                out << "      center: {x: " << cx << ", y: " << cy << "}\n";
-                out << "      radius: " << r << "\n";
-            }
-        }
-
-        if (!polylines.isEmpty())
-        {
-            out << "  polylines:\n";
-            for (const Polyline& polyline : polylines)
-            {
-                out << "    - label: " << polyline.label << "\n";
-                out << "      points: [";
-                for (int i = 0; i < polyline.points.size(); ++i)
-                {
-                    const QPointF& point = polyline.points[i];
-                    int px = static_cast<int>(std::round(point.x()));
-                    int py = static_cast<int>(std::round(point.y()));
-                    if (i > 0)
-                        out << ", ";
-                    out << "{x: " << px << ", y: " << py << "}";
-                }
-                out << "]\n";
-            }
-        }
-
-        if (!rectangles.isEmpty())
-        {
-            out << "  rectangles:\n";
-            for (const Rectangle& r : rectangles)
-            {
-                int x1 = static_cast<int>(std::round(r.x1));
-                int y1 = static_cast<int>(std::round(r.y1));
-                int x2 = static_cast<int>(std::round(r.x2));
-                int y2 = static_cast<int>(std::round(r.y2));
-
-                out << "    - label: " << r.label << "\n";
-                out << "      point1: {x: " << x1 << ", y: " << y1 << "}\n";
-                out << "      point2: {x: " << x2 << ", y: " << y2 << "}\n";
-            }
-        }
-
-        if (!points.isEmpty())
-        {
-            out << "  points:\n";
-            for (const Point& p : points)
-            {
-                int px = static_cast<int>(std::round(p.x));
-                int py = static_cast<int>(std::round(p.y));
-
-                out << "    - label: " << p.label << "\n";
-                out << "      point: {x: " << px << ", y: " << py << "}\n";
-            }
-        }
-
-        if (!lines.isEmpty())
-        {
-            out << "  lines:\n";
-            for (const Line& ln : lines)
-            {
-                out << "    - label: " << ln.label << "\n";
-                out << "      points: [";
-                for (int i = 0; i < ln.points.size(); ++i)
-                {
-                    const QPointF& p = ln.points[i];
-                    int px = static_cast<int>(std::round(p.x()));
-                    int py = static_cast<int>(std::round(p.y()));
-                    if (i > 0)
-                        out << ", ";
-                    out << "{x: " << px << ", y: " << py << "}";
-                }
-                out << "]\n";
-            }
-        }
-    }
-
-    // Пишем и JSON и YAML в буфер обмена
-    QMimeData* mime = new QMimeData;
-    mime->setData(kShapesMimeType, raw);
-    mime->setText(yaml);
-
-    QClipboard* cb = QGuiApplication::clipboard();
-    cb->setMimeData(mime);
-}
-
-QJsonObject MainWindow::readShapesJsonFromClipboard() const
-{
-    QClipboard* cb = QGuiApplication::clipboard();
-    const QMimeData* mime = cb->mimeData();
+    const QMimeData* mime = QGuiApplication::clipboard()->mimeData();
     if (!mime)
         return {};
 
-    QByteArray raw;
-
-    // Сначала пробуем наш MIME-тип
     if (mime->hasFormat(kShapesMimeType))
-    {
-        raw = mime->data(kShapesMimeType);
-    }
-    else if (mime->hasText())
-    {
-        // fallback: вдруг пользователь сам сохранил JSON в виде текста
-        raw = mime->text().toUtf8();
-    }
-    else
-    {
-        return {};
-    }
+        return QString::fromUtf8(mime->data(kShapesMimeType));
 
-    QJsonParseError err{};
-    QJsonDocument doc = QJsonDocument::fromJson(raw, &err);
-    if (err.error != QJsonParseError::NoError || !doc.isObject())
+    if (mime->hasText())
+        return mime->text();
+
+    return {};
+}
+
+QString MainWindow::serializeSelectedItemsToYaml(Document::Ptr doc)
+{
+    if (!doc || !doc->scene)
         return {};
 
-    return doc.object();
-}
-
-QJsonObject MainWindow::serializeSceneToJson(QGraphicsScene* scene)
-{
-    QJsonObject root;
-    QJsonArray shapesArray;
-
-    Document::Ptr doc = currentDocument();
-
-    if (!scene)
-    {
-        root["shapes"] = shapesArray;
-        return root;
-    }
-
-    for (QGraphicsItem* item : scene->items())
-    {
-        // Пропускаем само изображение и временные элементы
-        if (item == doc->videoRect
-            || item == _tempRectItem
-            || item == _tempCircleItem
-            || item == _tempPolyline)
-        {
-            continue;
-        }
-
-        QJsonObject shapeObj;
-        QString className = item->data(0).toString();
-        shapeObj["class"] = className;
-        // Пропускаем элементы без класса
-        if (className.isEmpty() || className == "--")
-        {
-            continue;
-        }
-
-        if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
-        {
-            shapeObj["type"] = "rectangle";
-            // QRectF r = rect->rect();
-            QRectF r = rect->sceneBoundingRect();
-            shapeObj["x"] = r.x();
-            shapeObj["y"] = r.y();
-            shapeObj["width"] = r.width();
-            shapeObj["height"] = r.height();
-        }
-        else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
-        {
-            shapeObj["type"] = "circle";
-            //QPointF center = circle->realCenter();
-            QPointF center = circle->center();
-            shapeObj["x"] = center.x();
-            shapeObj["y"] = center.y();
-            shapeObj["radius"] = circle->realRadius();
-        }
-        else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
-        {
-            shapeObj["type"] = "polyline";
-            shapeObj["closed"] = polyline->isClosed();
-            QJsonArray pointsArray;
-
-            // Получаем точки полилинии через метод points()
-            for (const QPointF& point : polyline->points())
-            {
-                QJsonObject pointObj;
-                pointObj["x"] = point.x();
-                pointObj["y"] = point.y();
-                pointsArray.append(pointObj);
-            }
-            shapeObj["points"] = pointsArray;
-        }
-        else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
-        {
-            shapeObj["type"] = "line";
-            QJsonArray pointsArray;
-
-            for (const QPointF& point : line->points())
-            {
-                QJsonObject pointObj;
-                pointObj["x"] = point.x();
-                pointObj["y"] = point.y();
-                pointsArray.append(pointObj);
-            }
-
-            shapeObj["points"] = pointsArray;
-        }
-        else if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
-        {
-            shapeObj["type"] = "point";
-            QPointF center = point->center();
-            shapeObj["x"] = center.x();
-            shapeObj["y"] = center.y();
-        }
-        else
-        {
-            continue;
-        }
-
-        shapesArray.append(shapeObj);
-    }
-
-    root["shapes"] = shapesArray;
-    return root;
-}
-
-void MainWindow::deserializeJsonToScene(QGraphicsScene* scene,
-                                        const QJsonObject& json,
-                                        const QPointF& offset)
-{
-    if (!scene)
-        return;
-
-    QJsonArray shapesArray = json["shapes"].toArray();
-    for (const QJsonValue& shapeValue : shapesArray)
-    {
-        QJsonObject shapeObj = shapeValue.toObject();
-        QString className = shapeObj["class"].toString();
-        QString type = shapeObj["type"].toString();
-
-        if (type == "rectangle")
-        {
-            qreal x = shapeObj["x"].toDouble();
-            qreal y = shapeObj["y"].toDouble();
-            qreal width = shapeObj["width"].toDouble();
-            qreal height = shapeObj["height"].toDouble();
-
-            QPointF topLeft(x, y);
-            topLeft += offset;
-
-            qgraph::Rectangle* rect = new qgraph::Rectangle(scene);
-
-            ensureUid(rect);
-            rect->setRealSceneRect(QRectF(topLeft, QSizeF(width, height)));
-            rect->setData(0, className);
-            apply_LineWidth_ToItem(rect);
-            apply_PointSize_ToItem(rect);
-            apply_NumberSize_ToItem(rect);
-        }
-        else if (type == "circle")
-        {
-            qreal x = shapeObj["x"].toDouble();
-            qreal y = shapeObj["y"].toDouble();
-            qreal radius = shapeObj["radius"].toDouble();
-
-            QPointF center(x, y);
-            center += offset;
-
-            qgraph::Circle* circle = new qgraph::Circle(scene, center);
-
-            ensureUid(circle);
-            circle->setRealRadius(radius);
-            circle->setData(0, className);
-            apply_LineWidth_ToItem(circle);
-            apply_PointSize_ToItem(circle);
-            apply_NumberSize_ToItem(circle);
-        }
-        else if (type == "polyline")
-        {
-            QJsonArray pointsArray = shapeObj["points"].toArray();
-            if (pointsArray.isEmpty())
-                continue;
-
-            const bool closed = shapeObj["closed"].toBool(false);
-
-            QPointF firstPoint(pointsArray[0].toObject()["x"].toDouble(),
-                               pointsArray[0].toObject()["y"].toDouble());
-
-            firstPoint += offset;
-
-            qgraph::Polyline* polyline = new qgraph::Polyline(scene, firstPoint);
-            ensureUid(polyline);
-
-            polyline->beginBulkLoad();
-            for (int i = 1; i < pointsArray.size(); ++i)
-            {
-                QPointF point(pointsArray[i].toObject()["x"].toDouble(),
-                              pointsArray[i].toObject()["y"].toDouble());
-                point += offset;
-                polyline->addPoint(point, scene);
-            }
-            polyline->endBulkLoad();
-
-            if (closed)
-                polyline->closePolyline();
-
-            polyline->setData(0, className);
-            apply_LineWidth_ToItem(polyline);
-            apply_PointSize_ToItem(polyline);
-            apply_NumberSize_ToItem(polyline);
-        }
-        else if (type == "line")
-        {
-            QJsonArray pointsArray = shapeObj["points"].toArray();
-            if (pointsArray.size() < 2)
-                continue;
-
-            QPointF firstPoint(pointsArray[0].toObject()["x"].toDouble(),
-                               pointsArray[0].toObject()["y"].toDouble());
-            firstPoint += offset;
-
-            qgraph::Line* line = new qgraph::Line(scene, firstPoint);
-            ensureUid(line);
-
-            line->beginBulkLoad();
-            for (int i = 1; i < pointsArray.size(); ++i)
-            {
-                QJsonObject ptObj = pointsArray[i].toObject();
-                QPointF p(ptObj["x"].toDouble(), ptObj["y"].toDouble());
-                p += offset;
-                line->addPoint(p, scene);
-            }
-            line->endBulkLoad();
-
-            line->setData(0, className);
-
-            apply_LineWidth_ToItem(line);
-            apply_PointSize_ToItem(line);
-            apply_NumberSize_ToItem(line);
-        }
-        else if (type == "point")
-        {
-            qreal x = shapeObj["x"].toDouble();
-            qreal y = shapeObj["y"].toDouble();
-
-            QPointF center(x, y);
-            center += offset;
-
-            qgraph::Point* p = new qgraph::Point(scene);
-
-            ensureUid(p);
-            p->setCenter(center);
-            p->setData(0, className);
-
-            apply_PointSize_ToItem(p);
-            apply_NumberSize_ToItem(p);
-            apply_PointStyle_ToItem(p);
-        }
-
-        // TODO какой смысл в этой конструкции ?
-        // else
-        // {
-        //     continue;
-        // }
-    }
-}
-
-QJsonObject MainWindow::serializeSelectedItemsToJson(QGraphicsScene* scene)
-{
-    Document::Ptr doc = currentDocument();
-    qgraph::VideoRect* videoRect = doc->videoRect;
-
-    QJsonObject root;
-    QJsonArray shapesArray;
-
-    if (!scene)
-    {
-        root["shapes"] = shapesArray;
-        return root;
-    }
-
-    // Берем именно выделенные элементы
-    const QList<QGraphicsItem*> items = scene->selectedItems();
+    // Сохраняем порядок фигур из списка справа
+    const QList<QGraphicsItem*> items = orderedShapeItemsForSave(doc);
+    QList<QGraphicsItem*> selectedItems;
 
     for (QGraphicsItem* item : items)
     {
-        // Пропускаем само изображение и временные элементы
-        if (item == videoRect || item == _tempRectItem ||
-            item == _tempCircleItem || item == _tempPolyline)
-        {
-            continue;
-        }
-
-        QJsonObject shapeObj;
-        QString className = item->data(0).toString();
-
-        // Пропускаем элементы без класса
-        if (className.isEmpty() || className == "--")
-        {
-            continue;
-        }
-
-        shapeObj["class"] = className;
-
-        if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(item))
-        {
-            shapeObj["type"] = "rectangle";
-            //QRectF r = rect->rect();
-            QRectF r = rect->sceneBoundingRect();
-            shapeObj["x"] = r.x();
-            shapeObj["y"] = r.y();
-            shapeObj["width"] = r.width();
-            shapeObj["height"] = r.height();
-        }
-        else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
-        {
-            shapeObj["type"] = "circle";
-            //QPointF center = circle->realCenter();
-            QPointF center = circle->center();
-            shapeObj["x"] = center.x();
-            shapeObj["y"] = center.y();
-            shapeObj["radius"] = circle->realRadius();
-        }
-        else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
-        {
-            shapeObj["type"] = "polyline";
-            shapeObj["closed"] = polyline->isClosed();
-            QJsonArray pointsArray;
-
-            for (const QPointF& point : polyline->points())
-            {
-                QJsonObject pt;
-                pt["x"] = point.x();
-                pt["y"] = point.y();
-                pointsArray.append(pt);
-            }
-
-            shapeObj["points"] = pointsArray;
-        }
-        else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
-        {
-            shapeObj["type"] = "line";
-            QJsonArray pointsArray;
-
-            for (const QPointF& point : line->points())
-            {
-                QJsonObject pt;
-                pt["x"] = point.x();
-                pt["y"] = point.y();
-                pointsArray.append(pt);
-            }
-
-            shapeObj["points"] = pointsArray;
-        }
-        else if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
-        {
-            shapeObj["type"] = "point";
-            QPointF center = point->center();
-            shapeObj["x"] = center.x();
-            shapeObj["y"] = center.y();
-        }
-        else
-        {
-            continue;
-        }
-
-        shapesArray.append(shapeObj);
+        if (item && item->isSelected())
+            selectedItems.append(item);
     }
 
-    root["shapes"] = shapesArray;
-    return root;
+    if (selectedItems.isEmpty())
+        return {};
+
+    // Используем ту же функцию, что и при сохранении разметки в файл
+    YamlConfig yconfig;
+    saveShapesToYaml(yconfig, selectedItems);
+
+    // Путь понадобится для определения сдвига при вставке
+    yconfig.setValue(
+        "sourceImagePath",
+        QFileInfo(doc->filePath).absoluteFilePath()
+    );
+
+    std::string yaml;
+    if (!yconfig.saveString(yaml))
+        return {};
+
+    return QString::fromUtf8(yaml.data(), static_cast<int>(yaml.size()));
+}
+
+void MainWindow::writeShapesYamlToClipboard(const QString& yaml) const
+{
+    if (yaml.isEmpty())
+        return;
+
+    QMimeData* mime = new QMimeData;
+
+    // Один и тот же YAML доступен программе и как обычный текст
+    mime->setData(kShapesMimeType, yaml.toUtf8());
+    mime->setText(yaml);
+
+    QGuiApplication::clipboard()->setMimeData(mime);
 }
 
 void MainWindow::copySelectedShapes()
@@ -6083,32 +5578,43 @@ void MainWindow::copySelectedShapes()
     if (!doc || !doc->scene)
         return;
 
-    // Собираем JSON только по выделенным фигурам на текущей сцене
-    QJsonObject json = serializeSelectedItemsToJson(doc->scene);
+    const QString yaml = serializeSelectedItemsToYaml(doc);
+    if (yaml.isEmpty())
+        return;
 
-    // Запоминаем снимок, с которого были скопированы примитивы
-    json["sourceImagePath"] = QFileInfo(doc->filePath).absoluteFilePath();
-
-    // Локальный буфер
-    _shapesClipboard = json;
-
-    // Отправляем JSON в системный буфер обмена
-    writeShapesJsonToClipboard(json);
+    _shapesClipboard = yaml;
+    writeShapesYamlToClipboard(yaml);
 }
 
 void MainWindow::pasteCopiedShapesToCurrentScene()
 {
     Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene)
+        return;
+
     QGraphicsScene* scene = doc->scene;
     qgraph::VideoRect* videoRect = doc->videoRect;
 
-    if (!doc) return;
+    QString yaml = readShapesYamlFromClipboard();
+    if (yaml.isEmpty())
+        yaml = _shapesClipboard;
 
-    QJsonObject json = readShapesJsonFromClipboard();
-    if (json.isEmpty())
-        json = _shapesClipboard;
+    if (yaml.isEmpty())
+        return;
 
-    if (json.isEmpty())
+    YamlConfig yconfig;
+    const QByteArray raw = yaml.toUtf8();
+
+    if (!yconfig.readString(std::string(raw.constData(), raw.size())))
+        return;
+
+    // Проверяем, что это разметка в нашем текущем YAML-формате
+    YamlConfig::Func checkShapes = [](YamlConfig*, YAML::Node& shapes, bool)
+    {
+        return shapes.IsSequence() && shapes.size() > 0;
+    };
+
+    if (!yconfig.getValue("shapes", checkShapes, false))
         return;
 
     // Запоминаем, что было на сцене ДО вставки
@@ -6122,7 +5628,10 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
         return QDir::cleanPath(QFileInfo(path).absoluteFilePath());
     };
 
-    const QString sourcePath = normalizedImagePath(json["sourceImagePath"].toString());
+    QString sourceImagePath;
+    yconfig.getValue("sourceImagePath", sourceImagePath, false);
+
+    const QString sourcePath = normalizedImagePath(sourceImagePath);
     const QString currentPath = normalizedImagePath(doc->filePath);
 
 #ifdef Q_OS_WIN
@@ -6149,7 +5658,8 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
         pasteOffset = QPointF(offsetValue, offsetValue);
     }
 
-    deserializeJsonToScene(scene, json, pasteOffset);
+    if (!loadShapesFromYaml(doc, yconfig, pasteOffset))
+        return;
 
     // Собираем список новых фигур (тех, которых не было в beforeItems)
     QList<QGraphicsItem*> afterItems = scene->items();
@@ -6186,6 +5696,18 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     if (newItems.isEmpty())
         return;
+
+    // Восстанавливаем порядок, в котором фигуры записаны в YAML.
+    std::sort(newItems.begin(), newItems.end(),
+              [this](QGraphicsItem* first, QGraphicsItem* second)
+    {
+        return first->data(_roleListOrder).toInt()
+             < second->data(_roleListOrder).toInt();
+    });
+
+    // Копии получат собственные номера при добавлении в список.
+    for (QGraphicsItem* item : newItems)
+        item->setData(_roleShapeNumber, QVariant());
 
     // После вставки активными должны стать именно новые фигуры
     const QList<QGraphicsItem*> selectedBeforePaste = scene->selectedItems();
@@ -6257,7 +5779,6 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
         linkSceneItemToList(item, -1, false);
 
         const int row = polygonListRowByItem(item);
-        //if (doc && doc->polygonList.model && row >= 0)
         if (row >= 0)
             pastedIndexes.append(doc->polygonList.model.index(row, 0));
     }
@@ -6369,11 +5890,9 @@ double MainWindow::round2(double value)
     return std::round(value * 100.0) / 100.0;
 }
 
-void MainWindow::saveAnnotationToFile(Document::Ptr doc)
+void MainWindow::saveShapesToYaml(YamlConfig& yconfig,
+                                  const QList<QGraphicsItem*>& items)
 {
-    if (!doc || !doc->scene || !doc->videoRect)
-        return;
-
     void (*savePointNode)(YamlConfig*, YAML::Node&, const char*, const QPointF&) =
         [](YamlConfig* conf, YAML::Node& parent, const char* key, const QPointF& point)
     {
@@ -6411,8 +5930,6 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
 
     YamlConfig::Func saveShapes = [&](YamlConfig* conf, YAML::Node& yshapes, bool)
     {
-        const QList<QGraphicsItem*> items = orderedShapeItemsForSave(doc);
-
         for (QGraphicsItem* item : items)
         {
             if (!item)
@@ -6470,9 +5987,17 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
         return true;
     };
 
-    YamlConfig yconfig;
     yconfig.setRounding(2);
     yconfig.setValue("shapes", saveShapes);
+}
+
+void MainWindow::saveAnnotationToFile(Document::Ptr doc)
+{
+    if (!doc || !doc->scene || !doc->videoRect)
+        return;
+
+    YamlConfig yconfig;
+    saveShapesToYaml(yconfig, orderedShapeItemsForSave(doc));
 
     const QString yamlPath = annotationPathFor(doc->filePath);
     const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(yamlPath));
@@ -6491,111 +6016,21 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
         return;
     }
 
+    // Запоминаем сохраненное состояние истории изменений
     if (doc->_undoStack)
         doc->_undoStack->setClean();
 
-    // После успешного сохранения
+    // Снимаем признак изменений и обновляем строку изображения
     doc->isModified = false;
     updateFileListDisplay(doc->filePath);
 }
 
-void MainWindow::updateFileListDisplay(const QString& filePath)
-{
-    QIcon modifiedIcon(":/images/resources/not_ok.svg");     // Красная иконка - есть изменения
-    QIcon savedIcon(":/images/resources/ok.svg");            // Зеленая иконка - сохранено
-    QIcon noAnnotationIcon(":/images/resources/not_ok.svg"); // Красная иконка - нет аннотаций
-
-    for (int i = 0; i < ui->fileList->count(); ++i)
-    {
-        QListWidgetItem* item = ui->fileList->item(i);
-        QVariant data = item->data(Qt::UserRole);
-        if (data.canConvert<Document::Ptr>())
-        {
-            Document::Ptr itemDoc = data.value<Document::Ptr>();
-            if (itemDoc->filePath == filePath)
-            {
-                QString fileName = QFileInfo(filePath).fileName();
-
-                if (itemDoc->isModified)
-                {
-                    // Документ изменен, но не сохранен
-                    item->setText("* " + fileName);
-                    item->setIcon(modifiedIcon);
-                }
-                else if (hasAnnotationFile(filePath))
-                {
-                    // Документ сохранен, проверяем не пустой ли YAML
-                    QString yamlPath = getAnnotationFilePath(filePath);
-                    if (!isYamlFileEmpty(yamlPath))
-                    {
-                        item->setText(fileName);
-                        item->setIcon(savedIcon);
-                    }
-                    else
-                    {
-                        item->setText(fileName);
-                        item->setIcon(noAnnotationIcon);
-                    }
-                }
-                else
-                {
-                    // Нет файла аннотаций
-                    item->setText(fileName);
-                    item->setIcon(noAnnotationIcon);
-                }
-                break;
-            }
-        }
-    }
-}
-
-void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
+bool MainWindow::loadShapesFromYaml(Document::Ptr doc,
+                                    YamlConfig& yconfig,
+                                    const QPointF& imageOffset)
 {
     if (!doc || !doc->scene)
-    {
-        return;
-    }
-
-    // Временно блокируем обработку изменений
-    _loadingNow = true;
-    QSignalBlocker blocker(doc->scene); // временно глушим QGraphicsScene::changed
-    // Сдвиг изображения, если восстанавливаем разметку
-    const QPointF imageOffset = (doc->videoRect ? doc->videoRect->pos() : QPointF(0.0, 0.0));
-
-    const QString yamlPath = annotationPathFor(doc->filePath);
-    YamlConfig yconfig;
-
-    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(yamlPath));
-    if (!yconfig.readFile(std::string(encoded.constData(), encoded.size())))
-    {
-        log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
-        _loadingNow = false;
-        return;
-    }
-
-    // Очищаем сцену только если нет несохраненных изменений
-    if (!doc->isModified)
-    {
-        const QList<QGraphicsItem*> items = doc->scene->items();
-        for (QGraphicsItem* item : items)
-        {
-            if (!item)
-                continue;
-
-            if (item == doc->videoRect || item == doc->pixmapItem)
-                continue;
-
-            if (item == _ghostHandle)
-                continue;
-
-            // Не удаляем дочерние элементы
-            if (item->parentItem() != nullptr)
-                continue;
-
-            doc->scene->removeItem(item);
-            delete item; // Удалит и всех детей автоматически
-        }
-    }
+        return false;
 
     int fallbackOrder = 0;
 
@@ -7011,8 +6446,109 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
         return true;
     };
 
-    // Загружаем данные из YAML
-    if (!yconfig.getValue("shapes", loadFunc, false))
+    return yconfig.getValue("shapes", loadFunc, false);
+}
+
+void MainWindow::updateFileListDisplay(const QString& filePath)
+{
+    QIcon modifiedIcon(":/images/resources/not_ok.svg");     // Красная иконка - есть изменения
+    QIcon savedIcon(":/images/resources/ok.svg");            // Зеленая иконка - сохранено
+    QIcon noAnnotationIcon(":/images/resources/not_ok.svg"); // Красная иконка - нет аннотаций
+
+    for (int i = 0; i < ui->fileList->count(); ++i)
+    {
+        QListWidgetItem* item = ui->fileList->item(i);
+        QVariant data = item->data(Qt::UserRole);
+        if (data.canConvert<Document::Ptr>())
+        {
+            Document::Ptr itemDoc = data.value<Document::Ptr>();
+            if (itemDoc->filePath == filePath)
+            {
+                QString fileName = QFileInfo(filePath).fileName();
+
+                if (itemDoc->isModified)
+                {
+                    // Документ изменен, но не сохранен
+                    item->setText("* " + fileName);
+                    item->setIcon(modifiedIcon);
+                }
+                else if (hasAnnotationFile(filePath))
+                {
+                    // Документ сохранен, проверяем не пустой ли YAML
+                    QString yamlPath = getAnnotationFilePath(filePath);
+                    if (!isYamlFileEmpty(yamlPath))
+                    {
+                        item->setText(fileName);
+                        item->setIcon(savedIcon);
+                    }
+                    else
+                    {
+                        item->setText(fileName);
+                        item->setIcon(noAnnotationIcon);
+                    }
+                }
+                else
+                {
+                    // Нет файла аннотаций
+                    item->setText(fileName);
+                    item->setIcon(noAnnotationIcon);
+                }
+                break;
+            }
+        }
+    }
+}
+
+void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
+{
+    if (!doc || !doc->scene)
+    {
+        return;
+    }
+
+    // Временно блокируем обработку изменений
+    _loadingNow = true;
+    QSignalBlocker blocker(doc->scene); // временно глушим QGraphicsScene::changed
+    // Сдвиг изображения, если восстанавливаем разметку
+    const QPointF imageOffset = (doc->videoRect ? doc->videoRect->pos() : QPointF(0.0, 0.0));
+
+    const QString yamlPath = annotationPathFor(doc->filePath);
+    YamlConfig yconfig;
+
+    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(yamlPath));
+    if (!yconfig.readFile(std::string(encoded.constData(), encoded.size())))
+    {
+        log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
+        _loadingNow = false;
+        return;
+    }
+
+    // Очищаем сцену только если нет несохраненных изменений
+    if (!doc->isModified)
+    {
+        const QList<QGraphicsItem*> items = doc->scene->items();
+        for (QGraphicsItem* item : items)
+        {
+            if (!item)
+                continue;
+
+            if (item == doc->videoRect || item == doc->pixmapItem)
+                continue;
+
+            if (item == _ghostHandle)
+                continue;
+
+            // Не удаляем дочерние элементы
+            if (item->parentItem() != nullptr)
+                continue;
+
+            doc->scene->removeItem(item);
+            delete item; // Удалит и всех детей автоматически
+        }
+    }
+
+    // Создаём фигуры из прочитанного YAML
+    if (!loadShapesFromYaml(doc, yconfig, imageOffset))
     {
         log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
         _loadingNow = false;

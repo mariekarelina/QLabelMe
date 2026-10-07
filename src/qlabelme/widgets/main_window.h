@@ -3,6 +3,7 @@
 #include "shared/defmac.h"
 #include "shared/container_ptr.h"
 #include "shared/qt/quuidex.h"
+#include "shared/config/yaml_config.h"
 
 //#include "pproto/func_invoker.h"
 //#include "pproto/transport/tcp.h"
@@ -52,9 +53,6 @@
 #include <QUndoGroup>
 #include <QUndoView>
 // #include <QDockWidget>
-
-// #include <QJsonObject>
-// #include <QJsonArray>
 
 #include <QGraphicsView>
 #include <QGraphicsScene>
@@ -195,16 +193,10 @@ private:
     void saveGeometry();
 
     // Системный буфер обмена
-    void writeShapesJsonToClipboard(const QJsonObject& json) const;
-    QJsonObject readShapesJsonFromClipboard() const;
+    QString readShapesYamlFromClipboard() const;
+    QString serializeSelectedItemsToYaml(Document::Ptr doc);
+    void writeShapesYamlToClipboard(const QString& yaml) const;
 
-    QJsonObject serializeSceneToJson(QGraphicsScene* scene);
-    void deserializeJsonToScene(QGraphicsScene* scene,
-                                const QJsonObject& json,
-                                const QPointF& offset = QPointF());
-
-    // Только выделенных элементов
-    QJsonObject serializeSelectedItemsToJson(QGraphicsScene* scene);
     // Логика копирования/вставки между сценами
     void copySelectedShapes();
     void pasteCopiedShapesToCurrentScene();
@@ -216,9 +208,19 @@ private:
 
     static QString annotationPathFor(const QString& imagePath);
     static double round2(double value);
+
+    // Формирует YAML-разметку из переданного списка фигур
+    void saveShapesToYaml(YamlConfig& yconfig,
+                          const QList<QGraphicsItem*>& items);
+    // Добавляет фигуры из YAML на сцену с указанным сдвигом координат
+    bool loadShapesFromYaml(Document::Ptr doc,
+                            YamlConfig& yconfig,
+                            const QPointF& imageOffset);
+
     void saveAnnotationToFile(Document::Ptr doc);
     void updateFileListDisplay(const QString& filePath);
     void loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi = true);
+
     void saveCurrentViewState(Document::Ptr doc);
     void restoreViewState(Document::Ptr doc);
 
@@ -508,7 +510,7 @@ private:
     // Текущее изображение
     QString _currentImagePath;
     // Буфер для копирования фигур между сценами
-    QJsonObject _shapesClipboard;
+    QString _shapesClipboard;
 
     QMap<QString /*class name*/, QColor> _projectClassColors;
 
