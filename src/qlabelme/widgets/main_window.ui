@@ -251,8 +251,8 @@
     <property name="title">
      <string>Справка</string>
     </property>
-    <addaction name="actAbout"/>
     <addaction name="actUserGuide"/>
+    <addaction name="actAbout"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>

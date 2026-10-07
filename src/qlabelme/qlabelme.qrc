@@ -37,5 +37,7 @@
     </qresource>
     <qresource prefix="/">
         <file>widgets/user_guide.md</file>
+        <file>../../LICENSE</file>
     </qresource>
+    <qresource prefix="/licenses"/>
 </RCC>

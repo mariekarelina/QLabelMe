@@ -1,5 +1,6 @@
 #include "about_program.h"
 #include "ui_about_program.h"
+#include "license.h"
 
 #include "shared/config/appl_conf.h"
 
@@ -16,6 +17,9 @@ AboutProgram::AboutProgram(QWidget* parent)
 {
     ui->setupUi(this);
 
+    // При открытии окна всегда показываем первую вкладку
+    ui->tabWidget->setCurrentIndex(0);
+
     setWindowTitle(u8"О программе QLabelMe");
     setWindowIcon(QIcon(":/images/resources/qlabelme.png"));
     setAttribute(Qt::WA_DeleteOnClose);
@@ -27,10 +31,25 @@ AboutProgram::AboutProgram(QWidget* parent)
     ui->versionLabel->setText(
         QString(u8"Версия: %1<br>"
                 u8"Git revision: %2<br>"
-                u8"Qt: %3")
+                u8"Qt: %3<br>"
+                u8"Лицензия: <a href=\"license\">GNU GPL v3</a>")
             .arg(VERSION_PROJECT)
             .arg(GIT_REVISION)
             .arg(QT_VERSION_STR));
+
+    // Обрабатываем ссылку внутри приложения
+    ui->versionLabel->setOpenExternalLinks(false);
+    ui->versionLabel->setTextInteractionFlags(Qt::LinksAccessibleByMouse);
+
+    connect(ui->versionLabel, &QLabel::linkActivated,
+            this, [this](const QString& link)
+    {
+        if (link != "license")
+            return;
+
+        License dialog(this);
+        dialog.exec();
+    });
 
     ui->descriptionBrowser->setOpenExternalLinks(true);
     ui->descriptionBrowser->setHtml(
@@ -43,14 +62,6 @@ AboutProgram::AboutProgram(QWidget* parent)
         u8"<p><b>Обратная связь:</b><br>"
         u8"<a href=\"https://github.com/mariekarelina/QLabelMe/issues\">"
         u8"https://github.com/mariekarelina/QLabelMe/issues</a></p>");
-
-    ui->componentsBrowser->setHtml(
-        QString(u8"<ul>"
-                u8"<li>Qt %1 - кроссплатформенный фреймворк для разработки интерфейса</li>"
-                u8"<li>C++ - основной язык реализации</li>"
-                u8"<li>YAML - формат хранения файлов разметки</li>"
-                u8"</ul>")
-            .arg(QT_VERSION_STR));
 
     ui->authorsBrowser->setHtml(
         u8"<ul>"
