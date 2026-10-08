@@ -5225,8 +5225,8 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
     QStringList files = directory.entryList(filters, QDir::Files);
 
     // Загружаем иконки из ресурсов
-    QIcon modifiedIcon(":/images/resources/ok.svg");
-    QIcon defaultIcon(":/images/resources/not_ok.svg");
+    QIcon savedIcon(":/images/resources/ok.svg");
+    QIcon noAnnotationIcon(":/images/resources/no_annotation.svg");
 
     // Добавляем файлы
     for (const QString& filename : files)
@@ -5246,12 +5246,11 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
 
         if (hasValidAnnotation)
         {
-            item->setIcon(modifiedIcon);
+            item->setIcon(savedIcon);
         }
         else
         {
-            item->setIcon(defaultIcon);
-            //item->setText("* " + filename);
+            item->setIcon(noAnnotationIcon);
         }
         // Создаем документ и сохраняем его в данных элемента
         Document::Ptr doc = Document::create(filePath);
@@ -6453,7 +6452,7 @@ void MainWindow::updateFileListDisplay(const QString& filePath)
 {
     QIcon modifiedIcon(":/images/resources/not_ok.svg");     // Красная иконка - есть изменения
     QIcon savedIcon(":/images/resources/ok.svg");            // Зеленая иконка - сохранено
-    QIcon noAnnotationIcon(":/images/resources/not_ok.svg"); // Красная иконка - нет аннотаций
+    QIcon noAnnotationIcon(":/images/resources/no_annotation.svg"); // Красная иконка - нет аннотаций
 
     for (int i = 0; i < ui->fileList->count(); ++i)
     {
@@ -7262,7 +7261,9 @@ void MainWindow::updateFileListItemIcon(QListWidgetItem* item, bool hasAnnotatio
     painter.drawPixmap(10, 10, preview);
 
     // Добавляем иконку статуса
-    QPixmap statusIcon(hasAnnotations ? "/images/resources/ok.svg" : "/images/resources/not_ok.svg");
+    QPixmap statusIcon(hasAnnotations
+        ? ":/images/resources/ok.svg"
+        : ":/images/resources/no_annotation.svg");
     statusIcon = statusIcon.scaled(20, 20, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     painter.drawPixmap(0, 0, statusIcon);
 
