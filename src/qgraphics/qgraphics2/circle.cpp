@@ -1,15 +1,15 @@
-#include "circle.h"
 #include "drag_circle.h"
+#include "circle.h"
 
-#include <QtGui>
-#include <QGraphicsRectItem>
-#include <cmath>
-#include <QApplication>
 #include <QPainterPathStroker>
+#include <QGraphicsRectItem>
 #include <QGraphicsView>
-#include <QCursor>
+#include <QApplication>
 #include <QMetaObject>
 #include <QVariant>
+#include <QCursor>
+#include <QtGui>
+#include <cmath>
 
 namespace qgraph {
 
@@ -25,7 +25,6 @@ Circle::Circle(QGraphicsScene* scene, const QPointF& scenePos)
 
     _radius = 20;
     setRect(-_radius, -_radius, _radius * 2, _radius * 2);
-    //setPos(_radius + 10, _radius + 10);
     setPos(scenePos.x(), scenePos.y());
 
     QPen pen = this->pen();
@@ -301,14 +300,6 @@ QVariant Circle::itemChange(GraphicsItemChange change, const QVariant& value)
         updateSelectionRect();
     }
     return QGraphicsItem::itemChange(change, value);
-}
-
-void Circle::updateHandleZValue()
-{
-    if (_circle)
-    {
-        _circle->setZValue(this->zValue() + 1);
-    }
 }
 
 void Circle::updateCrossLines()
@@ -830,31 +821,6 @@ bool Circle::isCursorNearCircle(const QPointF& cursorPos) const
 
     // Проверяем, находится ли курсор в зоне вокруг окружности
     return std::abs(distanceToCenter - sceneRadius) <= margin;
-}
-
-QVariant Circle::saveState() const
-{
-    QVariantMap m;
-    m["type"]    = "circle";
-    m["center"]  = realCenter();
-    m["radius"]  = realRadius();
-    m["z"]       = int(zValue());
-    m["visible"] = isVisible();
-    return m;
-}
-
-void Circle::loadState(const QVariant& v)
-{
-    const QVariantMap m = v.toMap();
-    if (m.contains("center"))  setRealCenter(m["center"].toPointF());
-    if (m.contains("radius"))  setRealRadius(m["radius"].toReal());
-    if (m.contains("z"))       setZValue(m["z"].toInt());
-    if (m.contains("visible")) setVisible(m["visible"].toBool());
-
-    updateHandlePosition();
-    updateCrossLines();
-    raiseHandleToTop();
-    update();
 }
 
 } // namespace qgraph

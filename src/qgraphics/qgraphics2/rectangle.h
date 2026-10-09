@@ -67,13 +67,8 @@ protected:
 
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
     void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
-    void updateHandleVisibility();
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
                QWidget* widget = nullptr) override;
-
-private slots:
-    void handleHandleHoverEnter();
-    void handleHandleHoverLeave();
 
 private:
     DragCircle* _circleTL; // Левый верхний угол

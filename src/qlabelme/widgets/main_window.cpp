@@ -1,42 +1,36 @@
 #include "main_window.h"
 #include "ui_main_window.h"
+
+#include "unsaved_changes.h"
 #include "load_geometry.h"
+#include "about_program.h"
+#include "select_class.h"
+#include "message_box.h"
 #include "undo_stack.h"
+#include "user_guide.h"
+#include "settings.h"
 
-#include "shared/defmac.h"
-#include "shared/break_point.h"
-#include "shared/steady_timer.h"
-#include "shared/logger/logger.h"
-#include "shared/logger/format.h"
-#include "shared/config/appl_conf.h"
 #include "shared/qt/logger_operators.h"
+#include "shared/config/appl_conf.h"
+#include "shared/logger/format.h"
+#include "shared/logger/logger.h"
+#include "shared/steady_timer.h"
+#include "shared/break_point.h"
+#include "shared/defmac.h"
 
-// #include "pproto/commands/base.h"
-// #include "pproto/commands/pool.h"
-// #include "pproto/logger_operators.h"
-
-#include "qgraphics2/circle.h"
 #include "qgraphics2/rectangle.h"
 #include "qgraphics2/polyline.h"
+#include "qgraphics2/circle.h"
 #include "qgraphics2/square.h"
 #include "qgraphics2/point.h"
 #include "qgraphics2/line.h"
 
-//#include "qgraphics/functions.h"
-//#include "qutils/message_box.h"
-
-#include "select_class.h"
-#include "settings.h"
-#include "user_guide.h"
-#include "about_program.h"
-#include "message_box.h"
-#include "unsaved_changes.h"
-
-#include <algorithm>
 #include <QApplication>
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QScrollBar>
+
+#include <algorithm>
 
 using namespace std;
 using namespace qgraph;
@@ -52,36 +46,11 @@ QUuidEx MainWindow::_applId;
 
 namespace
 {
-    // Строковый идентификатор формата данных
+    // Строковый идентификатор разметки в системном буфере обмена
     const char* kShapesMimeType = "application/x-qlabelme-shapes";
 }
 
-class OneSpinDialog : public QDialog {
-public:
-    explicit OneSpinDialog(const QString& title,
-                           const QString& label,
-                           double minValue, double maxValue, double step,
-                           double value,
-                           QWidget* parent=nullptr)
-        : QDialog(parent)
-    {
-        setWindowTitle(title);
-        QDoubleSpinBox* spin = new QDoubleSpinBox; spin->setRange(minValue, maxValue);
-                    spin->setDecimals(1); spin->setSingleStep(step); spin->setValue(value);
-        QFormLayout* form = new QFormLayout; form->addRow(label, spin);
-        QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-        QObject::connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
-        QObject::connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        QVBoxLayout* dialogLayout = new QVBoxLayout(this); dialogLayout->addLayout(form);
-                            dialogLayout->addWidget(buttonBox);
-        _spin = spin;
-    }
-    double value() const { return _spin->value(); }
-private:
-    QDoubleSpinBox* _spin = nullptr;
-};
-
-// Идем вверх по родителям, ищем перемещаемого владельца
+// Ищем ближайший перемещаемый элемент среди самого элемента и его родителей
 static QGraphicsItem* findMovableAncestor(QGraphicsItem* item)
 {
     for (QGraphicsItem* currentItem = item; currentItem; currentItem = currentItem->parentItem())
@@ -95,15 +64,11 @@ static QGraphicsItem* findMovableAncestor(QGraphicsItem* item)
 MainWindow::MainWindow(QWidget* parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
-    //_scene(new QGraphicsScene(this))
-    //_socket(new tcp::Socket)
 {
     ui->setupUi(this);
 
     ui->graphView->setViewportUpdateMode(QGraphicsView::MinimalViewportUpdate);
     ui->graphView->setCacheMode(QGraphicsView::CacheBackground);
-
-    //ui->menuBar->raise();
 
     // toolbar в правую панель над "Фигуры/Координаты/Стек действий"
     // Оба тулбара в layoutWidget1
@@ -122,7 +87,7 @@ MainWindow::MainWindow(QWidget* parent) :
 
     QVBoxLayout* vtb = new QVBoxLayout(toolBarsBlock);
     vtb->setContentsMargins(0, 0, 0, 0);
-    vtb->setSpacing(0); // Расстояние между тулбарами
+    vtb->setSpacing(0);
 
     // Строка для тулбаров
     QWidget* toolBarsRow = new QWidget(toolBarsBlock);
@@ -172,7 +137,6 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->gridLayout->removeWidget(ui->coordinateList);
     ui->gridLayout->removeWidget(ui->undoView);
 
-    // Добавляем контейнер toolBarsBlock
     ui->gridLayout->addWidget(toolBarsBlock, 0, 0, 1, 3);
 
     // Возвращаем заголовки и списки ниже
@@ -229,44 +193,7 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->graphView->viewport()->installEventFilter(this);
     loadVisualStyle();
 
-    bool ultraHD = false;
-    QList<QScreen*> screens = QGuiApplication::screens();
-    if (!screens.isEmpty())
-        ultraHD = (screens[0]->geometry().width() >= 2560);
-
-    // if (ultraHD)
-    //     ui->toolBar->setIconSize({48, 48});
-    // else
-    //     ui->toolBar->setIconSize({32, 32});
-#ifdef Q_OS_WINDOWS
-    ui->toolBar->setIconSize({32, 32});
-#else
-    if (ultraHD)
-        ui->toolBar->setIconSize({32, 32});
-    else
-        ui->toolBar->setIconSize({24, 24});
-#endif
-
-    _windowTitle = windowTitle();
-
     ui->graphView->init(this);
-    //setWindowTitle(windowTitle() + QString(" (%1)").arg(VERSION_PROJECT));
-
-//    enableButtons(false);
-//    disableAdminMode();
-
-    //ui->graphView->setScene(_scene);
-    // connect(_scene, &QGraphicsScene::changed,
-    //         this,  &MainWindow::onSceneChanged);
-
-    // _videoRect = new qgraph::VideoRect(_scene);
-
-    //_labelConnectStatus = new QLabel(u8"Нет подключения", this);
-    //ui->statusBar->addWidget(_labelConnectStatus);
-
-    ui->graphView->viewport()->installEventFilter(this);
-    ui->graphView->setMouseTracking(true);    
-
 
     QString buildDate =
             QLocale(QLocale::English)
@@ -305,7 +232,6 @@ MainWindow::MainWindow(QWidget* parent) :
 
     QString fileName = "/home/marie/фон.png";
     QPixmap pix(fileName);
-    //_videoRect->setPixmap(pix);
 
     // Масштабируем фон под размер окна
     pix = pix.scaled(ui->graphView->size(), Qt::KeepAspectRatioByExpanding);
@@ -368,42 +294,13 @@ MainWindow::MainWindow(QWidget* parent) :
 
 
     updateShapeListButtons();
-
-    ui->graphView->viewport()->setMouseTracking(true);
-    ui->graphView->setMouseTracking(true);
-
-    //_scene->installEventFilter(this);
-
-//    chk_connect_q(_socket.get(), &tcp::Socket::message,
-//                  this, &MainWindow::message)
-
-//    chk_connect_q(_socket.get(), &tcp::Socket::connected,
-//                  this, &MainWindow::socketConnected)
-
-//    chk_connect_q(_socket.get(), &tcp::Socket::disconnected,
-//                  this, &MainWindow::socketDisconnected)
-
-
-/*
-    #define FUNC_REGISTRATION(COMMAND) \
-        _funcInvoker.registration(command:: COMMAND, &MainWindow::command_##COMMAND, this);
-
-    FUNC_REGISTRATION(DevicesInfo)
-
-    #undef FUNC_REGISTRATION
-*/
-
     ui->splitter->setSizes({INT_MAX, INT_MAX});
-    // Сохраняем указатель на правую панель
-    _rightPanel = ui->splitter->widget(1);
+
     // Сохраняем начальные размеры сплиттера
     _savedSplitterSizes = ui->splitter->sizes();
     applyLabelFontToUi();
 
-    // сцена должна отдавать нам события
-    //_scene->installEventFilter(this);
-
-    // нужен свободный трекинг мыши
+    // Нужен свободный трекинг мыши
     ui->graphView->viewport()->setMouseTracking(true);
 
     _lastHoverHandle = nullptr;
@@ -417,10 +314,6 @@ MainWindow::MainWindow(QWidget* parent) :
     config::base().getValue("line.finish_mode", cmLine);
     _lineFinishMode = static_cast<Settings::LineFinishMode>(cmLine);
     applyFinishLine();
-
-    //ensureGhostAllocated();
-
-    //config::base().getValue("view.keep_image_scale", init.keepImageScale);
 
     // Группа стеков действий для разных документов
     _undoGroup = new QUndoGroup(this);
@@ -571,8 +464,6 @@ MainWindow::~MainWindow()
             if (_undoGroup)
                 _undoGroup->removeStack(doc->_undoStack.get());
         }
-
-        QObject::disconnect(&doc->undoStack2, nullptr, this, nullptr);
 
         QGraphicsScene* scene = doc->scene;
         if (scene)
@@ -3963,27 +3854,6 @@ void MainWindow::on_actExit_triggered(bool)
     close();
 }
 
-void MainWindow::on_btnRect_clicked(bool)
-{
-    _drawingRectangle= true;
-    _isInDrawingMode = true;
-    setSceneItemsMovable(false);
-}
-
-void MainWindow::on_btnPolyline_clicked(bool)
-{
-    _drawingPolyline = true;
-    _isInDrawingMode = true;
-    setSceneItemsMovable(false);
-}
-
-void MainWindow::on_btnCircle_clicked(bool)
-{
-    _drawingCircle = true;
-    _isInDrawingMode = true;
-    setSceneItemsMovable(false);
-}
-
 void MainWindow::fitImageToView()
 {
     Document::Ptr doc = currentDocument();
@@ -4106,17 +3976,6 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem*
     {
         _undoGroup->setActiveStack(doc->_undoStack.get());
         _undoView->setStack(doc->_undoStack.get());
-    }
-}
-
-void MainWindow::onPolylineModified()
-{
-    // Любое изменение полилинии помечает документ как измененный
-    Document::Ptr doc = currentDocument();
-    if (doc && !doc->isModified)
-    {
-        doc->isModified = true;
-        updateFileListDisplay(doc->filePath);
     }
 }
 
@@ -4247,8 +4106,6 @@ void MainWindow::selectAllShapes()
 
 void MainWindow::on_actRect_triggered()
 {
-    _btnRectFlag = true;
-
     _drawingRectangle = true;
     _drawingCircle = false;
     _drawingPolyline = false;
@@ -4259,8 +4116,6 @@ void MainWindow::on_actRect_triggered()
 
 void MainWindow::on_actCircle_triggered()
 {
-    _btnCircleFlag = true;
-
     _drawingCircle = true;
     _drawingPolyline = false;
     _drawingRectangle = false;
@@ -4271,8 +4126,6 @@ void MainWindow::on_actCircle_triggered()
 
 void MainWindow::on_actPolyline_triggered()
 {
-    _btnPolylineFlag = true;
-
     _drawingPolyline = true;
     _drawingRectangle = false;
     _drawingCircle = false;
@@ -4283,8 +4136,6 @@ void MainWindow::on_actPolyline_triggered()
 
 void MainWindow::on_actPoint_triggered()
 {
-    _btnPointFlag = true;
-
     _drawingPoint = true;
     _drawingRectangle = false;
     _drawingCircle = false;
@@ -4295,8 +4146,6 @@ void MainWindow::on_actPoint_triggered()
 
 void MainWindow::on_actLine_triggered()
 {
-    _btnLineFlag = true;
-
     _drawingLine = true;
     _drawingPoint = false;
     _drawingRectangle = false;
@@ -4383,15 +4232,6 @@ void MainWindow::resizeEvent(QResizeEvent* event)
     QMainWindow::resizeEvent(event);
 }
 
-void MainWindow::onCheckBoxPolygonLabel(QAbstractButton* button)
-{
-    QCheckBox* checkBox = qobject_cast<QCheckBox*>(button);
-    if (checkBox)
-    {
-        QString selectedText = checkBox->property("itemText").toString();
-    }
-}
-
 void MainWindow::setWorkingFolder(const QString& folderPath)
 {
     // Проверяем, существует ли выбранная папка
@@ -4437,7 +4277,6 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
 
     _documentsMap.clear();
     _currentImagePath.clear();
-    _scrollStates.clear();
 
     ui->fileList->clear();
     ui->polygonList->setModel(nullptr);
@@ -4458,50 +4297,6 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
         ui->fileList->setCurrentRow(0);
         ui->fileList->scrollToItem(ui->fileList->currentItem());
     }
-}
-
-void MainWindow::onSceneItemRemoved(QGraphicsItem* item)
-{
-    Document::Ptr doc = currentDocument();
-    qgraph::VideoRect* videoRect = doc->videoRect;
-
-    // Пропускаем временные элементы и само изображение
-    if (item == videoRect || item == _tempRectItem ||
-        item == _tempCircleItem || item == _tempPolyline)
-    {
-        return;
-    }
-    clearLinePolylineStateForDeletedItem(item);
-    if (_resumeEditing)
-    {
-        const qulonglong uid = item ? item->data(_roleUid).toULongLong() : 0;
-        if (uid && uid == _resumeUid)
-        {
-            _resumeEditing = false;
-            _resumeUid = 0;
-            _drawingLine = false;
-            _drawingPolyline = false;
-            _line = nullptr;
-            _polyline = nullptr;
-            setSceneItemsMovable(true);
-            updateModeLabel();
-        }
-    }
-
-    if (item == _line)
-    {
-        _line = nullptr;
-        _drawingLine = false;
-        updateModeLabel();
-    }
-    if (item == _polyline)
-    {
-        _polyline = nullptr;
-        _drawingPolyline = false;
-        updateModeLabel();
-    }
-
-    removeListEntryBySceneItem(item);
 }
 
 void MainWindow::on_actDelete_triggered()
@@ -5500,10 +5295,6 @@ void MainWindow::saveGeometry()
     splitterSizes = ui->splitter2->sizes();
     config::base().setValue("windows.main_window.splitter2_sizes", splitterSizes);
 
-//    config::base().setValue("windows.main_window.tab_index", ui->tabWidget->currentIndex());
-
-//    QByteArray ba = ui->tableJournal->horizontalHeader()->saveState().toBase64();
-//    config::base().setValue("windows.main_window.event_journal_header", QString::fromLatin1(ba));
     saveVisualStyle();
 }
 
@@ -5812,19 +5603,6 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     doc->isModified = true;
     updateFileListDisplay(doc->filePath);
-}
-
-qgraph::VideoRect* MainWindow::findVideoRect(QGraphicsScene* scene)
-{
-    if (!scene)
-        return nullptr;
-
-    for (QGraphicsItem* item : scene->items())
-    {
-        if (qgraph::VideoRect* videoRect = dynamic_cast<qgraph::VideoRect*>(item))
-            return videoRect;
-    }
-    return nullptr;
 }
 
 void MainWindow::toggleRightSplitter()
@@ -6531,7 +6309,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
             if (!item)
                 continue;
 
-            if (item == doc->videoRect || item == doc->pixmapItem)
+            if (item == doc->videoRect)
                 continue;
 
             if (item == _ghostHandle)
@@ -6603,24 +6381,6 @@ void MainWindow::restoreViewState(Document::Ptr doc)
         _m_zoom = 1.0;
     updateAllPointNumbers();
     ui->graphView->viewport()->update();
-}
-
-void MainWindow::handleCheckBoxClick(QCheckBox* clickedCheckBox)
-{
-    if (_lastCheckedPolygonLabel == clickedCheckBox)
-    {
-        clickedCheckBox->setChecked(false);
-        _lastCheckedPolygonLabel = nullptr;
-    }
-    else
-    {
-        if (_lastCheckedPolygonLabel)
-        {
-            _lastCheckedPolygonLabel->setChecked(false);
-        }
-        clickedCheckBox->setChecked(true);
-        _lastCheckedPolygonLabel = clickedCheckBox;
-    }
 }
 
 void MainWindow::loadLastUsedFolder()
@@ -7242,99 +7002,6 @@ void MainWindow::updateCoordinateList()
     }
 }
 
-void MainWindow::updateFileListItemIcon(QListWidgetItem* item, bool hasAnnotations)
-{
-    if (!item) return;
-
-    Document::Ptr doc = item->data(Qt::UserRole).value<Document::Ptr>();
-    if (!doc) return;
-
-    // Получаем превью изображения
-    QPixmap preview(doc->filePath);
-    preview = preview.scaled(50, 50, Qt::KeepAspectRatio);
-
-    // Создаем композитное изображение
-    QPixmap result(70, 70);
-    result.fill(Qt::transparent);
-
-    QPainter painter(&result);
-    painter.drawPixmap(10, 10, preview);
-
-    // Добавляем иконку статуса
-    QPixmap statusIcon(hasAnnotations
-        ? ":/images/resources/ok.svg"
-        : ":/images/resources/no_annotation.svg");
-    statusIcon = statusIcon.scaled(20, 20, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    painter.drawPixmap(0, 0, statusIcon);
-
-    item->setIcon(QIcon(result));
-}
-
-QListWidgetItem* MainWindow::findFileListItem(const QString& filePath)
-{
-    for (int i = 0; i < ui->fileList->count(); ++i)
-    {
-        QListWidgetItem* item = ui->fileList->item(i);
-        Document::Ptr doc = item->data(Qt::UserRole).value<Document::Ptr>();
-        if (doc && doc->filePath == filePath)
-        {
-            return item;
-        }
-    }
-    return nullptr;
-}
-
-void MainWindow::removePolygonItem(QGraphicsItem* item)
-{
-    if (!item)
-        return;
-
-    removeListEntryBySceneItem(item);
-
-    if (item->scene())
-        item->scene()->removeItem(item);
-
-    clearLinePolylineStateForDeletedItem(item);
-    delete item;
-
-    if (Document::Ptr doc = currentDocument())
-    {
-        doc->isModified = true;
-        updateFileListDisplay(doc->filePath);
-    }
-}
-
-void MainWindow::removePolygonListRow(int row)
-{
-    QGraphicsItem* sceneItem = sceneItemFromListRow(row);
-
-    if (!sceneItem)
-        return;
-
-    Document::Ptr doc = currentDocument();
-    QGraphicsScene* scene = doc->scene;
-
-    if (sceneItem->scene() == scene)
-        scene->removeItem(sceneItem);
-
-    clearLinePolylineStateForDeletedItem(sceneItem);
-    delete sceneItem;
-
-    if (Document::Ptr doc = currentDocument())
-    {
-        if (lst::inRange(row, 0, doc->polygonList.items.count()))
-        {
-            doc->polygonList.items.removeAt(row);
-            doc->polygonList.model.removeRow(row);
-        }
-
-        renumberPolygonList();
-
-        doc->isModified = true;
-        updateFileListDisplay(doc->filePath);
-    }
-}
-
 void MainWindow::linkSceneItemToList(QGraphicsItem* sceneItem)
 {
     linkSceneItemToList(sceneItem, -1, true);
@@ -7602,18 +7269,6 @@ bool MainWindow::isRootShapeItem(QGraphicsItem* item) const
            || dynamic_cast<qgraph::Polyline*>(item)
            || dynamic_cast<qgraph::Line*>(item)
            || dynamic_cast<qgraph::Point*>(item);
-}
-
-qreal MainWindow::originalZValueForItem(QGraphicsItem* item) const
-{
-    if (!item)
-        return 0.0;
-
-    const qulonglong uid = item->data(_roleUid).toULongLong();
-    if (uid != 0 && _temporaryRaisedZValues.contains(uid))
-        return _temporaryRaisedZValues.value(uid);
-
-    return item->zValue();
 }
 
 void MainWindow::restoreTemporaryRaisedZValues()
@@ -7957,28 +7612,6 @@ void MainWindow::ensureGhostAllocated()
     _ghostHandle->hide();
 }
 
-void MainWindow::showGhostOver(qgraph::DragCircle* target, const QPointF& scenePos)
-{
-    ensureGhostAllocated();
-    _ghostTarget = target;
-    _ghostActive = true;
-
-    QColor ghostColor = _vstyle.selectedHandleColor;
-    _ghostHandle->setRect(target->baseRect());
-    _ghostHandle->setPen (target->basePen());
-    _ghostHandle->setBrush(QBrush(ghostColor));
-    DragCircle::rememberCurrentAsBase(_ghostHandle);
-
-    // Поставим «призрака» поверх позиции настоящей ручки
-    const QPointF sceneHandlePos = target->scenePos();
-    _ghostHandle->setPos(sceneHandlePos);
-    setGhostStyleHover(), _ghostHover = true;
-    _ghostHandle->show();
-
-    _ghostGrabOffset = QPointF(0,0);
-    _ghostTarget->setGhostDriven(true);
-}
-
 void MainWindow::moveGhostTo(const QPointF& scenePos)
 {
     if (!_ghostActive || !_ghostTarget) return;
@@ -8093,21 +7726,6 @@ void MainWindow::setGhostStyleIdle()
 
     _ghostHandle->setPos(centerScene - _ghostHandle->rect().center());
     _ghostHandle->update();
-}
-
-void MainWindow::showGhostPreview(qgraph::DragCircle* target, const QPointF& scenePos)
-{
-    ensureGhostAllocated();
-    _ghostTarget = target;
-
-    _ghostHandle->setRect(target->baseRect());
-    _ghostHandle->setPen(target->basePen());
-    _ghostHandle->setBrush(target->baseBrush());
-    DragCircle::rememberCurrentAsBase(_ghostHandle);
-    _ghostHandle->setPos(target->scenePos());
-    setGhostStyleHover(), _ghostHover = true;
-
-    _ghostHandle->show();
 }
 
 void MainWindow::startGhostDrag(const QPointF& scenePos)
@@ -9154,40 +8772,6 @@ void MainWindow::updateLineColorsForScene(QGraphicsScene* scene)
     scene->update();
 }
 
-void MainWindow::applyZoom(qreal zoomFactor)
-{
-    if (!ui->graphView) return;
-
-    // Ограничим диапазон
-    if (zoomFactor < _kMinZoom)
-        zoomFactor = _kMinZoom;
-    if (zoomFactor > _kMaxZoom)
-        zoomFactor = _kMaxZoom;
-
-    // Сохраним текущий центр сцены, чтобы картинка не «уезжала»
-    const QPointF centerScene =
-        ui->graphView->mapToScene(ui->graphView->viewport()->rect().center());
-
-    QTransform t;
-    t.scale(zoomFactor, zoomFactor);
-    ui->graphView->setTransform(t);
-
-    // Вернем центр
-    ui->graphView->centerOn(centerScene);
-
-    _m_zoom = zoomFactor;
-
-    if (Document::Ptr doc = currentDocument())
-    {
-        doc->viewState = {
-            ui->graphView->horizontalScrollBar()->value(),
-            ui->graphView->verticalScrollBar()->value(),
-            _m_zoom,
-            centerScene
-        };
-    }
-}
-
 void MainWindow::applyClosePolyline()
 {
     using SDM = Settings::PolylineCloseMode;
@@ -9374,23 +8958,6 @@ void MainWindow::setPolygonListModelForCurrentDocument()
     }
 
     updateShapeListButtons();
-}
-
-void MainWindow::removeSceneAndListItems(const QVector<QGraphicsItem*>& items)
-{
-    for (QGraphicsItem* item : items)
-    {
-        if (!item)
-            continue;
-
-        removeListEntryBySceneItem(item);
-
-        if (item->scene())
-            item->scene()->removeItem(item);
-
-        clearLinePolylineStateForDeletedItem(item);
-        delete item;
-    }
 }
 
 void MainWindow::removeListEntryBySceneItem(QGraphicsItem* sceneItem)
@@ -10199,7 +9766,7 @@ void MainWindow::updateModeLabel()
                             : u8"Режим: перемещение (изображение)");
         return;
     }
-    if (_editInProgress || _handleDragging || _m_isDraggingHandle || _ghostActive)
+    if (_handleDragging || _m_isDraggingHandle || _ghostActive)
     {
         _modeLabel->setText(u8"Режим: редактирование");
         return;
@@ -10876,51 +10443,6 @@ void MainWindow::moveCurrentShapeInList(int direction)
         doc->scene->update();
 }
 
-void MainWindow::movePolygonListRow(int fromRow, int toRow)
-{
-    Document::Ptr doc = currentDocument();
-    if (!doc) return;
-
-    int count = doc->polygonList.items.count();
-
-    if (!lst::inRange(fromRow, 0, count))
-        return;
-
-    if (!lst::inRange(toRow, 0, count))
-        return;
-
-    if (fromRow == toRow)
-        return;
-
-    {
-        QSignalBlocker blocker {ui->polygonList}; (void) blocker;
-
-        QGraphicsItem* movedSceneItem = doc->polygonList.items.takeAt(fromRow);
-        doc->polygonList.items.insert(toRow, movedSceneItem);
-
-        QList<QStandardItem*> movedRow = doc->polygonList.model.takeRow(fromRow);
-        doc->polygonList.model.insertRow(toRow, movedRow);
-
-        ui->polygonList->clearSelection();
-
-        QModelIndex movedIndex = doc->polygonList.model.index(toRow, 0);
-        ui->polygonList->setCurrentIndex(movedIndex);
-
-        if (QItemSelectionModel* selectionModel = ui->polygonList->selectionModel())
-        {
-            selectionModel->select(movedIndex, QItemSelectionModel::Select
-                                               |QItemSelectionModel::Rows);
-        }
-    }
-
-    refreshShapeListOrderRole();
-
-    onPolygonListSelectionChanged();
-    updateShapeListButtons();
-
-    doc->scene->update();
-}
-
 void MainWindow::updateShapeListButtons()
 {
     if (!ui || !ui->polygonList)
@@ -11034,28 +10556,4 @@ QList<QGraphicsItem*> MainWindow::orderedShapeItemsForSave(Document::Ptr doc) co
     }
 
     return result;
-}
-
-void MainWindow::syncZValuesWithListOrder(Document::Ptr doc)
-{
-    if (!doc || !doc->scene)
-        return;
-
-    const QList<QGraphicsItem*> items = orderedShapeItemsForSave(doc);
-
-    const qreal baseZ = doc->videoRect ? doc->videoRect->zValue() : 0.0;
-    qreal z = baseZ + 1.0;
-
-    for (QGraphicsItem* item : items)
-    {
-        if (!item)
-            continue;
-
-        item->setZValue(z++);
-    }
-
-    raiseAllHandlesToTop();
-
-    if (doc->scene)
-        doc->scene->update();
 }

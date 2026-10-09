@@ -1,79 +1,40 @@
 #pragma once
 
-#include "shared/defmac.h"
+#include "shared/config/yaml_config.h"
 #include "shared/container_ptr.h"
 #include "shared/qt/quuidex.h"
-#include "shared/config/yaml_config.h"
+#include "shared/defmac.h"
 
-//#include "pproto/func_invoker.h"
-//#include "pproto/transport/tcp.h"
-
-//#include "commands/commands.h"
-//#include "commands/error.h"
-
-#include "qgraphics2/video_rect.h"
-#include "qgraphics2/rectangle.h"
 #include "qgraphics2/drag_circle.h"
-
-//#include "qutils/video_widget.h"
-
-// #include "handle.h"
-// #include "square.h"
-// #include "line.h"
-
-#include "lambda_command.h"
+#include "qgraphics2/video_rect.h"
 
 #include <QtCore>
 #include <QtGui>
-// #include <QCloseEvent>
-// #include <QShowEvent>
-// #include <QGraphicsScene>
-// #include <QWheelEvent>
-// #include <QToolButton>
-// #include <QListWidget>
-// #include <QMap>
-// #include <QColor>
-// #include <QList>
 
-#include <QCheckBox>
-#include <QShortcut>
-#include <QMainWindow>
-
-// #include <QButtonGroup>
-// #include <QHBoxLayout>
-// #include <QPushButton>
-// #include <QTableWidgetItem>
-// #include <QColorDialog>
-// #include <QUndoCommand>
-// #include <optional>
-// #include <QRubberBand>
-// #include <QPointer>
-
-// #include <QUndoStack>
-#include <QUndoGroup>
-#include <QUndoView>
-// #include <QDockWidget>
-
-#include <QGraphicsView>
-#include <QGraphicsScene>
-#include <QGraphicsLineItem>
-#include <QGraphicsTextItem>
-
-#include <QModelIndex>
 #include <QItemSelectionModel>
 #include <QStandardItemModel>
+#include <QGraphicsLineItem>
+#include <QGraphicsTextItem>
+#include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QStandardItem>
+#include <QModelIndex>
+#include <QMainWindow>
+#include <QUndoGroup>
+#include <QUndoView>
+#include <QShortcut>
 
-//#include "graphicsscene.h"
-#include "document.h"
-#include "graphics_view.h"
-#include "settings.h"
+#include <functional>
+
 #include "project_settings.h"
+#include "graphics_view.h"
+#include "document.h"
+#include "settings.h"
 #include "square.h"
 
-#include "qgraphics2/circle.h"
 #include "qgraphics2/rectangle.h"
 #include "qgraphics2/polyline.h"
+#include "qgraphics2/circle.h"
 #include "qgraphics2/point.h"
 #include "qgraphics2/line.h"
 
@@ -81,9 +42,6 @@
 #include "shared/logger/logger.h"
 #define log_debug2_m  alog::logger().debug2  (alog_line_location, "MainWin")
 
-// using namespace std;
-// using namespace pproto;
-// using namespace pproto::transport;
 
 namespace Ui {
 class MainWindow;
@@ -125,13 +83,9 @@ private slots:
 
     void on_actExit_triggered(bool);
 
-    void on_btnRect_clicked(bool);
-    void on_btnPolyline_clicked(bool);
-    void on_btnCircle_clicked(bool);
-
     void fitImageToView();
     void fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem* previous);
-    void onPolylineModified();
+
     void onSceneChanged();
     void onPolygonListSelectionChanged();
     void selectAllShapes();
@@ -148,12 +102,9 @@ private slots:
     void wheelEvent(QWheelEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
 
-    void onCheckBoxPolygonLabel(QAbstractButton* button);
     void setWorkingFolder(const QString& folderPath);
 
-    void onSceneItemRemoved(QGraphicsItem* item);
     void on_actDelete_triggered();
-
     void on_actSettingsApp_triggered();
     void on_actSettingsProj_triggered();
 
@@ -181,7 +132,6 @@ private slots:
     void on_actFitImageToView_triggered();
     void on_actScrollBars_triggered(bool checked);
 
-
 private:
     Q_OBJECT
     void loadFilesFromFolder(const QString& folderPath);
@@ -200,8 +150,6 @@ private:
     // Логика копирования/вставки между сценами
     void copySelectedShapes();
     void pasteCopiedShapesToCurrentScene();
-
-    qgraph::VideoRect* findVideoRect(QGraphicsScene* scene);
 
     void toggleRightSplitter();
     void updateWindowTitle();
@@ -224,8 +172,6 @@ private:
     void saveCurrentViewState(Document::Ptr doc);
     void restoreViewState(Document::Ptr doc);
 
-    void handleCheckBoxClick(QCheckBox* clickedCheckBox);
-
     void loadLastUsedFolder();
     void saveLastUsedFolder();
 
@@ -242,12 +188,6 @@ private:
     void onSceneSelectionChanged();
 
     void updateCoordinateList();
-    void updateFileListItemIcon(QListWidgetItem* item, bool hasAnnotations);
-    QListWidgetItem* findFileListItem(const QString& filePath);
-
-    // Удаление элемента со сцены и из списка
-    void removePolygonItem(QGraphicsItem* item);
-    void removePolygonListRow(int row);
 
     // Связывание элементов сцены и списка
     void linkSceneItemToList(QGraphicsItem* sceneItem);
@@ -266,7 +206,6 @@ private:
     void raiseAllHandlesToTop();
 
     bool isRootShapeItem(QGraphicsItem* item) const;
-    qreal originalZValueForItem(QGraphicsItem* item) const;
     void restoreTemporaryRaisedZValues();
     void raiseSelectedShapesTemporarily();
 
@@ -279,13 +218,11 @@ private:
 
     qgraph::DragCircle* pickHiddenHandle(const QPointF& scenePos, bool& topIsHandle) const;
     void ensureGhostAllocated();
-    void showGhostOver(qgraph::DragCircle* target, const QPointF& scenePos);
     void moveGhostTo(const QPointF& scenePos);
     void endGhost();
     // Cтили призрака
     void setGhostStyleHover();  // Желтый + увеличенный
     void setGhostStyleIdle();   // Исходный размер/цвет
-    void showGhostPreview(qgraph::DragCircle* target, const QPointF& scenePos);
     void startGhostDrag(const QPointF& scenePos);
 
     // Масштабируемые области захвата
@@ -322,13 +259,10 @@ private:
     void apply_LineWidth_ToItem(QGraphicsItem* item);
     void apply_PointSize_ToItem(QGraphicsItem* item);
     void apply_NumberSize_ToItem(QGraphicsItem* item);
-    void apply_LineColor_ToScene(QGraphicsItem* item);
     void apply_PointStyle_ToItem(QGraphicsItem* item);
 
     void applyLabelFontToUi();
     void updateLineColorsForScene(QGraphicsScene* scene);
-
-    void applyZoom(qreal zoomFactor);
 
     Settings::PolylineCloseMode _polylineCloseMode =
             Settings::PolylineCloseMode::DoubleClick;
@@ -343,13 +277,10 @@ private:
     void restoreDrawingStateAfterStackChange();
 
     void setPolygonListModelForCurrentDocument();
-    // Удаляет несколько фигур сразу
-    void removeSceneAndListItems(const QVector<QGraphicsItem*>& items);
 
     // Удаляет одну запись из списка по заданному QGraphicsItem
     void removeListEntryBySceneItem(QGraphicsItem* sceneItem);
 
-    // static QGraphicsItem* sceneItemFromListItem(const QListWidgetItem* listItem);
     QGraphicsItem* sceneItemFromListIndex(const QModelIndex& index) const;
     QGraphicsItem* sceneItemFromListRow(int row) const;
     int polygonListRowByItem(QGraphicsItem* sceneItem) const;
@@ -398,8 +329,6 @@ private:
 
     // Кнопки в списке фигур
     void moveCurrentShapeInList(int direction);
-    void movePolygonListRow(int fromRow, int toRow);
-    //int polygonListRowByUid(QGraphicsItem* sceneItem) const;
     void updateShapeListButtons();
     void refreshShapeListOrderRole();
 
@@ -407,42 +336,18 @@ private:
     int nextShapeNumberForScene(QGraphicsScene* scene) const;
     int ensureShapeNumber(QGraphicsItem* item) const;
     QList<QGraphicsItem*> orderedShapeItemsForSave(Document::Ptr doc) const;
-    void syncZValuesWithListOrder(Document::Ptr doc);
 
 private:
     Ui::MainWindow* ui;
     static QUuidEx _applId;
 
-    //qgraph::VideoRect* _videoRect = {nullptr};
-
-    //QGraphicsScene* _scene = {nullptr};
-    //GraphicsView* _graphView;
-
     QLabel* _imageSizeLabel = {nullptr}; // Размер изображения в statusBar
 
-    QString _windowTitle;
     QString _currentFolderPath; // Переменную для хранения пути
     QString _lastUsedFolder; // Последняя открытая папка
     bool _openLastFolderOnFirstShow = {true};
-    QLabel* _labelConnectStatus;
 
-    QLabel* _folderPathLabel; // Для отображения пути к папке рядом с версией
-
-    // Признак UltraHD монитора
-    bool _ultraHD = {false};
-
-    QPoint _point;
-    QList <QPointF> _points;
-
-    bool _dragging = {false}; // Флаг для отслеживания состояния перетаскивания
     QPoint _lastMousePos; // Последняя позиция мыши
-
-    //QToolButton* _selectModeButton;
-    bool _btnRectFlag     = {false};
-    bool _btnPolylineFlag = {false};
-    bool _btnCircleFlag   = {false};
-    bool _btnPointFlag    = {false};
-    bool _btnLineFlag     = {false};
 
     QGraphicsItem* _draggingItem = {nullptr}; // Указатель на перетаскиваемый объект
 
@@ -454,10 +359,6 @@ private:
     bool _isInDrawingMode  = {false}; // Флаг, указывающий что мы в режиме рисования новой фигуры
     bool _isDraggingImage  = {false}; // Флаг для перетаскивания изображения
     bool _isAllMoved       = {false}; // Флаг для перетаскивания изображения вместе с разметкой
-
-    qgraph::Polyline*  _currentLine = {nullptr};   // Текущая линия
-    //SquareDrawingItem* _currentSquare = {nullptr}; // Текущий квадрат
-    QList<QPointF>     _polylinePoints;            // Точки текущей полилинии
 
     enum class PendingDrawTool {None, Polyline, Line};
     PendingDrawTool _pendingDrawTool = {PendingDrawTool::None};
@@ -475,14 +376,9 @@ private:
     QGraphicsLineItem* _currCircleCrossV = {nullptr};
     QGraphicsLineItem* _currCircleCrossH = {nullptr};
 
-    QGraphicsPathItem* _currPolyline = {nullptr}; // Временная визуализация полилинии
     bool _isDrawingPolyline = {false}; // Флаг для состояния рисования
-
     bool _isDrawingPoint = {false};
-
-    qgraph::Line* _currLine = {nullptr};
     bool _isDrawingLine = {false};
-    QPointF _lineFirstPoint;
 
     // Линейка
     QGraphicsLineItem* _rulerLine = {nullptr}; // Временная линия измерения
@@ -496,15 +392,6 @@ private:
     qgraph::Line* _line = {nullptr};
     qgraph::Point* _currPoint = {nullptr};
 
-    // struct ImageData
-    // {
-    //     QGraphicsScene* scene;
-    //     QPixmap pixmap;
-    //     QList<QGraphicsItem*> shapes;
-    // };
-    // QMap<QString, ImageData> _imageDataMap; // Ключ - путь к файлу
-
-    //QMap<QString, QGraphicsScene*> _scenesMap; // Ключ - путь к файлу, значение - сцена
     QMap<QString /*file path*/, Document::Ptr> _documentsMap;
 
     // Текущее изображение
@@ -519,17 +406,6 @@ private:
     QGraphicsEllipseItem* _tempCircleItem = {nullptr};
     qgraph::Polyline* _tempPolyline = {nullptr};
 
-    struct ScrollState
-    {
-       int hScroll = {0};
-       int vScroll = {0};
-       qreal zoom  = {1};
-       QPointF center;
-    };
-    QMap<QString /*file path*/, ScrollState> _scrollStates; // Ключ - путь к файлу
-
-    // double currentScale = 1.0;
-    // const double scaleStep = 1.1;
     qreal _m_zoom = 1.0;
     static constexpr qreal _kZoomStep = {1.10};
     static constexpr qreal _kMinZoom  = {0.10};
@@ -537,11 +413,6 @@ private:
 
     QList<int> _savedSplitterSizes; // Хранит нормальные размеры сплиттера
     bool _isRightSplitterCollapsed = {false};
-    bool _isRightPanelVisible = {true};
-    QWidget* _rightPanel = {nullptr}; // Указатель на правую панель
-
-    // Указатель на последний выбранный чекбокс в списке классов для полигонов
-    QCheckBox* _lastCheckedPolygonLabel = {nullptr};
 
     // Механика призрачной ручки
     QGraphicsRectItem* _ghostHandle = {nullptr}; // Рисуемая сверху копия
@@ -553,10 +424,6 @@ private:
     qreal _edgePickRadius  = {8.0}; // Радиус захвата ребер
     qreal _drawHandleCommitRadius = {0.01}; // Точное попадание в узел именно во время рисования line/polyline
 
-    QVector<qgraph::DragCircle*> _m_circles;
-    qgraph::DragCircle* _m_selectedCircle = {nullptr};
-    QPointF _m_dragOffset;
-
     // Состояние перетаскивания
     bool _m_isDraggingHandle = {false};
     QPointer<qgraph::DragCircle> _m_dragHandle; // Какую ручку тащим
@@ -565,13 +432,8 @@ private:
     // Состояние левой кнопки мыши над графическим видом
     bool _leftMouseButtonDown = {false};
 
-    qgraph::DragCircle* _currentDraggedCircle = {nullptr};
-    QPointF _dragCircleStartPosition;
-    QPointF _dragCircleMouseOffset;
-
     bool _loadingNow = {false};
     bool _syncingSelection = {false};
-    bool _editInProgress = {false};
     bool _handleDragging = {false}; // Флаг для отслеживания перетаскивания ручек
 
     qgraph::DragCircle* _currentHoveredHandle = {nullptr};
@@ -606,14 +468,10 @@ private:
     };
     VisualStyle _vstyle; // Глобально для всех фигур
 
-    //std::unique_ptr<QUndoStack> _undoStack;
     QUndoGroup* _undoGroup = {nullptr};
     QUndoView* _undoView = {nullptr}; // Ссылка на вид из .ui
     QStringList _projectClasses;    // Единый список классов проекта
     ProjectSettings* _projPropsDialog = {nullptr};
-
-    QAction* _actUndo = {nullptr};
-    QAction* _actRedo = {nullptr};
 
     // Перемещение фигур
     QGraphicsItem* _movingItem = {nullptr};
@@ -644,10 +502,7 @@ private:
     qgraph::Line* _mergeLineA = {nullptr};
     int _mergeLineAEndIdx = -1; // Первая или последняя
 
-    QPointF _shiftImageBeforePos;
     bool _shiftImageDragging = {false};
-
-    bool _keepImageScale = {false};
 
     // Продолжение рисования
     bool _resumeEditing = {false};

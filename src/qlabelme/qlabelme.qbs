@@ -84,8 +84,6 @@ import QbsUtl
         name: "undo"
         prefix: "undo/"
         files: [
-            "lambda_command.cpp",
-            "lambda_command.h",
             "undo_stack.cpp",
             "undo_stack.h",
         ]

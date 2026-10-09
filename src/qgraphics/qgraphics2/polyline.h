@@ -1,23 +1,23 @@
 #pragma once
 
+#include "drag_circle.h"
 #include "user_type.h"
 #include "shape.h"
 
-#include "drag_circle.h"
+#include <QGraphicsSceneMouseEvent>
 #include <QGraphicsPathItem>
 #include <QGraphicsScene>
-#include <QGraphicsSceneMouseEvent>
 #include <QKeyEvent>
 #include <QObject>
 #include <QVector>
-#include <QMenu>
 #include <QLineF>
 #include <QtMath>
+#include <QMenu>
 
 
 namespace qgraph {
 
-class Polyline : public ShapeT<QGraphicsPathItem> //public QGraphicsPathItem
+class Polyline : public ShapeT<QGraphicsPathItem>
 {
 public:
     enum {Type = toInt(qgraph::UserType::Polyline)};
@@ -45,7 +45,6 @@ public:
                            QPointF* point) const;
 
     void closePolyline();
-    bool isClickOnFirstPoint(const QPointF& scenePos) const; // точка 0
     bool isClickOnAnyPoint(const QPointF& scenePos, int* idx = nullptr) const;
     void updatePath(); // Метод для обновления пути на основе позиций кругов
     QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;

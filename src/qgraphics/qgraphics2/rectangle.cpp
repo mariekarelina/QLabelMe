@@ -89,7 +89,6 @@ void Rectangle::setFrameScale(float newScale)
     _circleBL->setPos(r.bottomLeft());
 
     _frameScale = newScale;
-    //changeSignal.emit_(this);
     updatePointNumbers();
     raiseHandlesToTop();
 }
@@ -461,16 +460,6 @@ void Rectangle::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
     update();
 }
 
-void Rectangle::updateHandleVisibility()
-{
-    _circleTL->setVisible(true);
-    _circleTR->setVisible(true);
-    _circleBL->setVisible(true);
-    _circleBR->setVisible(true);
-
-    raiseHandlesToTop();
-}
-
 void Rectangle::paint(QPainter* painter,
                       const QStyleOptionGraphicsItem* option,
                       QWidget* widget)
@@ -485,20 +474,6 @@ void Rectangle::paint(QPainter* painter,
     painter->setPen(pen());
     painter->drawRect(r);
     painter->restore();
-}
-
-void Rectangle::handleHandleHoverEnter()
-{
-    // Поднимаем прямоугольник на верхний z-уровень временно
-    setZValue(1001);
-}
-
-void Rectangle::handleHandleHoverLeave()
-{
-    // Возвращаем исходный z-уровень
-    setZValue(1);
-    // Возвращаем видимость ручек в исходное состояние
-    //updateHandleVisibility();
 }
 
 void Rectangle::updatePointNumbers()

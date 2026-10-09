@@ -3,12 +3,12 @@
 #include "user_type.h"
 #include "shape.h"
 
-#include <QtCore>
-#include <QGraphicsItem>
-#include <QGraphicsScene>
-#include <QMouseEvent>
 #include <QStyleOptionGraphicsItem>
+#include <QGraphicsScene>
+#include <QGraphicsItem>
+#include <QMouseEvent>
 #include <QPainter>
+#include <QtCore>
 
 namespace qgraph {
 
@@ -44,7 +44,6 @@ public:
 
     QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
 
-    void updateHandleZValue();
     void updateCrossLines();
     void applyLineStyle(qreal lineWidth);
     void raiseHandleToTop();
@@ -59,9 +58,6 @@ public:
     void setGlobalSelectionRectVisible(bool visible);
 
     DragCircle* getDragCircle() const { return _circle; }
-
-    QVariant saveState() const;
-    void loadState(const QVariant& v);
 
 protected:
     // Переопределяем обработчик событий клавиатуры

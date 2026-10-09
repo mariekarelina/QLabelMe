@@ -1,14 +1,13 @@
 #pragma once
 
 #include "user_type.h"
-//#include "shape.h"
 
-#include <QtCore>
-#include <QGraphicsItem>
-#include <QGraphicsScene>
-#include <QObject>
-#include <QMenu>
 #include <QGraphicsSceneContextMenuEvent>
+#include <QGraphicsScene>
+#include <QGraphicsItem>
+#include <QObject>
+#include <QtCore>
+#include <QMenu>
 
 namespace qgraph {
 
@@ -20,16 +19,11 @@ public:
      int type() const override {return Type;}
 
     DragCircle(QGraphicsScene* scene);
-    //explicit DragCircle(QGraphicsItem* parent = nullptr, bool isGhost = false);
     ~DragCircle();
     void setParent(QGraphicsItem* newParent);
     void raiseToTop();
 
-    // Добавляем сеттеры для базовых размеров
-    void setBaseSize(qreal size);
-
     void setSmallSize();
-    void setLargeSize();
 
     // Переопределяем метод для определения столкновений
     bool collidesWithItem(const QGraphicsItem* other,
@@ -37,14 +31,12 @@ public:
     // Увеличиваем область взаимодействия
     QPainterPath shape() const override;
     void setGhostDriven(bool on) { _ghostDriven = on; }
-    static void applyHoverStyle(QGraphicsRectItem* item, bool active);
     // Сохранить текущий вид item как «базовый»
     static void rememberCurrentAsBase(QGraphicsRectItem* item);
 
     void setHoverStyle(bool hover);
     void restoreBaseStyle();
     void setBaseStyle(const QColor& color, qreal size);
-    void setBaseColor(const QColor& color);
     QColor baseColor() const { return _baseColor; }
 
     bool isValid() const { return _isValid; }
@@ -55,28 +47,25 @@ public:
     QBrush baseBrush() const { return _baseBrush; }
     qreal baseSize() const { return _smallSize; }
 
-    void setHover(bool on);
     void setHoverSizingEnabled(bool on);
     bool hoverSizingEnabled() const { return _hoverSizingEnabled; }
     void setSelectedHandleColor(const QColor& color);
     QColor selectedHandleColor() const { return _selectedHandleColor; }
 
-    bool containsPoint(const QPointF &point) const;   // Проверка попадания в круг
-    void setCenter(const QPointF &center);           // Перемещение центра
+    void setCenter(const QPointF &center); // Перемещение центра
 
     int index() const { return _index; }
     void setIndex(int idx) { _index = idx; }
 
-    // Пользовательское скрытие (переключатель)
-    void setUserHidden(bool on);
+    void setUserHidden(bool on); // Пользовательское скрытие
     bool isUserHidden() const { return _userHidden; }
 
     void setInteractionRadius(qreal r);
     qreal interactionRadius() const { return _interactionRadius; }
 
 signals:
-    void moved(DragCircle* circle);      // Сигнал, вызываемый при перемещении
-    void released(DragCircle* circle);  // Сигнал, вызываемый при отпускании мыши
+    void moved(DragCircle* circle);           // Сигнал, вызываемый при перемещении
+    void released(DragCircle* circle);        // Сигнал, вызываемый при отпускании мыши
     void deleteRequested(DragCircle* circle); // Сигнал для удаления
 
     void hoverEntered();
@@ -120,7 +109,7 @@ public:
 
     bool _isBeingDragged = false;
     int _index = -1;
-    QColor _baseColor = Qt::gray; // Цвет по умолчанию
+    QColor _baseColor = Qt::gray;             // Цвет по умолчанию
     QColor _selectedHandleColor = Qt::yellow; // Цвет выделенной ручки
 
 
@@ -129,7 +118,7 @@ public:
     float _radius;
     bool _isValid = true;
 
-    bool _userHidden = false;     // Скрыто пользователем
+    bool _userHidden = false; // Скрыто пользователем
     bool _runtimeVisible = true;
 };
 

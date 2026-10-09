@@ -186,20 +186,12 @@ QVariant Point::itemChange(GraphicsItemChange change, const QVariant& value)
 {
     if (change == QGraphicsItem::ItemSceneHasChanged)
     {
-        // Когда элемент окончательно попал в сцену – гарантируем корректное состояние круга
+        // Когда элемент окончательно попал в сцену - гарантируем корректное состояние круга
         ensureDotVis();
         syncDotGeometry();
         syncDotColors();
         showDotIfIdle();
     }
-    // if (change == QGraphicsItem::ItemSelectedChange)
-    // {
-    //     bool willBeSelected = value.toBool();
-    //     if (willBeSelected)
-    //         hideDot();
-    //     else
-    //         showDotIfIdle();
-    // }
     else if (change == QGraphicsItem::ItemPositionHasChanged)
     {
         updateHandlePosition();
@@ -209,22 +201,17 @@ QVariant Point::itemChange(GraphicsItemChange change, const QVariant& value)
 
 void Point::hoverEnterEvent(QGraphicsSceneHoverEvent* ev)
 {
-    //_interacting = true;
-    //hideDot();
     QGraphicsItem::hoverEnterEvent(ev);
 }
 
 void Point::hoverLeaveEvent(QGraphicsSceneHoverEvent* ev)
 {
-    //_interacting = false;
     showDotIfIdle();
     QGraphicsItem::hoverLeaveEvent(ev);
 }
 
 void Point::mousePressEvent(QGraphicsSceneMouseEvent* ev)
 {
-    // _interacting = true;
-    // hideDot();
     setSelected(true); // Гарантируем, что точка стала выбранной
     QGraphicsEllipseItem::mousePressEvent(ev);
 }
@@ -232,7 +219,6 @@ void Point::mousePressEvent(QGraphicsSceneMouseEvent* ev)
 void Point::mouseReleaseEvent(QGraphicsSceneMouseEvent* ev)
 {
     QGraphicsItem::mouseReleaseEvent(ev);
-    //_interacting = false;
     showDotIfIdle();
 }
 
@@ -329,15 +315,6 @@ void Point::showDotIfIdle()
     if (QGraphicsEllipseItem* dv = ensureDotVis())
         dv->setVisible(true);
 }
-
-void Point::hideDot()
-{
-    if (_dotVis)
-        _dotVis->setVisible(false);
-}
-
-
-//static constexpr qreal kCoverPaddingPx = 1.0; // запас на неточности между пикселями
 
 void Point::syncDotGeometry()
 {

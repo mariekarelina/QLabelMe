@@ -13,7 +13,6 @@ bool GraphicsView::init(MainWindow* mw)
 
 void GraphicsView::mouseMoveEvent(QMouseEvent* mouseEvent)
 {
-    // _mw->graphicsView_mouseMoveEvent(mouseEvent, this);
     if (_mw)
     {
         _mw->graphicsView_mouseMoveEvent(mouseEvent, this);
@@ -25,7 +24,6 @@ void GraphicsView::mouseMoveEvent(QMouseEvent* mouseEvent)
 
 void GraphicsView::mousePressEvent(QMouseEvent* mouseEvent)
 {
-    // _mw->graphicsView_mousePressEvent(mouseEvent, this);
     if (_mw)
     {
         _mw->graphicsView_mousePressEvent(mouseEvent, this);
@@ -37,7 +35,6 @@ void GraphicsView::mousePressEvent(QMouseEvent* mouseEvent)
 
 void GraphicsView::mouseReleaseEvent(QMouseEvent* mouseEvent)
 {
-    // _mw->graphicsView_mouseReleaseEvent(mouseEvent, this);
     if (_mw)
     {
         _mw->graphicsView_mouseReleaseEvent(mouseEvent, this);
@@ -63,7 +60,6 @@ void GraphicsView::wheelEvent(QWheelEvent* wheelEvent)
         }
         // Сбрасываем вид, чтобы курсор оставался на одной и той же позиции в сцене
         this->centerOn(scenePos);
-        //setZoom(getcurrentZoom() * 1.1);
         // Указываем, что событие обработано
         wheelEvent->accept();
     }

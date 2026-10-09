@@ -1,18 +1,19 @@
 #include "drag_circle.h"
 #include "circle.h"
+#include "square.h"
 #include "point.h"
 #include "shape.h"
-#include "square.h"
-#include <QtGui>
+
 #include <QApplication>
+#include <QtGui>
+
 #include <algorithm>
 
 namespace qgraph {
 
 DragCircle::DragCircle(QGraphicsScene* scene)
 {
-    //setFlag(QGraphicsItem::ItemIsMovable);
-    //setFlag(QGraphicsItem::ItemIsSelectable);
+
     setFlag(QGraphicsItem::ItemSendsScenePositionChanges);
     setAcceptHoverEvents(false);
     setAcceptedMouseButtons(Qt::NoButton);
@@ -50,8 +51,6 @@ DragCircle::DragCircle(QGraphicsScene* scene)
     // Устанавливаем начальный маленький размер
     setSmallSize();
 
-    //setRect(-_radius, -_radius, _radius * 2, _radius * 2);
-
     QColor color(123, 104, 238);
     setBrush(QBrush(color));
     setPen(QPen(Qt::black, 1));
@@ -66,13 +65,6 @@ DragCircle::DragCircle(QGraphicsScene* scene)
     scene->addItem(this);
 
     _selectedHandleColor = Qt::yellow;
-
-    // // Инициализация контекстного меню
-    // _contextMenu = new QMenu();
-    // QAction* deleteAction = _contextMenu->addAction("Удалить точку");
-    // QObject::connect(deleteAction, &QAction::triggered, [this]() {
-    //     emit deleteRequested(this); // Испускаем сигнал
-    // });
 }
 
 DragCircle::~DragCircle()
@@ -103,28 +95,10 @@ void DragCircle::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
     QGraphicsRectItem::hoverLeaveEvent(event);
 }
 
-void DragCircle::setBaseSize(qreal size)
-{
-    _smallSize = size;
-    _largeSize = size * 1.5;
-    _currentSize = size;
-    _baseRect = QRectF(-size/2, -size/2, size, size);
-
-    setRect(_baseRect);
-    rememberCurrentAsBase(this);
-    restoreBaseStyle();
-}
-
 void DragCircle::setSmallSize()
 {
     _currentSize = _smallSize;
     setRect(-_smallSize/2, -_smallSize/2, _smallSize, _smallSize);
-}
-
-void DragCircle::setLargeSize()
-{
-    _currentSize = _largeSize;
-    setRect(-_largeSize/2, -_largeSize/2, _largeSize, _largeSize);
 }
 
 bool DragCircle::collidesWithItem(const QGraphicsItem* other,
@@ -152,50 +126,6 @@ QPainterPath DragCircle::shape() const
     return path;
 }
 
-void DragCircle::applyHoverStyle(QGraphicsRectItem* item, bool active)
-{
-    if (!item) return;
-
-    // Убедимся, что «база» у этого item сохранена
-    if (!item->data(kRoleBaseRect).isValid())
-        rememberCurrentAsBase(item);
-
-    const QRectF baseRect = item->data(kRoleBaseRect).toRectF();
-    const QPen basePen = item->data(kRoleBasePen).value<QPen>();
-    const QBrush baseBr = item->data(kRoleBaseBrush).value<QBrush>();
-
-    // Для Circle/Point не рисуем hover-квадрат (узлы у них невидимые)
-    if (QGraphicsItem* p = item->parentItem())
-    {
-        if (dynamic_cast<qgraph::Circle*>(p) != nullptr ||
-            dynamic_cast<qgraph::Point*>(p)  != nullptr)
-        {
-            // На всякий случай держим в "невидимом" виде
-            item->setPen(Qt::NoPen);
-            item->setBrush(Qt::NoBrush);
-            return;
-        }
-    }
-
-    if (active)
-    {
-        // Увеличиваем относительно базового размера (без накопления)
-        //const qreal side = std::max(baseRect.width(), baseRect.height()) + 2.0; // или *1.5
-        const qreal side = baseRect.width() * 1.5;
-        item->setRect(QRectF(-side/2.0, -side/2.0, side, side));
-        item->setBrush(QBrush(Qt::yellow));
-        item->setPen(QPen(Qt::black, 1));
-        item->update();
-    }
-    else
-    {
-        // Полный возврат к «базе»
-        item->setRect(baseRect);
-        item->setPen(basePen);
-        item->setBrush(baseBr);
-    }
-}
-
 void DragCircle::rememberCurrentAsBase(QGraphicsRectItem* item)
 {
     if (!item) return;
@@ -214,7 +144,7 @@ void DragCircle::setHoverStyle(bool hover)
 
     if (hover)
     {
-        // Размер увеличиваем (чтобы удобнее было попадать), но для Circle/Point НЕ рисуем квадрат.
+        // Размер увеличиваем (чтобы удобнее было попадать)
         const qreal side = _baseRect.width() * 1.5;
         setRect(-side/2.0, -side/2.0, side, side);
 
@@ -284,14 +214,6 @@ void DragCircle::setBaseStyle(const QColor& color, qreal size)
     restoreBaseStyle();
 }
 
-void DragCircle::setBaseColor(const QColor& color)
-{
-    _baseColor = color;
-    _basePen = QPen(color.darker(150), 1);
-    _baseBrush = QBrush(color);
-    restoreBaseStyle();
-}
-
 void DragCircle::setHoverSizingEnabled(bool on)
 {
     _hoverSizingEnabled = on;
@@ -300,13 +222,6 @@ void DragCircle::setHoverSizingEnabled(bool on)
 void DragCircle::setSelectedHandleColor(const QColor& color)
 {
     _selectedHandleColor = color;
-}
-
-bool DragCircle::containsPoint(const QPointF &point) const
-{
-    qreal dx = point.x() - _center.x();
-    qreal dy = point.y() - _center.y();
-    return (dx*dx + dy*dy) <= (_radius * _radius);
 }
 
 void DragCircle::setCenter(const QPointF &center)

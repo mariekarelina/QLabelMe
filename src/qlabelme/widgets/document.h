@@ -1,18 +1,17 @@
 #pragma once
 
-#include "shared/defmac.h"
-#include "shared/simple_ptr.h"
-#include "shared/container_ptr.h"
 #include "qgraphics2/video_rect.h"
+#include "shared/container_ptr.h"
+#include "shared/simple_ptr.h"
+#include "shared/defmac.h"
 
-#include <QGraphicsItem>
-#include <QGraphicsPixmapItem>
+#include <QStandardItemModel>
 #include <QGraphicsScene>
+#include <QGraphicsItem>
+#include <QUndoStack>
 #include <QPixmap>
 #include <QPointF>
-#include <QStandardItemModel>
 #include <QString>
-#include <QUndoStack>
 #include <QVector>
 
 #include <memory>
@@ -21,7 +20,6 @@ struct PolygonListData
 {
     QVector<QGraphicsItem*> items; // Порядок фигур в правой панели
     QStandardItemModel model;      // Модель, которую отображает QListView
-    //std::unique_ptr<QStandardItemModel> model; // Модель, которую отображает QListView
 };
 
 struct Document
@@ -34,17 +32,14 @@ struct Document
     DISABLE_DEFAULT_COPY(Document)
 
     QString filePath;                            // Путь к файлу изображения
-    //QGraphicsScene* scene; // = {nullptr};     // Сцена с изображением и разметкой
     simple_ptr<QGraphicsScene> scene;
     qgraph::VideoRect* videoRect = {nullptr};
     QPixmap pixmap;                              // Само изображение
-    QGraphicsPixmapItem* pixmapItem = {nullptr}; // Элемент на сцене
     bool isModified = {false};                   // Есть ли несохраненные изменения
 
     PolygonListData polygonList; // Данные списка фигур для текущего документа
 
     std::unique_ptr<QUndoStack> _undoStack;
-    QUndoStack undoStack2;
 
     struct
     {

@@ -1,16 +1,17 @@
 #include "polyline.h"
-#include <QPainter>
-#include <QPen>
-#include <QKeyEvent>
-#include <QRectF>
-#include <QTimer>
-#include <QGraphicsSceneMouseEvent>
+
 #include <QStyleOptionGraphicsItem>
+#include <QGraphicsSceneMouseEvent>
 #include <QPainterPathStroker>
-#include <QCursor>
 #include <QGraphicsView>
 #include <QMetaObject>
+#include <QKeyEvent>
 #include <QVariant>
+#include <QPainter>
+#include <QCursor>
+#include <QTimer>
+#include <QRectF>
+#include <QPen>
 
 namespace qgraph {
 
@@ -404,13 +405,6 @@ void Polyline::closePolyline()
     setClosed(true, true);
 }
 
-bool Polyline::isClickOnFirstPoint(const QPointF& scenePos) const
-{
-    if (_circles.isEmpty()) return false;
-    const QPointF p0 = _circles.first()->scenePos();
-    return QLineF(scenePos, p0).length() <= 8.0;
-}
-
 bool Polyline::isClickOnAnyPoint(const QPointF& scenePos, int* idx) const
 {
     for (int i = 0; i < _circles.size(); ++i) {
@@ -639,16 +633,6 @@ void Polyline::keyPressEvent(QKeyEvent* event)
 
 void Polyline::mousePressEvent(QGraphicsSceneMouseEvent* event)
 {
-    // if (s_closeMode == CloseMode::SingleClickOnFirstPoint &&
-    //     event->button() == Qt::LeftButton)
-    // {
-    //     if (isClickOnFirstPoint(event->scenePos()))
-    //     {
-    //         closePolyline();
-    //         event->accept();
-    //         return;
-    //     }
-    // }
     QGraphicsPathItem::mousePressEvent(event);
 }
 
@@ -666,7 +650,6 @@ void Polyline::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event)
             return;
         }
     }
-    // QGraphicsPathItem::mouseDoubleClickEvent(event);
 }
 
 void Polyline::hoverEnterEvent(QGraphicsSceneHoverEvent* event)

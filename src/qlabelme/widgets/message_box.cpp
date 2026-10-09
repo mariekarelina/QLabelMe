@@ -1,8 +1,8 @@
 #include "message_box.h"
 
-#include <QTimer>
-#include <QPushButton>
 #include <QApplication>
+#include <QPushButton>
+#include <QTimer>
 
 class TimedMessageBox : public QMessageBox
 {
@@ -43,9 +43,6 @@ TimedMessageBox::TimedMessageBox(QWidget* parent, int closeTimeout)
             {
                 _closeTimer.stop();
                 this->accept();
-                //QAbstractButton* btn = this->button(QMessageBox::Ok);
-                //if (btn)
-                //    btn->animateClick();
             }
         });
     }
@@ -67,7 +64,6 @@ QMessageBox::StandardButton messageBox(QWidget* parent,
 {
     message.replace("  ", "<br>").replace(" ", "&nbsp;");
     TimedMessageBox msgBox {parent, closeTimeout};
-    //msgBox.setWindowModality(Qt::WindowModal);
     msgBox.setIcon(icon);
     msgBox.setWindowTitle(qApp->applicationName());
     msgBox.setTextFormat(Qt::RichText);

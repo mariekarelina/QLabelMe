@@ -2,7 +2,6 @@
 
 #include "user_type.h"
 #include "shape.h"
-//#include "drag_circle.h"
 
 #include <QtCore>
 #include <QGraphicsItem>
@@ -61,10 +60,6 @@ protected:
 
 private:
     void showDotIfIdle();
-    void hideDot();
-    void appearanceFromSettings(qreal handleSizePx,
-                                const QColor& pointColor,
-                                qreal outlineWidthPx);
     void syncDotGeometry();
     void syncDotColors();
     qreal dotRadiusLocal() const;
@@ -81,7 +76,6 @@ private:
     QColor _highlightColor = Qt::transparent;
 
     QGraphicsEllipseItem* _dotVis = {nullptr}; // Кружок точки
-    //QPointer<QGraphicsEllipseItem> _dotVis;
     qreal  _dotRadiusPx = 3.0;
     QColor _dotColor = Qt::white;
 
