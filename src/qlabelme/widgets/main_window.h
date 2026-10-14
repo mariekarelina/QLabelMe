@@ -398,6 +398,12 @@ private:
     QString _currentImagePath;
     // Буфер для копирования фигур между сценами
     QString _shapesClipboard;
+    // Последняя вставленная разметка и изображение назначения
+    QString _lastPastedYaml;
+    QString _lastPasteImagePath;
+
+    // Количество последовательных вставок одной разметки
+    int _pasteCount = 0;
 
     QMap<QString /*class name*/, QColor> _projectClassColors;
 

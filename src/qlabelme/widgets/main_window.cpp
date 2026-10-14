@@ -5373,6 +5373,7 @@ void MainWindow::copySelectedShapes()
         return;
 
     _shapesClipboard = yaml;
+    _pasteCount = 0;
     writeShapesYamlToClipboard(yaml);
 }
 
@@ -5410,43 +5411,26 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     // Запоминаем, что было на сцене ДО вставки
     QList<QGraphicsItem*> beforeItems = scene->items();
 
-    QString (*normalizedImagePath)(const QString&) = [](const QString& path) -> QString
-    {
-        if (path.isEmpty())
-            return {};
+    const QString currentPath =
+        QDir::cleanPath(QFileInfo(doc->filePath).absoluteFilePath());
 
-        return QDir::cleanPath(QFileInfo(path).absoluteFilePath());
-    };
+    const bool repeatedPaste = yaml == _lastPastedYaml
+                              && currentPath == _lastPasteImagePath;
 
-    QString sourceImagePath;
-    yconfig.getValue("sourceImagePath", sourceImagePath, false);
+    const int nextPasteCount = repeatedPaste ? _pasteCount + 1 : 1;
 
-    const QString sourcePath = normalizedImagePath(sourceImagePath);
-    const QString currentPath = normalizedImagePath(doc->filePath);
+    QSize imageSize = doc->pixmap.size();
 
-#ifdef Q_OS_WIN
-    const bool sameImage = !sourcePath.isEmpty() &&
-                           QString::compare(sourcePath, currentPath, Qt::CaseInsensitive) == 0;
-#else
-    const bool sameImage = !sourcePath.isEmpty() && sourcePath == currentPath;
-#endif
+    if (!imageSize.isValid() && videoRect)
+        imageSize = videoRect->pixmap().size();
 
-    QPointF pasteOffset;
+    const qreal imageSide = qMin(imageSize.width(), imageSize.height());
 
-    if (sameImage)
-    {
-        QSize imageSize = doc->pixmap.size();
+    // Сдвиг равен 2% от меньшей стороны изображения
+    const qreal offsetValue = qBound<qreal>(10.0, imageSide * 0.02, 250.0);
 
-        if (!imageSize.isValid() && videoRect)
-            imageSize = videoRect->pixmap().size();
-
-        const qreal imageSide = qMin(imageSize.width(), imageSize.height());
-
-        // Сдвиг равен 2% от меньшей стороны изображения
-        const qreal offsetValue = qBound<qreal>(10.0, imageSide * 0.02, 250.0);
-
-        pasteOffset = QPointF(offsetValue, offsetValue);
-    }
+    const QPointF pasteOffset =
+        QPointF(offsetValue, offsetValue) * nextPasteCount;
 
     if (!loadShapesFromYaml(doc, yconfig, pasteOffset))
         return;
@@ -5486,6 +5470,11 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     if (newItems.isEmpty())
         return;
+
+    // Запоминаем только успешную вставку
+    _lastPastedYaml = yaml;
+    _lastPasteImagePath = currentPath;
+    _pasteCount = nextPasteCount;
 
     // Восстанавливаем порядок, в котором фигуры записаны в YAML.
     std::sort(newItems.begin(), newItems.end(),
