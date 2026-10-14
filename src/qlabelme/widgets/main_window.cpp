@@ -524,7 +524,6 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     if (isAnyDrawingNow())
     {
         _isDraggingImage = false;
-        _isAllMoved = false;
         _shiftImageDragging = false;
         updateModeLabel();
     }
@@ -783,7 +782,6 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 _draggingItem = nullptr;
                 _isDraggingImage = false;
                 _shiftImageDragging = false;
-                _isAllMoved = false;
 
                 _lastMousePos = mouseEvent->pos();
                 mouseEvent->accept();
@@ -828,7 +826,6 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         _draggingItem = nullptr;
         _isDraggingImage = false;
         _shiftImageDragging = false;
-        _isAllMoved = false;
 
         const bool drawingLineLike =
                 _drawingLine || _drawingPolyline || _isDrawingLine || _isDrawingPolyline;
@@ -1767,13 +1764,6 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         return;
     }
 
-    if (mouseEvent->button() == Qt::LeftButton && _isAllMoved)
-    {
-        _isAllMoved = false;
-        updateModeLabel();
-        return;
-    }
-
     if (mouseEvent->button() == Qt::LeftButton)
         _moveInProgress = false;
 
@@ -1795,9 +1785,6 @@ void MainWindow::setSceneItemsMovable(bool movable)
             continue;
 
         if (item != doc->videoRect
-            && item != _tempRectItem
-            && item != _tempCircleItem
-            && item != _tempPolyline
             && item != _currCircle
             && item != _currCircleCrossV
             && item != _currCircleCrossH)
@@ -1830,10 +1817,7 @@ void MainWindow::changeClassByUid(qulonglong uid)
     for (QGraphicsItem* item : doc->scene->items())
     {
         if (item == nullptr
-            || (item == doc->videoRect)
-            || (item == _tempRectItem)
-            || (item == _tempCircleItem)
-            || (item == _tempPolyline))
+            || (item == doc->videoRect))
         {
             continue;
         }
@@ -3381,7 +3365,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                 QPainterPathStroker stroker;
                 const qreal rScene = viewPixelsToSceneRadius(ui->graphView,
-                                                            effectiveViewPickPx(_edgePickRadius));
+                                                            _edgePickRadius);
 
                 const QPointF lp0 = polyline->mapFromScene(scenePos);
                 const QPointF lp1 = polyline->mapFromScene(scenePos + QPointF(rScene, 0));
@@ -3476,7 +3460,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                 QPainterPathStroker stroker;
                 const qreal rScene = viewPixelsToSceneRadius(ui->graphView,
-                                                            effectiveViewPickPx(_edgePickRadius));
+                                                            _edgePickRadius);
 
                 const QPointF lp0 = line->mapFromScene(scenePos);
                 const QPointF lp1 = line->mapFromScene(scenePos + QPointF(rScene, 0));
@@ -3936,8 +3920,6 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem*
     if (!doc || !doc->scene)
         return;
 
-    _currentImagePath = doc->filePath;
-
     ui->graphView->setScene(doc->scene);
 
     setPolygonListModelForCurrentDocument();
@@ -4022,10 +4004,7 @@ void MainWindow::onPolygonListSelectionChanged()
             if (!item)
                 continue;
 
-            if (item == videoRect
-                || item == _tempRectItem
-                || item == _tempCircleItem
-                || item == _tempPolyline)
+            if (item == videoRect)
             {
                 continue;
             }
@@ -4080,10 +4059,7 @@ void MainWindow::selectAllShapes()
             if (!item)
                 continue;
 
-            if (item == videoRect
-                || item == _tempRectItem
-                || item == _tempCircleItem
-                || item == _tempPolyline)
+            if (item == videoRect)
             {
                 continue;
             }
@@ -4276,7 +4252,6 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
     }
 
     _documentsMap.clear();
-    _currentImagePath.clear();
 
     ui->fileList->clear();
     ui->polygonList->setModel(nullptr);
@@ -4512,10 +4487,7 @@ void MainWindow::on_actSettingsApp_triggered()
                     continue;
 
                 Document::Ptr doc = currentDocument();
-                if (item == doc->videoRect
-                    || item == _tempRectItem
-                    || item == _tempCircleItem
-                    || item == _tempPolyline)
+                if (item == doc->videoRect)
                 {
                     continue;
                 }
@@ -4596,10 +4568,7 @@ void MainWindow::on_actSettingsApp_triggered()
                 if (!item)
                     continue;
 
-                if (item == doc->videoRect
-                    || item == _tempRectItem
-                    || item == _tempCircleItem
-                    || item == _tempPolyline)
+                if (item == doc->videoRect)
                 {
                     continue;
                 }
@@ -5093,10 +5062,7 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
                 if (!item)
                     continue;
 
-                if (item == doc->videoRect
-                    || item == _tempRectItem
-                    || item == _tempCircleItem
-                    || item == _tempPolyline)
+                if (item == doc->videoRect)
                 {
                     continue;
                 }
@@ -5163,10 +5129,7 @@ void MainWindow::updatePolygonListForCurrentScene()
         if (!item)
             continue;
 
-        if (item == videoRect
-            || item == _tempRectItem
-            || item == _tempCircleItem
-            || item == _tempPolyline)
+        if (item == videoRect)
         {
             continue;
         }
@@ -5335,12 +5298,6 @@ QString MainWindow::serializeSelectedItemsToYaml(Document::Ptr doc)
     YamlConfig yconfig;
     saveShapesToYaml(yconfig, selectedItems);
 
-    // Путь понадобится для определения сдвига при вставке
-    yconfig.setValue(
-        "sourceImagePath",
-        QFileInfo(doc->filePath).absoluteFilePath()
-    );
-
     std::string yaml;
     if (!yconfig.saveString(yaml))
         return {};
@@ -5444,10 +5401,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
         if (!item)
             continue;
 
-        if (item == videoRect
-            || item == _tempRectItem
-            || item == _tempCircleItem
-            || item == _tempPolyline)
+        if (item == videoRect)
         {
             continue;
         }
@@ -5502,8 +5456,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
             item->setSelected(true);
     }
 
-    if (!newItems.isEmpty() && newItems.last())
-        newItems.last()->setFocus();
+    newItems.last()->setFocus();
 
     raiseAllHandlesToTop();
 
@@ -5516,10 +5469,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
         if (!item)
             continue;
 
-        if (item == videoRect
-            || item == _tempRectItem
-            || item == _tempCircleItem
-            || item == _tempPolyline)
+        if (item == videoRect)
         {
             continue;
         }
@@ -5541,9 +5491,6 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     }
 
     // Добавляем новые фигуры в конец списка справа
-    QList<QListWidgetItem*> pastedListItems;
-    pastedListItems.reserve(newItems.size());
-
     QModelIndexList pastedIndexes;
 
     for (QGraphicsItem* item : newItems)
@@ -6618,10 +6565,7 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
             if (!item)
                 continue;
 
-            if (item == videoRect
-                || item == _tempRectItem
-                || item == _tempCircleItem
-                || item == _tempPolyline)
+            if (item == videoRect)
             {
                 continue;
             }
@@ -6722,10 +6666,7 @@ void MainWindow::onSceneSelectionChanged()
         if (!item)
             continue;
 
-        if (item == videoRect
-            || item == _tempRectItem
-            || item == _tempCircleItem
-            || item == _tempPolyline)
+        if (item == videoRect)
         {
             continue;
         }
@@ -7242,10 +7183,7 @@ bool MainWindow::isRootShapeItem(QGraphicsItem* item) const
     Document::Ptr doc = currentDocument();
     qgraph::VideoRect* videoRect = doc ? doc->videoRect : nullptr;
 
-    if (item == videoRect
-        || item == _tempRectItem
-        || item == _tempCircleItem
-        || item == _tempPolyline)
+    if (item == videoRect)
     {
         return false;
     }
@@ -7347,35 +7285,9 @@ void MainWindow::moveSelectedItemsToBack()
     QList<QGraphicsItem*> selectedRoots;
     QList<QGraphicsItem*> nonSelectedRoots;
 
-    std::function<bool(QGraphicsItem*)> isRootShape = [this](QGraphicsItem* item) -> bool
-    {
-        if (!item)
-            return false;
-
-        Document::Ptr doc = currentDocument();
-        qgraph::VideoRect* videoRect = doc->videoRect;
-
-        if (item == videoRect ||
-            item == _tempRectItem ||
-            item == _tempCircleItem ||
-            item == _tempPolyline)
-        {
-            return false;
-        }
-
-        if (item->parentItem() != nullptr)
-            return false;
-
-        return dynamic_cast<qgraph::Rectangle*>(item) ||
-               dynamic_cast<qgraph::Circle*>(item) ||
-               dynamic_cast<qgraph::Polyline*>(item) ||
-               dynamic_cast<qgraph::Line*>(item) ||
-               dynamic_cast<qgraph::Point*>(item);
-    };
-
     for (QGraphicsItem* item : scene->items())
     {
-        if (!isRootShape(item))
+        if (!isRootShapeItem(item))
             continue;
 
         if (item->isSelected())
@@ -7509,7 +7421,7 @@ qgraph::DragCircle* MainWindow::pickHiddenHandle(const QPointF& scenePos, bool& 
     if (!scene) return nullptr;
 
     GraphicsView* view = ui ? ui->graphView : nullptr;
-    const qreal radiusScene = viewPixelsToSceneRadius(view, effectiveViewPickPx(_ghostPickRadius));
+    const qreal radiusScene = viewPixelsToSceneRadius(view, _ghostPickRadius);
     if (radiusScene <= 0.0)
       return nullptr;
 
@@ -7710,7 +7622,6 @@ void MainWindow::setGhostStyleIdle()
     _ghostHandle->setRect(-_smallSize/2, -_smallSize/2, _smallSize, _smallSize);
     QColor color(255, 255, 255, 200);
     _ghostHandle->setBrush(QBrush(color));
-    _ghostHandle->setPen(QPen(Qt::black, 1));
     _ghostHandle->setPen(QPen(color.darker(200)));
 
     _ghostHandle->setPos(centerScene - _ghostHandle->rect().center());
@@ -7725,7 +7636,6 @@ void MainWindow::startGhostDrag(const QPointF& scenePos)
     _ghostActive = true;
     _ghostHover  = false;
 
-    _ghostGrabOffset = scenePos - _ghostHandle->pos();
     _ghostTarget->setGhostDriven(true);
 
     startHandleEditState(_ghostTarget);
@@ -7734,11 +7644,6 @@ void MainWindow::startGhostDrag(const QPointF& scenePos)
     updateModeLabel();
 
     setGhostStyleHover();
-}
-
-qreal MainWindow::imagePickScale() const
-{
-    return 1.0;
 }
 
 qreal MainWindow::viewPixelsToSceneRadius(GraphicsView* view, qreal viewPx) const
@@ -7758,11 +7663,6 @@ qreal MainWindow::viewPixelsToSceneRadius(GraphicsView* view, qreal viewPx) cons
     return viewPx / s;
 }
 
-qreal MainWindow::effectiveViewPickPx(qreal baseValue) const
-{
-    return baseValue* imagePickScale();
-}
-
 qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
 {
     return pickHandleAt(scenePos, _ghostPickRadius);
@@ -7777,7 +7677,7 @@ qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos, qreal cust
         return nullptr;
 
     GraphicsView* view = ui ? ui->graphView : nullptr;
-    const qreal pickRadius = viewPixelsToSceneRadius(view, effectiveViewPickPx(customRadius));
+    const qreal pickRadius = viewPixelsToSceneRadius(view, customRadius);
     if (pickRadius <= 0.0)
         return nullptr;
 
@@ -7841,7 +7741,7 @@ QGraphicsItem* MainWindow::pickItemByEdgeAt(GraphicsView* view, const QPoint& vi
 
     const QPointF scenePos = view->mapToScene(viewPos);
 
-    const qreal radiusScene = viewPixelsToSceneRadius(view, effectiveViewPickPx(_edgePickRadius));
+    const qreal radiusScene = viewPixelsToSceneRadius(view, _edgePickRadius);
 
     if (radiusScene <= 0.0)
         return nullptr;
@@ -8949,25 +8849,6 @@ void MainWindow::setPolygonListModelForCurrentDocument()
     updateShapeListButtons();
 }
 
-void MainWindow::removeListEntryBySceneItem(QGraphicsItem* sceneItem)
-{
-    if (!sceneItem)
-        return;
-
-    Document::Ptr doc = currentDocument();
-    if (!doc) return;
-
-    const int row = polygonListRowByItem(sceneItem);
-
-    if (row < 0)
-        return;
-
-    doc->polygonList.items.removeAt(row);
-    doc->polygonList.model.removeRow(row);
-
-    renumberPolygonList();
-}
-
 QGraphicsItem* MainWindow::sceneItemFromListIndex(const QModelIndex& index) const
 {
     if (!index.isValid())
@@ -9750,9 +9631,7 @@ void MainWindow::updateModeLabel()
     // }
     if (_isDraggingImage)
     {
-        _modeLabel->setText(_isAllMoved
-                            ? u8"Режим: перемещение (изображение + разметка)"
-                            : u8"Режим: перемещение (изображение)");
+        _modeLabel->setText(u8"Режим: перемещение (изображение)");
         return;
     }
     if (_handleDragging || _m_isDraggingHandle || _ghostActive)

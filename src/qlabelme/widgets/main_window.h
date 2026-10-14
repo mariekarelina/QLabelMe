@@ -178,7 +178,6 @@ private:
     bool hasAnnotationFile(const QString& imagePath) const;
 
     QString classesYamlPath() const;
-    const QStringList& projectClasses() const {return _projectClasses;}
 
     bool loadClassesFromFile(const QString& filePath);
     bool saveProjectClasses(const QStringList& classes, const QMap<QString, QColor>& colors);
@@ -226,9 +225,7 @@ private:
     void startGhostDrag(const QPointF& scenePos);
 
     // Масштабируемые области захвата
-    qreal imagePickScale() const;
     qreal viewPixelsToSceneRadius(GraphicsView* view, qreal viewPx) const;
-    qreal effectiveViewPickPx(qreal baseViewPx) const;
 
     qgraph::DragCircle* pickHandleAt(const QPointF& scenePos) const;
     qgraph::DragCircle* pickHandleAt(const QPointF& scenePos, qreal customRadius) const;
@@ -277,9 +274,6 @@ private:
     void restoreDrawingStateAfterStackChange();
 
     void setPolygonListModelForCurrentDocument();
-
-    // Удаляет одну запись из списка по заданному QGraphicsItem
-    void removeListEntryBySceneItem(QGraphicsItem* sceneItem);
 
     QGraphicsItem* sceneItemFromListIndex(const QModelIndex& index) const;
     QGraphicsItem* sceneItemFromListRow(int row) const;
@@ -355,10 +349,9 @@ private:
     bool _drawingLine      = {false}; // Флаг, рисуется ли линия
     bool _drawingPolyline  = {false}; // Флаг, рисуется ли полилиния
     bool _drawingRectangle = {false}; // Флаг, рисуется ли прямоугольник
-    bool _drawingPoint     = {false};
+    bool _drawingPoint     = {false}; // Флаг, рисуется ли точка
     bool _isInDrawingMode  = {false}; // Флаг, указывающий что мы в режиме рисования новой фигуры
     bool _isDraggingImage  = {false}; // Флаг для перетаскивания изображения
-    bool _isAllMoved       = {false}; // Флаг для перетаскивания изображения вместе с разметкой
 
     enum class PendingDrawTool {None, Polyline, Line};
     PendingDrawTool _pendingDrawTool = {PendingDrawTool::None};
@@ -394,8 +387,6 @@ private:
 
     QMap<QString /*file path*/, Document::Ptr> _documentsMap;
 
-    // Текущее изображение
-    QString _currentImagePath;
     // Буфер для копирования фигур между сценами
     QString _shapesClipboard;
     // Последняя вставленная разметка и изображение назначения
@@ -406,11 +397,6 @@ private:
     int _pasteCount = 0;
 
     QMap<QString /*class name*/, QColor> _projectClassColors;
-
-    // Временные данные для рисования
-    QGraphicsRectItem* _tempRectItem = {nullptr};
-    QGraphicsEllipseItem* _tempCircleItem = {nullptr};
-    qgraph::Polyline* _tempPolyline = {nullptr};
 
     qreal _m_zoom = 1.0;
     static constexpr qreal _kZoomStep = {1.10};
@@ -425,7 +411,6 @@ private:
     qgraph::DragCircle* _ghostTarget = {nullptr}; // Реальная ручка
     bool _ghostActive = {false};
     bool _ghostHover  = {false};
-    QPointF _ghostGrabOffset; // Смещение точки хвата
     qreal _ghostPickRadius = {6.0}; // Радиус поиска ручки под курсором
     qreal _edgePickRadius  = {8.0}; // Радиус захвата ребер
     qreal _drawHandleCommitRadius = {0.01}; // Точное попадание в узел именно во время рисования line/polyline
