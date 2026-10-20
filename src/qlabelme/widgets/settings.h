@@ -55,6 +55,8 @@ public:
         int pointSize = 6;
         bool keepImageScale = false;
         bool keepMenuBarVisibility = false;
+        bool autoSaveEnabled = false;
+        int autoSaveIntervalSec = 30;
         double handlePickRadius = 6.0; // Область захвата узла
         double edgePickRadius = 8.0;  // Область захвата ребра
         bool showNumbers = true; // Глобальная видимость нумерации

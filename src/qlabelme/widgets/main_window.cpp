@@ -29,6 +29,7 @@
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QScrollBar>
+#include <QSaveFile>
 
 #include <algorithm>
 
@@ -66,6 +67,11 @@ MainWindow::MainWindow(QWidget* parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    _autoSaveTimer = new QTimer(this);
+
+    connect(_autoSaveTimer, &QTimer::timeout,
+        this, &MainWindow::autoSaveDocuments);
 
     ui->graphView->setViewportUpdateMode(QGraphicsView::MinimalViewportUpdate);
     ui->graphView->setCacheMode(QGraphicsView::CacheBackground);
@@ -229,6 +235,12 @@ MainWindow::MainWindow(QWidget* parent) :
     );
     statusBar()->addWidget(_modeLabel, 0);
     updateModeLabel();
+
+    _autoSaveLabel = new QLabel(this);
+    _autoSaveLabel->setText(u8"Автосохранение: выкл.");
+    _autoSaveLabel->setContentsMargins(8, 0, 8, 0);
+
+    statusBar()->addWidget(_autoSaveLabel, 0);
 
     QString fileName = "/home/marie/фон.png";
     QPixmap pix(fileName);
@@ -495,6 +507,7 @@ bool MainWindow::init()
     loadLastUsedFolder(); // Загружаем последнюю использованную папку
     loadGeometry();
     loadVisualStyle();    // Загружаем визуальный стиль
+    applyAutoSaveSettings(); // Запускаем таймер
     return true;
 }
 
@@ -4417,6 +4430,8 @@ void MainWindow::on_actSettingsApp_triggered()
 
     config::base().getValue("view.keep_image_scale_per_image", init.keepImageScale);
     config::base().getValue("ui.keep_menu_visibility", init.keepMenuBarVisibility);
+    config::base().getValue("autosave.enabled", init.autoSaveEnabled);
+    config::base().getValue("autosave.interval_sec", init.autoSaveIntervalSec);
 
     settings.setValues(init);
 
@@ -4522,7 +4537,12 @@ void MainWindow::on_actSettingsApp_triggered()
         // Масштаб при смене снимков
         config::base().setValue("view.keep_image_scale_per_image", v.keepImageScale);
         config::base().setValue("ui.keep_menu_visibility", v.keepMenuBarVisibility);
+
+        config::base().setValue("autosave.enabled", v.autoSaveEnabled);
+        config::base().setValue("autosave.interval_sec", v.autoSaveIntervalSec);
+
         config::base().saveFile();
+        applyAutoSaveSettings();
         visualStyleBackup = _vstyle;
 
         forEachScene([this](QGraphicsScene* sc)
@@ -5704,29 +5724,43 @@ void MainWindow::saveShapesToYaml(YamlConfig& yconfig,
     yconfig.setValue("shapes", saveShapes);
 }
 
-void MainWindow::saveAnnotationToFile(Document::Ptr doc)
-{
+bool MainWindow::saveAnnotationToFile(Document::Ptr doc, bool showError)
+    {
     if (!doc || !doc->scene || !doc->videoRect)
-        return;
+        return false;
 
     YamlConfig yconfig;
     saveShapesToYaml(yconfig, orderedShapeItemsForSave(doc));
 
     const QString yamlPath = annotationPathFor(doc->filePath);
-    const QByteArray encoded = QFile::encodeName(QDir::toNativeSeparators(yamlPath));
+    QSaveFile file(yamlPath);
 
-    const bool saved = yconfig.saveFile(std::string(encoded.constData(), encoded.size()));
+    // Формируем YAML в памяти перед записью на диск
+    std::string yaml;
+    bool saved = yconfig.saveString(yaml);
+
+    if (saved)
+    {
+        const qint64 size = static_cast<qint64>(yaml.size());
+
+        // Заменяем основной файл только после успешной записи
+        saved = file.open(QIODevice::WriteOnly)
+                && file.write(yaml.data(), size) == size
+                && file.commit();
+    }
+
     if (!saved)
     {
-        log_error_m << "Ошибка при сохранении разметки:" << yamlPath;
+        if (showError)
+        {
+            messageBox(
+                this,
+                QMessageBox::Warning,
+                u8"Не удалось сохранить файл разметки"
+            );
+        }
 
-        messageBox(
-            this,
-            QMessageBox::Warning,
-            u8"Не удалось сохранить файл разметки"
-        );
-
-        return;
+        return false;
     }
 
     // Запоминаем сохраненное состояние истории изменений
@@ -5736,6 +5770,109 @@ void MainWindow::saveAnnotationToFile(Document::Ptr doc)
     // Снимаем признак изменений и обновляем строку изображения
     doc->isModified = false;
     updateFileListDisplay(doc->filePath);
+
+    return true;
+}
+
+void MainWindow::applyAutoSaveSettings()
+{
+    bool enabled = false;
+    int intervalSec = 30;
+
+    config::base().getValue("autosave.enabled", enabled);
+    config::base().getValue("autosave.interval_sec", intervalSec);
+
+    // Используем стандартный интервал при неизвестном значении
+    if (intervalSec != 5 && intervalSec != 10
+        && intervalSec != 15 && intervalSec != 30
+        && intervalSec != 60 && intervalSec != 300)
+    {
+        intervalSec = 30;
+    }
+
+    const bool wasEnabled = _autoSaveTimer->isActive();
+    _autoSaveTimer->stop();
+
+    if (enabled)
+    {
+        _autoSaveTimer->start(intervalSec * 1000);
+
+        // При изменении интервала сохраняем последний результат на метке
+        if (!wasEnabled)
+        {
+            _autoSaveLabel->setText(u8"Автосохранение: вкл.");
+            _autoSaveLabel->setToolTip(
+                u8"Автоматическое сохранение ещё не выполнялось"
+            );
+        }
+    }
+    else
+    {
+        _autoSaveLabel->setText(u8"Автосохранение: выкл.");
+        _autoSaveLabel->setToolTip(QString());
+    }
+}
+
+void MainWindow::autoSaveDocuments()
+{
+    QWidget* modalWidget = QApplication::activeModalWidget();
+
+    // Окно настроек не блокирует автосохранение
+    const bool blockingDialog =
+        modalWidget && !qobject_cast<Settings*>(modalWidget);
+
+    // Не сохраняем во время загрузки, остальных диалогов и контекстных меню
+    if (_loadingNow
+        || blockingDialog
+        || QApplication::activePopupWidget())
+    {
+        return;
+    }
+
+    const bool editingCurrentDocument =
+        _isDrawingRectangle
+        || _isDrawingCircle
+        || _isDrawingPolyline
+        || _isDrawingLine
+        || _isDrawingPoint
+        || _resumeEditing
+        || (_drawingPolyline && _polyline)
+        || (_drawingLine && _line)
+        || _moveInProgress
+        || _m_isDraggingHandle
+        || _handleDragging
+        || _isDraggingImage
+        || _shiftImageDragging
+        || QApplication::mouseButtons() != Qt::NoButton;
+
+    if (editingCurrentDocument)
+        return;
+
+    const Document::Ptr doc = currentDocument();
+
+    if (!doc || !doc->scene || !doc->videoRect || !doc->isModified)
+        return;
+
+    if (!saveAnnotationToFile(doc, false))
+    {
+        _autoSaveLabel->setText(u8"Автосохранение: ошибка");
+        _autoSaveLabel->setToolTip(
+            QString::fromUtf8("Не удалось сохранить разметку:\n%1")
+                .arg(doc->filePath)
+        );
+
+        return;
+    }
+
+    _autoSaveLabel->setText(
+        QString::fromUtf8("Автосохранение: %1")
+            .arg(QTime::currentTime().toString("HH:mm:ss"))
+    );
+
+    _autoSaveLabel->setToolTip(
+        QString::fromUtf8("Последнее автосохранение:\n%1")
+            .arg(doc->filePath)
+    );
 }
 
 bool MainWindow::loadShapesFromYaml(Document::Ptr doc,

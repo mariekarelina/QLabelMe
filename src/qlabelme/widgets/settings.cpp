@@ -21,6 +21,20 @@ Settings::Settings(QWidget* parent)
 {
     ui->setupUi(this);
 
+    // Автосохранение
+    ui->comboAutoSaveInterval->addItem(u8"5 секунд", 5);
+    ui->comboAutoSaveInterval->addItem(u8"10 секунд", 10);
+    ui->comboAutoSaveInterval->addItem(u8"15 секунд", 15);
+    ui->comboAutoSaveInterval->addItem(u8"30 секунд", 30);
+    ui->comboAutoSaveInterval->addItem(u8"1 минута", 60);
+    ui->comboAutoSaveInterval->addItem(u8"5 минут", 300);
+
+    connect(ui->autoSaveEnabled, &QCheckBox::toggled,
+            ui->comboAutoSaveInterval, &QWidget::setEnabled);
+
+    connect(ui->autoSaveEnabled, &QCheckBox::toggled,
+            ui->labelAutoSaveInterval, &QWidget::setEnabled);
+
     ui->buttonBox->button(QDialogButtonBox::Ok)->setText(u8"ОК");
     ui->buttonBox->button(QDialogButtonBox::Apply)->setText(u8"Применить");
     ui->buttonBox->button(QDialogButtonBox::Cancel)->setText(u8"Отмена");
@@ -159,6 +173,19 @@ void Settings::applyModelToUi()
     //ui->spinLabelFontSize->setValue(_values.labelFontPt);
     ui->keepImageScale->setChecked(_values.keepImageScale);
     ui->keepMenuBarVisibility->setChecked(_values.keepMenuBarVisibility);
+    ui->autoSaveEnabled->setChecked(_values.autoSaveEnabled);
+
+    const int autoSaveIndex =
+        ui->comboAutoSaveInterval->findData(_values.autoSaveIntervalSec);
+
+    ui->comboAutoSaveInterval->setCurrentIndex(
+        autoSaveIndex >= 0
+            ? autoSaveIndex
+            : ui->comboAutoSaveInterval->findData(30)
+    );
+
+    ui->comboAutoSaveInterval->setEnabled(_values.autoSaveEnabled);
+    ui->labelAutoSaveInterval->setEnabled(_values.autoSaveEnabled);
     ui->showNumbers->setChecked(_values.showNumbers);
     ui->showSelectionFrame->setChecked(_values.showSelectionFrame);
     ui->fillShapeWhenSelected->setChecked(_values.fillShapeWhenSelected);
@@ -258,6 +285,9 @@ void Settings::applyUiToModel()
 
     _values.keepImageScale = ui->keepImageScale->isChecked();
     _values.keepMenuBarVisibility = ui->keepMenuBarVisibility->isChecked();
+    _values.autoSaveEnabled = ui->autoSaveEnabled->isChecked();
+    _values.autoSaveIntervalSec =
+        ui->comboAutoSaveInterval->currentData().toInt();
     _values.showNumbers = ui->showNumbers->isChecked();
     _values.showSelectionFrame = ui->showSelectionFrame->isChecked();
 

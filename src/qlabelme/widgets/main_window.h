@@ -23,6 +23,7 @@
 #include <QUndoGroup>
 #include <QUndoView>
 #include <QShortcut>
+#include <QTimer>
 
 #include <functional>
 
@@ -165,7 +166,11 @@ private:
                             YamlConfig& yconfig,
                             const QPointF& imageOffset);
 
-    void saveAnnotationToFile(Document::Ptr doc);
+    bool saveAnnotationToFile(Document::Ptr doc, bool showError = true);
+
+    void applyAutoSaveSettings();
+    void autoSaveDocuments();
+
     void updateFileListDisplay(const QString& filePath);
     void loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi = true);
 
@@ -336,6 +341,8 @@ private:
     static QUuidEx _applId;
 
     QLabel* _imageSizeLabel = {nullptr}; // Размер изображения в statusBar
+    QLabel* _autoSaveLabel = {nullptr};  // Состояние автосохранения
+    QTimer* _autoSaveTimer = {nullptr};  // Таймер автосохранения
 
     QString _currentFolderPath; // Переменную для хранения пути
     QString _lastUsedFolder; // Последняя открытая папка
