@@ -73,7 +73,7 @@ MainWindow::MainWindow(QWidget* parent) :
     connect(_autoSaveTimer, &QTimer::timeout,
         this, &MainWindow::autoSaveDocuments);
 
-    ui->graphView->setViewportUpdateMode(QGraphicsView::MinimalViewportUpdate);
+    ui->graphView->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
     ui->graphView->setCacheMode(QGraphicsView::CacheBackground);
 
     // toolbar в правую панель над "Фигуры/Координаты/Стек действий"
@@ -1104,35 +1104,32 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         _currPoint->setFocus();
 
         SelectClass dialog(_projectClasses, this);
+        const bool accepted = (dialog.exec() == QDialog::Accepted);
+        const QString selectedClass = accepted ? dialog.selectedClass() : QString();
 
-        if (dialog.exec() == QDialog::Accepted)
+        if (!selectedClass.isEmpty())
         {
-            const QString selectedClass = dialog.selectedClass();
-            if (!selectedClass.isEmpty())
+            _currPoint->setData(0, selectedClass);
+            applyClassColorToItem(_currPoint, selectedClass);
+            linkSceneItemToList(_currPoint);
+
+            if (QUndoStack* stack = activeUndoStack())
             {
-                _currPoint->setData(0, selectedClass);
-                applyClassColorToItem(_currPoint, selectedClass);
-                linkSceneItemToList(_currPoint);
-
-                if (Document::Ptr doc = currentDocument())
-                {
-                    if (QUndoStack* stack = activeUndoStack())
-                    {
-                        stack->push(new undo::Create(doc.get(),
-                                                     _currPoint,
-                                                     u8"Добавление точки"));
-                    }
-                }
+                stack->push(new undo::Create(doc.get(),
+                                             _currPoint,
+                                             u8"Добавление точки"));
             }
-        }
 
-        _currPoint = nullptr;
-
-        if (Document::Ptr doc = currentDocument())
-        {
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
+        else
+        {
+            scene->removeItem(_currPoint);
+            delete _currPoint;
+        }
+
+        _currPoint = nullptr;
 
         // Сразу завершаем, точка - единичный клик
         _drawingPoint = false;
@@ -1661,28 +1658,30 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         apply_NumberSize_ToItem(rectangle);
 
         SelectClass dialog(_projectClasses, this);
+        const bool accepted = (dialog.exec() == QDialog::Accepted);
+        const QString selectedClass = accepted ? dialog.selectedClass() : QString();
 
-        if (dialog.exec() == QDialog::Accepted)
+        if (!selectedClass.isEmpty())
         {
-            QString selectedClass = dialog.selectedClass();
-            if (!selectedClass.isEmpty())
-            {
-                rectangle->setData(0, selectedClass);
-                applyClassColorToItem(rectangle, selectedClass);
-                linkSceneItemToList(rectangle); // Связываем новый элемент с списком
-            }
-        }
-        if (Document::Ptr doc = currentDocument())
-        {
+            rectangle->setData(0, selectedClass);
+            applyClassColorToItem(rectangle, selectedClass);
+            linkSceneItemToList(rectangle);
+
             if (QUndoStack* stack = activeUndoStack())
             {
-                stack->push(new undo::Create(doc.get(), rectangle,
+                stack->push(new undo::Create(doc.get(),
+                                             rectangle,
                                              u8"Добавлен прямоугольник"));
             }
+
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
-        raiseAllHandlesToTop();
+        else
+        {
+            doc->scene->removeItem(rectangle);
+            delete rectangle;
+        }
     }
     else if (mouseEvent->button() == Qt::LeftButton && _isDrawingCircle)
     {
@@ -1724,34 +1723,30 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         apply_PointSize_ToItem(circle);
 
         SelectClass dialog(_projectClasses, this);
+        const bool accepted = (dialog.exec() == QDialog::Accepted);
+        const QString selectedClass = accepted ? dialog.selectedClass() : QString();
 
-        if (dialog.exec() == QDialog::Accepted)
+        if (!selectedClass.isEmpty())
         {
-            QString selectedClass = dialog.selectedClass();
-            if (!selectedClass.isEmpty())
+            circle->setData(0, selectedClass);
+            applyClassColorToItem(circle, selectedClass);
+            linkSceneItemToList(circle);
+
+            if (QUndoStack* stack = activeUndoStack())
             {
-                circle->setData(0, selectedClass);
-                applyClassColorToItem(circle, selectedClass);
-                linkSceneItemToList(circle); // Связываем новый элемент с списком
-
-                if (Document::Ptr doc = currentDocument())
-                {
-                    if (QUndoStack* stack = activeUndoStack())
-                    {
-                        stack->push(new undo::Create(doc.get(),
-                                                     circle,
-                                                     u8"Добавление круга"));
-                    }
-                }
-
+                stack->push(new undo::Create(doc.get(),
+                                             circle,
+                                             u8"Добавление круга"));
             }
-        }
-        if (Document::Ptr doc = currentDocument())
-        {
+
             doc->isModified = true;
             updateFileListDisplay(doc->filePath);
         }
-        raiseAllHandlesToTop();
+        else
+        {
+            doc->scene->removeItem(circle);
+            delete circle;
+        }
     }
     else if (mouseEvent->button() == Qt::LeftButton && _isDrawingRuler)
     {
@@ -9117,6 +9112,68 @@ void MainWindow::clearLinePolylineStateForDeletedItem(QGraphicsItem* item)
     }
 }
 
+bool MainWindow::discardDrawingUndoCommands()
+{
+    QUndoStack* stack = activeUndoStack();
+
+    if (!stack || _drawingUndoStartIndex < 0)
+        return false;
+
+    if (_drawingUndoStartIndex > stack->index())
+        return false;
+
+    // Откатываем действия текущего рисования
+    stack->setIndex(_drawingUndoStartIndex);
+
+    // Удаляем отмененные действия из ветки Redo
+    QUndoCommand* command = new QUndoCommand();
+    command->setObsolete(true);
+    stack->push(command);
+
+    _drawingUndoStartIndex = -1;
+
+    return true;
+}
+
+void MainWindow::cancelNewLinePolylineDrawing()
+{
+    // Откладываем удаление до завершения текущего события фигуры
+    QTimer::singleShot(0, this, [this]()
+    {
+        // Очищаем ссылки на узлы до их удаления
+        clearAllHandleHoverEffects();
+        _lastHoverHandle = nullptr;
+
+        qgraph::Line* line = _line;
+        qgraph::Polyline* polyline = _polyline;
+
+        // Обработчики изменения стека не должны обращаться к удаляемой фигуре
+        _line = nullptr;
+        _polyline = nullptr;
+
+        if (!discardDrawingUndoCommands())
+        {
+            _line = line;
+            _polyline = polyline;
+            return;
+        }
+
+        _drawingLine = false;
+        _drawingPolyline = false;
+        _isDrawingPolyline = false;
+        _isInDrawingMode = false;
+
+        _resumeEditing = false;
+        _resumeUid = 0;
+        _pendingDrawTool = PendingDrawTool::None;
+
+        setSceneItemsMovable(true);
+        updateModeLabel();
+        updateCoordinateList();
+        raiseAllHandlesToTop();
+    });
+}
+
 void MainWindow::cancelRulerMode()
 {
     _drawingRuler = false;
@@ -9818,6 +9875,12 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
     {
         _resumeEditing = false;
         _resumeUid = 0;
+
+        _drawingUndoStartIndex = -1;
+
+        if (QUndoStack* stack = activeUndoStack())
+            _drawingUndoStartIndex = stack->index();
+
         // Если полилиния еще не создана, создаем объект
         _polyline = new qgraph::Polyline(scene, _startPoint);
         qgraph::Polyline* createdPolyline = _polyline;
@@ -9851,8 +9914,15 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
                 if (!_resumeEditing)
                 {
                     SelectClass dialog(_projectClasses, this);
+                    const int result = dialog.exec();
 
-                    if (dialog.exec() == QDialog::Accepted)
+                    if (result != QDialog::Accepted || dialog.selectedClass().isEmpty())
+                    {
+                        cancelNewLinePolylineDrawing();
+                        return;
+                    }
+
+                    if (result == QDialog::Accepted)
                     {
                         const QString selectedClass = dialog.selectedClass();
 
@@ -10129,6 +10199,12 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
     {
         _resumeEditing = false;
         _resumeUid = 0;
+
+        _drawingUndoStartIndex = -1;
+
+        if (QUndoStack* stack = activeUndoStack())
+            _drawingUndoStartIndex = stack->index();
+
         // Если линия еще не создана, создаем объект
         _line = new qgraph::Line(scene, _startPoint);
         qgraph::Line* createdLine = _line;
@@ -10158,8 +10234,15 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
                 if (!_resumeEditing)
                 {
                     SelectClass dialog(_projectClasses, this);
+                    const int result = dialog.exec();
 
-                    if (dialog.exec() == QDialog::Accepted)
+                    if (result != QDialog::Accepted || dialog.selectedClass().isEmpty())
+                    {
+                        cancelNewLinePolylineDrawing();
+                        return;
+                    }
+
+                    if (result == QDialog::Accepted)
                     {
                         const QString selectedClass = dialog.selectedClass();
 

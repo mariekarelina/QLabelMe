@@ -292,6 +292,8 @@ private:
 
     // Сбросить состояния рисования при удалении line/polyline из сцены
     void clearLinePolylineStateForDeletedItem(QGraphicsItem* item);
+    bool discardDrawingUndoCommands();
+    void cancelNewLinePolylineDrawing();
 
     // Отмена линейки
     void cancelRulerMode();
@@ -390,6 +392,8 @@ private:
 
     qgraph::Polyline* _polyline = {nullptr};
     qgraph::Line* _line = {nullptr};
+    // Начальная позиция истории при создании линии или полилинии
+    int _drawingUndoStartIndex = -1;
     qgraph::Point* _currPoint = {nullptr};
 
     QMap<QString /*file path*/, Document::Ptr> _documentsMap;
