@@ -4,18 +4,20 @@
 #include "shared/defmac.h"
 #include "message_box.h"
 
-#include <QListWidgetItem>
-#include <QAbstractItemView>
-#include <QInputDialog>
-#include <QMessageBox>
-#include <QDialogButtonBox>
-#include <QPushButton>
-#include <QColor>
-#include <QHBoxLayout>
-#include <QLabel>
-#include <QToolButton>
-#include <QColorDialog>
 #include <algorithm>
+
+#include <QAbstractItemView>
+#include <QRandomGenerator>
+#include <QListWidgetItem>
+#include <QDialogButtonBox>
+#include <QInputDialog>
+#include <QColorDialog>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QHBoxLayout>
+#include <QToolButton>
+#include <QColor>
+#include <QLabel>
 
 static constexpr int RoleClassName = Qt::UserRole + 1; // Имя класса для QLabel
 static constexpr int RoleOriginalClassName = Qt::UserRole + 2;
@@ -238,7 +240,6 @@ void ProjectSettings::onSortAZ()
     {
         QListWidgetItem* it = ui->listClasses->item(i);
         ItemData d;
-        //d.name = it->text();
         d.name = it->data(RoleClassName).toString();
 
         d.color = it->data(Qt::UserRole).value<QColor>();
@@ -337,7 +338,6 @@ void ProjectSettings::onAddClass()
     dlg.setSizeGripEnabled(false); // Без уголка растяжения
 
     dlg.setWindowModality(Qt::WindowModal);
-    //dlg.move(this->geometry().center() - QPoint(sz.width()/2, sz.height()/2));
     const QPoint centerGlobal = this->mapToGlobal(this->rect().center());
     dlg.move(centerGlobal - QPoint(sz.width()/2, sz.height()/2));
 
@@ -387,7 +387,39 @@ void ProjectSettings::onAddClass()
     it->setData(RoleClassName, name);
     it->setData(RoleOriginalClassName, QString());
 
-    it->setData(Qt::UserRole, QColor());
+    // Генерируем цвет для нового класса
+    QColor color;
+
+    for (int attempt = 0; attempt < 64; ++attempt)
+    {
+        const int hue = QRandomGenerator::global()->bounded(360);
+        const QColor candidate = QColor::fromHsl(hue, 200, 120);
+
+        bool alreadyUsed = false;
+
+        for (int i = 0; i < ui->listClasses->count(); ++i)
+        {
+            const QColor existing =
+                ui->listClasses->item(i)->data(Qt::UserRole).value<QColor>();
+
+            if (existing.isValid() && existing == candidate)
+            {
+                alreadyUsed = true;
+                break;
+            }
+        }
+
+        if (!alreadyUsed)
+        {
+            color = candidate;
+            break;
+        }
+    }
+
+    if (!color.isValid())
+        color = QColor::fromHsl((ui->listClasses->count() * 47) % 360, 200, 120);
+
+    it->setData(Qt::UserRole, color);
 
     ui->listClasses->insertItem(insertRow, it);
     rebuildClassRowWidget(it);

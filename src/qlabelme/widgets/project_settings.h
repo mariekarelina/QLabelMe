@@ -1,11 +1,11 @@
 #pragma once
 
-#include <QDialog>
-#include <QStringList>
 #include <QAbstractButton>
 #include <QListWidgetItem>
-#include <QMap>
+#include <QStringList>
+#include <QDialog>
 #include <QColor>
+#include <QMap>
 
 namespace Ui { class ProjectSettings; }
 
