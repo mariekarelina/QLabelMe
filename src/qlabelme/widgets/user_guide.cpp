@@ -1,16 +1,16 @@
 #include "user_guide.h"
 #include "ui_user_guide.h"
 #include "shared/config/appl_conf.h"
+
 #include <QTreeWidgetItem>
-#include <QPushButton>
-#include <QFile>
-#include <QFileInfo>
-#include <QTextStream>
-#include <QMap>
-#include <QCloseEvent>
 #include <QGuiApplication>
-#include <QScreen>
+#include <QPushButton>
+#include <QTextStream>
+#include <QCloseEvent>
 #include <QSplitter>
+#include <QScreen>
+#include <QFile>
+#include <QMap>
 
 
 UserGuide::UserGuide(QWidget* parent)
@@ -76,13 +76,20 @@ void UserGuide::buildContents()
         return it;
     };
 
-    addItem(u8"Введение", "intro");
-    addItem(u8"Интерфейс", "ui");
+    addItem(u8"Интерфейс программы", "ui");
+    addItem(u8"Открытие и просмотр изображений", "images");
     addItem(u8"Создание разметки", "create");
-    addItem(u8"Редактирование", "edit");
+    addItem(u8"Выделение и редактирование", "edit");
+    addItem(u8"Узлы и операции с линиями", "nodes");
+    addItem(u8"Классы объектов", "classes");
+    addItem(u8"Нумерация и рамки", "numbering");
+    addItem(u8"Копирование и история действий", "clipboard");
+    addItem(u8"Сохранение разметки", "save");
+    addItem(u8"Автосохранение", "autosave");
+    addItem(u8"Линейка", "ruler");
+    addItem(u8"Настройки", "settings");
     addItem(u8"Горячие клавиши", "shortcuts");
     addItem(u8"Управление мышью", "mouse");
-    addItem(u8"Настройки", "settings");
 
     ui->treeContents->expandAll();
     ui->treeContents->setCurrentItem(ui->treeContents->topLevelItem(0));
@@ -124,11 +131,6 @@ static QString extractSectionByTitle(const QString& markdown, const QString& tit
 
 void UserGuide::showPage(const QString& key)
 {
-    // const QString sourceDir =
-    //     QFileInfo(QString::fromUtf8(__FILE__)).absolutePath();
-    // const QString mdPath = sourceDir + "/user_guide.md";
-
-    // QFile file(mdPath);
     const QString mdPath = ":/widgets/user_guide.md";
     QFile file(mdPath);
 
@@ -146,13 +148,20 @@ void UserGuide::showPage(const QString& key)
     const QString markdown = in.readAll();
 
     const QMap<QString, QString> sectionTitles = {
-        {"intro", "Введение"},
-        {"ui", "Интерфейс программы"},
-        {"create", "Создание разметки"},
-        {"edit", "Редактирование разметки"},
-        {"shortcuts", "Горячие клавиши"},
-        {"mouse", "Управление мышью"},
-        {"settings", "Настройки"}
+        {"ui", u8"Интерфейс программы"},
+        {"images", u8"Открытие и просмотр изображений"},
+        {"create", u8"Создание разметки"},
+        {"edit", u8"Выделение и редактирование"},
+        {"nodes", u8"Узлы и операции с линиями"},
+        {"classes", u8"Классы объектов"},
+        {"numbering", u8"Нумерация и рамки"},
+        {"clipboard", u8"Копирование и история действий"},
+        {"save", u8"Сохранение разметки"},
+        {"autosave", u8"Автосохранение"},
+        {"ruler", u8"Линейка"},
+        {"settings", u8"Настройки"},
+        {"shortcuts", u8"Горячие клавиши"},
+        {"mouse", u8"Управление мышью"},
     };
 
     const QString title = sectionTitles.value(key);
