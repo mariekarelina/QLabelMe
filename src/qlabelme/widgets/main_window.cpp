@@ -647,9 +647,10 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
         // Чтобы фигуры/сцена не начали двигаться во время возможного зума
         _leftMouseButtonDown = false;
-
         _zoomRectView = graphView;
         _zoomRectWasInteractive = graphView->isInteractive();
+        graphView->setInteractive(false);
+
         _zoomRectOrigin = mouseEvent->pos();
 
         if (_zoomRubberBand)
@@ -2164,6 +2165,19 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             QMouseEvent* me = static_cast<QMouseEvent*>(event);
             if (me->button() != Qt::LeftButton)
                 break;
+
+            // Передаем Ctrl + ЛКМ обработчику прямоугольного зума
+            if ((me->modifiers() & Qt::ControlModifier)
+                && !(me->modifiers() & Qt::ShiftModifier)
+                && !_drawingPolyline
+                && !_drawingLine
+                && !_drawingRectangle
+                && !_drawingCircle
+                && !_drawingPoint
+                && !_drawingRuler)
+            {
+                break;
+            }
 
             const QPointF sp = ui->graphView->mapToScene(me->pos());
 
