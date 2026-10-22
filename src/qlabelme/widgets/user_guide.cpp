@@ -23,11 +23,10 @@ UserGuide::UserGuide(QWidget* parent)
     setAttribute(Qt::WA_DeleteOnClose);
 
     loadGeometry();
-    buildContents();
 
     connect(ui->treeContents, &QTreeWidget::itemSelectionChanged, this, [this]()
     {
-        QList<QTreeWidgetItem*> items = ui->treeContents->selectedItems();
+        const QList<QTreeWidgetItem*> items = ui->treeContents->selectedItems();
         if (items.isEmpty())
             return;
 
@@ -35,8 +34,7 @@ UserGuide::UserGuide(QWidget* parent)
         showPage(key);
     });
 
-    // Показать первую страницу сразу
-    showPage("intro");
+    buildContents();
 
     ui->textBrowser->setOpenExternalLinks(true);
     ui->textBrowser->setStyleSheet("QTextBrowser { padding: 8px; }");
