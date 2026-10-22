@@ -907,64 +907,32 @@ void Line::paint(QPainter* painter,
 
 QRectF Line::boundingRect() const
 {
-    return shape().boundingRect();
+    return QGraphicsPathItem::boundingRect();
 }
 
 QPainterPath Line::shape() const
 {
-    QPainterPath basePath;
+    const QPainterPath basePath = path();
 
-    if (_circles.isEmpty())
-        return basePath;
-
-    basePath.moveTo(_circles[0]->pos());
-    for (int i = 1; i < _circles.size(); ++i)
-        basePath.lineTo(_circles[i]->pos());
-
-    qreal penWidthLocal = 1.0;
-
-    if (scene() && !scene()->views().isEmpty() && scene()->views().first())
-    {
-        QGraphicsView* view = scene()->views().first();
-        const qreal viewScale = view->transform().m11();
-
-        if (pen().isCosmetic())
-        {
-            const qreal px = qMax<qreal>(1.0, pen().widthF() > 0.0 ? pen().widthF() : 1.0);
-            penWidthLocal = (viewScale > 0.000001) ? (px / viewScale) : px;
-        }
-        else
-        {
-            penWidthLocal = qMax<qreal>(1.0, pen().widthF());
-        }
-    }
-    else
-    {
-        penWidthLocal = qMax<qreal>(1.0, pen().widthF() > 0.0 ? pen().widthF() : 1.0);
-    }
+    if (basePath.isEmpty())
+        return QPainterPath();
 
     QPainterPathStroker stroker;
-    stroker.setWidth(penWidthLocal);
+    stroker.setWidth(qMax<qreal>(1.0, pen().widthF()));
     stroker.setCapStyle(pen().capStyle());
     stroker.setJoinStyle(pen().joinStyle());
     stroker.setMiterLimit(pen().miterLimit());
 
     QPainterPath result = stroker.createStroke(basePath);
 
-    // Для линии из 3+ точек добавляем внутреннюю область контура,
-    // как у полилинии: hover/selection работают "внутри" фигуры.
-    if (_circles.size() > 2)
+    // Сохраняем выбор линии по внутренней области
+    if (basePath.elementCount() > 2)
     {
-        QPainterPath fillPath;
-        fillPath.moveTo(_circles[0]->pos());
-        for (int i = 1; i < _circles.size(); ++i)
-            fillPath.lineTo(_circles[i]->pos());
+        QPainterPath fillPath = basePath;
         fillPath.closeSubpath();
-
         result.addPath(fillPath);
     }
 
-    //return result.simplified();
     return result;
 }
 

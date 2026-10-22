@@ -922,60 +922,28 @@ void Polyline::paint(QPainter* painter,
 
 QRectF Polyline::boundingRect() const
 {
-    return shape().boundingRect();
+    return QGraphicsPathItem::boundingRect();
 }
 
 QPainterPath Polyline::shape() const
 {
-    QPainterPath basePath;
+    const QPainterPath basePath = path();
 
-    if (_circles.isEmpty())
-        return basePath;
-
-    basePath.moveTo(_circles[0]->pos());
-    for (int i = 1; i < _circles.size(); ++i)
-        basePath.lineTo(_circles[i]->pos());
-
-    if (_isClosed && _circles.size() > 1)
-    {
-        basePath.lineTo(_circles[0]->pos());
-        basePath.closeSubpath();
-    }
-
-    qreal penWidthLocal = 1.0;
-
-    if (scene() && !scene()->views().isEmpty() && scene()->views().first())
-    {
-        QGraphicsView* view = scene()->views().first();
-        const qreal viewScale = view->transform().m11();
-
-        if (pen().isCosmetic())
-        {
-            const qreal px = qMax<qreal>(1.0, pen().widthF() > 0.0 ? pen().widthF() : 1.0);
-            penWidthLocal = (viewScale > 0.000001) ? (px / viewScale) : px;
-        }
-        else
-        {
-            penWidthLocal = qMax<qreal>(1.0, pen().widthF());
-        }
-    }
-    else
-    {
-        penWidthLocal = qMax<qreal>(1.0, pen().widthF() > 0.0 ? pen().widthF() : 1.0);
-    }
+    if (basePath.isEmpty())
+        return QPainterPath();
 
     QPainterPathStroker stroker;
-    stroker.setWidth(penWidthLocal);
+    stroker.setWidth(qMax<qreal>(1.0, pen().widthF()));
     stroker.setCapStyle(pen().capStyle());
     stroker.setJoinStyle(pen().joinStyle());
     stroker.setMiterLimit(pen().miterLimit());
 
     QPainterPath result = stroker.createStroke(basePath);
 
-    if (_isClosed && _circles.size() > 2)
+    // Внутренняя область доступна для выбора после замыкания
+    if (_isClosed && basePath.elementCount() > 2)
         result.addPath(basePath);
 
-    //return result.simplified();
     return result;
 }
 

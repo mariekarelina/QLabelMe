@@ -10,7 +10,6 @@
 #include "qgraphics2/rectangle.h"
 #include "qgraphics2/drag_circle.h"
 
-
 namespace {
 
 double distanceSquaredToSegment(const QPointF& point,
@@ -201,8 +200,40 @@ Create::~Create()
 
 void Create::undo()
 {
+    const QList<QGraphicsItem*> children = _shape->childItems();
+
+    qDebug() << "Create::undo BEFORE"
+             << "shape:" << _shape
+             << "scene:" << _shape->scene()
+             << "children:" << children.size();
+
     _doc->scene->removeItem(_shape);
     _shapesCollector.insert(_shape);
+
+    qDebug() << "Create::undo AFTER"
+             << "shape:" << _shape
+             << "scene:" << _shape->scene();
+
+    for (QGraphicsItem* child : children)
+    {
+        qDebug() << "CHILD"
+                 << "item:" << child
+                 << "parent:" << child->parentItem()
+                 << "scene:" << child->scene();
+    }
+
+    for (QGraphicsItem* item : _doc->scene->items())
+    {
+        if (qgraph::DragCircle* handle =
+                dynamic_cast<qgraph::DragCircle*>(item))
+        {
+            qDebug() << "REMAINING HANDLE"
+                     << "item:" << static_cast<QGraphicsItem*>(handle)
+                     << "parent:" << handle->parentItem()
+                     << "pos:" << handle->scenePos()
+                     << "visible:" << handle->isVisible();
+        }
+    }
 }
 
 void Create::redo()
@@ -933,7 +964,14 @@ void NodeEdit::undo()
         qgraph::Line* line = dynamic_cast<qgraph::Line*>(_shape);
 
         if (line)
-            line->removePointAtIndex(_data.pointIndex);
+        {
+            const int lastIndex = line->circles().size() - 1;
+
+            if (_data.pointIndex == lastIndex)
+                line->removeLastPointForce(false);
+            else
+                line->removePointAtIndex(_data.pointIndex);
+        }
 
         break;
     }
@@ -953,7 +991,14 @@ void NodeEdit::undo()
         qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_shape);
 
         if (polyline)
-            polyline->removePointAtIndex(_data.pointIndex);
+        {
+            const int lastIndex = polyline->circles().size() - 1;
+
+            if (_data.pointIndex == lastIndex)
+                polyline->removeLastPointForce(false);
+            else
+                polyline->removePointAtIndex(_data.pointIndex);
+        }
 
         break;
     }
