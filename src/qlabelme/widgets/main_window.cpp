@@ -123,8 +123,6 @@ MainWindow::MainWindow(QWidget* parent) :
     htb->setStretch(1, 0);
     htb->setStretch(2, 1);
 
-    ui->toolBar->setMinimumWidth(ui->toolBar->sizeHint().width());
-
     // Нижняя общая линия под тулбарами
     QFrame* hSep = new QFrame(toolBarsBlock);
     hSep->setFrameShape(QFrame::HLine);
@@ -308,8 +306,13 @@ MainWindow::MainWindow(QWidget* parent) :
     updateShapeListButtons();
     ui->splitter->setSizes({INT_MAX, INT_MAX});
 
-    // Сохраняем начальные размеры сплиттера
-    _savedSplitterSizes = ui->splitter->sizes();
+    // Рабочая область занимает место, освобожденное правой панелью
+    ui->graphView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    ui->splitter2->setStretchFactor(0, 1);
+    ui->splitter2->setStretchFactor(1, 0);
+
+    // Длинный путь к папке не ограничивает ширину правой панели
+    ui->listPath->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     applyLabelFontToUi();
 
     // Нужен свободный трекинг мыши
@@ -5266,12 +5269,21 @@ void MainWindow::loadGeometry()
         ui->splitter->setSizes(splitterSizes);
 
     splitterSizes.clear();
-    if (!config::base().getValue("windows.main_window.splitter2_sizes", splitterSizes))
+
+    const bool hasSavedSizes = config::base().getValue(
+            "windows.main_window.splitter2_sizes", splitterSizes);
+
+    // Возвращаем стандартные размеры, если одна из областей свернута
+    if (!hasSavedSizes || splitterSizes.size() != 2
+            || splitterSizes[0] <= 0 || splitterSizes[1] <= 0)
     {
-        splitterSizes = {100, 100};
-        QRect windowGeometry = this->geometry();
-        splitterSizes[0] = windowGeometry.width() * (2./3);
+        const int availableWidth = qMax(
+                3, ui->splitter2->width() - ui->splitter2->handleWidth());
+
+        const int viewWidth = availableWidth * 2 / 3;
+        splitterSizes = {viewWidth, availableWidth - viewWidth};
     }
+
     ui->splitter2->setSizes(splitterSizes);
 }
 
@@ -5284,7 +5296,8 @@ void MainWindow::saveGeometry()
     QList<int> splitterSizes = ui->splitter->sizes();
     config::base().setValue("windows.main_window.splitter_sizes", splitterSizes);
 
-    splitterSizes = ui->splitter2->sizes();
+    splitterSizes = _isRightSplitterCollapsed
+            ? _savedMainSplitterSizes : ui->splitter2->sizes();
     config::base().setValue("windows.main_window.splitter2_sizes", splitterSizes);
 
     saveVisualStyle();
@@ -5576,20 +5589,15 @@ void MainWindow::toggleRightSplitter()
 
     if (_isRightSplitterCollapsed)
     {
-        // Восстанавливаем предыдущие размеры
-        rightSplitter->setSizes(_savedSplitterSizes);
-        rightSplitter->setVisible(true);
+        // Возвращаем панель и ее прежнюю ширину
+        rightSplitter->show();
+        ui->splitter2->setSizes(_savedMainSplitterSizes);
     }
     else
     {
-        // Сохраняем текущие размеры перед схлопыванием
-        _savedSplitterSizes = rightSplitter->sizes();
-
-        // Схлопываем сплиттер (устанавливаем все размеры в 0)
-        QList<int> newSizes;
-        for (int i = 0; i < rightSplitter->count(); ++i)
-            newSizes << 0;
-        rightSplitter->setSizes(newSizes);
+        // Скрываем всю панель, освобождая место для изображения
+        _savedMainSplitterSizes = ui->splitter2->sizes();
+        rightSplitter->hide();
     }
 
     _isRightSplitterCollapsed = !_isRightSplitterCollapsed;

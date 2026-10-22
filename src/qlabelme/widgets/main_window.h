@@ -414,7 +414,7 @@ private:
     static constexpr qreal _kMinZoom  = {0.10};
     static constexpr qreal _kMaxZoom  = {100};
 
-    QList<int> _savedSplitterSizes; // Хранит нормальные размеры сплиттера
+    QList<int> _savedMainSplitterSizes; // Размеры рабочей области и правой панели
     bool _isRightSplitterCollapsed = {false};
 
     // Механика призрачной ручки
