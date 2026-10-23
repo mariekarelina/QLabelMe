@@ -64,7 +64,7 @@ public:
     void graphicsView_mouseReleaseEvent(QMouseEvent*, GraphicsView*);
 
     void setSceneItemsMovable(bool movable);
-    QColor selectedHandleColor() const {return _vstyle.selectedHandleColor;}
+    QColor selectedHandleColor() const;
     Document::Ptr currentDocument() const;
 
 public slots:
@@ -159,11 +159,10 @@ private:
     static double round2(double value);
 
     // Формирует YAML-разметку из переданного списка фигур
-    void saveShapesToYaml(YamlConfig& yconfig,
-                          const QList<QGraphicsItem*>& items);
+    void saveShapesToYaml(YamlConfig& yconfig, const QList<QGraphicsItem*>& items);
+
     // Добавляет фигуры из YAML на сцену с указанным сдвигом координат
-    bool loadShapesFromYaml(Document::Ptr doc,
-                            YamlConfig& yconfig,
+    bool loadShapesFromYaml(Document::Ptr doc, YamlConfig& yconfig,
                             const QPointF& imageOffset);
 
     bool saveAnnotationToFile(Document::Ptr doc, bool showError = true);
@@ -185,7 +184,8 @@ private:
     QString classesYamlPath() const;
 
     bool loadClassesFromFile(const QString& filePath);
-    bool saveProjectClasses(const QStringList& classes, const QMap<QString, QColor>& colors);
+    bool saveProjectClasses(const QStringList& classes,
+                            const QMap<QString, QColor>& colors);
 
     void onPolygonListItemClicked(const QModelIndex& index);
     void onPolygonListItemDoubleClicked(const QModelIndex& index);
@@ -195,7 +195,8 @@ private:
 
     // Связывание элементов сцены и списка
     void linkSceneItemToList(QGraphicsItem* sceneItem);
-    void linkSceneItemToList(QGraphicsItem* sceneItem, int row, bool needRenumber = true);
+    void linkSceneItemToList(QGraphicsItem* sceneItem, int row,
+                             bool needRenumber = true);
     void renumberPolygonList();
     void renumberPolygonListTextOnly();
 
@@ -311,7 +312,8 @@ private:
     void startMergeLinesMode();
     void cancelMergeLinesMode();
     bool handleMergeLinesClick(const QPointF& scenePos); // true если клик обработан
-    bool performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line* lineB, int indexB);
+    bool performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line* lineB,
+                           int indexB);
 
     // Разрыв линии
     bool performSplitLineByEdge(qgraph::Line*, const QPointF& scenePos);
@@ -325,8 +327,11 @@ private:
     void updateModeLabel();
 
     // Перемещение в режиме рисования
-    void handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers, GraphicsView*);
-    void handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers mods, GraphicsView* graphView);
+    void handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers,
+                                GraphicsView*);
+
+    void handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers mods,
+                            GraphicsView* graphView);
 
     // Кнопки в списке фигур
     void moveCurrentShapeInList(int direction);
@@ -347,7 +352,7 @@ private:
     QTimer* _autoSaveTimer = {nullptr};  // Таймер автосохранения
 
     QString _currentFolderPath; // Переменную для хранения пути
-    QString _lastUsedFolder; // Последняя открытая папка
+    QString _lastUsedFolder;    // Последняя открытая папка
     bool _openLastFolderOnFirstShow = {true};
 
     QPoint _lastMousePos; // Последняя позиция мыши
@@ -385,13 +390,14 @@ private:
     // Линейка
     QGraphicsLineItem* _rulerLine = {nullptr}; // Временная линия измерения
     QGraphicsTextItem* _rulerText = {nullptr}; // Подпись с расстоянием
-    bool _drawingRuler = {false}; // Выбран ли инструмент "Линейка"
+    bool _drawingRuler = {false};   // Выбран ли инструмент "Линейка"
     bool _isDrawingRuler = {false}; // Тянем вторую точку
-    QPointF _rulerStartPoint; // Первая точка измерения
+    QPointF _rulerStartPoint;       // Первая точка измерения
 
 
     qgraph::Polyline* _polyline = {nullptr};
     qgraph::Line* _line = {nullptr};
+
     // Начальная позиция истории при создании линии или полилинии
     int _drawingUndoStartIndex = -1;
     qgraph::Point* _currPoint = {nullptr};
@@ -400,6 +406,7 @@ private:
 
     // Буфер для копирования фигур между сценами
     QString _shapesClipboard;
+
     // Последняя вставленная разметка и изображение назначения
     QString _lastPastedYaml;
     QString _lastPasteImagePath;
@@ -534,4 +541,3 @@ private:
 };
 
 //Q_DECLARE_METATYPE(Document::Ptr)
-

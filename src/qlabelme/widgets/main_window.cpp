@@ -520,19 +520,21 @@ void MainWindow::deinit()
 
 void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsView* graphView)
 {
-    const std::function<bool()> isAnyDrawingNow = [&]() -> bool
+    auto isAnyDrawingNow = [this]() -> bool
     {
         return _isInDrawingMode
-            || _isDrawingPolyline || _isDrawingLine
-            || _isDrawingRectangle || _isDrawingCircle || _isDrawingPoint
-            || _isDrawingRuler
-            || _drawingPolyline  || _drawingLine  || _drawingRectangle
-            || _drawingCircle  || _drawingPoint
-            || _drawingRuler;
+               || _isDrawingPolyline  || _isDrawingLine
+               || _isDrawingRectangle || _isDrawingCircle || _isDrawingPoint
+               || _isDrawingRuler
+               || _drawingPolyline    || _drawingLine     || _drawingRectangle
+               || _drawingCircle      || _drawingPoint
+               || _drawingRuler;
     };
+
     Document::Ptr doc = currentDocument();
     if (!doc || !doc->scene)
         return;
+
     QGraphicsScene* scene = doc->scene;
     qgraph::VideoRect* videoRect = doc->videoRect;
 
@@ -551,8 +553,9 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     if (mouseEvent->button() == Qt::LeftButton && graphView)
     {
         //const Qt::KeyboardModifiers mods = mouseEvent->modifiers();
-        const Qt::KeyboardModifiers mods =
-                mouseEvent->modifiers() | QApplication::keyboardModifiers();
+        const Qt::KeyboardModifiers mods = mouseEvent->modifiers()
+                                           |QApplication::keyboardModifiers();
+
         const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
 
         // Alt + ЛКМ добавить узел на ребро
@@ -682,7 +685,8 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 break;
             }
         }
-        if (!poly) return;
+        if (!poly)
+            return;
 
         // Ищем ближайшую точку
         DragCircle* nearest = nullptr;
@@ -699,10 +703,9 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                 nearest = circles;
             }
         }
+
         if (nearest)
-        {
             nearest->setUserHidden(!nearest->isUserHidden());
-        }
 
         return;
     }
@@ -1415,14 +1418,21 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
 
             // Обновляем ручки для перемещаемой фигуры
             if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(_draggingItem))
+            {
                 circle->updateHandlePosition();
+            }
             else if (qgraph::Rectangle* rect = dynamic_cast<qgraph::Rectangle*>(_draggingItem))
+            {
                 rect->updateHandlePosition();
+            }
             else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(_draggingItem))
+            {
                 polyline->updateHandlePosition();
+            }
             else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(_draggingItem))
+            {
                 line->updateHandlePosition();
-
+            }
             updateAllPointNumbers();
         }
 
@@ -1787,6 +1797,7 @@ void MainWindow::setSceneItemsMovable(bool movable)
     Document::Ptr doc = currentDocument();
     if (!doc || !doc->scene)
         return;
+
     for (QGraphicsItem* item : doc->scene->items())
     {
         if (!item)
@@ -1804,6 +1815,11 @@ void MainWindow::setSceneItemsMovable(bool movable)
             item->setFlag(QGraphicsItem::ItemIsMovable, movable);
         }
     }
+}
+
+QColor MainWindow::selectedHandleColor() const
+{
+    return _vstyle.selectedHandleColor;
 }
 
 Document::Ptr MainWindow::currentDocument() const
@@ -2007,7 +2023,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         && event->type() == QEvent::KeyPress)
     {
         QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
-
         if (keyEvent->key() == Qt::Key_Shift)
             ui->graphView->viewport()->setCursor(Qt::OpenHandCursor);
     }
@@ -2017,7 +2032,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         && event->type() == QEvent::KeyRelease)
     {
         QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
-
         if (keyEvent->key() == Qt::Key_Shift)
         {
             if (_movingItem)
@@ -2033,11 +2047,10 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
     {
         QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
 
-        const bool isArrowKey =
-                keyEvent->key() == Qt::Key_Left
-                || keyEvent->key() == Qt::Key_Right
-                || keyEvent->key() == Qt::Key_Up
-                || keyEvent->key() == Qt::Key_Down;
+        const bool isArrowKey = keyEvent->key() == Qt::Key_Left
+                                || keyEvent->key() == Qt::Key_Right
+                                || keyEvent->key() == Qt::Key_Up
+                                || keyEvent->key() == Qt::Key_Down;
 
         if (keyEvent->modifiers() == Qt::ShiftModifier && isArrowKey)
         {
@@ -3225,10 +3238,11 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                 data.closedBefore = true;
                                 data.closedAfter = false;
 
-                                stack->push(new undo::ResumeEdit(doc.get(),
-                                                                 line,
-                                                                 data,
-                                                                 u8"Возобновление линии"));
+                                stack->push(new undo::ResumeEdit(
+                                    doc.get(),
+                                    line,
+                                    data,
+                                    u8"Возобновление линии"));
 
                                 if (!doc->isModified)
                                 {
@@ -3272,10 +3286,11 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                         data.closedBefore = false;
                                         data.closedAfter = true;
 
-                                        stack->push(new undo::ResumeEdit(doc.get(),
-                                                                         _line,
-                                                                         data,
-                                                                         u8"Завершение продолжения линии"));
+                                        stack->push(new undo::ResumeEdit(
+                                            doc.get(),
+                                            _line,
+                                            data,
+                                            u8"Завершение продолжения линии"));
 
                                         if (!doc->isModified)
                                         {
@@ -3464,7 +3479,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     if (command->isValid())
                     {
                         stack->push(command);
-
                         if (!doc->isModified)
                         {
                             doc->isModified = true;
@@ -3616,7 +3630,8 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
 
         const int key = event->key();
 
-        if (key == Qt::Key_Plus || key == Qt::Key_Equal)
+        if (key == Qt::Key_Plus
+            || key == Qt::Key_Equal)
         {
             double nz = _m_zoom * kZoomStep;
             if (nz < kZoomMin) nz = kZoomMin;
@@ -3657,7 +3672,8 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         event->accept();
         return;
     }
-    else if (event->key() == Qt::Key_E || event->key() == Qt::Key_R)
+    else if (event->key() == Qt::Key_E
+             || event->key() == Qt::Key_R)
     {
         event->accept();
         return;
@@ -3694,25 +3710,29 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         event->accept();
         return;
     }
-    else if (event->key() == Qt::Key_L && event->modifiers() == Qt::NoModifier)
+    else if (event->modifiers() == Qt::NoModifier
+             && event->key() == Qt::Key_L)
     {
         on_actRuler_triggered();
         event->accept();
         return;
     }
-    else if (event->modifiers() == Qt::ControlModifier && event->key() == Qt::Key_S)
+    else if (event->modifiers() == Qt::ControlModifier
+             && event->key() == Qt::Key_S)
     {
         on_actSave_triggered(true);
         event->accept();
         return;
     }
-    else if (event->key() == Qt::Key_K && event->modifiers() == Qt::NoModifier)
+    else if (event->modifiers() == Qt::NoModifier
+             && event->key() == Qt::Key_K)
     {
         toggleRightSplitter();
         event->accept();
         return;
     }
-    if (event->modifiers() == Qt::ControlModifier && event->key() == Qt::Key_Q)
+    if (event->modifiers() == Qt::ControlModifier
+        && event->key() == Qt::Key_Q)
     {
         close();
         event->accept();
@@ -3766,6 +3786,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
                 saveGeometry();
                 event->accept();
                 break;
+
             case QDialogButtonBox::Discard:
                 // Не сохранять
                 saveGeometry();
@@ -3998,9 +4019,7 @@ void MainWindow::onSceneChanged()
 
     // Обновляем координаты для выделенной фигуры
     if (_leftMouseButtonDown)
-    {
         updateCoordinateList();
-    }
 }
 
 void MainWindow::onPolygonListSelectionChanged()
@@ -4021,7 +4040,7 @@ void MainWindow::onPolygonListSelectionChanged()
     QGraphicsScene* scene = doc->scene;
     qgraph::VideoRect* videoRect = doc->videoRect;
 
-    {
+    { //Block for QSignalBlocker
         QSignalBlocker blocker {scene}; (void) blocker;
 
         for (QGraphicsItem* item : scene->items())
@@ -4030,9 +4049,7 @@ void MainWindow::onPolygonListSelectionChanged()
                 continue;
 
             if (item == videoRect)
-            {
                 continue;
-            }
 
             if (item->parentItem() != nullptr)
                 continue;
@@ -4073,9 +4090,9 @@ void MainWindow::selectAllShapes()
 
     _syncingSelection = true;
 
-    {
-        QSignalBlocker blockScene(scene);
-        QSignalBlocker blockList(ui->polygonList);
+    { //Block for QSignalBlocker
+        QSignalBlocker blockScene {scene}; (void) blockScene;
+        QSignalBlocker blockList  {ui->polygonList}; (void) blockList;
 
         ui->polygonList->clearSelection();
 
@@ -4085,9 +4102,7 @@ void MainWindow::selectAllShapes()
                 continue;
 
             if (item == videoRect)
-            {
                 continue;
-            }
 
             if (item->parentItem() != nullptr)
                 continue;
@@ -4515,9 +4530,7 @@ void MainWindow::on_actSettingsApp_triggered()
 
                 Document::Ptr doc = currentDocument();
                 if (item == doc->videoRect)
-                {
                     continue;
-                }
 
                 if (item->parentItem() != nullptr)
                     continue;
@@ -4601,9 +4614,7 @@ void MainWindow::on_actSettingsApp_triggered()
                     continue;
 
                 if (item == doc->videoRect)
-                {
                     continue;
-                }
 
                 if (item->parentItem() != nullptr)
                     continue;
@@ -4972,6 +4983,7 @@ void MainWindow::on_actScrollBars_triggered(bool checked)
 {
     ui->graphView->setHorizontalScrollBarPolicy(
         checked ? Qt::ScrollBarAlwaysOn : Qt::ScrollBarAlwaysOff);
+
     ui->graphView->setVerticalScrollBarPolicy(
         checked ? Qt::ScrollBarAlwaysOn : Qt::ScrollBarAlwaysOff);
 
@@ -5007,10 +5019,11 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
     // Путь к папке в заголовке окна
     updateWindowTitle();
 
-    ui->fileList->clear(); // Очищаем список перед добавлением
+    // Очищаем список перед добавлением
+    ui->fileList->clear();
+
     // Путь к папке над полем FileList
     ui->listPath->setText(QDir::toNativeSeparators(folderPath));
-
 
     QStringList filters;
     filters << "*.jpg";
@@ -5041,25 +5054,22 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
         }
 
         if (hasValidAnnotation)
-        {
             item->setIcon(savedIcon);
-        }
         else
-        {
             item->setIcon(noAnnotationIcon);
-        }
+
         // Создаем документ и сохраняем его в данных элемента
         Document::Ptr doc = Document::create(filePath);
         item->setData(Qt::UserRole, QVariant::fromValue(doc));
         _documentsMap.insert(doc->filePath, doc);
 
         // Инициализируем индивидуальный стек для документа и регистрируем его в группе
-        doc->_undoStack = std::make_unique<QUndoStack>();      // без родителя, владеем unique_ptr
-        _undoGroup->addStack(doc->_undoStack.get());           // группа будет переключать активный
+        doc->_undoStack = std::make_unique<QUndoStack>(); // без родителя, владеем unique_ptr
+        _undoGroup->addStack(doc->_undoStack.get());      // группа будет переключать активный
 
         QUndoStack* stack = doc->_undoStack.get();
-        QObject::connect(stack, &QUndoStack::cleanChanged,
-                         this, [this, stack](bool clean){
+        QObject::connect(stack, &QUndoStack::cleanChanged, this, [this, stack](bool clean)
+        {
             if (_loadingNow)
                 return;
 
@@ -5110,13 +5120,19 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
                 apply_PointSize_ToItem(item);
 
                 if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
+                {
                     polyline->updatePointNumbers();
+                }
                 else if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
+                {
                     line->updatePointNumbers();
+                }
                 else if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+                {
                     rectangle->updatePointNumbers();
+                }
 
-               apply_NumberSize_ToItem(item);
+                apply_NumberSize_ToItem(item);
             }
 
             refreshShapeListOrderRole();
@@ -5130,9 +5146,7 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
 
         ui->fileList->addItem(item);
         if (doc->loadImage())
-        {
             loadAnnotationFromFile(doc, false);
-        }
     }
 }
 
@@ -5162,9 +5176,7 @@ void MainWindow::updatePolygonListForCurrentScene()
             continue;
 
         if (item == videoRect)
-        {
             continue;
-        }
 
         if (item->parentItem() != nullptr)
             continue;
@@ -5188,8 +5200,7 @@ void MainWindow::updatePolygonListForCurrentScene()
             roots.append(item);
     }
 
-    std::sort(roots.begin(), roots.end(),
-              [](QGraphicsItem* a, QGraphicsItem* b)
+    std::sort(roots.begin(), roots.end(), [](QGraphicsItem* a, QGraphicsItem* b)
     {
         bool aOk = false;
         bool bOk = false;
@@ -5274,11 +5285,13 @@ void MainWindow::loadGeometry()
             "windows.main_window.splitter2_sizes", splitterSizes);
 
     // Возвращаем стандартные размеры, если одна из областей свернута
-    if (!hasSavedSizes || splitterSizes.size() != 2
-            || splitterSizes[0] <= 0 || splitterSizes[1] <= 0)
+    if (!hasSavedSizes
+        || splitterSizes.size() != 2
+        || splitterSizes[0] <= 0
+        || splitterSizes[1] <= 0)
     {
-        const int availableWidth = qMax(
-                3, ui->splitter2->width() - ui->splitter2->handleWidth());
+        const int availableWidth =
+            qMax(3, ui->splitter2->width() - ui->splitter2->handleWidth());
 
         const int viewWidth = availableWidth * 2 / 3;
         splitterSizes = {viewWidth, availableWidth - viewWidth};
@@ -5413,10 +5426,10 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     const QString currentPath =
         QDir::cleanPath(QFileInfo(doc->filePath).absoluteFilePath());
 
-    const bool repeatedPaste = yaml == _lastPastedYaml
-                              && currentPath == _lastPasteImagePath;
+    const bool repeatedPaste = (yaml == _lastPastedYaml
+                                && currentPath == _lastPasteImagePath);
 
-    const int nextPasteCount = repeatedPaste ? _pasteCount + 1 : 1;
+    const int nextPasteCount = (repeatedPaste ? _pasteCount + 1 : 1);
 
     QSize imageSize = doc->pixmap.size();
 
@@ -5428,8 +5441,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     // Сдвиг равен 2% от меньшей стороны изображения
     const qreal offsetValue = qBound<qreal>(10.0, imageSide * 0.02, 250.0);
 
-    const QPointF pasteOffset =
-        QPointF(offsetValue, offsetValue) * nextPasteCount;
+    const QPointF pasteOffset = QPointF(offsetValue, offsetValue) * nextPasteCount;
 
     if (!loadShapesFromYaml(doc, yconfig, pasteOffset))
         return;
@@ -5444,9 +5456,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
             continue;
 
         if (item == videoRect)
-        {
             continue;
-        }
 
         if (item->parentItem() != nullptr)
             continue;
@@ -5640,11 +5650,10 @@ double MainWindow::round2(double value)
     return std::round(value * 100.0) / 100.0;
 }
 
-void MainWindow::saveShapesToYaml(YamlConfig& yconfig,
-                                  const QList<QGraphicsItem*>& items)
+void MainWindow::saveShapesToYaml(YamlConfig& yconfig, const QList<QGraphicsItem*>& items)
 {
-    void (*savePointNode)(YamlConfig*, YAML::Node&, const char*, const QPointF&) =
-        [](YamlConfig* conf, YAML::Node& parent, const char* key, const QPointF& point)
+    auto savePointNode = [](YamlConfig* conf, YAML::Node& parent, const char* key,
+                            const QPointF& point)
     {
         YamlConfig::Func savePoint = [point](YamlConfig* conf, YAML::Node& ypoint, bool)
         {
@@ -5656,8 +5665,7 @@ void MainWindow::saveShapesToYaml(YamlConfig& yconfig,
         conf->setValue(parent, key, savePoint);
     };
 
-    void (*savePointsArray)(YamlConfig*, YAML::Node&, const QVector<QPointF>&) =
-        [](YamlConfig* conf, YAML::Node& parent, const QVector<QPointF>& points)
+    auto savePointsArray = [](YamlConfig* conf, YAML::Node& parent, const QVector<QPointF>& points)
     {
         YamlConfig::Func savePoints = [points](YamlConfig* conf, YAML::Node& ypoints, bool)
         {
@@ -5751,6 +5759,8 @@ bool MainWindow::saveAnnotationToFile(Document::Ptr doc, bool showError)
 
     const QString yamlPath = annotationPathFor(doc->filePath);
     QSaveFile file(yamlPath);
+
+    // TODO зачем использовать QSaveFile ?
 
     // Формируем YAML в памяти перед записью на диск
     std::string yaml;
@@ -5874,21 +5884,21 @@ void MainWindow::autoSaveDocuments()
     {
         _autoSaveLabel->setText(u8"Автосохранение: ошибка");
         _autoSaveLabel->setToolTip(
-            QString::fromUtf8("Не удалось сохранить разметку:\n%1")
-                .arg(doc->filePath)
+            QString::fromUtf8(u8"Не удалось сохранить разметку:\n%1")
+                             .arg(doc->filePath)
         );
 
         return;
     }
 
     _autoSaveLabel->setText(
-        QString::fromUtf8("Автосохранение: %1")
-            .arg(QTime::currentTime().toString("HH:mm:ss"))
+        QString::fromUtf8(u8"Автосохранение: %1")
+                         .arg(QTime::currentTime().toString("HH:mm:ss"))
     );
 
     _autoSaveLabel->setToolTip(
-        QString::fromUtf8("Последнее автосохранение:\n%1")
-            .arg(doc->filePath)
+        QString::fromUtf8(u8"Последнее автосохранение:\n%1")
+                         .arg(doc->filePath)
     );
 }
 
@@ -5901,7 +5911,7 @@ bool MainWindow::loadShapesFromYaml(Document::Ptr doc,
 
     int fallbackOrder = 0;
 
-    std::function<void(QGraphicsItem*)> finalizeOldLoadedShape = [&](QGraphicsItem* item)
+    auto finalizeOldLoadedShape = [&](QGraphicsItem* item)
     {
         if (!item)
             return;
@@ -6122,8 +6132,7 @@ bool MainWindow::loadShapesFromYaml(Document::Ptr doc,
             return true;
         };
 
-        std::function<void(const YAML::Node&, QVector<QPointF>&)> readPointsArray =
-            [&](const YAML::Node& parent, QVector<QPointF>& points)
+        auto readPointsArray = [&](const YAML::Node& parent, QVector<QPointF>& points)
         {
             if (!parent["points"])
                 return;
@@ -6140,14 +6149,18 @@ bool MainWindow::loadShapesFromYaml(Document::Ptr doc,
             }
         };
 
-        std::function<void(QGraphicsItem*, const YAML::Node&, const QString&)> finalizeShape =
-            [&](QGraphicsItem* item, const YAML::Node& yshape, const QString& label)
+        auto finalizeShape = [&](QGraphicsItem* item, const YAML::Node& yshape,
+                                 const QString& label)
         {
             if (!item)
                 return;
 
             int number = order;
-            if (yshape["number"])
+            //if (yshape["number"])
+            //    conf->getValue(yshape, "number", number);
+
+            // TODO проверить
+            if (conf->nodeExists(yshape, "number"))
                 conf->getValue(yshape, "number", number);
 
             item->setData(0, label);
@@ -6305,11 +6318,11 @@ bool MainWindow::loadShapesFromYaml(Document::Ptr doc,
         if (shapes.IsSequence())
             return loadShapes(conf, shapes, false);
 
-        conf->getValue(shapes, "circles", loadCircles);
-        conf->getValue(shapes, "polylines", loadPolylines);
+        conf->getValue(shapes, "circles",    loadCircles);
+        conf->getValue(shapes, "polylines",  loadPolylines);
         conf->getValue(shapes, "rectangles", loadRectangles);
-        conf->getValue(shapes, "points", loadPoints);
-        conf->getValue(shapes, "lines", loadLines);
+        conf->getValue(shapes, "points",     loadPoints);
+        conf->getValue(shapes, "lines",      loadLines);
         return true;
     };
 
@@ -6318,8 +6331,8 @@ bool MainWindow::loadShapesFromYaml(Document::Ptr doc,
 
 void MainWindow::updateFileListDisplay(const QString& filePath)
 {
-    QIcon modifiedIcon(":/images/resources/not_ok.svg");     // Красная иконка - есть изменения
-    QIcon savedIcon(":/images/resources/ok.svg");            // Зеленая иконка - сохранено
+    QIcon modifiedIcon(":/images/resources/not_ok.svg"); // Красная иконка - есть изменения
+    QIcon savedIcon(":/images/resources/ok.svg");        // Зеленая иконка - сохранено
     QIcon noAnnotationIcon(":/images/resources/no_annotation.svg"); // Красная иконка - нет аннотаций
 
     for (int i = 0; i < ui->fileList->count(); ++i)
@@ -6369,13 +6382,14 @@ void MainWindow::updateFileListDisplay(const QString& filePath)
 void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
 {
     if (!doc || !doc->scene)
-    {
         return;
-    }
 
     // Временно блокируем обработку изменений
     _loadingNow = true;
-    QSignalBlocker blocker(doc->scene); // временно глушим QGraphicsScene::changed
+
+    // Временно глушим QGraphicsScene::changed
+    QSignalBlocker blocker {doc->scene}; (void) blocker;
+
     // Сдвиг изображения, если восстанавливаем разметку
     const QPointF imageOffset = (doc->videoRect ? doc->videoRect->pos() : QPointF(0.0, 0.0));
 
@@ -6636,8 +6650,8 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
 
     bool generatedMissingColors = false;
 
-    std::function<QColor(const QMap<QString, QColor>&, int)> generateRandomClassColor =
-        [&](const QMap<QString, QColor>& existingColors, int fallbackIndex) -> QColor
+    auto generateRandomClassColor = [&](const QMap<QString, QColor>& existingColors,
+                                        int fallbackIndex) -> QColor
     {
         for (int attempt = 0; attempt < 64; ++attempt)
         {
@@ -6645,8 +6659,8 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
             QColor c = QColor::fromHsl(h, 200, 120);
 
             bool alreadyUsed = false;
-            for (QMap<QString, QColor>::const_iterator it = existingColors.constBegin();
-                 it != existingColors.constEnd(); ++it)
+            auto it = existingColors.constBegin();
+            for (; it != existingColors.constEnd(); ++it)
             {
                 if (it.value().isValid() && it.value() == c)
                 {
@@ -6654,7 +6668,6 @@ bool MainWindow::loadClassesFromFile(const QString& filePath)
                     break;
                 }
             }
-
             if (!alreadyUsed)
                 return c;
         }
@@ -7482,9 +7495,9 @@ void MainWindow::moveSelectedItemsToBack()
             item->setZValue(z++);
     }
 
-    {
-        QSignalBlocker blockScene(scene);
-        QSignalBlocker blockList(ui->polygonList);
+    { //Block for QSignalBlocker
+        QSignalBlocker blockScene {scene}; (void) blockScene;
+        QSignalBlocker blockList  {ui->polygonList}; (void) blockList;
 
         for (QGraphicsItem* item : selectedRoots)
         {
@@ -7517,13 +7530,11 @@ bool MainWindow::hasUnsavedChanges() const
 QList<Document::Ptr> MainWindow::getUnsavedDocuments() const
 {
     QList<Document::Ptr> unsavedDocs;
-    for (QMap<QString, Document::Ptr>::const_iterator it = _documentsMap.constBegin();
-         it != _documentsMap.constEnd(); ++it)
+    auto it = _documentsMap.constBegin();
+    for (; it != _documentsMap.constEnd(); ++it)
     {
         if (it.value()->isModified)
-        {
             unsavedDocs.append(it.value());
-        }
     }
     return unsavedDocs;
 }
@@ -7556,13 +7567,11 @@ int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr>& unsavedDocs
 
 void MainWindow::saveAllDocuments()
 {
-    for (QMap<QString, Document::Ptr>::const_iterator it = _documentsMap.begin();
-         it != _documentsMap.end(); ++it)
+    auto it = _documentsMap.constBegin();
+    for (; it != _documentsMap.constEnd(); ++it)
     {
         if (it.value()->isModified)
-        {
             saveAnnotationToFile(it.value());
-        }
     }
 }
 
@@ -7579,10 +7588,11 @@ qgraph::DragCircle* MainWindow::pickHiddenHandle(const QPointF& scenePos, bool& 
     if (radiusScene <= 0.0)
       return nullptr;
 
-    const QRectF pickRect(scenePos - QPointF(radiusScene, radiusScene),
-                        QSizeF(2 * radiusScene, 2 * radiusScene));
+    const QRectF pickRect {scenePos - QPointF(radiusScene, radiusScene),
+                           QSizeF(2 * radiusScene, 2 * radiusScene)};
 
-    const QList<QGraphicsItem*> items = scene->items(pickRect, Qt::IntersectsItemShape, Qt::DescendingOrder);
+    const QList<QGraphicsItem*> items =
+        scene->items(pickRect, Qt::IntersectsItemShape, Qt::DescendingOrder);
 
     // Если верхний элемент уже ручка - «обманка» не нужна, пусть работает стандартный drag
     if (!items.isEmpty())
@@ -8361,7 +8371,6 @@ void MainWindow::loadVisualStyle()
     else
         _vstyle.labelFont.clear();
 
-
     applyStyle_AllDocuments();
 }
 
@@ -8823,7 +8832,7 @@ void MainWindow::applyClosePolyline()
     qgraph::Polyline::CloseMode mode = PLM::DoubleClick;
     switch (_polylineCloseMode)
     {
-        case SDM::DoubleClick:             mode = PLM::DoubleClick;   break;
+        case SDM::DoubleClick:             mode = PLM::DoubleClick;             break;
         case SDM::SingleClickOnFirstPoint: mode = PLM::SingleClickOnFirstPoint; break;
         case SDM::CtrlModifier:            mode = PLM::CtrlModifier;            break;
         case SDM::KeyCWithoutNewPoint:     mode = PLM::KeyC;                    break;
@@ -9480,7 +9489,7 @@ bool MainWindow::handleMergeLinesClick(const QPointF& scenePos)
     return ok ? true : true;
 }
 
-bool MainWindow::   performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line* lineB, int indexB)
+bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line* lineB, int indexB)
 {
     Document::Ptr doc = currentDocument();
     if (!doc || !doc->_undoStack || !lineA || !lineB)
