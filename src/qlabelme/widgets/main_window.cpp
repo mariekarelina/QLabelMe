@@ -8376,32 +8376,67 @@ void MainWindow::loadVisualStyle()
 
 void MainWindow::saveVisualStyle() const
 {
-    config::base().setValue("graphics.line_width", _vstyle.lineWidth);
-    config::base().setValue("graphics.handle_size", _vstyle.handleSize);
-    config::base().setValue("graphics.handle_pick_radius", _ghostPickRadius);
-    config::base().setValue("graphics.edge_pick_radius", _edgePickRadius);
-    config::base().setValue("graphics.number_font_pt", _vstyle.numberFontPt);
-    config::base().setValue("graphics.show_numbers", _vstyle.showNumbers);
-    config::base().setValue("graphics.show_selection_frame", _vstyle.showSelectionFrame);
-    config::base().setValue("graphics.point_size", _vstyle.pointSize);
-    config::base().setValue("graphics.handle_color", _vstyle.handleColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.selected_handle_color", _vstyle.selectedHandleColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.number_color", _vstyle.numberColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.number_bg_color", _vstyle.numberBgColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.rectangle", _vstyle.rectangleLineColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.circle", _vstyle.circleLineColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.polyline", _vstyle.polylineLineColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.line",  _vstyle.lineLineColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.point", _vstyle.pointColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.colors.ruler", _vstyle.rulerColor.name(QColor::HexArgb));
-    config::base().setValue("graphics.point.outline_width", _vstyle.pointOutlineWidth);
-    config::base().setValue("graphics.fill_shape_when_selected", _vstyle.fillShapeWhenSelected);
+    // config::base().setValue("graphics.line_width", _vstyle.lineWidth);
+    // config::base().setValue("graphics.handle_size", _vstyle.handleSize);
+    // config::base().setValue("graphics.handle_pick_radius", _ghostPickRadius);
+    // config::base().setValue("graphics.edge_pick_radius", _edgePickRadius);
+    // config::base().setValue("graphics.number_font_pt", _vstyle.numberFontPt);
+    // config::base().setValue("graphics.show_numbers", _vstyle.showNumbers);
+    // config::base().setValue("graphics.show_selection_frame", _vstyle.showSelectionFrame);
+    // config::base().setValue("graphics.point_size", _vstyle.pointSize);
+    // config::base().setValue("graphics.handle_color", _vstyle.handleColor.name(QColor::HexArgb));
+    // config::base().setValue("graphics.selected_handle_color", _vstyle.selectedHandleColor.name(QColor::HexArgb));
+    // config::base().setValue("graphics.number_color", _vstyle.numberColor.name(QColor::HexArgb));
+    // config::base().setValue("graphics.number_bg_color", _vstyle.numberBgColor.name(QColor::HexArgb));
+    // config::base().setValue("graphics.colors.rectangle", _vstyle.rectangleLineColor.name(QColor::HexArgb));
+    // config::base().setValue("graphics.colors.circle", _vstyle.circleLineColor.name(QColor::HexArgb));
+    // config::base().setValue("graphics.colors.polyline", _vstyle.polylineLineColor.name(QColor::HexArgb));
+    // config::base().setValue("graphics.colors.line",  _vstyle.lineLineColor.name(QColor::HexArgb));
+    // config::base().setValue("graphics.colors.point", _vstyle.pointColor.name(QColor::HexArgb));
+    // config::base().setValue("graphics.colors.ruler", _vstyle.rulerColor.name(QColor::HexArgb));
+    // config::base().setValue("graphics.point.outline_width", _vstyle.pointOutlineWidth);
+    // config::base().setValue("graphics.fill_shape_when_selected", _vstyle.fillShapeWhenSelected);
 
-    if (_vstyle.labelFontPt > 0)
-        config::base().setValue("graphics.label_font_pt", _vstyle.labelFontPt);
+    // if (_vstyle.labelFontPt > 0)
+    //     config::base().setValue("graphics.label_font_pt", _vstyle.labelFontPt);
 
-    if (!_vstyle.labelFont.isEmpty())
-        config::base().setValue("graphics.label_font_family", _vstyle.labelFont);
+    // if (!_vstyle.labelFont.isEmpty())
+    //     config::base().setValue("graphics.label_font_family", _vstyle.labelFont);
+
+    // TODO проверить
+    YamlConfig::Func saveFunc = [this](YamlConfig* conf, YAML::Node& node, bool)
+    {
+        conf->setValue(node, "line_width"           , _vstyle.lineWidth);
+        conf->setValue(node, "handle_size"          , _vstyle.handleSize);
+        conf->setValue(node, "handle_pick_radius"   , _ghostPickRadius);
+        conf->setValue(node, "edge_pick_radius"     , _edgePickRadius);
+        conf->setValue(node, "number_font_pt"       , _vstyle.numberFontPt);
+        conf->setValue(node, "show_numbers"         , _vstyle.showNumbers);
+        conf->setValue(node, "show_selection_frame" , _vstyle.showSelectionFrame);
+        conf->setValue(node, "point_size"           , _vstyle.pointSize);
+        conf->setValue(node, "handle_color"         , _vstyle.handleColor.name(QColor::HexArgb));
+        conf->setValue(node, "selected_handle_color", _vstyle.selectedHandleColor.name(QColor::HexArgb));
+        conf->setValue(node, "number_color"         , _vstyle.numberColor.name(QColor::HexArgb));
+        conf->setValue(node, "number_bg_color"      , _vstyle.numberBgColor.name(QColor::HexArgb));
+        conf->setValue(node, "colors.rectangle"     , _vstyle.rectangleLineColor.name(QColor::HexArgb));
+        conf->setValue(node, "colors.circle"        , _vstyle.circleLineColor.name(QColor::HexArgb));
+        conf->setValue(node, "colors.polyline"      , _vstyle.polylineLineColor.name(QColor::HexArgb));
+        conf->setValue(node, "colors.line"          , _vstyle.lineLineColor.name(QColor::HexArgb));
+        conf->setValue(node, "colors.point"         , _vstyle.pointColor.name(QColor::HexArgb));
+        conf->setValue(node, "colors.ruler"         , _vstyle.rulerColor.name(QColor::HexArgb));
+        conf->setValue(node, "point.outline_width"  , _vstyle.pointOutlineWidth);
+        conf->setValue(node, "fill_shape_when_selected", _vstyle.fillShapeWhenSelected);
+
+        if (_vstyle.labelFontPt > 0)
+            conf->setValue(node, "label_font_pt", _vstyle.labelFontPt);
+
+        if (!_vstyle.labelFont.isEmpty())
+            conf->setValue(node, "label_font_family", _vstyle.labelFont);
+
+        return true;
+    };
+    config::base().remove("graphics");
+    config::base().setValue("graphics", saveFunc);
 }
 
 void MainWindow::applyStyle_AllDocuments()
