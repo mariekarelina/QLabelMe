@@ -3,7 +3,7 @@
 	url = https://github.com/hkarel/QbsExt.git
 [submodule "src/shared/shared"]
 	path = src/shared/shared
-	url = https://github.com/hkarel/SharedTools.git
+	url = https://github.com/hkarel/SharedLib.git
 [submodule "src/pproto/pproto"]
 	path = src/pproto/pproto
 	url = https://github.com/hkarel/PProtoCpp.git
