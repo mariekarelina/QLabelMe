@@ -209,6 +209,7 @@
     <addaction name="actOpen"/>
     <addaction name="separator"/>
     <addaction name="actSave"/>
+    <addaction name="actSaveAll"/>
     <addaction name="actClose"/>
    </widget>
    <widget class="QMenu" name="menuEdit">
@@ -611,6 +612,14 @@
   <action name="actUserGuide">
    <property name="text">
     <string>Руководство пользователся QLabelMe</string>
+   </property>
+  </action>
+  <action name="actSaveAll">
+   <property name="text">
+    <string>Сохранить все</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+S</string>
    </property>
   </action>
  </widget>

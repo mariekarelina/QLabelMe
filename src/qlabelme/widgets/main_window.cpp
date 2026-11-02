@@ -3879,6 +3879,12 @@ void MainWindow::on_actSave_triggered(bool)
         saveAnnotationToFile(doc);
 }
 
+void MainWindow::on_actSaveAll_triggered(bool)
+{
+    // Сохраняем разметку всех документов
+    saveAllDocuments();
+}
+
 void MainWindow::on_actExit_triggered(bool)
 {
     close();

@@ -81,6 +81,7 @@ private slots:
     void on_actOpen_triggered(bool);
     void on_actClose_triggered(bool);
     void on_actSave_triggered(bool);
+    void on_actSaveAll_triggered(bool);
 
     void on_actExit_triggered(bool);
 
