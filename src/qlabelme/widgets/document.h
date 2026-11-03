@@ -31,13 +31,14 @@ struct Document
 
     DISABLE_DEFAULT_COPY(Document)
 
-    QString filePath;                            // Путь к файлу изображения
+    QString filePath;                // Путь к файлу изображения
     simple_ptr<QGraphicsScene> scene;
     qgraph::VideoRect* videoRect = {nullptr};
-    QPixmap pixmap;                              // Само изображение
-    bool isModified = {false};                   // Есть ли несохраненные изменения
+    QPixmap pixmap;                  // Само изображение
+    bool isModified = {false};       // Есть ли несохраненные изменения
+    bool autoSaveUpToDate = {false}; // Резервная копия соответствует текущей разметке
 
-    PolygonListData polygonList; // Данные списка фигур для текущего документа
+    PolygonListData polygonList;     // Данные списка фигур для текущего документа
 
     std::unique_ptr<QUndoStack> _undoStack;
 
@@ -51,6 +52,8 @@ struct Document
 
     static Ptr create(const QString& path);
     bool loadImage();
+    // Отмечает изменение разметки и необходимость обновить резервную копию
+    void markModified();
 };
 
 Q_DECLARE_METATYPE(Document::Ptr)

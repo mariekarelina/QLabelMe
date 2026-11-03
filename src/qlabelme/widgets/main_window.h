@@ -157,6 +157,9 @@ private:
     void updateWindowTitle();
 
     static QString annotationPathFor(const QString& imagePath);
+    static QString autoSavePathFor(const QString& imagePath);
+    // Загружает резервную копию при первоначальном открытии документа
+    bool loadAutoSave(Document::Ptr doc);
     static double round2(double value);
 
     // Формирует YAML-разметку из переданного списка фигур
@@ -166,7 +169,11 @@ private:
     bool loadShapesFromYaml(Document::Ptr doc, YamlConfig& yconfig,
                             const QPointF& imageOffset);
 
+    // Записывает разметку, не изменяя состояние документа
+    bool writeAnnotationFile(Document::Ptr doc, const QString& filePath);
     bool saveAnnotationToFile(Document::Ptr doc, bool showError = true);
+    // Удаляет резервную копию и сбрасывает признак ее актуальности
+    bool removeAutoSaveFile(Document::Ptr doc, bool showError = true);
 
     void applyAutoSaveSettings();
     void autoSaveDocuments();

@@ -2,6 +2,7 @@
 #include "ui_main_window.h"
 
 #include "unsaved_changes.h"
+#include "restoreautosave.h"
 #include "load_geometry.h"
 #include "about_program.h"
 #include "select_class.h"
@@ -589,7 +590,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
                         if (!doc->isModified)
                         {
-                            doc->isModified = true;
+                            doc->markModified();
                             updateFileListDisplay(doc->filePath);
                         }
 
@@ -624,7 +625,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
                         if (!doc->isModified)
                         {
-                            doc->isModified = true;
+                            doc->markModified();
                             updateFileListDisplay(doc->filePath);
                         }
 
@@ -1126,7 +1127,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
                                              u8"Добавление точки"));
             }
 
-            doc->isModified = true;
+            doc->markModified();
             updateFileListDisplay(doc->filePath);
         }
         else
@@ -1625,7 +1626,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
 
                             stack->push(new undo::Move(doc.get(), shapes, description, delta));
                         }
-                        doc->isModified = true;
+                        doc->markModified();
                         updateFileListDisplay(doc->filePath);
                     }
             }
@@ -1687,7 +1688,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                                              u8"Добавлен прямоугольник"));
             }
 
-            doc->isModified = true;
+            doc->markModified();
             updateFileListDisplay(doc->filePath);
         }
         else
@@ -1752,7 +1753,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
                                              u8"Добавление круга"));
             }
 
-            doc->isModified = true;
+            doc->markModified();
             updateFileListDisplay(doc->filePath);
         }
         else
@@ -2007,7 +2008,7 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
 
     if (Document::Ptr doc = currentDocument())
     {
-        doc->isModified = true;
+        doc->markModified();
         updateFileListDisplay(doc->filePath);
     }
     updateCoordinateList();
@@ -2113,7 +2114,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
             if (!doc->isModified)
             {
-                doc->isModified = true;
+                doc->markModified();
                 updateFileListDisplay(doc->filePath);
             }
 
@@ -2261,7 +2262,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                             {
-                                doc->isModified = true;
+                                doc->markModified();
                                 updateFileListDisplay(doc->filePath);
                             }
                         }
@@ -2320,7 +2321,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                             {
-                                doc->isModified = true;
+                                doc->markModified();
                                 updateFileListDisplay(doc->filePath);
                             }
                         }
@@ -2770,7 +2771,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                 if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                                 {
-                                    doc->isModified = true;
+                                    doc->markModified();
                                     updateFileListDisplay(doc->filePath);
                                 }
                             }
@@ -2819,7 +2820,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                 if (!doc->isModified)
                                 {
-                                    doc->isModified = true;
+                                    doc->markModified();
                                     updateFileListDisplay(doc->filePath);
                                 }
                             }
@@ -2863,7 +2864,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                         if (!doc->isModified)
                                         {
-                                            doc->isModified = true;
+                                            doc->markModified();
                                             updateFileListDisplay(doc->filePath);
                                         }
                                     }
@@ -2960,7 +2961,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                 if (!doc->isModified)
                                 {
-                                    doc->isModified = true;
+                                    doc->markModified();
                                     updateFileListDisplay(doc->filePath);
                                 }
 
@@ -3042,7 +3043,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                 if (!doc->isModified)
                                 {
-                                    doc->isModified = true;
+                                    doc->markModified();
                                     updateFileListDisplay(doc->filePath);
                                 }
 
@@ -3124,7 +3125,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                 if (!doc->isModified)
                                 {
-                                    doc->isModified = true;
+                                    doc->markModified();
                                     updateFileListDisplay(doc->filePath);
                                 }
 
@@ -3199,7 +3200,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                 if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                                 {
-                                    doc->isModified = true;
+                                    doc->markModified();
                                     updateFileListDisplay(doc->filePath);
                                 }
                             }
@@ -3246,7 +3247,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                 if (!doc->isModified)
                                 {
-                                    doc->isModified = true;
+                                    doc->markModified();
                                     updateFileListDisplay(doc->filePath);
                                 }
                             }
@@ -3294,7 +3295,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                         if (!doc->isModified)
                                         {
-                                            doc->isModified = true;
+                                            doc->markModified();
                                             updateFileListDisplay(doc->filePath);
                                         }
                                     }
@@ -3338,7 +3339,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                                 if (!doc->isModified)
                                 {
-                                    doc->isModified = true;
+                                    doc->markModified();
                                     updateFileListDisplay(doc->filePath);
                                 }
 
@@ -3385,7 +3386,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                                                                     u8"Пересчет нумерации"));
                                 if (!doc->isModified)
                                 {
-                                    doc->isModified = true;
+                                    doc->markModified();
                                     updateFileListDisplay(doc->filePath);
                                 }
                                 if (doc->scene)
@@ -3447,7 +3448,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                             {
-                                doc->isModified = true;
+                                doc->markModified();
                                 updateFileListDisplay(doc->filePath);
                             }
                         }
@@ -3481,7 +3482,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                         stack->push(command);
                         if (!doc->isModified)
                         {
-                            doc->isModified = true;
+                            doc->markModified();
                             updateFileListDisplay(doc->filePath);
                         }
                     }
@@ -3543,7 +3544,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                             if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
                             {
-                                doc->isModified = true;
+                                doc->markModified();
                                 updateFileListDisplay(doc->filePath);
                             }
                         }
@@ -3590,7 +3591,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                         if (!doc->isModified)
                         {
-                            doc->isModified = true;
+                            doc->markModified();
                             updateFileListDisplay(doc->filePath);
                         }
                     }
@@ -3764,51 +3765,59 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
-    // Всегда запоминаем текущую открытую папку как последнюю
+    // Запоминаем последнюю открытую папку
     if (!_currentFolderPath.isEmpty())
     {
         _lastUsedFolder = _currentFolderPath;
         saveLastUsedFolder();
     }
 
-    // Проверяем есть ли несохраненные изменения
     if (hasUnsavedChanges())
     {
-        QList<Document::Ptr> unsavedDocs = getUnsavedDocuments();
-
-        int result = showUnsavedChangesDialog(unsavedDocs);
+        const QList<Document::Ptr> unsavedDocs = getUnsavedDocuments();
+        const int result = showUnsavedChangesDialog(unsavedDocs);
 
         switch (result)
         {
             case QDialogButtonBox::SaveAll:
-                // Сохранить все
+            {
                 saveAllDocuments();
-                saveGeometry();
-                event->accept();
+
+                // Не закрываем приложение, если часть документов не сохранена
+                if (hasUnsavedChanges())
+                {
+                    event->ignore();
+                    return;
+                }
+
                 break;
+            }
 
             case QDialogButtonBox::Discard:
-                // Не сохранять
-                saveGeometry();
-                event->accept();
-                break;
+            {
+                // Удаляем копии только после явного отказа от изменений
+                for (const Document::Ptr& doc : unsavedDocs)
+                {
+                    if (!removeAutoSaveFile(doc))
+                    {
+                        event->ignore();
+                        return;
+                    }
+                }
 
-            case QDialogButtonBox::Cancel:
-                // Отмена
-                event->ignore();
                 break;
+            }
 
             default:
+            {
                 event->ignore();
-                break;
+                return;
+            }
         }
     }
-    else
-    {
-        // Нет несохраненных изменений - просто сохраняем геометрию и закрываем
-        saveGeometry();
-        event->accept();
-    }
+
+    saveGeometry();
+    event->accept();
 }
 
 void MainWindow::showEvent(QShowEvent* event)
@@ -3828,44 +3837,75 @@ void MainWindow::showEvent(QShowEvent* event)
 
 void MainWindow::on_actOpen_triggered(bool)
 {
-    // Сначала проверяем несохраненные изменения,
-    // и только потом даем выбирать новую папку
-    if (!_currentFolderPath.isEmpty() && hasUnsavedChanges())
+    const QString initialDir = _lastUsedFolder.isEmpty()
+        ? QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
+        : _lastUsedFolder;
+
+    // Сначала выбираем новую папку, не затрагивая текущие документы
+    const QString folderPath = QFileDialog::getExistingDirectory(
+        this,
+        u8"Выберите рабочую папку с изображениями",
+        initialDir,
+        QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks
+    );
+
+    if (folderPath.isEmpty())
+        return;
+
+    if (!QDir(folderPath).exists())
     {
-        QList<Document::Ptr> unsavedDocs = getUnsavedDocuments();
-        int result = showUnsavedChangesDialog(unsavedDocs);
+        messageBox(
+            this,
+            QMessageBox::Warning,
+            u8"Выбранная папка не существует!"
+        );
+
+        return;
+    }
+
+    // Повторный выбор текущей папки не требует закрытия документов
+    if (!_currentFolderPath.isEmpty()
+        && QDir::cleanPath(_currentFolderPath) == QDir::cleanPath(folderPath))
+    {
+        return;
+    }
+
+    if (hasUnsavedChanges())
+    {
+        const QList<Document::Ptr> unsavedDocs = getUnsavedDocuments();
+        const int result = showUnsavedChangesDialog(unsavedDocs);
 
         switch (result)
         {
             case QDialogButtonBox::SaveAll:
+            {
                 saveAllDocuments();
+
+                // Остаёмся в текущей папке при ошибке сохранения
+                if (hasUnsavedChanges())
+                    return;
+
                 break;
+            }
 
             case QDialogButtonBox::Discard:
-                break;
+            {
+                // Отказ подтвержден, удаляем копии текущих изменений
+                for (const Document::Ptr& doc : unsavedDocs)
+                {
+                    if (!removeAutoSaveFile(doc))
+                        return;
+                }
 
-            case QDialogButtonBox::Cancel:
-                return;
+                break;
+            }
 
             default:
                 return;
         }
     }
-    QString initialDir = _lastUsedFolder.isEmpty()
-                             ? QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
-                             : _lastUsedFolder;
 
-    // Создаем диалог выбора директории
-    QString folderPath = QFileDialog::getExistingDirectory(
-        this,
-        u8"Выберите рабочую папку с изображениями",
-        initialDir,
-        QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks
-        );
-    if (!folderPath.isEmpty())
-    {
-        setWorkingFolder(folderPath);
-    }
+    setWorkingFolder(folderPath);
 }
 
 void MainWindow::on_actClose_triggered(bool)
@@ -4899,7 +4939,7 @@ void MainWindow::on_actResetAnnotation_triggered()
                                           shapes,
                                           u8"Сброс разметки"));
 
-    doc->isModified = true;
+    doc->markModified();
     updateFileListDisplay(doc->filePath);
     updateShapeListButtons();
 
@@ -5039,6 +5079,31 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
     filters << "*.tiff";
     QStringList files = directory.entryList(filters, QDir::Files);
 
+    QStringList autoSaveFiles;
+
+    // Ищем резервные копии для изображений выбранной папки
+    for (const QString& filename : files)
+    {
+        const QString imagePath = directory.filePath(filename);
+        const QString autoSavePath = autoSavePathFor(imagePath);
+
+        if (QFileInfo::exists(autoSavePath))
+            autoSaveFiles.append(QFileInfo(autoSavePath).fileName());
+    }
+
+    bool restoreAutoSaves = false;
+    bool discardAutoSaves = false;
+    QStringList failedAutoSaveFiles;
+
+    // Предлагаем восстановить найденные копии одним диалогом
+    if (!autoSaveFiles.isEmpty())
+    {
+        RestoreAutoSave dialog(autoSaveFiles, this);
+
+        restoreAutoSaves = dialog.exec() == QDialog::Accepted;
+        discardAutoSaves = dialog.discardAutoSaves();
+    }
+
     // Загружаем иконки из ресурсов
     QIcon savedIcon(":/images/resources/ok.svg");
     QIcon noAnnotationIcon(":/images/resources/no_annotation.svg");
@@ -5085,6 +5150,11 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
             if (Document::Ptr doc = currentDocument())
             {
                 doc->isModified = !clean;
+
+                // При возврате к сохраненному состоянию копия больше не нужна
+                if (clean)
+                    removeAutoSaveFile(doc, false);
+
                 updateFileListDisplay(doc->filePath);
             }
         });
@@ -5102,6 +5172,9 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
 
             if (!doc || !doc->scene)
                 return;
+
+            // После изменения истории резервную копию нужно обновить
+            doc->autoSaveUpToDate = false;
 
             const QList<QGraphicsItem*> items = doc->scene->items();
 
@@ -5151,8 +5224,43 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
         });
 
         ui->fileList->addItem(item);
+
+        // Удаляем копию только при явном отказе от восстановления
+        if (discardAutoSaves)
+            removeAutoSaveFile(doc);
+
         if (doc->loadImage())
-            loadAnnotationFromFile(doc, false);
+        {
+            bool restored = false;
+
+            const QString autoSavePath = autoSavePathFor(doc->filePath);
+
+            if (restoreAutoSaves && QFileInfo::exists(autoSavePath))
+            {
+                restored = loadAutoSave(doc);
+
+                if (!restored)
+                    failedAutoSaveFiles.append(autoSavePath);
+            }
+
+            // Основной YAML загружаем только при отсутствии восстановления
+            if (!restored)
+                loadAnnotationFromFile(doc, false);
+
+            updateFileListDisplay(doc->filePath);
+        }
+    }
+    if (!failedAutoSaveFiles.isEmpty())
+    {
+        messageBox(
+            this,
+            QMessageBox::Warning,
+            QString::fromUtf8(
+                u8"Не удалось восстановить следующие резервные копии:\n%1\n\n"
+                u8"Для этих изображений выполнена попытка загрузки основной разметки.\n"
+                u8"Резервные файлы оставлены на диске."
+            ).arg(failedAutoSaveFiles.join("\n"))
+        );
     }
 }
 
@@ -5271,7 +5379,7 @@ void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
 
     if (!doc->isModified)
     {
-        doc->isModified = true;
+        doc->markModified();
         updateFileListDisplay(doc->filePath);
     }
 }
@@ -5595,7 +5703,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     if (QUndoStack* stack = activeUndoStack())
         stack->push(new undo::Paste(doc.get(), newItems, descr));
 
-    doc->isModified = true;
+    doc->markModified();
     updateFileListDisplay(doc->filePath);
 }
 
@@ -5649,6 +5757,83 @@ QString MainWindow::annotationPathFor(const QString& imagePath)
     QFileInfo fileInfo(imagePath);
     QDir dir(fileInfo.absolutePath());
     return dir.filePath(fileInfo.completeBaseName() + ".yaml");
+}
+
+QString MainWindow::autoSavePathFor(const QString& imagePath)
+{
+    const QFileInfo fileInfo(imagePath);
+    const QDir dir(fileInfo.absolutePath());
+
+    return dir.filePath(fileInfo.completeBaseName() + ".autosave.yaml");
+}
+
+bool MainWindow::loadAutoSave(Document::Ptr doc)
+{
+    if (!doc || !doc->scene || !doc->videoRect)
+        return false;
+
+    const QString filePath = autoSavePathFor(doc->filePath);
+    const QByteArray encoded =
+        QFile::encodeName(QDir::toNativeSeparators(filePath));
+
+    YamlConfig yconfig;
+
+    if (!yconfig.readFile(std::string(encoded.constData(), encoded.size())))
+    {
+        log_error_m << "Не удалось прочитать резервную копию:" << filePath;
+        return false;
+    }
+
+    // Проверяем структуру текущего формата разметки
+    YamlConfig::Func checkShapes =
+        [](YamlConfig*, YAML::Node& shapes, bool)
+    {
+        return shapes.IsSequence() || shapes.IsNull();
+    };
+
+    if (!yconfig.getValue("shapes", checkShapes, false))
+    {
+        log_error_m << "Неверный формат резервной копии:" << filePath;
+        return false;
+    }
+
+    // Подавляем обработку изменений на время загрузки
+    QScopedValueRollback<bool> loadingGuard(_loadingNow, true);
+    QSignalBlocker sceneBlocker(doc->scene);
+
+    const QPointF imageOffset = doc->videoRect->pos();
+
+    if (!loadShapesFromYaml(doc, yconfig, imageOffset))
+    {
+        // Основная разметка ещё не загружена.
+        // Убираем фигуры, частично созданные из резервной копии.
+        QList<QGraphicsItem*> createdShapes;
+
+        const QList<QGraphicsItem*> items = doc->scene->items();
+
+        for (QGraphicsItem* item : items)
+        {
+            if (isRootShapeItem(item))
+                createdShapes.append(item);
+        }
+
+        for (QGraphicsItem* item : createdShapes)
+            delete item;
+
+        log_error_m << "Не удалось загрузить резервную копию:" << filePath;
+        return false;
+    }
+
+    // Восстановленное состояние еще не сохранено в основном YAML
+    if (doc->_undoStack)
+        doc->_undoStack->resetClean();
+
+    doc->markModified();
+
+    // Копия на диске соответствует только что загруженной разметке
+    doc->autoSaveUpToDate = true;
+
+    return true;
 }
 
 double MainWindow::round2(double value)
@@ -5755,34 +5940,41 @@ void MainWindow::saveShapesToYaml(YamlConfig& yconfig, const QList<QGraphicsItem
     yconfig.setValue("shapes", saveShapes);
 }
 
-bool MainWindow::saveAnnotationToFile(Document::Ptr doc, bool showError)
-    {
+bool MainWindow::writeAnnotationFile(Document::Ptr doc,
+                                     const QString& filePath)
+{
     if (!doc || !doc->scene || !doc->videoRect)
         return false;
 
     YamlConfig yconfig;
     saveShapesToYaml(yconfig, orderedShapeItemsForSave(doc));
 
-    const QString yamlPath = annotationPathFor(doc->filePath);
-    QSaveFile file(yamlPath);
-
-    // TODO зачем использовать QSaveFile ?
-
-    // Формируем YAML в памяти перед записью на диск
+    // Формируем YAML перед записью на диск
     std::string yaml;
-    bool saved = yconfig.saveString(yaml);
+    if (!yconfig.saveString(yaml))
+        return false;
 
-    if (saved)
-    {
-        const qint64 size = static_cast<qint64>(yaml.size());
+    QSaveFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly))
+        return false;
 
-        // Заменяем основной файл только после успешной записи
-        saved = file.open(QIODevice::WriteOnly)
-                && file.write(yaml.data(), size) == size
-                && file.commit();
-    }
+    const qint64 size = static_cast<qint64>(yaml.size());
 
-    if (!saved)
+    if (file.write(yaml.data(), size) != size)
+        return false;
+
+    // Заменяем предыдущую версию только после успешной записи
+    return file.commit();
+}
+
+bool MainWindow::saveAnnotationToFile(Document::Ptr doc, bool showError)
+{
+    if (!doc || !doc->scene || !doc->videoRect)
+        return false;
+
+    const QString yamlPath = annotationPathFor(doc->filePath);
+
+    if (!writeAnnotationFile(doc, yamlPath))
     {
         if (showError)
         {
@@ -5796,15 +5988,50 @@ bool MainWindow::saveAnnotationToFile(Document::Ptr doc, bool showError)
         return false;
     }
 
+    // Основная разметка сохранена, резервная копия больше не нужна
+    removeAutoSaveFile(doc, showError);
+
     // Запоминаем сохраненное состояние истории изменений
     if (doc->_undoStack)
         doc->_undoStack->setClean();
 
-    // Снимаем признак изменений и обновляем строку изображения
     doc->isModified = false;
+    doc->autoSaveUpToDate = false;
+
     updateFileListDisplay(doc->filePath);
 
     return true;
+}
+
+bool MainWindow::removeAutoSaveFile(Document::Ptr doc, bool showError)
+{
+    if (!doc)
+        return false;
+
+    doc->autoSaveUpToDate = false;
+
+    const QString filePath = autoSavePathFor(doc->filePath);
+
+    if (!QFileInfo::exists(filePath))
+        return true;
+
+    if (QFile::remove(filePath))
+        return true;
+
+    log_warn_m << "Не удалось удалить резервную копию:" << filePath;
+
+    if (showError)
+    {
+        messageBox(
+            this,
+            QMessageBox::Warning,
+            QString::fromUtf8(
+                u8"Не удалось удалить резервную копию:\n%1"
+            ).arg(filePath)
+        );
+    }
+
+    return false;
 }
 
 void MainWindow::applyAutoSaveSettings()
@@ -5881,30 +6108,62 @@ void MainWindow::autoSaveDocuments()
     if (editingCurrentDocument)
         return;
 
-    const Document::Ptr doc = currentDocument();
+    QStringList savedFiles;
+    QStringList failedFiles;
 
-    if (!doc || !doc->scene || !doc->videoRect || !doc->isModified)
-        return;
+    QMap<QString, Document::Ptr>::const_iterator it =
+        _documentsMap.constBegin();
 
-    if (!saveAnnotationToFile(doc, false))
+    for (; it != _documentsMap.constEnd(); ++it)
+    {
+        const Document::Ptr doc = it.value();
+
+        if (!doc || !doc->scene || !doc->videoRect)
+            continue;
+
+        if (!doc->isModified)
+            continue;
+
+        const QString autoSavePath = autoSavePathFor(doc->filePath);
+
+        // Пропускаем документ, если его актуальная копия уже существует
+        if (doc->autoSaveUpToDate && QFileInfo::exists(autoSavePath))
+            continue;
+
+        if (!writeAnnotationFile(doc, autoSavePath))
+        {
+            failedFiles.append(autoSavePath);
+            continue;
+        }
+
+        // Поднимаем флаг только после успешной записи
+        doc->autoSaveUpToDate = true;
+        savedFiles.append(autoSavePath);
+    }
+
+    if (!failedFiles.isEmpty())
     {
         _autoSaveLabel->setText(u8"Автосохранение: ошибка");
         _autoSaveLabel->setToolTip(
-            QString::fromUtf8(u8"Не удалось сохранить разметку:\n%1")
-                             .arg(doc->filePath)
+            QString::fromUtf8(u8"Не удалось записать резервные копии:\n%1")
+                .arg(failedFiles.join("\n"))
         );
 
         return;
     }
 
+    // При отсутствии новых записей оставляем предыдущий результат
+    if (savedFiles.isEmpty())
+        return;
+
     _autoSaveLabel->setText(
         QString::fromUtf8(u8"Автосохранение: %1")
-                         .arg(QTime::currentTime().toString("HH:mm:ss"))
+            .arg(QTime::currentTime().toString("HH:mm:ss"))
     );
 
     _autoSaveLabel->setToolTip(
-        QString::fromUtf8(u8"Последнее автосохранение:\n%1")
-                         .arg(doc->filePath)
+        QString::fromUtf8(u8"Записаны резервные копии:\n%1")
+            .arg(savedFiles.join("\n"))
     );
 }
 
@@ -7733,7 +7992,7 @@ void MainWindow::endGhost()
 
             if (doc && !doc->isModified)
             {
-                doc->isModified = true;
+                doc->markModified();
                 updateFileListDisplay(doc->filePath);
             }
         }
@@ -8157,7 +8416,7 @@ void MainWindow::finishHandleDrag()
 
             if (doc && !doc->isModified)
             {
-                doc->isModified = true;
+                doc->markModified();
                 updateFileListDisplay(doc->filePath);
             }
         }
@@ -9440,7 +9699,7 @@ void MainWindow::applyClassRenames(
         if (!documentChanged)
             continue;
 
-        doc->isModified = true;
+        doc->markModified();
         updateFileListDisplay(doc->filePath);
         doc->scene->update();
 
@@ -9680,7 +9939,7 @@ bool MainWindow::performMergeLines(qgraph::Line* lineA, int indexA, qgraph::Line
 
     stack->push(command);
 
-    doc->isModified = true;
+    doc->markModified();
     updateFileListDisplay(doc->filePath);
 
     return true;
@@ -9795,7 +10054,7 @@ bool MainWindow::performSplitLineByEdge(qgraph::Line* line, const QPointF& scene
 
     stack->push(command);
 
-    doc->isModified = true;
+    doc->markModified();
     updateFileListDisplay(doc->filePath);
 
     return true;
@@ -10007,7 +10266,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
                                 if (!doc->isModified)
                                 {
-                                    doc->isModified = true;
+                                    doc->markModified();
                                     updateFileListDisplay(doc->filePath);
                                 }
                             }
@@ -10063,7 +10322,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
                         if (!doc->isModified)
                         {
-                            doc->isModified = true;
+                            doc->markModified();
                             updateFileListDisplay(doc->filePath);
                         }
                     }
@@ -10104,7 +10363,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
             if (!doc->isModified)
             {
-                doc->isModified = true;
+                doc->markModified();
                 updateFileListDisplay(doc->filePath);
             }
         }
@@ -10169,7 +10428,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
             if (doc && !doc->isModified)
             {
-                doc->isModified = true;
+                doc->markModified();
                 updateFileListDisplay(doc->filePath);
             }
         }
@@ -10217,7 +10476,7 @@ void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,
 
                 if (!doc->isModified)
                 {
-                    doc->isModified = true;
+                    doc->markModified();
                     updateFileListDisplay(doc->filePath);
                 }
             }
@@ -10327,7 +10586,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
                                 if (!doc->isModified)
                                 {
-                                    doc->isModified = true;
+                                    doc->markModified();
                                     updateFileListDisplay(doc->filePath);
                                 }
                             }
@@ -10383,7 +10642,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
                         if (!doc->isModified)
                         {
-                            doc->isModified = true;
+                            doc->markModified();
                             updateFileListDisplay(doc->filePath);
                         }
                     }
@@ -10422,7 +10681,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
             if (!doc->isModified)
             {
-                doc->isModified = true;
+                doc->markModified();
                 updateFileListDisplay(doc->filePath);
             }
         }
@@ -10460,7 +10719,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
             if (doc && !doc->isModified)
             {
-                doc->isModified = true;
+                doc->markModified();
                 updateFileListDisplay(doc->filePath);
             }
         }
@@ -10507,7 +10766,7 @@ void MainWindow::handleLineLmbClick(const QPointF& scenePos, Qt::KeyboardModifie
 
                 if (!doc->isModified)
                 {
-                    doc->isModified = true;
+                    doc->markModified();
                     updateFileListDisplay(doc->filePath);
                 }
             }
@@ -10592,7 +10851,7 @@ void MainWindow::moveCurrentShapeInList(int direction)
 
     if (!doc->isModified)
     {
-        doc->isModified = true;
+        doc->markModified();
         updateFileListDisplay(doc->filePath);
     }
 

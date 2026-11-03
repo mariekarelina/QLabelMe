@@ -36,3 +36,9 @@ bool Document::loadImage()
     scene->setSceneRect(QRectF(QPointF(0, 0), QSizeF(pixmap.size())));
     return true;
 }
+
+void Document::markModified()
+{
+    isModified = true;
+    autoSaveUpToDate = false;
+}

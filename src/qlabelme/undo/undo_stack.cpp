@@ -553,7 +553,7 @@ void Delete::undo()
         }
     }
 
-    _doc->isModified = true;
+    _doc->markModified();
 }
 
 void Delete::redo()
@@ -582,7 +582,7 @@ void Delete::redo()
             state.modelItems = _doc->polygonList.model.takeRow(state.row);
     }
 
-    _doc->isModified = true;
+    _doc->markModified();
 }
 
 ResetAnnotation::ResetAnnotation(Document* doc,
