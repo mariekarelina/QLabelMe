@@ -64,7 +64,13 @@
        </property>
        <widget class="QWidget" name="layoutWidget">
         <layout class="QGridLayout" name="gridLayout">
-         <item row="0" column="0">
+         <item row="1" column="1">
+          <widget class="QListWidget" name="coordinateList"/>
+         </item>
+         <item row="1" column="3">
+          <widget class="QUndoView" name="undoView"/>
+         </item>
+         <item row="0" column="4">
           <widget class="QWidget" name="figuresWidget" native="true">
            <layout class="QHBoxLayout" name="figuresWidget2">
             <item>
@@ -77,6 +83,9 @@
               </property>
               <property name="text">
                <string>Фигуры</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
               </property>
              </widget>
             </item>
@@ -134,28 +143,34 @@
            </layout>
           </widget>
          </item>
+         <item row="1" column="4">
+          <widget class="QListView" name="polygonList"/>
+         </item>
          <item row="0" column="1">
           <widget class="QLabel" name="label">
+           <property name="focusPolicy">
+            <enum>Qt::NoFocus</enum>
+           </property>
            <property name="text">
             <string>Координаты</string>
            </property>
+           <property name="alignment">
+            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+           </property>
+           <property name="wordWrap">
+            <bool>false</bool>
+           </property>
           </widget>
          </item>
-         <item row="0" column="2">
+         <item row="0" column="3">
           <widget class="QLabel" name="label_4">
            <property name="text">
             <string>Стек действий</string>
            </property>
+           <property name="alignment">
+            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+           </property>
           </widget>
-         </item>
-         <item row="1" column="2">
-          <widget class="QUndoView" name="undoView"/>
-         </item>
-         <item row="1" column="1">
-          <widget class="QListWidget" name="coordinateList"/>
-         </item>
-         <item row="1" column="0">
-          <widget class="QListView" name="polygonList"/>
          </item>
         </layout>
        </widget>

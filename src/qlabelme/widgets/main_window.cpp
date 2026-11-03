@@ -145,13 +145,14 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->gridLayout->addWidget(toolBarsBlock, 0, 0, 1, 3);
 
     // Возвращаем заголовки и списки ниже
-    ui->gridLayout->addWidget(ui->figuresWidget, 1, 0);
-    ui->gridLayout->addWidget(ui->label,   1, 1);
-    ui->gridLayout->addWidget(ui->label_4, 1, 2);
+    ui->gridLayout->addWidget(ui->label,         1, 0);
+    ui->gridLayout->addWidget(ui->label_4,       1, 1);
+    ui->gridLayout->addWidget(ui->figuresWidget, 1, 2);
 
-    ui->gridLayout->addWidget(ui->polygonList,    2, 0);
-    ui->gridLayout->addWidget(ui->coordinateList, 2, 1);
-    ui->gridLayout->addWidget(ui->undoView,       2, 2);
+    // Содержимое под соответствующими заголовками
+    ui->gridLayout->addWidget(ui->coordinateList, 2, 0);
+    ui->gridLayout->addWidget(ui->undoView,       2, 1);
+    ui->gridLayout->addWidget(ui->polygonList,    2, 2);
 
     // Растяжение: тулбары/заголовки не растягиваются, низ растягивается
     ui->gridLayout->setRowStretch(0, 0);
@@ -3881,7 +3882,7 @@ void MainWindow::on_actOpen_triggered(bool)
             {
                 saveAllDocuments();
 
-                // Остаёмся в текущей папке при ошибке сохранения
+                // Остаемся в текущей папке при ошибке сохранения
                 if (hasUnsavedChanges())
                     return;
 
@@ -4973,7 +4974,7 @@ void MainWindow::on_actRestoreAnnotation_triggered()
         const QMessageBox::StandardButton answer = messageBox(
             this,
             QMessageBox::Question,
-            u8"Восстановить разметку из файла .yaml?\nВсе несохранённые изменения будут потеряны",
+            u8"Восстановить разметку из файла .yaml?\nВсе несохраненные изменения будут потеряны",
             0,
             [](QMessageBox* box)
             {
@@ -5805,7 +5806,7 @@ bool MainWindow::loadAutoSave(Document::Ptr doc)
 
     if (!loadShapesFromYaml(doc, yconfig, imageOffset))
     {
-        // Основная разметка ещё не загружена.
+        // Основная разметка еще не загружена.
         // Убираем фигуры, частично созданные из резервной копии.
         QList<QGraphicsItem*> createdShapes;
 
@@ -6062,7 +6063,7 @@ void MainWindow::applyAutoSaveSettings()
         {
             _autoSaveLabel->setText(u8"Автосохранение: вкл.");
             _autoSaveLabel->setToolTip(
-                u8"Автоматическое сохранение ещё не выполнялось"
+                u8"Автоматическое сохранение еще не выполнялось"
             );
         }
     }
@@ -6693,7 +6694,7 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
         }
     }
 
-    // Создаём фигуры из прочитанного YAML
+    // Создаем фигуры из прочитанного YAML
     if (!loadShapesFromYaml(doc, yconfig, imageOffset))
     {
         log_error_m << "Ошибка при загрузке разметки:" << yamlPath;
