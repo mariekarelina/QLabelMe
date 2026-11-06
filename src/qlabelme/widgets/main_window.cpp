@@ -3957,6 +3957,7 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem*
     doc->scene->installEventFilter(this);
     doc->scene->setProperty("classChangeReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
     doc->scene->setProperty("shapeDeleteReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
+    doc->scene->setProperty("shapeOrderReceiver", QVariant::fromValue(static_cast<QObject*>(this)));
     doc->scene->setProperty("fillShapeWhenSelected", _vstyle.fillShapeWhenSelected);
 
     ensureGhostAllocated();
@@ -7739,11 +7740,11 @@ void MainWindow::raiseSelectedShapesTemporarily()
 void MainWindow::moveSelectedItemsToBack()
 {
     Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene)
+        return;
+
     QGraphicsScene* scene = doc->scene;
     qgraph::VideoRect* videoRect = doc->videoRect;
-
-    if (!scene)
-        return;
 
     restoreTemporaryRaisedZValues();
 

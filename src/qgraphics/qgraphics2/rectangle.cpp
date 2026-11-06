@@ -735,76 +735,21 @@ void Rectangle::raiseHandlesToTop()
 
 void Rectangle::moveToBack()
 {
-    if (!scene()) return;
+    QGraphicsScene* currentScene = scene();
+    if (!currentScene)
+        return;
 
-    // Собираем информацию о всех фигурах
-    QList<QGraphicsItem*> allItems;
-    qreal photoZValue = 0;
+    QObject* receiver =
+        currentScene->property("shapeOrderReceiver").value<QObject*>();
 
-    for (QGraphicsItem* item : scene()->items())
-    {
-        if (!item)
-            continue;
+    if (!receiver)
+        return;
 
-        if (dynamic_cast<DragCircle*>(item))
-            continue;
-
-        if (item->zValue() <= 1 && item != this)
-        {
-            photoZValue = item->zValue();
-        }
-        allItems.append(item);
-    }
-
-    // Сортируем по z-value
-    std::sort(allItems.begin(), allItems.end(),
-              [](QGraphicsItem* a, QGraphicsItem* b) {
-                  return a->zValue() < b->zValue();
-              });
-
-    // Находим индекс текущей фигуры
-    int currentIndex = -1;
-    for (int i = 0; i < allItems.size(); ++i)
-    {
-        if (allItems[i] == this)
-        {
-            currentIndex = i;
-            break;
-        }
-    }
-
-    if (currentIndex == -1) return;
-
-    // Если фигура уже самая нижняя (после фотографии)
-    if (currentIndex == 1) // индекс 0 - фотография, индекс 1 - самая нижняя фигура
-    {
-        // Перемещаем на самый верх
-        QGraphicsItem* topItem = allItems.last();
-        setZValue(topItem->zValue() + 1);
-    }
-    else
-    {
-        // Перемещаем на одну позицию ниже
-        QGraphicsItem* lowerItem = allItems[currentIndex - 1];
-        setZValue(lowerItem->zValue() - 0.1);
-    }
-
-    // Гарантируем, что остаемся над фотографией
-    if (zValue() <= photoZValue)
-    {
-        setZValue(photoZValue + 0.1);
-    }
-
-    // Ручки всегда поверх
-    for (QGraphicsItem* child : childItems())
-    {
-        if (DragCircle* circle = dynamic_cast<DragCircle*>(child))
-        {
-            circle->setZValue(10000);
-        }
-    }
-
-    scene()->update();
+    // Используем общий обработчик порядка фигур
+    QMetaObject::invokeMethod(
+        receiver,
+        "on_actBack_triggered",
+        Qt::DirectConnection);
 }
 
 void Rectangle::recalcNumberingFromHandle(DragCircle* handle)
