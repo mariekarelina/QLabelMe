@@ -447,6 +447,7 @@ MainWindow::MainWindow(QWidget* parent) :
 MainWindow::~MainWindow()
 {
     _loadingNow = true;
+    cancelRulerMode();
 
     if (ui)
     {
@@ -552,7 +553,9 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         _leftMouseButtonDown = true;
 
     // Alt + ЛКМ / Alt + Shift + ЛКМ для редактирования узлов
-    if (mouseEvent->button() == Qt::LeftButton && graphView)
+    if (mouseEvent->button() == Qt::LeftButton
+            && graphView
+            && !_drawingRuler)
     {
         //const Qt::KeyboardModifiers mods = mouseEvent->modifiers();
         const Qt::KeyboardModifiers mods = mouseEvent->modifiers()
@@ -647,8 +650,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         && !_drawingLine
         && !_drawingRectangle
         && !_drawingCircle
-        && !_drawingPoint
-        && !_drawingRuler)
+        && !_drawingPoint)
     {
         _zoomRectActive = true;
         updateModeLabel();
@@ -713,62 +715,23 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     }
     if (mouseEvent->button() == Qt::LeftButton && _drawingRuler)
     {
-        if (!_isDrawingRuler)
+        if (_drawingRuler)
         {
-            Document::Ptr doc = currentDocument();
-
-            if (!doc || !doc->scene || !doc->videoRect)
-                return;
-
-            QGraphicsScene* scene = doc->scene;
-            qgraph::VideoRect* videoRect = doc->videoRect;
-
-            _rulerStartPoint = graphView->mapToScene(mouseEvent->pos());
-            _isDrawingRuler = true;
-            updateModeLabel();
-
-            if (_rulerLine)
+            if (mouseEvent->button() == Qt::LeftButton
+                && mouseEvent->modifiers() == Qt::NoModifier)
             {
-                scene->removeItem(_rulerLine);
-                delete _rulerLine;
-                _rulerLine = nullptr;
-            }
-            if (_rulerText)
-            {
-                scene->removeItem(_rulerText);
-                delete _rulerText;
-                _rulerText = nullptr;
+                // Откладываем установку точки до отпускания кнопки
+                _pendingDrawTool = PendingDrawTool::Ruler;
+                _pendingDrawPressViewPos = mouseEvent->pos();
+                _pendingDrawPressScenePos =
+                    graphView->mapToScene(mouseEvent->pos());
+
+                _lastMousePos = mouseEvent->pos();
             }
 
-            QPen pen(_vstyle.rulerColor);
-            pen.setWidthF(2.0);
-            pen.setStyle(Qt::DotLine);
-            pen.setCapStyle(Qt::RoundCap);
-            pen.setJoinStyle(Qt::RoundJoin);
-            pen.setCosmetic(true);
-
-            _rulerLine = scene->addLine(QLineF(_rulerStartPoint, _rulerStartPoint), pen);
-            _rulerLine->setZValue(1000);
-
-            _rulerText = scene->addText(QStringLiteral("0"));
-            _rulerText->setDefaultTextColor(_vstyle.rulerColor);
-            // Масштабируем размер текста от размера изображения
-            if (videoRect)
-            {
-                const QSize imgSize = videoRect->pixmap().size();
-                const int maxSide = std::max(imgSize.width(), imgSize.height());
-
-                QFont f = _rulerText->font();
-                f.setPointSizeF(std::max(6.0, maxSide / 200.0));
-                _rulerText->setFont(f);
-            }
-            _rulerText->setZValue(1001);
-            _rulerText->setPos(_rulerStartPoint);
+            mouseEvent->accept();
+            return;
         }
-
-        _drawingRuler = false;
-        mouseEvent->accept();
-        return;
     }
     if (mouseEvent->button() == Qt::LeftButton && !isAnyDrawingNow())
     {
@@ -1270,27 +1233,6 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
             return;
         }
     }
-    if (_isDrawingRuler && _rulerLine)
-    {
-       QPointF currentPoint = graphView->mapToScene(mouseEvent->pos());
-       QLineF line(_rulerStartPoint, currentPoint);
-       _rulerLine->setLine(line);
-
-       const double dist = line.length();
-
-       if (_rulerText)
-       {
-           QString text = QString::number(dist, 'f', 1);
-           _rulerText->setPlainText(text);
-
-           QPointF middle = (line.p1() + line.p2()) / 2.0;
-           _rulerText->setPos(middle);
-       }
-
-       mouseEvent->accept();
-       return;
-    }
-
     if (_isInDrawingMode)
     {
         if (_isDrawingRectangle && _currRectangle)
@@ -1463,6 +1405,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             handlePolylineLmbClick(scenePos, mods, graphView);
         else if (tool == PendingDrawTool::Line)
             handleLineLmbClick(scenePos, mods, graphView);
+        else if (tool == PendingDrawTool::Ruler)
+            handleRulerLmbClick(scenePos);
 
         mouseEvent->accept();
         return;
@@ -1509,7 +1453,11 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             mouseEvent->accept();
             return;
         }
-
+        if (_drawingRuler)
+        {
+            mouseEvent->accept();
+            return;
+        }
         // Если протяжки не было, это обычный Ctrl+клик по фигуре для мультивыделения
         if ((mouseEvent->modifiers() & Qt::ControlModifier) &&
             !(mouseEvent->modifiers() & Qt::ShiftModifier))
@@ -1763,31 +1711,6 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             delete circle;
         }
     }
-    else if (mouseEvent->button() == Qt::LeftButton && _isDrawingRuler)
-    {
-        // Фиксируем конечную точку и окончательно считаем расстояние
-        _isDrawingRuler = false;
-        updateModeLabel();
-
-        if (_rulerLine)
-        {
-            QLineF line = _rulerLine->line();
-            const double dist = line.length();
-
-            if (_rulerText)
-            {
-                QString text = QString::number(dist, 'f', 1);
-                _rulerText->setPlainText(text);
-
-                QPointF middle = (line.p1() + line.p2()) / 2.0;
-                _rulerText->setPos(middle);
-            }
-        }
-
-        mouseEvent->accept();
-        return;
-    }
-
     if (mouseEvent->button() == Qt::LeftButton)
         _moveInProgress = false;
 
@@ -1812,7 +1735,8 @@ void MainWindow::setSceneItemsMovable(bool movable)
         if (item != doc->videoRect
             && item != _currCircle
             && item != _currCircleCrossV
-            && item != _currCircleCrossH)
+            && item != _currCircleCrossH
+            && item != _rulerLine)
         {
             item->setFlag(QGraphicsItem::ItemIsMovable, movable);
         }
@@ -2186,8 +2110,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 && !_drawingLine
                 && !_drawingRectangle
                 && !_drawingCircle
-                && !_drawingPoint
-                && !_drawingRuler)
+                && !_drawingPoint)
             {
                 break;
             }
@@ -3965,6 +3888,8 @@ void MainWindow::fitImageToView()
 
 void MainWindow::fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem* previous)
 {
+    cancelRulerMode();
+
     if (!current) return;
 
     restoreTemporaryRaisedZValues();
@@ -4169,6 +4094,8 @@ void MainWindow::selectAllShapes()
 
 void MainWindow::on_actRect_triggered()
 {
+    cancelRulerMode();
+
     _drawingRectangle = true;
     _drawingCircle = false;
     _drawingPolyline = false;
@@ -4179,6 +4106,8 @@ void MainWindow::on_actRect_triggered()
 
 void MainWindow::on_actCircle_triggered()
 {
+    cancelRulerMode();
+
     _drawingCircle = true;
     _drawingPolyline = false;
     _drawingRectangle = false;
@@ -4189,6 +4118,8 @@ void MainWindow::on_actCircle_triggered()
 
 void MainWindow::on_actPolyline_triggered()
 {
+    cancelRulerMode();
+
     _drawingPolyline = true;
     _drawingRectangle = false;
     _drawingCircle = false;
@@ -4199,6 +4130,8 @@ void MainWindow::on_actPolyline_triggered()
 
 void MainWindow::on_actPoint_triggered()
 {
+    cancelRulerMode();
+
     _drawingPoint = true;
     _drawingRectangle = false;
     _drawingCircle = false;
@@ -4209,6 +4142,8 @@ void MainWindow::on_actPoint_triggered()
 
 void MainWindow::on_actLine_triggered()
 {
+    cancelRulerMode();
+
     _drawingLine = true;
     _drawingPoint = false;
     _drawingRectangle = false;
@@ -4220,37 +4155,121 @@ void MainWindow::on_actLine_triggered()
 void MainWindow::on_actRuler_triggered()
 {
     Document::Ptr doc = currentDocument();
-    QGraphicsScene* scene = doc->scene;
+    if (!doc || !doc->scene || !doc->videoRect)
+        return;
 
-    // Отключаем другие режимы рисования
-    _drawingLine      = false;
-    _drawingPoint     = false;
+    // Удаляем предыдущее измерение
+    cancelRulerMode();
+
+    _drawingLine = false;
+    _drawingPoint = false;
     _drawingRectangle = false;
-    _drawingCircle    = false;
-    _drawingPolyline  = false;
+    _drawingCircle = false;
+    _drawingPolyline = false;
 
-    // Включаем режим линейки
-    _drawingRuler     = true;
-    _isDrawingRuler   = false;
-    _isInDrawingMode  = true;
+    _drawingRuler = true;
+    _isDrawingRuler = false;
 
-    setSceneItemsMovable(false);
+    // Линейка обрабатывается отдельно от рисования фигур
+    _isInDrawingMode = false;
+    _pendingDrawTool = PendingDrawTool::None;
+    _isDraggingImage = false;
+
     clearAllHandleHoverEffects();
     hideGhost();
+    updateModeLabel();
+}
 
-    // При включении инструмента очищаем старую линейку
-    if (_rulerLine)
+void MainWindow::handleRulerLmbClick(const QPointF& scenePos)
+{
+    if (!_drawingRuler)
+        return;
+
+    Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene || !doc->videoRect)
+        return;
+
+    if (!_isDrawingRuler)
     {
-        scene->removeItem(_rulerLine);
-        delete _rulerLine;
-        _rulerLine = nullptr;
+        // Запоминаем первую точку в координатах сцены
+        _rulerStartPoint = scenePos;
+
+        QPen linePen(_vstyle.rulerColor);
+        linePen.setWidthF(2.0);
+        linePen.setStyle(Qt::DotLine);
+        linePen.setCapStyle(Qt::RoundCap);
+        linePen.setCosmetic(true);
+
+        _rulerLine = doc->scene->addLine(
+            QLineF(scenePos, scenePos), linePen);
+        _rulerLine->setZValue(1000);
+        _rulerLine->setAcceptedMouseButtons(Qt::NoButton);
+
+        // Маркеры и подпись принадлежат линии и удаляются вместе с ней
+        _rulerStartMarker = new QGraphicsEllipseItem(
+            QRectF(-4.0, -4.0, 8.0, 8.0), _rulerLine);
+        _rulerEndMarker = new QGraphicsEllipseItem(
+            QRectF(-4.0, -4.0, 8.0, 8.0), _rulerLine);
+
+        QPen markerPen(_vstyle.rulerColor);
+        markerPen.setWidthF(1.5);
+        markerPen.setCosmetic(true);
+
+        for (QGraphicsEllipseItem* marker :
+             {_rulerStartMarker, _rulerEndMarker})
+        {
+            marker->setPen(markerPen);
+            marker->setBrush(QBrush(_vstyle.rulerColor));
+            marker->setFlag(
+                QGraphicsItem::ItemIgnoresTransformations, true);
+            marker->setAcceptedMouseButtons(Qt::NoButton);
+            marker->setZValue(1);
+        }
+
+        // Размер маркеров на экране не зависит от масштаба
+        _rulerStartMarker->setPos(scenePos);
+        _rulerEndMarker->setVisible(false);
+
+        _rulerText = new QGraphicsTextItem(_rulerLine);
+        _rulerText->setDefaultTextColor(_vstyle.rulerColor);
+        _rulerText->setAcceptedMouseButtons(Qt::NoButton);
+        _rulerText->setZValue(2);
+
+        const QSize imageSize = doc->videoRect->pixmap().size();
+        const int maxSide = std::max(
+            imageSize.width(), imageSize.height());
+
+        QFont rulerFont = _rulerText->font();
+        rulerFont.setPointSizeF(std::max(6.0, maxSide / 200.0));
+        _rulerText->setFont(rulerFont);
+        _rulerText->setVisible(false);
+
+        _isDrawingRuler = true;
+        updateModeLabel();
+        return;
     }
-    if (_rulerText)
+
+    if (!_rulerLine || !_rulerText || !_rulerEndMarker)
     {
-        scene->removeItem(_rulerText);
-        delete _rulerText;
-        _rulerText = nullptr;
+        cancelRulerMode();
+        return;
     }
+
+    // Второй клик завершает измерение
+    const QLineF line(_rulerStartPoint, scenePos);
+
+    _rulerLine->setLine(line);
+    _rulerEndMarker->setPos(scenePos);
+    _rulerEndMarker->setVisible(true);
+
+    _rulerText->setPlainText(QString::number(line.length(), 'f', 1));
+    _rulerText->setPos((line.p1() + line.p2()) / 2.0);
+    _rulerText->setVisible(true);
+
+    // Возвращаемся в просмотр, сохраняя результат на сцене
+    _drawingRuler = false;
+    _isDrawingRuler = false;
+    _isInDrawingMode = false;
 
     updateModeLabel();
 }
@@ -4314,6 +4333,7 @@ void MainWindow::setWorkingFolder(const QString& folderPath)
     {
         return;
     }
+    cancelRulerMode();
 
     _ghostTarget = nullptr;
     _ghostHandle = nullptr;
@@ -4554,6 +4574,18 @@ void MainWindow::on_actSettingsApp_triggered()
         if (_rulerText)
         {
             _rulerText->setDefaultTextColor(_vstyle.rulerColor);
+        }
+        // Обновляем цвет обоих маркеров
+        for (QGraphicsEllipseItem* marker :
+             {_rulerStartMarker, _rulerEndMarker})
+        {
+            if (!marker)
+                continue;
+
+            QPen pen = marker->pen();
+            pen.setColor(_vstyle.rulerColor);
+            marker->setPen(pen);
+            marker->setBrush(QBrush(_vstyle.rulerColor));
         }
         Document::Ptr doc = currentDocument();
         if (doc->scene)
@@ -9494,36 +9526,30 @@ void MainWindow::cancelNewLinePolylineDrawing()
 
 void MainWindow::cancelRulerMode()
 {
+    // Не меняем состояние других инструментов, если линейки нет
+    if (!_drawingRuler && !_isDrawingRuler && !_rulerLine)
+        return;
+
     _drawingRuler = false;
     _isDrawingRuler = false;
     _isInDrawingMode = false;
 
+    if (_pendingDrawTool == PendingDrawTool::Ruler)
+        _pendingDrawTool = PendingDrawTool::None;
+
+    _isDraggingImage = false;
+
+    // Удаление линии также удаляет дочерние маркеры и подпись
+    delete _rulerLine;
+
+    _rulerLine = nullptr;
+    _rulerText = nullptr;
+    _rulerStartMarker = nullptr;
+    _rulerEndMarker = nullptr;
+    _rulerStartPoint = QPointF();
+
     clearAllHandleHoverEffects();
     hideGhost();
-    setSceneItemsMovable(true);
-
-    if (_rulerLine)
-    {
-        QGraphicsScene* scene = _rulerLine->scene();
-
-        if (scene)
-            scene->removeItem(_rulerLine);
-
-        delete _rulerLine;
-        _rulerLine = nullptr;
-    }
-
-    if (_rulerText)
-    {
-        QGraphicsScene* scene = _rulerText->scene();
-
-        if (scene)
-            scene->removeItem(_rulerText);
-
-        delete _rulerText;
-        _rulerText = nullptr;
-    }
-
     updateModeLabel();
 }
 
@@ -10109,8 +10135,8 @@ void MainWindow::updateModeLabel()
     if (_drawingRuler || _isDrawingRuler)
     {
         _modeLabel->setText(_isDrawingRuler
-                            ? u8"Режим: линейка (измерение...)"
-                            : u8"Режим: линейка");
+                            ? u8"Режим: линейка — вторая точка"
+                            : u8"Режим: линейка — первая точка");
         return;
     }
     if (_isInDrawingMode

@@ -306,6 +306,7 @@ private:
 
     // Отмена линейки
     void cancelRulerMode();
+    void handleRulerLmbClick(const QPointF& scenePos);
 
     // Видимость menuBar
     void toggleMenuBarVisible();
@@ -375,7 +376,7 @@ private:
     bool _isInDrawingMode  = {false}; // Флаг, указывающий что мы в режиме рисования новой фигуры
     bool _isDraggingImage  = {false}; // Флаг для перетаскивания изображения
 
-    enum class PendingDrawTool {None, Polyline, Line};
+    enum class PendingDrawTool {None, Polyline, Line, Ruler};
     PendingDrawTool _pendingDrawTool = {PendingDrawTool::None};
     QPoint _pendingDrawPressViewPos;
     QPointF _pendingDrawPressScenePos;
@@ -396,11 +397,14 @@ private:
     bool _isDrawingLine = {false};
 
     // Линейка
-    QGraphicsLineItem* _rulerLine = {nullptr}; // Временная линия измерения
-    QGraphicsTextItem* _rulerText = {nullptr}; // Подпись с расстоянием
-    bool _drawingRuler = {false};   // Выбран ли инструмент "Линейка"
-    bool _isDrawingRuler = {false}; // Тянем вторую точку
-    QPointF _rulerStartPoint;       // Первая точка измерения
+    QGraphicsLineItem* _rulerLine = {nullptr};
+    QGraphicsTextItem* _rulerText = {nullptr};
+    QGraphicsEllipseItem* _rulerStartMarker = {nullptr};
+    QGraphicsEllipseItem* _rulerEndMarker = {nullptr};
+
+    bool _drawingRuler = {false};   // Инструмент линейки активен
+    bool _isDrawingRuler = {false}; // Первая точка установлена, ожидаем вторую
+    QPointF _rulerStartPoint;
 
 
     qgraph::Polyline* _polyline = {nullptr};
