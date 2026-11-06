@@ -1211,6 +1211,9 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
         }
     }
 
+    if (graphView)
+        updateSegmentPreview(graphView, mouseEvent->pos());
+
     // Зум прямоугольной области Ctrl + ЛКМ
     if (_zoomRectActive && graphView && (mouseEvent->buttons() & Qt::LeftButton))
     {
@@ -1407,6 +1410,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             handleLineLmbClick(scenePos, mods, graphView);
         else if (tool == PendingDrawTool::Ruler)
             handleRulerLmbClick(scenePos);
+
+        updateSegmentPreview(graphView, mouseEvent->pos());
 
         mouseEvent->accept();
         return;
@@ -10131,6 +10136,9 @@ bool MainWindow::isBetterTopLeft(const QPointF& firstPoint, const QPointF& secon
 
 void MainWindow::updateModeLabel()
 {
+    if (!_drawingLine && !_drawingPolyline && ui && ui->graphView)
+        ui->graphView->setSegmentPreview(QLineF());
+
     if (!_modeLabel) return;
 
     if (_drawingRuler || _isDrawingRuler)
@@ -10198,6 +10206,39 @@ void MainWindow::updateModeLabel()
         return;
     }
     _modeLabel->setText(u8"Режим: просмотр");
+}
+
+void MainWindow::updateSegmentPreview(GraphicsView* graphView, const QPoint& viewPos)
+{
+    const qgraph::DragCircle* lastNode = nullptr;
+    QPen pen;
+
+    // Берем последний поставленный узел активной фигуры
+    if (_drawingPolyline && _polyline && _polyline->scene() == graphView->scene()
+        && !_polyline->isClosed() && !_polyline->circles().isEmpty())
+    {
+        lastNode = _polyline->circles().last();
+        pen = _polyline->pen();
+    }
+    else if (_drawingLine && _line && _line->scene() == graphView->scene()
+             && !_line->isClosed() && !_line->circles().isEmpty())
+    {
+        lastNode = _line->circles().last();
+        pen = _line->pen();
+    }
+
+    if (!lastNode || _isDraggingImage || _zoomRectActive
+        || !graphView->viewport()->rect().contains(viewPos))
+    {
+        // Скрываем предпросмотр, если рисовать отрезок пока нельзя
+        graphView->setSegmentPreview(QLineF());
+        return;
+    }
+
+    // Предпросмотр остается сплошным и использует толщину контура
+    pen.setStyle(Qt::SolidLine);
+    graphView->setSegmentPreview(
+        QLineF(lastNode->scenePos(), graphView->mapToScene(viewPos)), pen);
 }
 
 void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,

@@ -335,6 +335,7 @@ private:
     // Режим в statusBar
     void updateModeLabel();
 
+    void updateSegmentPreview(GraphicsView* graphView, const QPoint& viewPos);
     // Перемещение в режиме рисования
     void handlePolylineLmbClick(const QPointF& scenePos, Qt::KeyboardModifiers,
                                 GraphicsView*);
