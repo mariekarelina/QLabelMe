@@ -292,10 +292,10 @@
     <bool>false</bool>
    </attribute>
    <addaction name="actRect"/>
-   <addaction name="actCircle"/>
    <addaction name="actPolyline"/>
    <addaction name="actLine"/>
    <addaction name="actPoint"/>
+   <addaction name="actCircle"/>
   </widget>
   <widget class="QToolBar" name="toolBar_2">
    <property name="windowTitle">

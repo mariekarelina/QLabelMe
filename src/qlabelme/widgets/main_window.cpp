@@ -7560,9 +7560,8 @@ void MainWindow::updatePolygonListItemText(int row)
     if (!modelItem)
         return;
 
-    int number = ensureShapeNumber(sceneItem);
     QString className = sceneItem->data(0).toString();
-    QString text = QString("%1: %2").arg(number).arg(className);
+    QString text = QString("%1: %2").arg(row).arg(className);
 
     if (!sceneItem->isVisible())
         text += " [скрыто]";
