@@ -5505,6 +5505,8 @@ QString MainWindow::serializeSelectedItemsToYaml(Document::Ptr doc)
     // Используем ту же функцию, что и при сохранении разметки в файл
     YamlConfig yconfig;
     saveShapesToYaml(yconfig, selectedItems);
+    // Запоминаем исходный снимок в YAML для буфера обмена
+    yconfig.setValue("sourceImagePath", QFileInfo(doc->filePath).absoluteFilePath());
 
     std::string yaml;
     if (!yconfig.saveString(yaml))
@@ -5538,7 +5540,7 @@ void MainWindow::copySelectedShapes()
         return;
 
     _shapesClipboard = yaml;
-    _pasteCount = 0;
+    _pasteCountsByImage.clear();
     writeShapesYamlToClipboard(yaml);
 }
 
@@ -5564,7 +5566,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     if (!yconfig.readString(std::string(raw.constData(), raw.size())))
         return;
 
-    // Проверяем, что это разметка в нашем текущем YAML-формате
+    // Проверяем формат разметки
     YamlConfig::Func checkShapes = [](YamlConfig*, YAML::Node& shapes, bool)
     {
         return shapes.IsSequence() && shapes.size() > 0;
@@ -5573,34 +5575,55 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     if (!yconfig.getValue("shapes", checkShapes, false))
         return;
 
-    // Запоминаем, что было на сцене ДО вставки
-    QList<QGraphicsItem*> beforeItems = scene->items();
+    // Запоминаем элементы, которые уже были на сцене
+    const QList<QGraphicsItem*> beforeItems = scene->items();
+
+    QString sourceImagePath;
+    yconfig.getValue("sourceImagePath", sourceImagePath, false);
 
     const QString currentPath =
         QDir::cleanPath(QFileInfo(doc->filePath).absoluteFilePath());
+    const QString sourcePath = sourceImagePath.isEmpty() ? QString() :
+        QDir::cleanPath(QFileInfo(sourceImagePath).absoluteFilePath());
 
-    const bool repeatedPaste = (yaml == _lastPastedYaml
-                                && currentPath == _lastPasteImagePath);
+#ifdef Q_OS_WIN
+    const QString imageKey = currentPath.toCaseFolded();
+    const bool sameImage = !sourcePath.isEmpty()
+        && QString::compare(sourcePath, currentPath, Qt::CaseInsensitive) == 0;
+#else
+    const QString& imageKey = currentPath;
+    const bool sameImage = !sourcePath.isEmpty() && sourcePath == currentPath;
+#endif
 
-    const int nextPasteCount = (repeatedPaste ? _pasteCount + 1 : 1);
+    const bool sameYaml = yaml == _lastPastedYaml;
+    const int pasteCount = sameYaml ? _pasteCountsByImage.value(imageKey) : 0;
 
-    QSize imageSize = doc->pixmap.size();
+    // На исходном снимке сдвиг начинается с первого шага, на другом - с нуля
+    int offsetSteps = 0;
+    if (sameImage)
+        offsetSteps = pasteCount + 1;
+    else if (!sourcePath.isEmpty())
+        offsetSteps = pasteCount;
 
-    if (!imageSize.isValid() && videoRect)
-        imageSize = videoRect->pixmap().size();
+    QPointF pasteOffset;
+    if (offsetSteps > 0)
+    {
+        QSize imageSize = doc->pixmap.size();
+        if (!imageSize.isValid() && videoRect)
+            imageSize = videoRect->pixmap().size();
 
-    const qreal imageSide = qMin(imageSize.width(), imageSize.height());
+        const qreal imageSide = qMin(imageSize.width(), imageSize.height());
 
-    // Сдвиг равен 2% от меньшей стороны изображения
-    const qreal offsetValue = qBound<qreal>(10.0, imageSide * 0.02, 250.0);
-
-    const QPointF pasteOffset = QPointF(offsetValue, offsetValue) * nextPasteCount;
+        // Один шаг равен 2% от меньшей стороны снимка, в пределах от 10 до 250 пикселей
+        const qreal offsetValue = qBound<qreal>(10.0, imageSide * 0.02, 250.0);
+        pasteOffset = QPointF(offsetValue, offsetValue) * offsetSteps;
+    }
 
     if (!loadShapesFromYaml(doc, yconfig, pasteOffset))
         return;
 
-    // Собираем список новых фигур (тех, которых не было в beforeItems)
-    QList<QGraphicsItem*> afterItems = scene->items();
+    // Собираем фигуры, которые появились на сцене после вставки
+    const QList<QGraphicsItem*> afterItems = scene->items();
     QList<QGraphicsItem*> newItems;
 
     for (QGraphicsItem* item : afterItems)
@@ -5630,12 +5653,14 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     if (newItems.isEmpty())
         return;
 
-    // Запоминаем только успешную вставку
-    _lastPastedYaml = yaml;
-    _lastPasteImagePath = currentPath;
-    _pasteCount = nextPasteCount;
+    // Запоминаем успешную вставку, для другого снимка достаточно отметки
+    if (!sameYaml)
+        _pasteCountsByImage.clear();
 
-    // Восстанавливаем порядок, в котором фигуры записаны в YAML.
+    _lastPastedYaml = yaml;
+    _pasteCountsByImage.insert(imageKey, pasteCount + 1);
+
+    // Восстанавливаем порядок фигур из YAML
     std::sort(newItems.begin(), newItems.end(),
               [this](QGraphicsItem* first, QGraphicsItem* second)
     {
@@ -5643,11 +5668,11 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
              < second->data(_roleListOrder).toInt();
     });
 
-    // Копии получат собственные номера при добавлении в список.
+    // Копии получат собственные номера при добавлении в список
     for (QGraphicsItem* item : newItems)
         item->setData(_roleShapeNumber, QVariant());
 
-    // После вставки активными должны стать именно новые фигуры
+    // Переносим выделение на вставленные фигуры
     const QList<QGraphicsItem*> selectedBeforePaste = scene->selectedItems();
     for (QGraphicsItem* item : selectedBeforePaste)
     {
@@ -5665,7 +5690,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     raiseAllHandlesToTop();
 
-    // Новые фигуры должны быть выше уже существующих на сцене
+    // Размещаем вставленные фигуры выше уже существующих
     qreal maxZ = 0.0;
     bool hasExisting = false;
 
@@ -5675,9 +5700,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
             continue;
 
         if (item == videoRect)
-        {
             continue;
-        }
 
         if (item->parentItem() != nullptr)
             continue;
@@ -5695,7 +5718,7 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
             newItems[i]->setZValue(maxZ + 1.0 + i);
     }
 
-    // Добавляем новые фигуры в конец списка справа
+    // Добавляем вставленные фигуры в конец списка справа
     QModelIndexList pastedIndexes;
 
     for (QGraphicsItem* item : newItems)
@@ -5716,8 +5739,10 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
 
     renumberPolygonListTextOnly();
 
-    { //Block for QSignalBlocker
-        QSignalBlocker blocker {ui->polygonList}; (void) blocker;
+    // Обновляем выделение в списке с заблокированными сигналами
+    {
+        QSignalBlocker blocker {ui->polygonList};
+        (void) blocker;
         ui->polygonList->clearSelection();
 
         QItemSelectionModel* selectionModel = ui->polygonList->selectionModel();
@@ -5727,8 +5752,9 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
             for (const QModelIndex& index : pastedIndexes)
             {
                 selectionModel->select(index, QItemSelectionModel::Select
-                                              |QItemSelectionModel::Rows);
+                                              | QItemSelectionModel::Rows);
             }
+
             if (!pastedIndexes.isEmpty())
                 ui->polygonList->setCurrentIndex(pastedIndexes.last());
         }
