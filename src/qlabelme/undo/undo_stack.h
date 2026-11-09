@@ -80,7 +80,10 @@ class Paste : public BaseUndo
 public:
     Paste(Document* doc,
           const QList<QGraphicsItem*>& shapes,
-          const QString& text);
+          const QString& text,
+          quint64 seriesId);
+
+    quint64 seriesId() const { return _seriesId; }
 
     ~Paste();
 
@@ -101,6 +104,7 @@ private:
 
 private:
     QVector<Data> _rows;
+    quint64 _seriesId = 0;
 };
 
 class Delete : public BaseUndo

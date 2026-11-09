@@ -145,7 +145,7 @@ private:
     void saveGeometry();
 
     // Системный буфер обмена
-    QString readShapesYamlFromClipboard() const;
+    QString readShapesYamlFromClipboard(bool& isShapeCopy) const;
     QString serializeSelectedItemsToYaml(Document::Ptr doc);
     void writeShapesYamlToClipboard(const QString& yaml) const;
 
@@ -422,7 +422,9 @@ private:
 
     // Разметка и ее успешные вставки по изображениям
     QString _lastPastedYaml;
-    QMap<QString, int> _pasteCountsByImage;
+    bool _lastPasteWasShapeCopy = false;
+    //QMap<QString, int> _pasteCountsByImage;
+    quint64 _pasteSeriesId = 0;
 
     // Количество последовательных вставок одной разметки
     int _pasteCount = 0;

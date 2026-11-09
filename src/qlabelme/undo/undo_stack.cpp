@@ -359,7 +359,9 @@ void FinishDrawing::restoreToList()
 
 Paste::Paste(Document* doc,
              const QList<QGraphicsItem*>& shapes,
-             const QString& text)
+             const QString& text,
+             quint64 seriesId)
+    : _seriesId(seriesId)
 {
     _doc = doc;
 

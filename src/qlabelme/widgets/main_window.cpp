@@ -5469,13 +5469,15 @@ void MainWindow::saveGeometry()
     saveVisualStyle();
 }
 
-QString MainWindow::readShapesYamlFromClipboard() const
+QString MainWindow::readShapesYamlFromClipboard(bool& isShapeCopy) const
 {
     const QMimeData* mime = QGuiApplication::clipboard()->mimeData();
+    isShapeCopy = mime && mime->hasFormat(kShapesMimeType);
+
     if (!mime)
         return {};
 
-    if (mime->hasFormat(kShapesMimeType))
+    if (isShapeCopy)
         return QString::fromUtf8(mime->data(kShapesMimeType));
 
     if (mime->hasText())
@@ -5540,7 +5542,8 @@ void MainWindow::copySelectedShapes()
         return;
 
     _shapesClipboard = yaml;
-    _pasteCountsByImage.clear();
+    // Новое копирование начинает отдельную серию вставок
+    _lastPastedYaml.clear();
     writeShapesYamlToClipboard(yaml);
 }
 
@@ -5553,9 +5556,13 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     QGraphicsScene* scene = doc->scene;
     qgraph::VideoRect* videoRect = doc->videoRect;
 
-    QString yaml = readShapesYamlFromClipboard();
+    bool isShapeCopy = false;
+    QString yaml = readShapesYamlFromClipboard(isShapeCopy);
     if (yaml.isEmpty())
+    {
         yaml = _shapesClipboard;
+        isShapeCopy = true;
+    }
 
     if (yaml.isEmpty())
         return;
@@ -5579,7 +5586,9 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     const QList<QGraphicsItem*> beforeItems = scene->items();
 
     QString sourceImagePath;
-    yconfig.getValue("sourceImagePath", sourceImagePath, false);
+    // Учитываем путь только для фигур, скопированных в QLabelMe
+    if (isShapeCopy)
+        yconfig.getValue("sourceImagePath", sourceImagePath, false);
 
     const QString currentPath =
         QDir::cleanPath(QFileInfo(doc->filePath).absoluteFilePath());
@@ -5591,19 +5600,29 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     const bool sameImage = !sourcePath.isEmpty()
         && QString::compare(sourcePath, currentPath, Qt::CaseInsensitive) == 0;
 #else
-    const QString& imageKey = currentPath;
     const bool sameImage = !sourcePath.isEmpty() && sourcePath == currentPath;
 #endif
 
-    const bool sameYaml = yaml == _lastPastedYaml;
-    const int pasteCount = sameYaml ? _pasteCountsByImage.value(imageKey) : 0;
+    // Серия вставок зависит от содержимого YAML и формата буфера
+    const bool samePasteSeries = yaml == _lastPastedYaml
+        && isShapeCopy == _lastPasteWasShapeCopy;
+    QUndoStack* const stack = doc->_undoStack.get();
+    int pasteCount = 0;
 
-    // На исходном снимке сдвиг начинается с первого шага, на другом - с нуля
-    int offsetSteps = 0;
-    if (sameImage)
-        offsetSteps = pasteCount + 1;
-    else if (!sourcePath.isEmpty())
-        offsetSteps = pasteCount;
+    // Команды после текущей позиции стека отменены
+    if (samePasteSeries && stack)
+    {
+        for (int i = 0; i < stack->index(); ++i)
+        {
+            const undo::Paste* paste =
+                dynamic_cast<const undo::Paste*>(stack->command(i));
+            if (paste && paste->seriesId() == _pasteSeriesId)
+                ++pasteCount;
+        }
+    }
+
+    // На исходном снимке копия из QLabelMe сразу получает один шаг сдвига
+    const int offsetSteps = sameImage ? pasteCount + 1 : pasteCount;
 
     QPointF pasteOffset;
     if (offsetSteps > 0)
@@ -5653,12 +5672,12 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     if (newItems.isEmpty())
         return;
 
-    // Запоминаем успешную вставку, для другого снимка достаточно отметки
-    if (!sameYaml)
-        _pasteCountsByImage.clear();
+    // Новая серия начинается после успешной вставки
+    if (!samePasteSeries)
+        ++_pasteSeriesId;
 
     _lastPastedYaml = yaml;
-    _pasteCountsByImage.insert(imageKey, pasteCount + 1);
+    _lastPasteWasShapeCopy = isShapeCopy;
 
     // Восстанавливаем порядок фигур из YAML
     std::sort(newItems.begin(), newItems.end(),
@@ -5765,8 +5784,10 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     QString descr = (newItems.count() == 1) ? u8"Вставка примитива"
                                             : u8"Вставка примитивов";
 
-    if (QUndoStack* stack = activeUndoStack())
-        stack->push(new undo::Paste(doc.get(), newItems, descr));
+    // if (QUndoStack* stack = activeUndoStack())
+    //     stack->push(new undo::Paste(doc.get(), newItems, descr));
+    if (stack)
+        stack->push(new undo::Paste(doc.get(), newItems, descr, _pasteSeriesId));
 
     doc->markModified();
     updateFileListDisplay(doc->filePath);
