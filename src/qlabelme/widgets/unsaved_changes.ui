@@ -22,9 +22,9 @@
     </widget>
    </item>
    <item>
-    <widget class="QLabel" name="messageLabel">
+    <widget class="QCheckBox" name="selectAllCheckBox">
      <property name="text">
-      <string>Хотите сохранить изменения?</string>
+      <string>Выбрать все</string>
      </property>
     </widget>
    </item>

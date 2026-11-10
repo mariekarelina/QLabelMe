@@ -1,13 +1,15 @@
 #include "unsaved_changes.h"
-
 #include "ui_unsaved_changes.h"
+
 #include "load_geometry.h"
 #include "shared/config/appl_conf.h"
 
 #include <QAbstractButton>
-#include <QPushButton>
 #include <QGuiApplication>
+#include <QSignalBlocker>
 #include <QPushButton>
+#include <QCheckBox>
+#include <QFileInfo>
 #include <QScreen>
 
 UnsavedChanges::UnsavedChanges(const QStringList& documents, QWidget* parent)
@@ -22,12 +24,56 @@ UnsavedChanges::UnsavedChanges(const QStringList& documents, QWidget* parent)
 
     ui->unsavedDocs->clear();
 
-    for (const QString& document : documents)
-        ui->unsavedDocs->addItem(document);
+    for (const QString& path : documents)
+    {
+        QListWidgetItem* item = new QListWidgetItem(QFileInfo(path).fileName());
+
+        // Храним полный путь отдельно от отображаемого имени
+        item->setData(Qt::UserRole, path);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Checked);
+        ui->unsavedDocs->addItem(item);
+    }
+
+    // Все файлы отмечены при открытии окна
+    ui->selectAllCheckBox->setCheckState(Qt::Checked);
+
+    connect(ui->selectAllCheckBox, &QCheckBox::clicked, this, [this](bool checked)
+    {
+        // При массовом выборе не пересчитываем состояние после каждой строки
+        const QSignalBlocker blocker(ui->unsavedDocs);
+        const Qt::CheckState state = checked ? Qt::Checked : Qt::Unchecked;
+
+        for (int row = 0; row < ui->unsavedDocs->count(); ++row)
+            ui->unsavedDocs->item(row)->setCheckState(state);
+
+        ui->selectAllCheckBox->setTristate(false);
+    });
+
+    connect(ui->unsavedDocs, &QListWidget::itemChanged, this, [this]()
+    {
+        int checkedCount = 0;
+        const int itemCount = ui->unsavedDocs->count();
+
+        for (int row = 0; row < itemCount; ++row)
+        {
+            if (ui->unsavedDocs->item(row)->checkState() == Qt::Checked)
+                ++checkedCount;
+        }
+
+        // Промежуточное состояние означает, что отмечена часть файлов
+        const bool partiallyChecked = checkedCount > 0 && checkedCount < itemCount;
+        ui->selectAllCheckBox->setTristate(partiallyChecked);
+
+        if (partiallyChecked)
+            ui->selectAllCheckBox->setCheckState(Qt::PartiallyChecked);
+        else
+            ui->selectAllCheckBox->setCheckState(checkedCount > 0 ? Qt::Checked : Qt::Unchecked);
+    });
 
     QPushButton* saveAllButton = ui->buttonBox->button(QDialogButtonBox::SaveAll);
     if (saveAllButton)
-        saveAllButton->setText(u8"Сохранить все");
+        saveAllButton->setText(u8"Сохранить выбранные");
 
     QPushButton* discardButton = ui->buttonBox->button(QDialogButtonBox::Discard);
     if (discardButton)
@@ -125,6 +171,21 @@ void UnsavedChanges::saveGeometry() const
     QRect g = geometry();
     QVector<int> wg {g.x(), g.y(), g.width(), g.height()};
     config::base().setValue("windows.unsaved_changes.geometry", wg);
+}
+
+QSet<QString> UnsavedChanges::checkedDocumentPaths() const
+{
+    QSet<QString> paths;
+
+    for (int row = 0; row < ui->unsavedDocs->count(); ++row)
+    {
+        const QListWidgetItem* item = ui->unsavedDocs->item(row);
+
+        if (item->checkState() == Qt::Checked)
+            paths.insert(item->data(Qt::UserRole).toString());
+    }
+
+    return paths;
 }
 
 QDialogButtonBox::StandardButton UnsavedChanges::selectedButton() const

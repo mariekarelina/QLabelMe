@@ -3702,10 +3702,10 @@ void MainWindow::closeEvent(QCloseEvent* event)
         saveLastUsedFolder();
     }
 
-    if (hasUnsavedChanges())
+    if (!confirmUnsavedChanges())
     {
         const QList<Document::Ptr> unsavedDocs = getUnsavedDocuments();
-        const int result = showUnsavedChangesDialog(unsavedDocs);
+        const int result = confirmUnsavedChanges();
 
         switch (result)
         {
@@ -3714,7 +3714,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
                 saveAllDocuments();
 
                 // Не закрываем приложение, если часть документов не сохранена
-                if (hasUnsavedChanges())
+                if (!confirmUnsavedChanges())
                 {
                     event->ignore();
                     return;
@@ -3800,10 +3800,10 @@ void MainWindow::on_actOpen_triggered(bool)
         return;
     }
 
-    if (hasUnsavedChanges())
+    if (!confirmUnsavedChanges())
     {
         const QList<Document::Ptr> unsavedDocs = getUnsavedDocuments();
-        const int result = showUnsavedChangesDialog(unsavedDocs);
+        const int result = confirmUnsavedChanges();
 
         switch (result)
         {
@@ -3812,7 +3812,7 @@ void MainWindow::on_actOpen_triggered(bool)
                 saveAllDocuments();
 
                 // Остаемся в текущей папке при ошибке сохранения
-                if (hasUnsavedChanges())
+                if (!confirmUnsavedChanges())
                     return;
 
                 break;
@@ -7894,15 +7894,6 @@ void MainWindow::moveSelectedItemsToBack()
     if (scene)
         scene->update();
 }
-bool MainWindow::hasUnsavedChanges() const
-{
-    for (const Document::Ptr& doc : _documentsMap.values())
-    {
-        if (doc && doc->isModified)
-            return true;
-    }
-    return false;
-}
 
 QList<Document::Ptr> MainWindow::getUnsavedDocuments() const
 {
@@ -7916,30 +7907,50 @@ QList<Document::Ptr> MainWindow::getUnsavedDocuments() const
     return unsavedDocs;
 }
 
-int MainWindow::showUnsavedChangesDialog(const QList<Document::Ptr>& unsavedDocs)
+bool MainWindow::confirmUnsavedChanges()
 {
+    const QList<Document::Ptr> unsavedDocs = getUnsavedDocuments();
+    if (unsavedDocs.isEmpty())
+        return true;
+
     QStringList documents;
-
     for (const Document::Ptr& doc : unsavedDocs)
-    {
-        if (!doc)
-            continue;
+        documents.append(doc->filePath);
 
-        QFileInfo fileInfo {doc->filePath};
-        documents.append(fileInfo.fileName());
+    UnsavedChanges dialog(documents, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return false;
+
+    QSet<QString> selectedPaths;
+    const QDialogButtonBox::StandardButton button = dialog.selectedButton();
+
+    if (button == QDialogButtonBox::SaveAll)
+    {
+        selectedPaths = dialog.checkedDocumentPaths();
+
+        bool saveFailed = false;
+        for (const Document::Ptr& doc : unsavedDocs)
+        {
+            if (selectedPaths.contains(doc->filePath) && !saveAnnotationToFile(doc))
+                saveFailed = true;
+        }
+
+        if (saveFailed)
+            return false;
+    }
+    else if (button != QDialogButtonBox::Discard)
+    {
+        return false;
     }
 
-    UnsavedChanges dialog {documents, this};
+    // Удаляем автокопии файлов, которые пользователь решил не сохранять
+    for (const Document::Ptr& doc : unsavedDocs)
+    {
+        if (!selectedPaths.contains(doc->filePath) && !removeAutoSaveFile(doc))
+            return false;
+    }
 
-    dialog.loadGeometry();
-
-    int res = dialog.exec();
-    dialog.saveGeometry();
-
-    if (res != QDialog::Accepted)
-        return QDialogButtonBox::Cancel;
-
-    return dialog.selectedButton();
+    return true;
 }
 
 void MainWindow::saveAllDocuments()

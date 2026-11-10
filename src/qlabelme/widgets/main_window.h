@@ -224,9 +224,8 @@ private:
 
     void moveSelectedItemsToBack();
 
-    bool hasUnsavedChanges() const;
     QList<Document::Ptr> getUnsavedDocuments() const;
-    int showUnsavedChangesDialog(const QList<Document::Ptr>& unsavedDocs);
+    bool confirmUnsavedChanges();
     void saveAllDocuments();
 
     qgraph::DragCircle* pickHiddenHandle(const QPointF& scenePos, bool& topIsHandle) const;

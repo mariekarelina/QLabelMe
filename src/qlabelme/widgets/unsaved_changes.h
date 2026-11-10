@@ -1,9 +1,10 @@
 #pragma once
 
-#include <QDialog>
 #include <QDialogButtonBox>
 #include <QCloseEvent>
 #include <QStringList>
+#include <QDialog>
+#include <QSet>
 
 namespace Ui {
 
@@ -21,6 +22,8 @@ public:
 
     void loadGeometry();
     void saveGeometry() const;
+
+    QSet<QString> checkedDocumentPaths() const;
 
 public slots:
     void accept() override;
