@@ -17,14 +17,14 @@
    <item>
     <widget class="QLabel" name="messageLabel_2">
      <property name="text">
-      <string>Следующие файлы имеют несохраненные изменения:</string>
+      <string>Восстановить файлы из резервных копий?</string>
      </property>
     </widget>
    </item>
    <item>
-    <widget class="QLabel" name="messageLabel">
+    <widget class="QCheckBox" name="selectAllCheckBox">
      <property name="text">
-      <string>Хотите сохранить изменения?</string>
+      <string>Восстановить все?</string>
      </property>
     </widget>
    </item>
@@ -34,7 +34,7 @@
    <item>
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+      <set>QDialogButtonBox::No|QDialogButtonBox::Yes</set>
      </property>
     </widget>
    </item>

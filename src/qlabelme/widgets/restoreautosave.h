@@ -2,6 +2,7 @@
 
 #include <QStringList>
 #include <QDialog>
+#include <QSet>
 
 namespace Ui
 {
@@ -16,6 +17,8 @@ public:
     explicit RestoreAutoSave(const QStringList& documents,
                              QWidget* parent = nullptr);
     ~RestoreAutoSave() override;
+
+    QSet<QString> checkedAutoSavePaths() const;
     bool discardAutoSaves() const;
 
 public slots:

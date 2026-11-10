@@ -31,6 +31,7 @@
 #include <QFileDialog>
 #include <QScrollBar>
 #include <QSaveFile>
+#include <QSet>
 
 #include <algorithm>
 
@@ -5127,11 +5128,14 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
         const QString autoSavePath = autoSavePathFor(imagePath);
 
         if (QFileInfo::exists(autoSavePath))
-            autoSaveFiles.append(QFileInfo(autoSavePath).fileName());
+            autoSaveFiles.append(autoSavePath);
     }
 
-    bool restoreAutoSaves = false;
-    bool discardAutoSaves = false;
+    // Изображения с одинаковым базовым именем могут ссылаться на одну копию
+    autoSaveFiles.removeDuplicates();
+
+    QSet<QString> restoreAutoSavePaths;
+    QSet<QString> discardAutoSavePaths;
     QStringList failedAutoSaveFiles;
 
     // Предлагаем восстановить найденные копии одним диалогом
@@ -5139,8 +5143,19 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
     {
         RestoreAutoSave dialog(autoSaveFiles, this);
 
-        restoreAutoSaves = dialog.exec() == QDialog::Accepted;
-        discardAutoSaves = dialog.discardAutoSaves();
+        const bool restoreAccepted = dialog.exec() == QDialog::Accepted;
+        if (restoreAccepted)
+            restoreAutoSavePaths = dialog.checkedAutoSavePaths();
+
+        // После подтверждения удаляем копии, которые не выбраны для восстановления
+        if (restoreAccepted || dialog.discardAutoSaves())
+        {
+            for (const QString& path : autoSaveFiles)
+            {
+                if (!restoreAutoSavePaths.contains(path))
+                    discardAutoSavePaths.insert(path);
+            }
+        }
     }
 
     // Загружаем иконки из ресурсов
@@ -5264,17 +5279,18 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
 
         ui->fileList->addItem(item);
 
-        // Удаляем копию только при явном отказе от восстановления
-        if (discardAutoSaves)
+        const QString autoSavePath = autoSavePathFor(doc->filePath);
+
+        // При явном отказе удаляем только копии из списка диалога
+        if (discardAutoSavePaths.contains(autoSavePath))
             removeAutoSaveFile(doc);
 
         if (doc->loadImage())
         {
             bool restored = false;
 
-            const QString autoSavePath = autoSavePathFor(doc->filePath);
-
-            if (restoreAutoSaves && QFileInfo::exists(autoSavePath))
+            if (restoreAutoSavePaths.contains(autoSavePath)
+                && QFileInfo::exists(autoSavePath))
             {
                 restored = loadAutoSave(doc);
 
@@ -5850,7 +5866,7 @@ QString MainWindow::autoSavePathFor(const QString& imagePath)
     const QFileInfo fileInfo(imagePath);
     const QDir dir(fileInfo.absolutePath());
 
-    return dir.filePath(fileInfo.completeBaseName() + ".autosave.yaml");
+    return dir.filePath(fileInfo.completeBaseName() + ".yaml.autosave");
 }
 
 bool MainWindow::loadAutoSave(Document::Ptr doc)
@@ -5965,6 +5981,9 @@ void MainWindow::saveShapesToYaml(YamlConfig& yconfig, const QList<QGraphicsItem
 
     YamlConfig::Func saveShapes = [&](YamlConfig* conf, YAML::Node& yshapes, bool)
     {
+        // Создаем список даже при отсутствии фигур
+        yshapes = YAML::Node(YAML::NodeType::Sequence);
+
         for (QGraphicsItem* item : items)
         {
             if (!item)
@@ -6018,6 +6037,9 @@ void MainWindow::saveShapesToYaml(YamlConfig& yconfig, const QList<QGraphicsItem
 
             yshapes.push_back(yshape);
         }
+        // Записываем пустой список в виде shapes: []
+        if (yshapes.size() == 0)
+            yshapes.SetStyle(YAML::EmitterStyle::Flow);
 
         return true;
     };
@@ -7618,6 +7640,11 @@ bool MainWindow::isYamlFileEmpty(const QString& yamlPath) const
     for (const QString& line : lines)
     {
         QString trimmed = line.trimmed();
+
+        // Пустой список не содержит разметки
+        if (trimmed == QStringLiteral("shapes: []"))
+            continue;
+
         // Пропускаем пустые строки и комментарии
         if (!trimmed.isEmpty() && !trimmed.startsWith('#'))
         {
