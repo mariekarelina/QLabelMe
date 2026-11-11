@@ -2064,6 +2064,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
     {
         case QEvent::Leave:
         {
+            ui->graphView->clearSegmentPreview();
             clearAllHandleHoverEffects();
             hideGhost();
             break;
@@ -3944,6 +3945,7 @@ void MainWindow::fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem*
     if (!doc || !doc->scene)
         return;
 
+    ui->graphView->clearSegmentPreview();
     ui->graphView->setScene(doc->scene);
 
     setPolygonListModelForCurrentDocument();
@@ -5273,6 +5275,10 @@ void MainWindow::loadFilesFromFolder(const QString& folderPath)
             updateCoordinateList();
 
             restoreDrawingStateAfterStackChange();
+            // Пересчитываем предпросмотр по последнему узлу после изменения стека
+            GraphicsView* graphView = ui->graphView;
+            const QPoint viewPos = graphView->viewport()->mapFromGlobal(QCursor::pos());
+            updateSegmentPreview(graphView, viewPos);
 
             doc->scene->update();
         });
@@ -10221,7 +10227,7 @@ bool MainWindow::isBetterTopLeft(const QPointF& firstPoint, const QPointF& secon
 void MainWindow::updateModeLabel()
 {
     if (!_drawingLine && !_drawingPolyline && ui && ui->graphView)
-        ui->graphView->setSegmentPreview(QLineF());
+        ui->graphView->clearSegmentPreview();
 
     if (!_modeLabel) return;
 
@@ -10315,14 +10321,15 @@ void MainWindow::updateSegmentPreview(GraphicsView* graphView, const QPoint& vie
         || !graphView->viewport()->rect().contains(viewPos))
     {
         // Скрываем предпросмотр, если рисовать отрезок пока нельзя
-        graphView->setSegmentPreview(QLineF());
+        graphView->clearSegmentPreview();
         return;
     }
+    // Переводим позицию курсора в координаты рисуемой фигуры
+    QGraphicsItem* shape = lastNode->parentItem();
+    const QPointF cursorPos = shape->mapFromScene(graphView->mapToScene(viewPos));
 
-    // Предпросмотр остается сплошным и использует толщину контура
     pen.setStyle(Qt::SolidLine);
-    graphView->setSegmentPreview(
-        QLineF(lastNode->scenePos(), graphView->mapToScene(viewPos)), pen);
+    graphView->setSegmentPreview(shape, QLineF(lastNode->pos(), cursorPos), pen);
 }
 
 void MainWindow::handlePolylineLmbClick(const QPointF& scenePos,

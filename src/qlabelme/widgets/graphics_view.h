@@ -3,6 +3,7 @@
 #include <QGraphicsView>
 #include <QMouseEvent>
 #include <QWheelEvent>
+#include <QPointer>
 #include <QColor>
 #include <QLineF>
 #include <QPen>
@@ -21,10 +22,8 @@ public:
     void mouseReleaseEvent(QMouseEvent*) override;
     void wheelEvent(QWheelEvent*) override;
 
-    void setSegmentPreview(const QLineF& line, const QPen& pen = QPen());
-
-protected:
-    void drawForeground(QPainter* painter, const QRectF& rect) override;
+    void setSegmentPreview(QGraphicsItem* shape, const QLineF& line, const QPen& pen);
+    void clearSegmentPreview();
 
 private:
     Q_OBJECT
@@ -32,6 +31,6 @@ private:
 private:
     MainWindow* _mw = {nullptr};
 
-    QLineF _segmentPreview;
-    QPen _segmentPreviewPen;
+    class SegmentPreviewItem;
+    QPointer<SegmentPreviewItem> _segmentPreview;
 };
