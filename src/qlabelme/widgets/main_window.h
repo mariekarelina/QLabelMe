@@ -308,6 +308,11 @@ private:
     void updateRectanglePreview(const QPointF& scenePos);
     void cancelRectangleMode();
 
+    // Круг по 2-м маркерам
+    void updateCirclePreview(const QPointF& scenePos);
+    void cancelCircleMode();
+    void handleCircleLmbClick(const QPointF& scenePos);
+
     // Отмена линейки
     void cancelRulerMode();
     void handleRulerLmbClick(const QPointF& scenePos);
@@ -381,7 +386,7 @@ private:
     bool _isInDrawingMode  = {false}; // Флаг, указывающий что мы в режиме рисования новой фигуры
     bool _isDraggingImage  = {false}; // Флаг для перетаскивания изображения
 
-    enum class PendingDrawTool {None, Polyline, Line, Rectangle, Ruler};
+    enum class PendingDrawTool {None, Polyline, Line, Rectangle, Circle, Ruler};
     PendingDrawTool _pendingDrawTool = {PendingDrawTool::None};
     QPoint _pendingDrawPressViewPos;
     QPointF _pendingDrawPressScenePos;
@@ -392,7 +397,6 @@ private:
     QGraphicsRectItem* _currRectangle = {nullptr}; // Предпросмотр после первого клика
 
     QGraphicsEllipseItem* _currCircle = {nullptr};
-    bool _isDrawingCircle = {false};
     // Временный крестик центра при рисовании круга
     QGraphicsLineItem* _currCircleCrossV = {nullptr};
     QGraphicsLineItem* _currCircleCrossH = {nullptr};
