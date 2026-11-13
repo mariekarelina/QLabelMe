@@ -300,7 +300,7 @@ private:
 
     // Сбросить состояния рисования при удалении line/polyline из сцены
     void clearLinePolylineStateForDeletedItem(QGraphicsItem* item);
-    bool discardDrawingUndoCommands();
+    bool discardDrawingUndoCommands(const QGraphicsItem* shape);
     void cancelNewLinePolylineDrawing();
 
     // Прямоугольник по 2-м маркерам

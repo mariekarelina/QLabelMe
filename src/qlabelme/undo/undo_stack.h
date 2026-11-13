@@ -35,6 +35,9 @@ public:
     Create(Document* doc, QGraphicsItem* shape, const QString& text);
     ~Create();
 
+    // Проверяем, какую фигуру создала команда.
+    bool creates(const QGraphicsItem* shape) const { return _shape == shape; }
+
     void undo() override;
     void redo() override;
 

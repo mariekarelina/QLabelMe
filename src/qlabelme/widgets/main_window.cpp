@@ -1694,6 +1694,32 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
 
 bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 {
+    if (!_mergeLinesMode && (_drawingLine || _drawingPolyline)
+        && (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress))
+    {
+        const QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+        const QWidget* widget = qobject_cast<QWidget*>(obj);
+
+        if (keyEvent->key() == Qt::Key_Escape && widget && widget->window() == this)
+        {
+            const QGraphicsItem* shape = _drawingLine
+                                            ? static_cast<QGraphicsItem*>(_line)
+                                            : _polyline;
+
+            // До выбора класса в data(0) хранится числовой ID фигуры.
+            const bool hasClass = shape && shape->data(0).userType() == QMetaType::QString;
+
+            if (!hasClass)
+            {
+                if (event->type() == QEvent::KeyPress && !keyEvent->isAutoRepeat())
+                    cancelNewLinePolylineDrawing();
+
+                event->accept();
+                return true;
+            }
+        }
+    }
+
     // При зажатом Shift показываем готовность к перемещению фигуры
     if ((obj == ui->graphView || obj == ui->graphView->viewport())
         && event->type() == QEvent::KeyPress)
@@ -9349,46 +9375,69 @@ void MainWindow::clearLinePolylineStateForDeletedItem(QGraphicsItem* item)
     }
 }
 
-bool MainWindow::discardDrawingUndoCommands()
+bool MainWindow::discardDrawingUndoCommands(const QGraphicsItem* shape)
 {
-    QUndoStack* stack = activeUndoStack();
+    const Document::Ptr doc = currentDocument();
 
-    if (!stack || _drawingUndoStartIndex < 0)
+    if (!doc || !doc->_undoStack || shape->scene() != doc->scene)
         return false;
 
-    if (_drawingUndoStartIndex > stack->index())
+    QUndoStack* stack = doc->_undoStack.get();
+    if (_drawingUndoStartIndex < 0 || _drawingUndoStartIndex >= stack->index())
         return false;
 
-    // Откатываем действия текущего рисования
+    // Проверяем, что история рисования начинается с создания этой фигуры.
+    const undo::Create* create =
+        dynamic_cast<const undo::Create*>(stack->command(_drawingUndoStartIndex));
+    if (!create || !create->creates(shape))
+        return false;
+
+    // Откатываем команды до состояния перед первым узлом.
     stack->setIndex(_drawingUndoStartIndex);
 
-    // Удаляем отмененные действия из ветки Redo
+    // Удаляем отменённые команды рисования из ветки Redo.
     QUndoCommand* command = new QUndoCommand();
     command->setObsolete(true);
     stack->push(command);
-
-    _drawingUndoStartIndex = -1;
 
     return true;
 }
 
 void MainWindow::cancelNewLinePolylineDrawing()
 {
-    // Откладываем удаление до завершения текущего события фигуры
-    QTimer::singleShot(0, this, [this]()
+    const Document::Ptr doc = currentDocument();
+    qgraph::Line* line = _line;
+    qgraph::Polyline* polyline = _polyline;
+
+    // Откладываем удаление до завершения текущего события фигуры.
+    QTimer::singleShot(0, this, [this, doc, line, polyline]()
     {
-        // Очищаем ссылки на узлы до их удаления
+        if (currentDocument().get() != doc.get() || _line != line || _polyline != polyline)
+            return;
+
+        const QGraphicsItem* shape = line ? static_cast<QGraphicsItem*>(line) : polyline;
+
+        // Очищаем ссылки на узлы и предпросмотр до отката истории.
         clearAllHandleHoverEffects();
         _lastHoverHandle = nullptr;
+        ui->graphView->clearSegmentPreview();
 
-        qgraph::Line* line = _line;
-        qgraph::Polyline* polyline = _polyline;
+        if (shape && _handleEditedItem == shape)
+        {
+            _m_dragHandle = nullptr;
+            _m_isDraggingHandle = false;
+            _handleEditedItem = nullptr;
+            _handleDragHadChanges = false;
+            _handleDragging = false;
+            _ghostActive = false;
+            _ghostHover = false;
+        }
 
-        // Обработчики изменения стека не должны обращаться к удаляемой фигуре
+        // Обработчики стека могут сработать во время отката.
         _line = nullptr;
         _polyline = nullptr;
 
-        if (!discardDrawingUndoCommands())
+        if (shape && !discardDrawingUndoCommands(shape))
         {
             _line = line;
             _polyline = polyline;
@@ -9396,13 +9445,16 @@ void MainWindow::cancelNewLinePolylineDrawing()
         }
 
         _drawingLine = false;
+        _isDrawingLine = false;
         _drawingPolyline = false;
         _isDrawingPolyline = false;
         _isInDrawingMode = false;
+        _isDraggingImage = false;
 
         _resumeEditing = false;
         _resumeUid = 0;
         _pendingDrawTool = PendingDrawTool::None;
+        _drawingUndoStartIndex = -1;
 
         setSceneItemsMovable(true);
         updateModeLabel();
