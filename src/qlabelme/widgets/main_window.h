@@ -303,6 +303,11 @@ private:
     bool discardDrawingUndoCommands();
     void cancelNewLinePolylineDrawing();
 
+    // Прямоугольник по 2-м маркерам
+    void handleRectangleLmbClick(const QPointF& scenePos);
+    void updateRectanglePreview(const QPointF& scenePos);
+    void cancelRectangleMode();
+
     // Отмена линейки
     void cancelRulerMode();
     void handleRulerLmbClick(const QPointF& scenePos);
@@ -376,15 +381,15 @@ private:
     bool _isInDrawingMode  = {false}; // Флаг, указывающий что мы в режиме рисования новой фигуры
     bool _isDraggingImage  = {false}; // Флаг для перетаскивания изображения
 
-    enum class PendingDrawTool {None, Polyline, Line, Ruler};
+    enum class PendingDrawTool {None, Polyline, Line, Rectangle, Ruler};
     PendingDrawTool _pendingDrawTool = {PendingDrawTool::None};
     QPoint _pendingDrawPressViewPos;
     QPointF _pendingDrawPressScenePos;
 
     QPointF _startPoint;
 
-    QGraphicsRectItem* _currRectangle = {nullptr};
-    bool _isDrawingRectangle = {false};
+    QPointF _rectangleStartPoint;
+    QGraphicsRectItem* _currRectangle = {nullptr}; // Предпросмотр после первого клика
 
     QGraphicsEllipseItem* _currCircle = {nullptr};
     bool _isDrawingCircle = {false};

@@ -448,6 +448,7 @@ MainWindow::MainWindow(QWidget* parent) :
 MainWindow::~MainWindow()
 {
     _loadingNow = true;
+    cancelRectangleMode();
     cancelRulerMode();
 
     if (ui)
@@ -528,7 +529,7 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     {
         return _isInDrawingMode
                || _isDrawingPolyline  || _isDrawingLine
-               || _isDrawingRectangle || _isDrawingCircle || _isDrawingPoint
+               || _isDrawingCircle || _isDrawingPoint
                || _isDrawingRuler
                || _drawingPolyline    || _drawingLine     || _drawingRectangle
                || _drawingCircle      || _drawingPoint
@@ -556,9 +557,9 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     // Alt + ЛКМ / Alt + Shift + ЛКМ для редактирования узлов
     if (mouseEvent->button() == Qt::LeftButton
             && graphView
-            && !_drawingRuler)
+            && !_drawingRuler
+            && !_drawingRectangle)
     {
-        //const Qt::KeyboardModifiers mods = mouseEvent->modifiers();
         const Qt::KeyboardModifiers mods = mouseEvent->modifiers()
                                            |QApplication::keyboardModifiers();
 
@@ -649,7 +650,6 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         && !(mouseEvent->modifiers() & Qt::ShiftModifier)
         && !_drawingPolyline
         && !_drawingLine
-        && !_drawingRectangle
         && !_drawingCircle
         && !_drawingPoint)
     {
@@ -714,25 +714,20 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
 
         return;
     }
-    if (mouseEvent->button() == Qt::LeftButton && _drawingRuler)
+    if (mouseEvent->button() == Qt::LeftButton && (_drawingRectangle || _drawingRuler))
     {
-        if (_drawingRuler)
+        if (mouseEvent->modifiers() == Qt::NoModifier)
         {
-            if (mouseEvent->button() == Qt::LeftButton
-                && mouseEvent->modifiers() == Qt::NoModifier)
-            {
-                // Откладываем установку точки до отпускания кнопки
-                _pendingDrawTool = PendingDrawTool::Ruler;
-                _pendingDrawPressViewPos = mouseEvent->pos();
-                _pendingDrawPressScenePos =
-                    graphView->mapToScene(mouseEvent->pos());
-
-                _lastMousePos = mouseEvent->pos();
-            }
-
-            mouseEvent->accept();
-            return;
+            // Фиксируем точку при отпускании ЛКМ, если не началось перетаскивание
+            _pendingDrawTool = _drawingRectangle ? PendingDrawTool::Rectangle
+                                                : PendingDrawTool::Ruler;
+            _pendingDrawPressViewPos = mouseEvent->pos();
+            _pendingDrawPressScenePos = graphView->mapToScene(mouseEvent->pos());
+            _lastMousePos = mouseEvent->pos();
         }
+
+        mouseEvent->accept();
+        return;
     }
     if (mouseEvent->button() == Qt::LeftButton && !isAnyDrawingNow())
     {
@@ -1015,48 +1010,6 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
         mouseEvent->accept();
         return;
     }
-    else if (_drawingRectangle)
-    {
-        _isInDrawingMode = true;
-        setSceneItemsMovable(false);
-        updateModeLabel();
-        if (!_isDrawingRectangle)
-        {
-            _startPoint = graphView->mapToScene(mouseEvent->pos()); // Сохраняем начальную точку
-
-            QPointF startPoint2  = _startPoint;
-            startPoint2.rx() += 2;
-            startPoint2.ry() += 2;
-
-            if (!_currRectangle)
-            {
-                _currRectangle = new QGraphicsRectItem();
-                QPen pen;
-                pen.setWidthF(_vstyle.lineWidth);
-                pen.setColor(_vstyle.rectangleLineColor);
-                pen.setCosmetic(true);
-                _currRectangle->setPen(pen);
-                if (_vstyle.fillShapeWhenSelected)
-                {
-                    QColor fill = _vstyle.rectangleLineColor;
-                    fill.setAlpha(60);
-                    _currRectangle->setBrush(QBrush(fill));
-                }
-                else
-                {
-                    _currRectangle->setBrush(Qt::NoBrush);
-                }
-                scene->addItem(_currRectangle);
-            }
-            _currRectangle->setRect(QRectF(_startPoint, startPoint2));
-            _isDrawingRectangle = true; // Включаем флаг рисования
-        }
-        else if (_currRectangle)
-        {
-            _isDrawingRectangle = false;
-        }
-        _drawingRectangle = false;
-    }
     else if (_drawingPoint)
     {
         _isInDrawingMode = true;
@@ -1237,17 +1190,16 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
             return;
         }
     }
+    if (_currRectangle && !_isDraggingImage)
+    {
+        // После первого клика рамка следует за курсором
+        updateRectanglePreview(graphView->mapToScene(mouseEvent->pos()));
+        mouseEvent->accept();
+        return;
+    }
     if (_isInDrawingMode)
     {
-        if (_isDrawingRectangle && _currRectangle)
-        {
-            // Обновляем размеры прямоугольника, пока пользователь тянет мышь
-            QRectF newRect(_startPoint, graphView->mapToScene(mouseEvent->pos()));
-            _currRectangle->setRect(newRect.normalized());
-            // normalized: приводит координаты к нужному порядку (левый верхний угол - начальный)
-            return;
-        }
-        else if (_isDrawingCircle && _currCircle)
+        if (_isDrawingCircle && _currCircle)
         {
             QPointF currentPoint = graphView->mapToScene(mouseEvent->pos());
             // Вычисляем радиус
@@ -1351,6 +1303,8 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
             graphView->translate(deltaView.x() / sx, deltaView.y() / sy);
             graphView->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
 
+            updateRectanglePreview(graphView->mapToScene(mouseEvent->pos()));
+
             _lastMousePos = mouseEvent->pos();
             mouseEvent->accept();
             return;
@@ -1409,6 +1363,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             handlePolylineLmbClick(scenePos, mods, graphView);
         else if (tool == PendingDrawTool::Line)
             handleLineLmbClick(scenePos, mods, graphView);
+        else if (tool == PendingDrawTool::Rectangle)
+            handleRectangleLmbClick(scenePos);
         else if (tool == PendingDrawTool::Ruler)
             handleRulerLmbClick(scenePos);
 
@@ -1446,6 +1402,8 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             graphView->fitInView(sceneRect, Qt::KeepAspectRatio);
             graphView->centerOn(sceneRect.center());
 
+            updateRectanglePreview(graphView->mapToScene(mouseEvent->pos()));
+
             _m_zoom = graphView->transform().m11();
             if (_m_zoom <= 0.000001)
                 _m_zoom = 1.0;
@@ -1459,7 +1417,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             mouseEvent->accept();
             return;
         }
-        if (_drawingRuler)
+        if (_drawingRectangle || _drawingRuler)
         {
             mouseEvent->accept();
             return;
@@ -1603,56 +1561,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
             return;
         }
     }
-    if (mouseEvent->button() == Qt::LeftButton && _isDrawingRectangle)
-    {
-        _isDrawingRectangle = false;
-        // Получаем финальный прямоугольник и нормализуем его (если размеры отрицательны)
-        QRectF finalRect = _currRectangle->sceneBoundingRect();
-        // Убираем временный прямоугольник из сцены
-        doc->scene->removeItem(_currRectangle);
-        delete _currRectangle;
-        _currRectangle = nullptr; // Сбрасываем ссылку, чтобы начать новый прямоугольник
-
-        // Проверяем минимальный размер
-        if (finalRect.width() < 1 || finalRect.height() < 1)
-            return; // Не создаем объект, если размеры некорректны
-
-        // Создаем объект класса Rectangle
-        qgraph::Rectangle* rectangle = new qgraph::Rectangle(doc->scene);
-        ensureUid(rectangle);
-        rectangle->setRealSceneRect(finalRect); // Устанавливаем координаты и размеры
-        rectangle->updatePointNumbers();
-        apply_LineWidth_ToItem(rectangle);
-        apply_PointSize_ToItem(rectangle);
-        apply_NumberSize_ToItem(rectangle);
-
-        SelectClass dialog(_projectClasses, this);
-        const bool accepted = (dialog.exec() == QDialog::Accepted);
-        const QString selectedClass = accepted ? dialog.selectedClass() : QString();
-
-        if (!selectedClass.isEmpty())
-        {
-            rectangle->setData(0, selectedClass);
-            applyClassColorToItem(rectangle, selectedClass);
-            linkSceneItemToList(rectangle);
-
-            if (QUndoStack* stack = activeUndoStack())
-            {
-                stack->push(new undo::Create(doc.get(),
-                                             rectangle,
-                                             u8"Добавлен прямоугольник"));
-            }
-
-            doc->markModified();
-            updateFileListDisplay(doc->filePath);
-        }
-        else
-        {
-            doc->scene->removeItem(rectangle);
-            delete rectangle;
-        }
-    }
-    else if (mouseEvent->button() == Qt::LeftButton && _isDrawingCircle)
+    if (mouseEvent->button() == Qt::LeftButton && _isDrawingCircle)
     {
         _isDrawingCircle = false;
         // Получаем финальный прямоугольник круга
@@ -1739,6 +1648,7 @@ void MainWindow::setSceneItemsMovable(bool movable)
             continue;
 
         if (item != doc->videoRect
+            && item != _currRectangle
             && item != _currCircle
             && item != _currCircleCrossV
             && item != _currCircleCrossH
@@ -2076,6 +1986,12 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             if (me->button() != Qt::LeftButton)
                 break;
 
+            if (_drawingRectangle)
+            {
+                // Быстрое второе нажатие приходит отдельным событием Qt
+                graphicsView_mousePressEvent(me, ui->graphView);
+                return true;
+            }
             if (_drawingPolyline
                 && _polyline
                 && qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::DoubleClick)
@@ -2115,16 +2031,17 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 && !(me->modifiers() & Qt::ShiftModifier)
                 && !_drawingPolyline
                 && !_drawingLine
-                && !_drawingRectangle
                 && !_drawingCircle
                 && !_drawingPoint)
             {
                 break;
             }
+            if (_drawingRectangle)
+                break;
 
             const QPointF sp = ui->graphView->mapToScene(me->pos());
 
-            if (_drawingRuler || _isDrawingRuler)
+            if (_drawingRectangle || _drawingRuler || _isDrawingRuler)
             {
                 clearAllHandleHoverEffects();
                 hideGhost();
@@ -2383,6 +2300,9 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
             }
 
             QMouseEvent* me = static_cast<QMouseEvent*>(event);
+            if (_drawingRectangle)
+                break;
+
             const QPointF sp = ui->graphView->mapToScene(me->pos());
 
             if (_drawingRuler || _isDrawingRuler)
@@ -2539,6 +2459,8 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                     QScrollBar* hbar = ui->graphView->horizontalScrollBar();
                     hbar->setValue(hbar->value() - dx);
 
+                    updateRectanglePreview(ui->graphView->mapToScene(we->position().toPoint()));
+
                     if (Document::Ptr doc = currentDocument())
                         saveCurrentViewState(doc);
                 }
@@ -2607,6 +2529,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
             _m_zoom = nz;
 
+            updateRectanglePreview(ui->graphView->mapToScene(we->position().toPoint()));
             updateAllPointNumbers();
             ui->graphView->viewport()->update();
 
@@ -2618,7 +2541,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         }
         case QEvent::ContextMenu:
         {
-            if (_drawingRuler || _isDrawingRuler)
+            if (_drawingRectangle || _drawingRuler || _isDrawingRuler)
             {
                 clearAllHandleHoverEffects();
                 hideGhost();
@@ -3688,6 +3611,7 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
     if (event->key() == Qt::Key_Escape)
     {
         cancelRulerMode();
+        cancelRectangleMode();
         event->accept();
         return;
     }
@@ -3896,6 +3820,7 @@ void MainWindow::fitImageToView()
 void MainWindow::fileList_ItemChanged(QListWidgetItem* current, QListWidgetItem* previous)
 {
     cancelRulerMode();
+    cancelRectangleMode();
 
     if (!current) return;
 
@@ -4103,6 +4028,11 @@ void MainWindow::selectAllShapes()
 
 void MainWindow::on_actRect_triggered()
 {
+    const Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene || !doc->videoRect)
+        return;
+
+    cancelRectangleMode();
     cancelRulerMode();
 
     _drawingRectangle = true;
@@ -4110,16 +4040,18 @@ void MainWindow::on_actRect_triggered()
     _drawingPolyline = false;
     _drawingLine = false;
     _drawingPoint = false;
+
+    clearAllHandleHoverEffects();
     updateModeLabel();
 }
 
 void MainWindow::on_actCircle_triggered()
 {
+    cancelRectangleMode();
     cancelRulerMode();
 
     _drawingCircle = true;
     _drawingPolyline = false;
-    _drawingRectangle = false;
     _drawingLine = false;
     _drawingPoint = false;
     updateModeLabel();
@@ -4127,10 +4059,10 @@ void MainWindow::on_actCircle_triggered()
 
 void MainWindow::on_actPolyline_triggered()
 {
+    cancelRectangleMode();
     cancelRulerMode();
 
     _drawingPolyline = true;
-    _drawingRectangle = false;
     _drawingCircle = false;
     _drawingLine = false;
     _drawingPoint = false;
@@ -4139,10 +4071,10 @@ void MainWindow::on_actPolyline_triggered()
 
 void MainWindow::on_actPoint_triggered()
 {
+    cancelRectangleMode();
     cancelRulerMode();
 
     _drawingPoint = true;
-    _drawingRectangle = false;
     _drawingCircle = false;
     _drawingPolyline = false;
     _drawingLine = false;
@@ -4151,11 +4083,11 @@ void MainWindow::on_actPoint_triggered()
 
 void MainWindow::on_actLine_triggered()
 {
+    cancelRectangleMode();
     cancelRulerMode();
 
     _drawingLine = true;
     _drawingPoint = false;
-    _drawingRectangle = false;
     _drawingCircle = false;
     _drawingPolyline = false;
     updateModeLabel();
@@ -4167,12 +4099,13 @@ void MainWindow::on_actRuler_triggered()
     if (!doc || !doc->scene || !doc->videoRect)
         return;
 
+    cancelRectangleMode();
+
     // Удаляем предыдущее измерение
     cancelRulerMode();
 
     _drawingLine = false;
     _drawingPoint = false;
-    _drawingRectangle = false;
     _drawingCircle = false;
     _drawingPolyline = false;
 
@@ -5034,6 +4967,7 @@ void MainWindow::on_actRestoreAnnotation_triggered()
         if (answer != QMessageBox::Yes)
             return;
     }
+    cancelRectangleMode();
 
     // Очищаем undo/redo стек
     if (doc->_undoStack)
@@ -5806,8 +5740,6 @@ void MainWindow::pasteCopiedShapesToCurrentScene()
     QString descr = (newItems.count() == 1) ? u8"Вставка примитива"
                                             : u8"Вставка примитивов";
 
-    // if (QUndoStack* stack = activeUndoStack())
-    //     stack->push(new undo::Paste(doc.get(), newItems, descr));
     if (stack)
         stack->push(new undo::Paste(doc.get(), newItems, descr, _pasteSeriesId));
 
@@ -6204,7 +6136,7 @@ void MainWindow::autoSaveDocuments()
     }
 
     const bool editingCurrentDocument =
-        _isDrawingRectangle
+        _currRectangle
         || _isDrawingCircle
         || _isDrawingPolyline
         || _isDrawingLine
@@ -9349,6 +9281,7 @@ void MainWindow::restoreDrawingStateAfterStackChange()
 
     if (openPolyline)
     {
+        cancelRectangleMode();
         _line = nullptr;
         _polyline = openPolyline;
 
@@ -9377,6 +9310,7 @@ void MainWindow::restoreDrawingStateAfterStackChange()
 
     if (openLine)
     {
+        cancelRectangleMode();
         _polyline = nullptr;
         _line = openLine;
 
@@ -9618,6 +9552,110 @@ void MainWindow::cancelNewLinePolylineDrawing()
         updateCoordinateList();
         raiseAllHandlesToTop();
     });
+}
+
+void MainWindow::handleRectangleLmbClick(const QPointF& scenePos)
+{
+    const Document::Ptr doc = currentDocument();
+    if (!_drawingRectangle || !doc || !doc->scene)
+        return;
+
+    if (!_currRectangle)
+    {
+        // Первый клик фиксирует угол в координатах сцены
+        _rectangleStartPoint = scenePos;
+
+        QPen pen(_vstyle.rectangleLineColor);
+        pen.setWidthF(_vstyle.lineWidth);
+        pen.setCosmetic(true);
+
+        QBrush brush(Qt::NoBrush);
+        if (_vstyle.fillShapeWhenSelected)
+        {
+            QColor fill = _vstyle.rectangleLineColor;
+            fill.setAlpha(60);
+            brush = QBrush(fill);
+        }
+
+        _currRectangle = doc->scene->addRect(QRectF(scenePos, scenePos), pen, brush);
+        _currRectangle->setZValue(1e9);
+        _currRectangle->setAcceptedMouseButtons(Qt::NoButton);
+
+        // Маркер сохраняет размер при зуме и удаляется вместе с рамкой
+        QGraphicsEllipseItem* marker = new QGraphicsEllipseItem(
+            QRectF(-4.0, -4.0, 8.0, 8.0), _currRectangle);
+        marker->setPen(QPen(Qt::NoPen));
+        marker->setBrush(QBrush(_vstyle.rectangleLineColor));
+        marker->setFlag(QGraphicsItem::ItemIgnoresTransformations);
+        marker->setAcceptedMouseButtons(Qt::NoButton);
+        marker->setPos(scenePos);
+
+        updateModeLabel();
+        return;
+    }
+
+    // Второй клик задаёт противоположный угол без учёта толщины контура
+    const QRectF finalRect = QRectF(_rectangleStartPoint, scenePos).normalized();
+    if (finalRect.width() < 1.0 || finalRect.height() < 1.0)
+        return;
+
+    cancelRectangleMode();
+
+    qgraph::Rectangle* rectangle = new qgraph::Rectangle(doc->scene);
+    ensureUid(rectangle);
+    rectangle->setRealSceneRect(finalRect);
+    rectangle->updatePointNumbers();
+    apply_LineWidth_ToItem(rectangle);
+    apply_PointSize_ToItem(rectangle);
+    apply_NumberSize_ToItem(rectangle);
+
+    SelectClass dialog(_projectClasses, this);
+    const bool accepted = (dialog.exec() == QDialog::Accepted);
+    const QString selectedClass = accepted ? dialog.selectedClass() : QString();
+
+    if (!selectedClass.isEmpty())
+    {
+        rectangle->setData(0, selectedClass);
+        applyClassColorToItem(rectangle, selectedClass);
+        linkSceneItemToList(rectangle);
+
+        if (QUndoStack* stack = activeUndoStack())
+        {
+            stack->push(new undo::Create(doc.get(),
+                                         rectangle,
+                                         u8"Добавлен прямоугольник"));
+        }
+
+        doc->markModified();
+        updateFileListDisplay(doc->filePath);
+    }
+    else
+    {
+        doc->scene->removeItem(rectangle);
+        delete rectangle;
+    }
+}
+
+void MainWindow::updateRectanglePreview(const QPointF& scenePos)
+{
+    if (_currRectangle)
+        _currRectangle->setRect(QRectF(_rectangleStartPoint, scenePos).normalized());
+}
+
+void MainWindow::cancelRectangleMode()
+{
+    if (!_drawingRectangle)
+        return;
+
+    _drawingRectangle = false;
+    if (_pendingDrawTool == PendingDrawTool::Rectangle)
+        _pendingDrawTool = PendingDrawTool::None;
+
+    _isDraggingImage = false;
+
+    delete _currRectangle;
+    _currRectangle = nullptr;
+    updateModeLabel();
 }
 
 void MainWindow::cancelRulerMode()
@@ -10238,20 +10276,26 @@ void MainWindow::updateModeLabel()
                             : u8"Режим: линейка — первая точка");
         return;
     }
+    if (_drawingRectangle && !_zoomRectActive)
+    {
+        _modeLabel->setText(_currRectangle
+                            ? u8"Режим: прямоугольник — второй угол"
+                            : u8"Режим: прямоугольник — первый угол");
+        return;
+    }
+
     if (_isInDrawingMode
-        || _isDrawingRectangle
         || _isDrawingCircle
         || _isDrawingLine
         || _isDrawingPolyline
         || _isDrawingPoint
-        || _drawingRectangle
         || _drawingCircle
         || _drawingLine
         || _drawingPolyline
         || _drawingPoint)
     {
         QString tool = u8"фигура";
-        if (_isDrawingRectangle || _drawingRectangle)
+        if (_drawingRectangle)
             tool = u8"прямоугольник";
         else if (_isDrawingCircle || _drawingCircle)
             tool = u8"круг";
