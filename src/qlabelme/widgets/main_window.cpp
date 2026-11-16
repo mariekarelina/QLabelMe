@@ -297,10 +297,8 @@ MainWindow::MainWindow(QWidget* parent) :
             changeClassForSceneItem(selectedItems.first());
     });
 
-    QShortcut* shDuplicate = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_D), this);
-    shDuplicate->setContext(Qt::WindowShortcut);
-    shDuplicate->setAutoRepeat(false);
-    connect(shDuplicate, &QShortcut::activated, this, [this]()
+    ui->actDuplicate->setAutoRepeat(false);
+    connect(ui->actDuplicate, &QAction::triggered, this, [this]()
     {
         if (_isInDrawingMode || _currRectangle || _currCircle || _resumeEditing || _mergeLinesMode)
             return;
@@ -314,6 +312,12 @@ MainWindow::MainWindow(QWidget* parent) :
     shToggleAnnotations->setContext(Qt::WindowShortcut);
     shToggleAnnotations->setAutoRepeat(false);
     connect(shToggleAnnotations, &QShortcut::activated, this, &MainWindow::toggleAllAnnotations);
+
+    connect(shToggleAnnotations, &QShortcut::activated, this, &MainWindow::toggleAllAnnotations);
+
+    ui->actFitSelectedShapes->setAutoRepeat(false);
+    connect(ui->actFitSelectedShapes, &QAction::triggered,
+        this, &MainWindow::fitSelectedShapesToView);
 
     QShortcut* shRemoveNode = new QShortcut(QKeySequence(Qt::Key_Backspace), this);
     shRemoveNode->setContext(Qt::WindowShortcut);
@@ -1782,22 +1786,27 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         && (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress))
     {
         const QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
-        const bool isEnter = keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter;
         const Qt::KeyboardModifiers modifiers = keyEvent->modifiers();
+        const bool isEnter = (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter)
+            && (modifiers == Qt::NoModifier || modifiers == Qt::KeypadModifier);
+        const bool isC = keyEvent->key() == Qt::Key_C && modifiers == Qt::NoModifier;
 
-        if (isEnter && (modifiers == Qt::NoModifier || modifiers == Qt::KeypadModifier))
+        if (isEnter || isC)
         {
-            const bool closePolylineByEnter = _drawingPolyline && _polyline
-                && qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::KeyEnter;
-            const bool finishLineByEnter = _drawingLine && _line
-                && qgraph::Line::globalCloseMode() == qgraph::Line::CloseMode::KeyEnter;
+            using PolylineMode = qgraph::Polyline::CloseMode;
+            using LineMode = qgraph::Line::CloseMode;
 
-            if (closePolylineByEnter || finishLineByEnter)
+            const bool closePolyline = _drawingPolyline && _polyline && !_polyline->isClosed()
+                && qgraph::Polyline::globalCloseMode() == (isC ? PolylineMode::KeyC : PolylineMode::KeyEnter);
+            const bool finishLine = _drawingLine && _line && !_line->isClosed()
+                && qgraph::Line::globalCloseMode() == (isC ? LineMode::KeyC : LineMode::KeyEnter);
+
+            if (closePolyline || finishLine)
             {
                 // Завершаем фигуру по уже поставленным узлам.
                 if (event->type() == QEvent::KeyPress && !keyEvent->isAutoRepeat())
                 {
-                    if (closePolylineByEnter)
+                    if (closePolyline)
                         _polyline->closePolyline();
                     else
                         _line->closeLine();
@@ -3300,6 +3309,16 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
 void MainWindow::keyPressEvent(QKeyEvent* event)
 {
+    Qt::KeyboardModifiers modifiers = event->modifiers();
+    modifiers.setFlag(Qt::KeypadModifier, false);
+
+    if (event->key() == Qt::Key_0 && modifiers == Qt::ControlModifier)
+    {
+        on_actActualImageSize_triggered();
+        event->accept();
+        return;
+    }
+
     Document::Ptr doc = currentDocument();
     QGraphicsScene* scene = doc->scene;
 
@@ -3345,12 +3364,6 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
             updateAllPointNumbers();
             ui->graphView->viewport()->update();
             event->accept();
-            return;
-        }
-        else if (key == Qt::Key_0)
-        {
-            // Сброс к базе
-            fitImageToView();
             return;
         }
     }
@@ -4057,24 +4070,6 @@ void MainWindow::handleRulerLmbClick(const QPointF& scenePos)
     _isInDrawingMode = false;
 
     updateModeLabel();
-}
-
-void MainWindow::on_actClosePolyline_triggered()
-{
-    if (_drawingPolyline && _polyline)
-    {
-        if (!_polyline->isClosed())
-            _polyline->closePolyline();
-
-        return;
-    }
-    if (_drawingLine && _line)
-    {
-        if (!_line->isClosed())
-            _line->closeLine();
-
-        return;
-    }
 }
 
 void MainWindow::wheelEvent(QWheelEvent* event)
@@ -4845,6 +4840,28 @@ void MainWindow::on_actMenu_triggered()
 void MainWindow::on_actFitImageToView_triggered()
 {
     fitImageToView();
+}
+
+void MainWindow::on_actActualImageSize_triggered()
+{
+    Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene || !doc->videoRect)
+        return;
+
+    const QRectF imageRect = doc->videoRect->sceneBoundingRect();
+    QGraphicsView* graphView = ui->graphView;
+    doc->scene->setSceneRect(imageRect);
+
+    // Возвращаем масштаб 100 % и центрируем изображение.
+    graphView->resetTransform();
+    _m_zoom = 1.0;
+    graphView->centerOn(imageRect.center());
+
+    // Запоминаем масштаб и положение для текущего снимка.
+    saveCurrentViewState(doc);
+
+    updateAllPointNumbers();
+    graphView->viewport()->update();
 }
 
 void MainWindow::on_actScrollBars_triggered(bool checked)
@@ -6089,15 +6106,16 @@ void MainWindow::autoSaveDocuments()
     if (savedFiles.isEmpty())
         return;
 
-    _autoSaveLabel->setText(
-        QString::fromUtf8(u8"Автосохранение: %1")
-            .arg(QTime::currentTime().toString("HH:mm:ss"))
-    );
+    // Показываем, в какое время было автосохранение
+    // _autoSaveLabel->setText(
+    //     QString::fromUtf8(u8"Автосохранение: %1")
+    //         .arg(QTime::currentTime().toString("HH:mm:ss"))
+    // );
 
-    _autoSaveLabel->setToolTip(
-        QString::fromUtf8(u8"Записаны резервные копии:\n%1")
-            .arg(savedFiles.join("\n"))
-    );
+    // _autoSaveLabel->setToolTip(
+    //     QString::fromUtf8(u8"Записаны резервные копии:\n%1")
+    //         .arg(savedFiles.join("\n"))
+    // );
 }
 
 bool MainWindow::loadShapesFromYaml(Document::Ptr doc,
@@ -6639,6 +6657,48 @@ void MainWindow::loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi)
     {
         updatePolygonListForCurrentScene();
     }
+}
+
+void MainWindow::fitSelectedShapesToView()
+{
+    const Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene || !doc->videoRect)
+        return;
+
+    QRectF bounds;
+    const QList<QGraphicsItem*> selectedItems = doc->scene->selectedItems();
+    for (QGraphicsItem* item : selectedItems)
+    {
+        if (!isRootShapeItem(item) || !item->isVisible())
+            continue;
+
+        QRectF shapeBounds = item->sceneBoundingRect();
+
+        // Даем фигуре с нулевой шириной или высотой область для вписывания
+        if (shapeBounds.isEmpty())
+            shapeBounds.adjust(-1.0, -1.0, 1.0, 1.0);
+
+        bounds = bounds.united(shapeBounds);
+    }
+
+    if (bounds.isEmpty())
+        return;
+
+    const qreal margin = qMax(bounds.width(), bounds.height()) * 0.05;
+    QGraphicsView* graphView = ui->graphView;
+    graphView->fitInView(bounds.adjusted(-margin, -margin, margin, margin),
+                         Qt::KeepAspectRatio);
+
+    const qreal zoom = graphView->transform().m11();
+    if (zoom > _kMaxZoom)
+        graphView->scale(_kMaxZoom / zoom, _kMaxZoom / zoom);
+
+    graphView->centerOn(bounds.center());
+    _m_zoom = graphView->transform().m11();
+    saveCurrentViewState(doc);
+
+    updateAllPointNumbers();
+    graphView->viewport()->update();
 }
 
 void MainWindow::saveCurrentViewState(Document::Ptr doc)
@@ -9161,8 +9221,6 @@ void MainWindow::applyClosePolyline()
         case SDM::KeyEnterWithoutNewPoint: mode = PLM::KeyEnter;                break;
     }
     qgraph::Polyline::setGlobalCloseMode(mode);
-    if (ui && ui->actClosePolyline)
-        ui->actClosePolyline->setShortcut(mode == PLM::KeyC ? QKeySequence(Qt::Key_C) : QKeySequence());
 }
 
 void MainWindow::applyFinishLine()

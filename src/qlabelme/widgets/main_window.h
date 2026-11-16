@@ -99,8 +99,6 @@ private slots:
     void on_actLine_triggered();
     void on_actRuler_triggered();
 
-    void on_actClosePolyline_triggered();
-
     void wheelEvent(QWheelEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
 
@@ -132,6 +130,7 @@ private slots:
 
     void on_actMenu_triggered();
     void on_actFitImageToView_triggered();
+    void on_actActualImageSize_triggered();
     void on_actScrollBars_triggered(bool checked);
 
 private:
@@ -182,6 +181,7 @@ private:
     void updateFileListDisplay(const QString& filePath);
     void loadAnnotationFromFile(Document::Ptr doc, bool rebuildUi = true);
 
+    void fitSelectedShapesToView();
     void saveCurrentViewState(Document::Ptr doc);
     void restoreViewState(Document::Ptr doc);
 

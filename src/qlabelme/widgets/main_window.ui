@@ -232,13 +232,12 @@
      <string>Правка</string>
     </property>
     <addaction name="actRect"/>
-    <addaction name="actCircle"/>
     <addaction name="actPolyline"/>
     <addaction name="actLine"/>
     <addaction name="actPoint"/>
+    <addaction name="actCircle"/>
     <addaction name="actDelete"/>
     <addaction name="separator"/>
-    <addaction name="actClosePolyline"/>
     <addaction name="actBack"/>
     <addaction name="actViewNum"/>
     <addaction name="toggleSelectionFrame"/>
@@ -247,6 +246,7 @@
     <addaction name="separator"/>
     <addaction name="Copy"/>
     <addaction name="Paste"/>
+    <addaction name="actDuplicate"/>
     <addaction name="separator"/>
     <addaction name="actRuler"/>
     <addaction name="separator"/>
@@ -255,6 +255,8 @@
     <addaction name="actMenu"/>
     <addaction name="actScrollBars"/>
     <addaction name="actFitImageToView"/>
+    <addaction name="actActualImageSize"/>
+    <addaction name="actFitSelectedShapes"/>
    </widget>
    <widget class="QMenu" name="menuSettings">
     <property name="title">
@@ -497,11 +499,6 @@
     <string>Свойства проекта</string>
    </property>
   </action>
-  <action name="actClosePolyline">
-   <property name="text">
-    <string>Завершить полилинию</string>
-   </property>
-  </action>
   <action name="actBack">
    <property name="text">
     <string>Переместить на задний план</string>
@@ -613,7 +610,7 @@
     <string>Восстановить масштаб</string>
    </property>
    <property name="shortcut">
-    <string>Ctrl+0</string>
+    <string>F</string>
    </property>
   </action>
   <action name="actScrollBars">
@@ -635,6 +632,30 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+S</string>
+   </property>
+  </action>
+  <action name="actActualImageSize">
+   <property name="text">
+    <string>Фактический размер</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+0</string>
+   </property>
+  </action>
+  <action name="actDuplicate">
+   <property name="text">
+    <string>Дублировать</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+D</string>
+   </property>
+  </action>
+  <action name="actFitSelectedShapes">
+   <property name="text">
+    <string>Вписать выделенные фигуры</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+F</string>
    </property>
   </action>
  </widget>
