@@ -380,10 +380,10 @@
     <string>Создать круг</string>
    </property>
    <property name="toolTip">
-    <string>Создать круг (Y)</string>
+    <string>Создать круг (O)</string>
    </property>
    <property name="shortcut">
-    <string>Y</string>
+    <string>O</string>
    </property>
   </action>
   <action name="actRect">
@@ -395,10 +395,10 @@
     <string>Создать прямоугольник</string>
    </property>
    <property name="toolTip">
-    <string>Создать прямоугольник (T)</string>
+    <string>Создать прямоугольник (Ctrl + R)</string>
    </property>
    <property name="shortcut">
-    <string>T</string>
+    <string>Ctrl+R</string>
    </property>
   </action>
   <action name="actPolyline">
@@ -410,10 +410,10 @@
     <string>Создать полилинию</string>
    </property>
    <property name="toolTip">
-    <string>Создать полилинию (U)</string>
+    <string>Создать полилинию (Ctrl + N)</string>
    </property>
    <property name="shortcut">
-    <string>U</string>
+    <string>Ctrl+N</string>
    </property>
   </action>
   <action name="actSave">
@@ -471,10 +471,10 @@
     <string>Создать точку</string>
    </property>
    <property name="toolTip">
-    <string>Создать точку (O)</string>
+    <string>Создать точку (I)</string>
    </property>
    <property name="shortcut">
-    <string>O</string>
+    <string>I</string>
    </property>
   </action>
   <action name="actLine">
@@ -486,10 +486,10 @@
     <string>Создать линию</string>
    </property>
    <property name="toolTip">
-    <string>Создать линию (I)</string>
+    <string>Создать линию (U)</string>
    </property>
    <property name="shortcut">
-    <string>I</string>
+    <string>U</string>
    </property>
   </action>
   <action name="actSettingsProj">

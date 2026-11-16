@@ -140,6 +140,7 @@ private:
 
     void updatePolygonListForCurrentScene();
     void changeClassForSceneItem(QGraphicsItem* item);
+    void toggleAllAnnotations();
 
     void loadGeometry();
     void saveGeometry();

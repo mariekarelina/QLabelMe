@@ -310,6 +310,11 @@ MainWindow::MainWindow(QWidget* parent) :
             pasteCopiedShapesToCurrentScene();
     });
 
+    QShortcut* shToggleAnnotations = new QShortcut(QKeySequence(Qt::Key_T), this);
+    shToggleAnnotations->setContext(Qt::WindowShortcut);
+    shToggleAnnotations->setAutoRepeat(false);
+    connect(shToggleAnnotations, &QShortcut::activated, this, &MainWindow::toggleAllAnnotations);
+
     ui->polygonList->setContextMenuPolicy(Qt::CustomContextMenu);
     ui->polygonList->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
@@ -5289,6 +5294,46 @@ void MainWindow::changeClassForSceneItem(QGraphicsItem* item)
         doc->markModified();
         updateFileListDisplay(doc->filePath);
     }
+}
+
+void MainWindow::toggleAllAnnotations()
+{
+    if (_isInDrawingMode || _currRectangle || _currCircle || _resumeEditing || _mergeLinesMode
+        || _moveInProgress || _handleDragging || _m_isDraggingHandle)
+    {
+        return;
+    }
+
+    const Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene)
+        return;
+
+    QGraphicsScene* scene = doc->scene;
+    QVector<QGraphicsItem*> visibleShapes;
+    QVector<QGraphicsItem*> hiddenShapes;
+    for (QGraphicsItem* item : doc->polygonList.items)
+    {
+        if (!item || item->scene() != scene)
+            continue;
+
+        if (item->isVisible())
+            visibleShapes.append(item);
+        else
+            hiddenShapes.append(item);
+    }
+
+    const bool show = visibleShapes.isEmpty();
+    const QVector<QGraphicsItem*>& shapes = show ? hiddenShapes : visibleShapes;
+    if (shapes.isEmpty())
+        return;
+
+    hideGhost();
+    for (QGraphicsItem* item : shapes)
+        item->setVisible(show);
+
+    updatePolygonListTexts();
+    updateCoordinateList();
+    scene->update();
 }
 
 void MainWindow::loadGeometry()
