@@ -150,7 +150,7 @@ private:
     void writeShapesYamlToClipboard(const QString& yaml) const;
 
     // Логика копирования/вставки между сценами
-    void copySelectedShapes();
+    bool copySelectedShapes();
     void pasteCopiedShapesToCurrentScene();
 
     void toggleRightSplitter();

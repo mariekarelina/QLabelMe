@@ -291,10 +291,23 @@ MainWindow::MainWindow(QWidget* parent) :
         if (!doc || !doc->scene)
             return;
 
-        // Сверяем выделение со списком фигур, чтобы пропустить управляющие узлы.
+        // Сверяем выделение со списком фигур, чтобы пропустить управляющие узлы
         const QList<QGraphicsItem*> selectedItems = doc->scene->selectedItems();
         if (selectedItems.size() == 1 && polygonListRowByItem(selectedItems.first()) >= 0)
             changeClassForSceneItem(selectedItems.first());
+    });
+
+    QShortcut* shDuplicate = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_D), this);
+    shDuplicate->setContext(Qt::WindowShortcut);
+    shDuplicate->setAutoRepeat(false);
+    connect(shDuplicate, &QShortcut::activated, this, [this]()
+    {
+        if (_isInDrawingMode || _currRectangle || _currCircle || _resumeEditing || _mergeLinesMode)
+            return;
+
+        // Вставляем только после успешного копирования текущего выделения
+        if (copySelectedShapes())
+            pasteCopiedShapesToCurrentScene();
     });
 
     ui->polygonList->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -5386,20 +5399,21 @@ void MainWindow::writeShapesYamlToClipboard(const QString& yaml) const
     QGuiApplication::clipboard()->setMimeData(mime);
 }
 
-void MainWindow::copySelectedShapes()
+bool MainWindow::copySelectedShapes()
 {
     Document::Ptr doc = currentDocument();
     if (!doc || !doc->scene)
-        return;
+        return false;
 
     const QString yaml = serializeSelectedItemsToYaml(doc);
     if (yaml.isEmpty())
-        return;
+        return false;
 
     _shapesClipboard = yaml;
     // Новое копирование начинает отдельную серию вставок
     _lastPastedYaml.clear();
     writeShapesYamlToClipboard(yaml);
+    return true;
 }
 
 void MainWindow::pasteCopiedShapesToCurrentScene()
