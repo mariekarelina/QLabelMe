@@ -327,7 +327,7 @@ void Rectangle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     QString numbersText = _pointNumbersVisible ? "Скрыть нумерацию (N)" : "Показать нумерацию (N)";
     QAction* moveToBackAction = menu.addAction("Переместить на задний план (B)");
     QAction* toggleNumbersAction = menu.addAction(numbersText);
-    QAction* changeClassAction = menu.addAction("Изменить класс");
+    QAction* changeClassAction = menu.addAction("Изменить класс (Ctrl + E)");
     QAction* toggleVisibleAction =
         menu.addAction(isVisible() ? "Скрыть разметку" : "Показать разметку");
 

@@ -241,7 +241,7 @@ void Point::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
 
     QMenu menu;
 
-    QAction* changeClassAction = menu.addAction("Изменить класс");
+    QAction* changeClassAction = menu.addAction("Изменить класс (Ctrl + E)");
     QAction* toggleVisibleAction =
         menu.addAction(isVisible() ? "Скрыть разметку" : "Показать разметку");
 

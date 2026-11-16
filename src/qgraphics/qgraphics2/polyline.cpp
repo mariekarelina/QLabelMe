@@ -749,7 +749,7 @@ void Polyline::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     QAction* moveToBackAction = menu.addAction("Переместить на задний план (B)");
     QAction* toggleNumbersAction = menu.addAction(numbersText);
     QAction* toggleFrameAction = menu.addAction(frameText);
-    QAction* changeClassAction = menu.addAction("Изменить класс");
+    QAction* changeClassAction = menu.addAction("Изменить класс (Ctrl + E)");
     QAction* toggleVisibleAction =
         menu.addAction(isVisible() ? "Скрыть разметку" : "Показать разметку");
 

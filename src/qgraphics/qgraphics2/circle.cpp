@@ -416,7 +416,7 @@ void Circle::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     QAction* moveToBackAction = menu.addAction("Переместить на задний план (B)");
     QString frameText = _selectionRectVisible ? "Скрыть рамку (W)" : "Показать рамку (W)";
     QAction* toggleFrameAction = menu.addAction(frameText);
-    QAction* changeClassAction = menu.addAction("Изменить класс");
+    QAction* changeClassAction = menu.addAction("Изменить класс (Ctrl + E)");
     QAction* toggleVisibleAction =
         menu.addAction(isVisible() ? "Скрыть разметку" : "Показать разметку");
 

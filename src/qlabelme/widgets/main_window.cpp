@@ -279,6 +279,24 @@ MainWindow::MainWindow(QWidget* parent) :
     shSelectAll->setContext(Qt::ApplicationShortcut);
     connect(shSelectAll, &QShortcut::activated, this, &MainWindow::selectAllShapes);
 
+    QShortcut* shChangeClass = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_E), this);
+    shChangeClass->setContext(Qt::WindowShortcut);
+    shChangeClass->setAutoRepeat(false);
+    connect(shChangeClass, &QShortcut::activated, this, [this]()
+    {
+        if (_isInDrawingMode || _currRectangle || _currCircle || _resumeEditing || _mergeLinesMode)
+            return;
+
+        const Document::Ptr doc = currentDocument();
+        if (!doc || !doc->scene)
+            return;
+
+        // Сверяем выделение со списком фигур, чтобы пропустить управляющие узлы.
+        const QList<QGraphicsItem*> selectedItems = doc->scene->selectedItems();
+        if (selectedItems.size() == 1 && polygonListRowByItem(selectedItems.first()) >= 0)
+            changeClassForSceneItem(selectedItems.first());
+    });
+
     ui->polygonList->setContextMenuPolicy(Qt::CustomContextMenu);
     ui->polygonList->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
