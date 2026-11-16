@@ -315,6 +315,26 @@ MainWindow::MainWindow(QWidget* parent) :
     shToggleAnnotations->setAutoRepeat(false);
     connect(shToggleAnnotations, &QShortcut::activated, this, &MainWindow::toggleAllAnnotations);
 
+    QShortcut* shRemoveNode = new QShortcut(QKeySequence(Qt::Key_Backspace), this);
+    shRemoveNode->setContext(Qt::WindowShortcut);
+    shRemoveNode->setAutoRepeat(false);
+    connect(shRemoveNode, &QShortcut::activated, this, [this]()
+    {
+        if (_drawingRectangle || _drawingCircle || _drawingRuler || _isDrawingRuler
+            || QApplication::mouseButtons() != Qt::NoButton)
+        {
+            return;
+        }
+
+        // Ищем узел по текущей позиции курсора в рабочей области
+        QWidget* viewport = ui->graphView->viewport();
+        const QPoint cursorPos = QCursor::pos();
+        if (QApplication::widgetAt(cursorPos) != viewport)
+            return;
+
+        removeNodeAt(ui->graphView->mapToScene(viewport->mapFromGlobal(cursorPos)));
+    });
+
     ui->polygonList->setContextMenuPolicy(Qt::CustomContextMenu);
     ui->polygonList->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
@@ -1975,137 +1995,13 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 hideGhost();
                 break;
             }
-            // Alt + Shift + ЛКМ удалить узел
-            if ((me->modifiers() & Qt::AltModifier) && (me->modifiers() & Qt::ShiftModifier))
+            // Alt + Shift + ЛКМ удаляет узел
+            if ((me->modifiers() & Qt::AltModifier)
+                && (me->modifiers() & Qt::ShiftModifier)
+                && removeNodeAt(sp))
             {
-                qgraph::DragCircle* handle = pickHandleAt(sp);
-
-                if (!handle)
-                {
-                    bool topIsHandle = false;
-                    handle = pickHiddenHandle(sp, topIsHandle);
-                }
-
-                if (handle && handle->parentItem())
-                {
-                    if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(handle->parentItem()))
-                    {
-                        const QVector<qgraph::DragCircle*>& circles = polyline->circles();
-                        const int pointIndex = circles.indexOf(handle);
-
-                        if (pointIndex < 0)
-                        {
-                            event->accept();
-                            return true;
-                        }
-
-                        const QPointF point = handle->scenePos();
-
-                        if (_currentHoveredHandle == handle)
-                            _currentHoveredHandle = nullptr;
-
-                        if (_lastHoverHandle == handle)
-                            _lastHoverHandle = nullptr;
-
-                        if (_ghostTarget == handle)
-                        {
-                            _ghostTarget = nullptr;
-
-                            if (_ghostHandle)
-                                _ghostHandle->setVisible(false);
-                        }
-
-                        if (_m_dragHandle == handle)
-                        {
-                            _m_dragHandle = nullptr;
-                            _m_isDraggingHandle = false;
-                        }
-
-                        if (polyline->removePointAtIndex(pointIndex))
-                        {
-                            if (QUndoStack* stack = activeUndoStack())
-                            {
-                                undo::NodeEdit::Data data;
-                                data.type = undo::NodeEdit::Type::RemovePolylineNode;
-                                data.pointIndex = pointIndex;
-                                data.point = point;
-
-                                stack->push(new undo::NodeEdit(currentDocument().get(),
-                                                               polyline,
-                                                               data,
-                                                               u8"Удаление узла"));
-                            }
-
-                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
-                            {
-                                doc->markModified();
-                                updateFileListDisplay(doc->filePath);
-                            }
-                        }
-
-                        event->accept();
-                        return true;
-                    }
-
-                    if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(handle->parentItem()))
-                    {
-                        const QVector<qgraph::DragCircle*>& circles = line->circles();
-                        const int pointIndex = circles.indexOf(handle);
-
-                        if (pointIndex < 0)
-                        {
-                            event->accept();
-                            return true;
-                        }
-
-                        const QPointF point = handle->scenePos();
-
-                        if (_currentHoveredHandle == handle)
-                            _currentHoveredHandle = nullptr;
-
-                        if (_lastHoverHandle == handle)
-                            _lastHoverHandle = nullptr;
-
-                        if (_ghostTarget == handle)
-                        {
-                            _ghostTarget = nullptr;
-
-                            if (_ghostHandle)
-                                _ghostHandle->setVisible(false);
-                        }
-
-                        if (_m_dragHandle == handle)
-                        {
-                            _m_dragHandle = nullptr;
-                            _m_isDraggingHandle = false;
-                        }
-
-                        if (line->removePointAtIndex(pointIndex))
-                        {
-                            if (QUndoStack* stack = activeUndoStack())
-                            {
-                                undo::NodeEdit::Data data;
-                                data.type = undo::NodeEdit::Type::RemoveLineNode;
-                                data.pointIndex = pointIndex;
-                                data.point = point;
-
-                                stack->push(new undo::NodeEdit(currentDocument().get(),
-                                                               line,
-                                                               data,
-                                                               u8"Удаление узла"));
-                            }
-
-                            if (Document::Ptr doc = currentDocument(); doc && !doc->isModified)
-                            {
-                                doc->markModified();
-                                updateFileListDisplay(doc->filePath);
-                            }
-                        }
-
-                        event->accept();
-                        return true;
-                    }
-                }
+                event->accept();
+                return true;
             }
             // Shift + ЛКМ используется для перемещения всей фигуры
             // Поэтому ручки не должны перехватывать этот жест как редактирование узла
@@ -7890,6 +7786,80 @@ void MainWindow::saveAllDocuments()
         if (it.value()->isModified)
             saveAnnotationToFile(it.value());
     }
+}
+
+bool MainWindow::removeNodeAt(const QPointF& scenePos)
+{
+    const Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene)
+        return false;
+
+    qgraph::DragCircle* handle = pickHandleAt(scenePos);
+    if (!handle)
+    {
+        bool topIsHandle = false;
+        handle = pickHiddenHandle(scenePos, topIsHandle);
+    }
+
+    if (!handle)
+        return false;
+
+    QGraphicsItem* shape = handle->parentItem();
+    qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(shape);
+    qgraph::Line* line = dynamic_cast<qgraph::Line*>(shape);
+    if (!polyline && !line)
+        return false;
+
+    const QVector<qgraph::DragCircle*>& circles = polyline ? polyline->circles() : line->circles();
+    const int pointIndex = circles.indexOf(handle);
+    if (pointIndex < 0)
+        return true;
+
+    const QPointF point = handle->scenePos();
+
+    // Сбрасываем ссылки на ручку до её удаления.
+    if (_currentHoveredHandle == handle)
+        _currentHoveredHandle = nullptr;
+
+    if (_lastHoverHandle == handle)
+        _lastHoverHandle = nullptr;
+
+    if (_ghostTarget == handle)
+    {
+        _ghostTarget = nullptr;
+        if (_ghostHandle)
+            _ghostHandle->setVisible(false);
+    }
+
+    if (_m_dragHandle == handle)
+    {
+        _m_dragHandle = nullptr;
+        _m_isDraggingHandle = false;
+    }
+
+    const bool removed = polyline ? polyline->removePointAtIndex(pointIndex)
+                                  : line->removePointAtIndex(pointIndex);
+    if (removed)
+    {
+        if (QUndoStack* stack = activeUndoStack())
+        {
+            undo::NodeEdit::Data data;
+            data.type = polyline ? undo::NodeEdit::Type::RemovePolylineNode
+                                 : undo::NodeEdit::Type::RemoveLineNode;
+            data.pointIndex = pointIndex;
+            data.point = point;
+
+            stack->push(new undo::NodeEdit(doc.get(), shape, data, u8"Удаление узла"));
+        }
+
+        if (!doc->isModified)
+        {
+            doc->markModified();
+            updateFileListDisplay(doc->filePath);
+        }
+    }
+
+    return true;
 }
 
 qgraph::DragCircle* MainWindow::pickHiddenHandle(const QPointF& scenePos, bool& topIsHandle) const

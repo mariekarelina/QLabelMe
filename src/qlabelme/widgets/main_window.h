@@ -229,7 +229,9 @@ private:
     bool confirmUnsavedChanges();
     void saveAllDocuments();
 
+    bool removeNodeAt(const QPointF& scenePos);
     qgraph::DragCircle* pickHiddenHandle(const QPointF& scenePos, bool& topIsHandle) const;
+
     void ensureGhostAllocated();
     void moveGhostTo(const QPointF& scenePos);
     void endGhost();
