@@ -24,13 +24,15 @@ public:
         DoubleClick = 0,
         SingleClickOnFirstPoint = 1,
         CtrlModifier = 2,
-        KeyCWithoutNewPoint = 3
+        KeyCWithoutNewPoint = 3,
+        KeyEnterWithoutNewPoint = 4
     };
     enum class LineFinishMode
     {
         DoubleClick = 0,
         CtrlModifier = 1,
-        KeyCWithoutNewPoint = 2
+        KeyCWithoutNewPoint = 2,
+        KeyEnterWithoutNewPoint = 3
     };
 
     struct Values

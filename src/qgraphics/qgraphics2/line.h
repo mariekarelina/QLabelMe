@@ -59,8 +59,9 @@ public:
     enum class CloseMode
     {
         DoubleClick,      // 1) По двойному клику ЛКМ
-        CtrlModifier,     // 3) Через Ctrl
-        KeyC              // 4) Нажатие 'C'
+        CtrlModifier,     // 2) Через Ctrl
+        KeyC,             // 3) Нажатие 'C'
+        KeyEnter          // 4) Нажатие Enter
     };
 
     bool isClosed() const { return _isClosed; }

@@ -1756,6 +1756,39 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         }
     }
 
+    if (!_mergeLinesMode
+        && (_drawingPolyline || _drawingLine)
+        && (obj == ui->graphView || obj == ui->graphView->viewport())
+        && (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress))
+    {
+        const QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+        const bool isEnter = keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter;
+        const Qt::KeyboardModifiers modifiers = keyEvent->modifiers();
+
+        if (isEnter && (modifiers == Qt::NoModifier || modifiers == Qt::KeypadModifier))
+        {
+            const bool closePolylineByEnter = _drawingPolyline && _polyline
+                && qgraph::Polyline::globalCloseMode() == qgraph::Polyline::CloseMode::KeyEnter;
+            const bool finishLineByEnter = _drawingLine && _line
+                && qgraph::Line::globalCloseMode() == qgraph::Line::CloseMode::KeyEnter;
+
+            if (closePolylineByEnter || finishLineByEnter)
+            {
+                // Завершаем фигуру по уже поставленным узлам.
+                if (event->type() == QEvent::KeyPress && !keyEvent->isAutoRepeat())
+                {
+                    if (closePolylineByEnter)
+                        _polyline->closePolyline();
+                    else
+                        _line->closeLine();
+                }
+
+                event->accept();
+                return true;
+            }
+        }
+    }
+
     // При зажатом Shift показываем готовность к перемещению фигуры
     if ((obj == ui->graphView || obj == ui->graphView->viewport())
         && event->type() == QEvent::KeyPress)
@@ -9155,6 +9188,7 @@ void MainWindow::applyClosePolyline()
         case SDM::SingleClickOnFirstPoint: mode = PLM::SingleClickOnFirstPoint; break;
         case SDM::CtrlModifier:            mode = PLM::CtrlModifier;            break;
         case SDM::KeyCWithoutNewPoint:     mode = PLM::KeyC;                    break;
+        case SDM::KeyEnterWithoutNewPoint: mode = PLM::KeyEnter;                break;
     }
     qgraph::Polyline::setGlobalCloseMode(mode);
     if (ui && ui->actClosePolyline)
@@ -9174,6 +9208,8 @@ void MainWindow::applyFinishLine()
         case SDM::CtrlModifier: mode = PLM::CtrlModifier;
             break;
         case SDM::KeyCWithoutNewPoint: mode = PLM::KeyC;
+            break;
+        case SDM::KeyEnterWithoutNewPoint: mode = PLM::KeyEnter;
             break;
     }
     qgraph::Line::setGlobalCloseMode(mode);

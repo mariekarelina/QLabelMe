@@ -59,7 +59,8 @@ public:
         DoubleClick,              // 1) По двойному клику ЛКМ
         SingleClickOnFirstPoint,  // 2) По одинарному клику ЛКМ на нулевой точке
         CtrlModifier,             // 3) Через Ctrl
-        KeyC                      // 4) Нажатие 'C'
+        KeyC,                     // 4) Нажатие 'C'
+        KeyEnter                  // 5) Нажатие Enter
     };
 
 

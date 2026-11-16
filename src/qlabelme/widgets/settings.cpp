@@ -124,6 +124,7 @@ void Settings::setupCloseMethodGroup()
     g->addButton(ui->LMBZeroPoint, static_cast<int>(PolylineCloseMode::SingleClickOnFirstPoint));
     g->addButton(ui->holdingCtrl, static_cast<int>(PolylineCloseMode::CtrlModifier));
     g->addButton(ui->keyC, static_cast<int>(PolylineCloseMode::KeyCWithoutNewPoint));
+    g->addButton(ui->keyEnterPolyline, static_cast<int>(PolylineCloseMode::KeyEnterWithoutNewPoint));
 
     connect(g, &QButtonGroup::idClicked,
             this, [this](int id){
@@ -139,6 +140,7 @@ void Settings::setupFinishMethodGroup()
     g->addButton(ui->doubleClickLMB_2, static_cast<int>(LineFinishMode::DoubleClick));
     g->addButton(ui->holdingCtrl_2, static_cast<int>(LineFinishMode::CtrlModifier));
     g->addButton(ui->keyC_2, static_cast<int>(LineFinishMode::KeyCWithoutNewPoint));
+    g->addButton(ui->keyEnterLine, static_cast<int>(LineFinishMode::KeyEnterWithoutNewPoint));
 
     connect(g, &QButtonGroup::idClicked,
             this, [this](int id){
@@ -256,6 +258,9 @@ void Settings::applyModelToUi()
         case PolylineCloseMode::KeyCWithoutNewPoint:
             ui->keyC->setChecked(true);
             break;
+        case PolylineCloseMode::KeyEnterWithoutNewPoint:
+            ui->keyEnterPolyline->setChecked(true);
+            break;
     }
     switch (_values.finishLine)
     {
@@ -267,6 +272,9 @@ void Settings::applyModelToUi()
             break;
         case LineFinishMode::KeyCWithoutNewPoint:
             ui->keyC_2->setChecked(true);
+            break;
+        case LineFinishMode::KeyEnterWithoutNewPoint:
+            ui->keyEnterLine->setChecked(true);
             break;
     }
 }
@@ -304,6 +312,8 @@ void Settings::applyUiToModel()
         _values.closePolyline = PolylineCloseMode::CtrlModifier;
     else if (ui->keyC->isChecked())
         _values.closePolyline = PolylineCloseMode::KeyCWithoutNewPoint;
+    else if (ui->keyEnterPolyline->isChecked())
+        _values.closePolyline = PolylineCloseMode::KeyEnterWithoutNewPoint;
 
     if (ui->doubleClickLMB_2->isChecked())
         _values.finishLine = LineFinishMode::DoubleClick;
@@ -311,6 +321,8 @@ void Settings::applyUiToModel()
         _values.finishLine = LineFinishMode::CtrlModifier;
     else if (ui->keyC_2->isChecked())
         _values.finishLine = LineFinishMode::KeyCWithoutNewPoint;
+    else if (ui->keyEnterLine->isChecked())
+        _values.finishLine = LineFinishMode::KeyEnterWithoutNewPoint;
 }
 
 void Settings::on_buttonBox_accepted()

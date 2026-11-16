@@ -32,7 +32,7 @@
       </sizepolicy>
      </property>
      <property name="currentIndex">
-      <number>0</number>
+      <number>5</number>
      </property>
      <widget class="QWidget" name="tabGeneral">
       <attribute name="title">
@@ -728,6 +728,13 @@ background: #000000;</string>
         </widget>
        </item>
        <item>
+        <widget class="QRadioButton" name="keyEnterPolyline">
+         <property name="text">
+          <string>По клавише 'Enter'</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="verticalSpacer_2">
          <property name="orientation">
           <enum>Qt::Vertical</enum>
@@ -789,6 +796,13 @@ background: #000000;</string>
          </property>
          <property name="text">
           <string>По клавише 'C'</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="keyEnterLine">
+         <property name="text">
+          <string>По клавише 'Enter'</string>
          </property>
         </widget>
        </item>
