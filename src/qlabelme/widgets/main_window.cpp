@@ -777,7 +777,12 @@ void MainWindow::graphicsView_mousePressEvent(QMouseEvent* mouseEvent, GraphicsV
     if (mouseEvent->button() == Qt::LeftButton
         && (_drawingRectangle || _drawingCircle || _drawingRuler))
     {
-        if (mouseEvent->modifiers() == Qt::NoModifier)
+        // При рисовании прямоугольника Shift включает равные стороны
+        const Qt::KeyboardModifiers modifiers = mouseEvent->modifiers();
+        const bool squareClick = _drawingRectangle
+            && modifiers == Qt::ShiftModifier;
+
+        if (modifiers == Qt::NoModifier || squareClick)
         {
             // Фиксируем точку при отпускании ЛКМ, если не началось перетаскивание
                         if (_drawingRectangle)
@@ -1818,6 +1823,37 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         }
     }
 
+    // При рисовании прямоугольника Shift управляет равенством сторон
+    if (_drawingRectangle
+        && (obj == ui->graphView || obj == ui->graphView->viewport())
+        && (event->type() == QEvent::KeyPress
+            || event->type() == QEvent::KeyRelease))
+    {
+        const QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+
+        if (keyEvent->key() == Qt::Key_Shift)
+        {
+            if (!keyEvent->isAutoRepeat())
+            {
+                // Во время рисования Shift не включает курсор перемещения
+                ui->graphView->viewport()->unsetCursor();
+
+                if (_currRectangle && !_zoomRectActive && !_isDraggingImage)
+                {
+                    // Пересчитываем контур по текущей позиции курсора
+                    const QPoint viewPos =
+                        ui->graphView->viewport()->mapFromGlobal(QCursor::pos());
+                    const QPointF scenePos =
+                        ui->graphView->mapToScene(viewPos);
+
+                    updateRectanglePreview(scenePos);
+                }
+            }
+
+            event->accept();
+            return true;
+        }
+    }
     // При зажатом Shift показываем готовность к перемещению фигуры
     if ((obj == ui->graphView || obj == ui->graphView->viewport())
         && event->type() == QEvent::KeyPress)
@@ -9604,6 +9640,25 @@ void MainWindow::cancelNewLinePolylineDrawing()
     });
 }
 
+QRectF MainWindow::rectangleRectForDrawing(const QPointF& scenePos) const
+{
+    QPointF endPoint = scenePos;
+
+    if (QApplication::keyboardModifiers() & Qt::ShiftModifier)
+    {
+        const QPointF delta = scenePos - _rectangleStartPoint;
+        const qreal side = qMax(qAbs(delta.x()), qAbs(delta.y()));
+
+        // Сохраняем направление рисования относительно первого угла
+        const qreal dx = delta.x() < 0.0 ? -side : side;
+        const qreal dy = delta.y() < 0.0 ? -side : side;
+
+        endPoint = _rectangleStartPoint + QPointF(dx, dy);
+    }
+
+    return QRectF(_rectangleStartPoint, endPoint).normalized();
+}
+
 void MainWindow::handleRectangleLmbClick(const QPointF& scenePos)
 {
     const Document::Ptr doc = currentDocument();
@@ -9644,8 +9699,8 @@ void MainWindow::handleRectangleLmbClick(const QPointF& scenePos)
         return;
     }
 
-    // Второй клик задаёт противоположный угол без учёта толщины контура
-    const QRectF finalRect = QRectF(_rectangleStartPoint, scenePos).normalized();
+    // Используем тот же расчtт, что и для предпросмотра
+    const QRectF finalRect = rectangleRectForDrawing(scenePos);
     if (finalRect.width() < 1.0 || finalRect.height() < 1.0)
         return;
 
@@ -9689,7 +9744,7 @@ void MainWindow::handleRectangleLmbClick(const QPointF& scenePos)
 void MainWindow::updateRectanglePreview(const QPointF& scenePos)
 {
     if (_currRectangle)
-        _currRectangle->setRect(QRectF(_rectangleStartPoint, scenePos).normalized());
+        _currRectangle->setRect(rectangleRectForDrawing(scenePos));
 }
 
 void MainWindow::cancelRectangleMode()
