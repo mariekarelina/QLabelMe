@@ -86,12 +86,7 @@ RestoreAutoSave::RestoreAutoSave(const QStringList& documents,
             this, &RestoreAutoSave::accept);
 
     connect(ui->buttonBox, &QDialogButtonBox::rejected,
-            this, [this]()
-    {
-        // Удаление разрешено только при нажатии кнопки
-        _discardAutoSaves = true;
-        reject();
-    });
+            this, &QDialog::reject);
 
     // Восстанавливаем размер и положение окна
     dialogLoadGeometry(
@@ -129,6 +124,9 @@ bool RestoreAutoSave::discardAutoSaves() const
 
 void RestoreAutoSave::done(int result)
 {
+    // «Нет», Esc и крестик означают отказ от резервных копий
+    _discardAutoSaves = (result == QDialog::Rejected);
+
     // Сохраняем геометрию при любом способе закрытия диалога
     const QRect rect = isMaximized() || isFullScreen()
         ? normalGeometry()
