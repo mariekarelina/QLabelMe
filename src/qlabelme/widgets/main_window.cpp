@@ -308,12 +308,8 @@ MainWindow::MainWindow(QWidget* parent) :
             pasteCopiedShapesToCurrentScene();
     });
 
-    QShortcut* shToggleAnnotations = new QShortcut(QKeySequence(Qt::Key_T), this);
-    shToggleAnnotations->setContext(Qt::WindowShortcut);
-    shToggleAnnotations->setAutoRepeat(false);
-    connect(shToggleAnnotations, &QShortcut::activated, this, &MainWindow::toggleAllAnnotations);
-
-    connect(shToggleAnnotations, &QShortcut::activated, this, &MainWindow::toggleAllAnnotations);
+    connect(ui->actToggleAnnotations, &QAction::triggered,
+            this, &MainWindow::toggleAllAnnotations);
 
     ui->actFitSelectedShapes->setAutoRepeat(false);
     connect(ui->actFitSelectedShapes, &QAction::triggered,
@@ -1710,19 +1706,6 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
             break;
         }
     }
-
-    const QString description =
-        hideMode
-            ? ((targets.size() == 1) ? u8"Скрытие фигуры" : u8"Скрытие фигур")
-            : ((targets.size() == 1) ? u8"Показ фигуры"   : u8"Показ фигур");
-
-    QUndoStack* stack = activeUndoStack();
-
-    if (!stack)
-        return;
-
-    QVector<QGraphicsItem*> shapes;
-
     for (QGraphicsItem* target : targets)
     {
         if (!target)
@@ -1732,25 +1715,9 @@ void MainWindow::toggleSceneItemVisibility(QGraphicsItem* item)
 
         if (hideMode)
             target->setSelected(false);
-
-        shapes.append(target);
     }
-
-    if (shapes.isEmpty())
-        return;
-
-    stack->push(new undo::Visibility(doc.get(),
-                                     shapes,
-                                     !hideMode,
-                                     description));
 
     updatePolygonListTexts();
-
-    if (Document::Ptr doc = currentDocument())
-    {
-        doc->markModified();
-        updateFileListDisplay(doc->filePath);
-    }
     updateCoordinateList();
 
     if (doc->scene)

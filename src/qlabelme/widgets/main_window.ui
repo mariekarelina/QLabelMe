@@ -254,6 +254,7 @@
     <addaction name="actRestoreAnnotation"/>
     <addaction name="actMenu"/>
     <addaction name="actScrollBars"/>
+    <addaction name="actToggleAnnotations"/>
     <addaction name="actFitImageToView"/>
     <addaction name="actActualImageSize"/>
     <addaction name="actFitSelectedShapes"/>
@@ -656,6 +657,14 @@
    </property>
    <property name="shortcut">
     <string>Shift+F</string>
+   </property>
+  </action>
+  <action name="actToggleAnnotations">
+   <property name="text">
+    <string>Скрыть/показать разметку</string>
+   </property>
+   <property name="shortcut">
+    <string>T</string>
    </property>
   </action>
  </widget>
