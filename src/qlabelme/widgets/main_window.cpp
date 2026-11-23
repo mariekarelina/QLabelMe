@@ -3323,7 +3323,8 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
     }
 
     Document::Ptr doc = currentDocument();
-    QGraphicsScene* scene = doc->scene;
+   // До выбора изображения текущий документ может отсутствовать
+    QGraphicsScene* scene = doc ? doc->scene.get() : nullptr;
 
     if (event->modifiers() & Qt::ControlModifier)
     {
@@ -7927,11 +7928,16 @@ bool MainWindow::removeNodeAt(const QPointF& scenePos)
 
 qgraph::DragCircle* MainWindow::pickHiddenHandle(const QPointF& scenePos, bool& topIsHandle) const
 {
-    Document::Ptr doc = currentDocument();
-    QGraphicsScene* scene = doc->scene;
-
+    // Сбрасываем результат и при отсутствии открытого документа.
     topIsHandle = false;
-    if (!scene) return nullptr;
+
+    Document::Ptr doc = currentDocument();
+
+    // Без документа и сцены искать скрытые узлы негде.
+    if (!doc || !doc->scene)
+        return nullptr;
+
+    QGraphicsScene* scene = doc->scene;
 
     GraphicsView* view = ui ? ui->graphView : nullptr;
     const qreal radiusScene = viewPixelsToSceneRadius(view, _ghostPickRadius);
@@ -8185,12 +8191,15 @@ qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos) const
 qgraph::DragCircle* MainWindow::pickHandleAt(const QPointF& scenePos, qreal customRadius) const
 {
     Document::Ptr doc = currentDocument();
-    QGraphicsScene* scene = doc->scene;
 
-    if (!scene)
+    // Пока изображение не открыто, искать узлы негде.
+    if (!doc || !doc->scene)
         return nullptr;
 
+    QGraphicsScene* scene = doc->scene;
+
     GraphicsView* view = ui ? ui->graphView : nullptr;
+
     const qreal pickRadius = viewPixelsToSceneRadius(view, customRadius);
     if (pickRadius <= 0.0)
         return nullptr;

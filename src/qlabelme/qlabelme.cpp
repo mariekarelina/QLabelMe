@@ -77,22 +77,38 @@ int main(int argc, char *argv[])
         signal(SIGINT,  &stopProgramHandler);
 
 #ifdef MINGW
-        QString configDir = "AppData/qlabelme";
+        // Получаем APPDATA сразу как Unicode-строку
+        const QString appData = qEnvironmentVariable("APPDATA");
+        if (appData.isEmpty())
+        {
+            log_error << "Environment variable APPDATA is empty";
+            alog::stop();
+            return 1;
+        }
+
+        const QString configDir = QDir(appData).filePath("qlabelme");
 #else
-        QString configDir = "~/.config/qlabelme";
+        const QString configDir =
+            QDir::home().filePath(".config/qlabelme");
 #endif
-        QString configFile = configDir + "/qlabelme.conf";
 
-        config::dirExpansion(configDir);
-        if (!QDir(configDir).exists())
-            if (!QDir().mkpath(configDir))
-            {
-                log_error << "Failed create config directory: " << configDir;
-                alog::stop();
-                return 1;
-            }
+        // mkpath() также возвращает true, если каталог уже существует
+        if (!QDir().mkpath(configDir))
+        {
+            log_error << "Failed create config directory: " << configDir;
+            alog::stop();
+            return 1;
+        }
 
-        config::dirExpansion(configFile);
+        const QString configFile =
+            QDir(configDir).filePath("qlabelme.conf");
+
+        // Подготавливаем путь для файловых функций сабмодуля
+        const QByteArray encodedConfigFile =
+            QFile::encodeName(QDir::toNativeSeparators(configFile));
+
+        // QByteArray::toStdString() копирует байты без перекодирования
+        const std::string configFilePath = encodedConfigFile.toStdString();
         if (!QFile::exists(configFile))
         {
             QFile file;
@@ -107,14 +123,22 @@ int main(int argc, char *argv[])
                 alog::stop();
                 return 1;
             }
-            if (!config::base().saveFile(configFile.toStdString()))
+            // Используем подготовленный путь в системной кодировке
+            if (!config::base().saveFile(configFilePath))
             {
                 alog::stop();
                 return 1;
             }
         }
         else
-            config::base().readFile(configFile.toStdString());
+        {
+            // При ошибке чтения прекращаем запуск
+            if (!config::base().readFile(configFilePath))
+            {
+                alog::stop();
+                return 1;
+            }
+        }
 
         // Создаем сэйвер по умолчанию для логгера
         if (!alog::configDefaultSaver())
