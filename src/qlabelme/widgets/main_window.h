@@ -82,6 +82,8 @@ private slots:
     void on_actClose_triggered(bool);
     void on_actSave_triggered(bool);
     void on_actSaveAll_triggered(bool);
+    void on_actExportLabelMeJson_triggered(bool);
+    void on_actExportAllLabelMeJson_triggered(bool);
 
     void on_actExit_triggered(bool);
 
@@ -174,6 +176,10 @@ private:
     bool saveAnnotationToFile(Document::Ptr doc, bool showError = true);
     // Удаляет резервную копию и сбрасывает признак ее актуальности
     bool removeAutoSaveFile(Document::Ptr doc, bool showError = true);
+
+    // Экспортирует документ в JSON, совместимый с LabelMe 5.5.0
+    bool writeLabelMeJsonFile(Document::Ptr doc, const QString& filePath,
+                             QString& error) const;
 
     void applyAutoSaveSettings();
     void autoSaveDocuments();
@@ -435,7 +441,6 @@ private:
     // Разметка и ее успешные вставки по изображениям
     QString _lastPastedYaml;
     bool _lastPasteWasShapeCopy = false;
-    //QMap<QString, int> _pasteCountsByImage;
     quint64 _pasteSeriesId = 0;
 
     // Количество последовательных вставок одной разметки

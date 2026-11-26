@@ -19,6 +19,9 @@
 #include "shared/break_point.h"
 #include "shared/defmac.h"
 
+#include <rapidjson/prettywriter.h>
+#include <rapidjson/stringbuffer.h>
+
 #include "qgraphics2/rectangle.h"
 #include "qgraphics2/polyline.h"
 #include "qgraphics2/circle.h"
@@ -31,9 +34,14 @@
 #include <QFileDialog>
 #include <QScrollBar>
 #include <QSaveFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QBuffer>
 #include <QSet>
 
 #include <algorithm>
+#include <cmath>
 
 using namespace std;
 using namespace qgraph;
@@ -3625,6 +3633,150 @@ void MainWindow::on_actSave_triggered(bool)
         saveAnnotationToFile(doc);
 }
 
+void MainWindow::on_actExportLabelMeJson_triggered(bool)
+{
+    const Document::Ptr doc = currentDocument();
+
+    if (!doc || !doc->scene || doc->pixmap.isNull() || !doc->videoRect)
+        return;
+
+    // Не экспортируем промежуточное состояние фигуры
+    if (_currRectangle
+        || _currCircle
+        || _isDrawingPolyline
+        || _isDrawingLine
+        || _isDrawingPoint
+        || _resumeEditing
+        || (_drawingPolyline && _polyline)
+        || (_drawingLine && _line)
+        || _mergeLinesMode
+        || _moveInProgress
+        || _m_isDraggingHandle
+        || _handleDragging
+        || _isDraggingImage
+        || _shiftImageDragging)
+    {
+        messageBox(
+            this,
+            QMessageBox::Information,
+            u8"Перед экспортом завершите рисование или редактирование фигуры."
+        );
+        return;
+    }
+
+    // Сохраняем JSON рядом с изображением без диалога выбора файла
+    const QFileInfo imageInfo(doc->filePath);
+    const QString filePath = imageInfo.absoluteDir().filePath(
+        imageInfo.completeBaseName() + ".json"
+    );
+
+    QString error;
+
+    if (!writeLabelMeJsonFile(doc, filePath, error))
+    {
+        messageBox(
+            this,
+            QMessageBox::Warning,
+            QString::fromUtf8(
+                u8"Не удалось экспортировать разметку:\n%1\n\n%2"
+            ).arg(QDir::toNativeSeparators(filePath)).arg(error)
+        );
+        return;
+    }
+
+    statusBar()->showMessage(
+        QString::fromUtf8(u8"Разметка экспортирована: %1")
+            .arg(QDir::toNativeSeparators(filePath)),
+        5000
+    );
+}
+
+void MainWindow::on_actExportAllLabelMeJson_triggered(bool)
+{
+    const Document::Ptr doc = currentDocument();
+    if (!doc || !doc->scene || !doc->videoRect || doc->pixmap.isNull())
+    {
+        messageBox(this, QMessageBox::Information,
+                   u8"Сначала откройте изображение для экспорта.");
+        return;
+    }
+
+    // Не экспортируем промежуточное состояние фигуры
+    const bool editingDocument =
+        _currRectangle
+        || _currCircle
+        || _isDrawingPolyline
+        || _isDrawingLine
+        || _isDrawingPoint
+        || _resumeEditing
+        || (_drawingPolyline && _polyline)
+        || (_drawingLine && _line)
+        || _mergeLinesMode
+        || _moveInProgress
+        || _m_isDraggingHandle
+        || _handleDragging
+        || _isDraggingImage
+        || _shiftImageDragging;
+
+    if (editingDocument)
+    {
+        messageBox(this, QMessageBox::Information,
+                   u8"Перед экспортом завершите создание или редактирование фигуры.");
+        return;
+    }
+    int exportedCount = 0;
+    QStringList errors;
+
+    for (QMap<QString, Document::Ptr>::const_iterator it =
+             _documentsMap.constBegin();
+         it != _documentsMap.constEnd(); ++it)
+    {
+        const Document::Ptr exportDoc = it.value();
+
+        if (!exportDoc)
+            continue;
+
+        // JSON сохраняется рядом с соответствующим изображением
+        const QFileInfo imageInfo(exportDoc->filePath);
+        const QString filePath = imageInfo.absoluteDir().filePath(
+            imageInfo.completeBaseName() + ".json"
+        );
+
+        QString error;
+
+        if (!writeLabelMeJsonFile(exportDoc, filePath, error))
+        {
+            errors.append(
+                QString::fromUtf8(u8"%1:\n%2")
+                    .arg(QDir::toNativeSeparators(filePath))
+                    .arg(error)
+            );
+            continue;
+        }
+
+        ++exportedCount;
+    }
+
+    if (!errors.isEmpty())
+    {
+        messageBox(
+            this,
+            QMessageBox::Warning,
+            QString::fromUtf8(
+                u8"Экспортировано файлов: %1.\n\n"
+                u8"Ошибки экспорта:\n%2"
+            ).arg(exportedCount).arg(errors.join("\n\n"))
+        );
+        return;
+    }
+
+    statusBar()->showMessage(
+        QString::fromUtf8(u8"Экспортировано файлов: %1.")
+            .arg(exportedCount),
+        5000
+    );
+}
+
 void MainWindow::on_actSaveAll_triggered(bool)
 {
     // Сохраняем разметку всех документов
@@ -5986,6 +6138,206 @@ bool MainWindow::removeAutoSaveFile(Document::Ptr doc, bool showError)
     }
 
     return false;
+}
+
+bool MainWindow::writeLabelMeJsonFile(Document::Ptr doc,
+                                     const QString& filePath,
+                                     QString& error) const
+{
+    error.clear();
+
+    if (!doc || !doc->scene || !doc->videoRect || doc->pixmap.isNull())
+    {
+        error = u8"Изображение не загружено.";
+        return false;
+    }
+
+    QJsonArray shapes;
+    const qreal imagePixelRatio = doc->pixmap.devicePixelRatio();
+    const QList<QGraphicsItem*> items = orderedShapeItemsForSave(doc);
+
+    for (QGraphicsItem* item : items)
+    {
+        QVector<QPointF> scenePoints;
+        QString shapeType;
+
+        if (qgraph::Line* line = dynamic_cast<qgraph::Line*>(item))
+        {
+            scenePoints = line->points();
+            shapeType = scenePoints.size() == 2 ? "line" : "linestrip";
+        }
+        else if (qgraph::Polyline* polyline = dynamic_cast<qgraph::Polyline*>(item))
+        {
+            scenePoints = polyline->points();
+            shapeType = "polygon";
+        }
+        else if (qgraph::Rectangle* rectangle = dynamic_cast<qgraph::Rectangle*>(item))
+        {
+            const QRectF sceneRect = rectangle->realSceneRect();
+
+            scenePoints.append(sceneRect.topLeft());
+            scenePoints.append(sceneRect.bottomRight());
+            shapeType = "rectangle";
+        }
+        else if (qgraph::Circle* circle = dynamic_cast<qgraph::Circle*>(item))
+        {
+            const QPointF center = circle->realCenter();
+            const qreal radius = circle->realRadius();
+
+            scenePoints.append(center);
+            scenePoints.append(center + QPointF(radius, 0.0));
+            shapeType = "circle";
+        }
+        else if (qgraph::Point* point = dynamic_cast<qgraph::Point*>(item))
+        {
+            scenePoints.append(point->center());
+            shapeType = "point";
+        }
+        else
+        {
+            continue;
+        }
+
+        QJsonArray points;
+
+        for (const QPointF& scenePoint : scenePoints)
+        {
+            // Переводим координаты сцены в координаты изображения
+            const QPointF imagePoint =
+                doc->videoRect->mapFromScene(scenePoint) * imagePixelRatio;
+
+            if (!std::isfinite(imagePoint.x()) || !std::isfinite(imagePoint.y()))
+            {
+                error = u8"Фигура содержит некорректные координаты.";
+                return false;
+            }
+
+            QJsonArray coordinates;
+            coordinates.append(imagePoint.x());
+            coordinates.append(imagePoint.y());
+            points.append(coordinates);
+        }
+
+        QString label = item->data(0).toString();
+        if (label.isEmpty())
+            label = "none";
+
+        QJsonObject shape;
+        shape.insert("label", label);
+        shape.insert("points", points);
+        shape.insert("group_id", QJsonValue(QJsonValue::Null));
+        shape.insert("description", QString());
+        shape.insert("shape_type", shapeType);
+        shape.insert("flags", QJsonObject());
+        shape.insert("mask", QJsonValue(QJsonValue::Null));
+        shapes.append(shape);
+    }
+
+    const QFileInfo jsonInfo(filePath);
+    const QFileInfo imageInfo(doc->filePath);
+    const QString imagePath = QDir::fromNativeSeparators(
+        jsonInfo.absoluteDir().relativeFilePath(imageInfo.absoluteFilePath()));
+
+    // JPEG для .jpg/.jpeg, PNG для остальных расширений
+    const QString imageSuffix = imageInfo.suffix().toLower();
+    const bool useJpeg = imageSuffix == "jpg" || imageSuffix == "jpeg";
+    const char* imageFormat = useJpeg ? "JPEG" : "PNG";
+
+    QByteArray imageData;
+    QBuffer imageBuffer(&imageData);
+    if (!imageBuffer.open(QIODevice::WriteOnly)
+        || !doc->pixmap.save(&imageBuffer, imageFormat, useJpeg ? 75 : -1))
+    {
+        error = u8"Не удалось подготовить изображение для экспорта.";
+        return false;
+    }
+
+    rapidjson::StringBuffer jsonBuffer;
+    rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(jsonBuffer);
+    writer.SetIndent(' ', 2);
+
+    // Передаем строки в UTF-8 с явной длиной
+    std::function<void(const QString&)> writeString =
+        [&writer](const QString& value)
+    {
+        const QByteArray utf8 = value.toUtf8();
+        writer.String(utf8.constData(),
+                      static_cast<rapidjson::SizeType>(utf8.size()));
+    };
+
+    writer.StartObject();
+    writer.Key("version");
+    writer.String("0.8.9");
+    writer.Key("flags");
+    writer.StartObject();
+    writer.EndObject();
+    writer.Key("shapes");
+    writer.StartArray();
+
+    for (const QJsonValue& shapeValue : shapes)
+    {
+        const QJsonObject shape = shapeValue.toObject();
+
+        writer.StartObject();
+        writer.Key("label");
+        writeString(shape.value("label").toString());
+        writer.Key("points");
+        writer.StartArray();
+
+        for (const QJsonValue& pointValue : shape.value("points").toArray())
+        {
+            const QJsonArray point = pointValue.toArray();
+
+            writer.StartArray();
+            writer.Double(point.at(0).toDouble());
+            writer.Double(point.at(1).toDouble());
+            writer.EndArray();
+        }
+
+        writer.EndArray();
+        writer.Key("group_id");
+        writer.Null();
+        writer.Key("description");
+        writeString(shape.value("description").toString());
+        writer.Key("shape_type");
+        writeString(shape.value("shape_type").toString());
+        writer.Key("flags");
+        writer.StartObject();
+        writer.EndObject();
+        writer.Key("mask");
+        writer.Null();
+        writer.EndObject();
+    }
+
+    writer.EndArray();
+    writer.Key("imagePath");
+    writeString(imagePath);
+    writer.Key("imageData");
+
+    const QByteArray base64 = imageData.toBase64();
+    writer.String(base64.constData(),
+                  static_cast<rapidjson::SizeType>(base64.size()));
+
+    writer.Key("imageHeight");
+    writer.Int(doc->pixmap.height());
+    writer.Key("imageWidth");
+    writer.Int(doc->pixmap.width());
+    writer.EndObject();
+
+    const QByteArray json(jsonBuffer.GetString(),
+                              static_cast<int>(jsonBuffer.GetSize()));
+
+    // Старый JSON заменяется только после успешной записи нового
+    QSaveFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly)
+        || file.write(json) != json.size()
+        || !file.commit())
+    {
+        error = file.errorString();
+        return false;
+    }
+
+    return true;
 }
 
 void MainWindow::applyAutoSaveSettings()

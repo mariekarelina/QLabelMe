@@ -225,6 +225,9 @@
     <addaction name="separator"/>
     <addaction name="actSave"/>
     <addaction name="actSaveAll"/>
+    <addaction name="actExportLabelMeJson"/>
+    <addaction name="actExportAllLabelMeJson"/>
+    <addaction name="separator"/>
     <addaction name="actClose"/>
    </widget>
    <widget class="QMenu" name="menuEdit">
@@ -665,6 +668,22 @@
    </property>
    <property name="shortcut">
     <string>T</string>
+   </property>
+  </action>
+  <action name="actExportLabelMeJson">
+   <property name="text">
+    <string>Экспорт текущего изображения</string>
+   </property>
+   <property name="toolTip">
+    <string>Экспорт в json</string>
+   </property>
+  </action>
+  <action name="actExportAllLabelMeJson">
+   <property name="text">
+    <string>Экспорт всей разметки</string>
+   </property>
+   <property name="toolTip">
+    <string>Экспорт всей разметки в json</string>
    </property>
   </action>
  </widget>
