@@ -43,16 +43,16 @@ public:
         int labelFontPt = 12;
         QString labelFont;
 
-        QColor nodeColor = QColor("#3b6cff");
-        QColor nodeSelectedColor = QColor("#ffe100");
-        QColor numberColor = QColor("#ffffff");
-        QColor numberBgColor = QColor("#000000");
-        QColor rectLineColor = QColor("#3b6cff");
-        QColor circleLineColor = QColor("#6aa7ff");
-        QColor polylineLineColor = QColor("#40ff40");
-        QColor lineLineColor = QColor("#40ff40");
-        QColor pointColor = QColor("#00ff00");
-        QColor rulerColor = QColor(200, 200, 200);
+        QColor nodeColor = QColor("#BAC8D6");
+        QColor nodeSelectedColor = QColor("#E6B85C");
+        QColor numberColor = QColor("#FFFFFF");
+        QColor numberBgColor = QColor("#B4000000");
+        QColor rectLineColor = QColor("#55B5AA");
+        QColor circleLineColor = QColor("#AA8BD0");
+        QColor polylineLineColor = QColor("#6F9ED4");
+        QColor lineLineColor = QColor("#D3AC6B");
+        QColor pointColor = QColor("#D98282");
+        QColor rulerColor = QColor("#C8CDD3");
         int pointOutlineWidth = 1;
         int pointSize = 6;
         bool keepImageScale = false;

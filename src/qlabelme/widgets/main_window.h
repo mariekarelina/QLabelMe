@@ -490,19 +490,17 @@ private:
         bool fillShapeWhenSelected = true;
         int labelFontPt = 0;
         QString labelFont;
-        QColor handleColor = Qt::red;
-        QColor selectedHandleColor = Qt::yellow;
+        QColor handleColor = QColor("#BAC8D6");
+        QColor selectedHandleColor = QColor("#E6B85C");
         QColor numberColor = Qt::white;
         QColor numberBgColor = QColor(0, 0, 0, 180);
+        QColor rectangleLineColor = QColor("#55B5AA");
+        QColor circleLineColor = QColor("#AA8BD0");
+        QColor polylineLineColor = QColor("#6F9ED4");
+        QColor lineLineColor = QColor("#D3AC6B");
+        QColor pointColor = QColor("#D98282");
+        QColor rulerColor = QColor("#C8CDD3");
 
-        // Цвета линий для разных примитивов
-        QColor rectangleLineColor = Qt::green;
-        QColor circleLineColor = Qt::red;
-        QColor polylineLineColor = Qt::blue;
-
-        QColor lineLineColor = Qt::red;
-        QColor pointColor = Qt::green;
-        QColor rulerColor = QColor(200, 200, 200);
         int pointOutlineWidth = 1;
         int pointSize = 6;
 

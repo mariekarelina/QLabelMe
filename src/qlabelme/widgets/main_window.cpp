@@ -9019,53 +9019,58 @@ void MainWindow::loadVisualStyle()
         _vstyle.pointSize = 6;
 
     // Загружаем цвета
+    const VisualStyle defaultStyle;
     QString colorStr;
+
     if (config::base().getValue("graphics.handle_color", colorStr))
         _vstyle.handleColor = QColor(colorStr);
     else
-        _vstyle.handleColor = Qt::red;
+        _vstyle.handleColor = defaultStyle.handleColor;
 
     if (config::base().getValue("graphics.number_color", colorStr))
         _vstyle.numberColor = QColor(colorStr);
     else
-        _vstyle.numberColor = Qt::white;
+        _vstyle.numberColor = defaultStyle.numberColor;
 
     if (config::base().getValue("graphics.number_bg_color", colorStr))
         _vstyle.numberBgColor = QColor(colorStr);
     else
-        _vstyle.numberBgColor = QColor(0, 0, 0, 180);
+        _vstyle.numberBgColor = defaultStyle.numberBgColor;
 
-    // Загружаем цвета линий
     if (config::base().getValue("graphics.colors.rectangle", colorStr))
         _vstyle.rectangleLineColor = QColor(colorStr);
     else
-        _vstyle.rectangleLineColor = Qt::green;
+        _vstyle.rectangleLineColor = defaultStyle.rectangleLineColor;
 
     if (config::base().getValue("graphics.colors.circle", colorStr))
         _vstyle.circleLineColor = QColor(colorStr);
     else
-        _vstyle.circleLineColor = Qt::red;
+        _vstyle.circleLineColor = defaultStyle.circleLineColor;
 
     if (config::base().getValue("graphics.colors.polyline", colorStr))
         _vstyle.polylineLineColor = QColor(colorStr);
     else
-        _vstyle.polylineLineColor = Qt::blue;
+        _vstyle.polylineLineColor = defaultStyle.polylineLineColor;
 
     if (config::base().getValue("graphics.all.selected_handle_color", colorStr))
         _vstyle.selectedHandleColor = QColor(colorStr);
     else
-        _vstyle.selectedHandleColor = Qt::yellow;
+        _vstyle.selectedHandleColor = defaultStyle.selectedHandleColor;
 
     if (config::base().getValue("graphics.colors.line", colorStr))
         _vstyle.lineLineColor = QColor(colorStr);
+    else
+        _vstyle.lineLineColor = defaultStyle.lineLineColor;
 
     if (config::base().getValue("graphics.colors.point", colorStr))
         _vstyle.pointColor = QColor(colorStr);
+    else
+        _vstyle.pointColor = defaultStyle.pointColor;
 
     if (config::base().getValue("graphics.colors.ruler", colorStr))
         _vstyle.rulerColor = QColor(colorStr);
     else
-        _vstyle.rulerColor = QColor(200, 200, 200);
+        _vstyle.rulerColor = defaultStyle.rulerColor;
 
     int ow = 1;
     if (config::base().getValue("graphics.point.outline_width", ow))
