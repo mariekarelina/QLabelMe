@@ -93,7 +93,8 @@ import QbsUtl
     }
 
     cpp.dynamicLibraries: [
-        "pthread"
+        "pthread",
+        "tiff"
     ]
 
     files: [

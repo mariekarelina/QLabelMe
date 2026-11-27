@@ -15,6 +15,7 @@
 #include <QVector>
 
 #include <memory>
+#include <tiffio.h>
 
 struct PolygonListData
 {
