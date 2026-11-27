@@ -1193,7 +1193,7 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
     {
         // После первого клика контур следует за курсором
         const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
-        updateRectanglePreview(scenePos);
+        updateRectanglePreview(scenePos, mouseEvent->modifiers());
         updateCirclePreview(scenePos);
         mouseEvent->accept();
         return;
@@ -1270,7 +1270,7 @@ void MainWindow::graphicsView_mouseMoveEvent(QMouseEvent* mouseEvent, GraphicsVi
             graphView->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
 
             const QPointF scenePos = graphView->mapToScene(mouseEvent->pos());
-            updateRectanglePreview(scenePos);
+            updateRectanglePreview(scenePos, mouseEvent->modifiers());
             updateCirclePreview(scenePos);
 
             _lastMousePos = mouseEvent->pos();
@@ -1332,7 +1332,7 @@ void MainWindow::graphicsView_mouseReleaseEvent(QMouseEvent* mouseEvent, Graphic
         else if (tool == PendingDrawTool::Line)
             handleLineLmbClick(scenePos, mods, graphView);
         else if (tool == PendingDrawTool::Rectangle)
-            handleRectangleLmbClick(scenePos);
+            handleRectangleLmbClick(scenePos, mods);
         else if (tool == PendingDrawTool::Circle)
             handleCircleLmbClick(scenePos);
         else if (tool == PendingDrawTool::Ruler)
@@ -1815,13 +1815,18 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
                 if (_currRectangle && !_zoomRectActive && !_isDraggingImage)
                 {
-                    // Пересчитываем контур по текущей позиции курсора
                     const QPoint viewPos =
                         ui->graphView->viewport()->mapFromGlobal(QCursor::pos());
                     const QPointF scenePos =
                         ui->graphView->mapToScene(viewPos);
 
-                    updateRectanglePreview(scenePos);
+                    // Состояние Shift определяем по типу события
+                    const Qt::KeyboardModifiers modifiers =
+                        event->type() == QEvent::KeyPress
+                            ? Qt::KeyboardModifiers(Qt::ShiftModifier)
+                            : Qt::KeyboardModifiers(Qt::NoModifier);
+
+                    updateRectanglePreview(scenePos, modifiers);
                 }
             }
 
@@ -9973,16 +9978,17 @@ void MainWindow::cancelNewLinePolylineDrawing()
     });
 }
 
-QRectF MainWindow::rectangleRectForDrawing(const QPointF& scenePos) const
+QRectF MainWindow::rectangleRectForDrawing(
+    const QPointF& scenePos, Qt::KeyboardModifiers modifiers) const
 {
     QPointF endPoint = scenePos;
 
-    if (QApplication::keyboardModifiers() & Qt::ShiftModifier)
+    if (modifiers & Qt::ShiftModifier)
     {
         const QPointF delta = scenePos - _rectangleStartPoint;
         const qreal side = qMax(qAbs(delta.x()), qAbs(delta.y()));
 
-        // Сохраняем направление рисования относительно первого угла
+        // Сохраняем направление относительно первого угла.
         const qreal dx = delta.x() < 0.0 ? -side : side;
         const qreal dy = delta.y() < 0.0 ? -side : side;
 
@@ -9992,7 +9998,8 @@ QRectF MainWindow::rectangleRectForDrawing(const QPointF& scenePos) const
     return QRectF(_rectangleStartPoint, endPoint).normalized();
 }
 
-void MainWindow::handleRectangleLmbClick(const QPointF& scenePos)
+void MainWindow::handleRectangleLmbClick(
+    const QPointF& scenePos, Qt::KeyboardModifiers modifiers)
 {
     const Document::Ptr doc = currentDocument();
     if (!_drawingRectangle || !doc || !doc->scene)
@@ -10032,8 +10039,8 @@ void MainWindow::handleRectangleLmbClick(const QPointF& scenePos)
         return;
     }
 
-    // Используем тот же расчtт, что и для предпросмотра
-    const QRectF finalRect = rectangleRectForDrawing(scenePos);
+    // При завершении используем состояние Shift из события мыши
+    const QRectF finalRect = rectangleRectForDrawing(scenePos, modifiers);
     if (finalRect.width() < 1.0 || finalRect.height() < 1.0)
         return;
 
@@ -10076,8 +10083,14 @@ void MainWindow::handleRectangleLmbClick(const QPointF& scenePos)
 
 void MainWindow::updateRectanglePreview(const QPointF& scenePos)
 {
+    updateRectanglePreview(scenePos, QApplication::keyboardModifiers());
+}
+
+void MainWindow::updateRectanglePreview(
+    const QPointF& scenePos, Qt::KeyboardModifiers modifiers)
+{
     if (_currRectangle)
-        _currRectangle->setRect(rectangleRectForDrawing(scenePos));
+        _currRectangle->setRect(rectangleRectForDrawing(scenePos, modifiers));
 }
 
 void MainWindow::cancelRectangleMode()

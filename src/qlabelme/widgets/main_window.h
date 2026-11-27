@@ -313,9 +313,13 @@ private:
     void cancelNewLinePolylineDrawing();
 
     // Прямоугольник по 2-м маркерам
-    QRectF rectangleRectForDrawing(const QPointF& scenePos) const;
-    void handleRectangleLmbClick(const QPointF& scenePos);
+    QRectF rectangleRectForDrawing(
+        const QPointF& scenePos, Qt::KeyboardModifiers modifiers) const;
+    void handleRectangleLmbClick(
+        const QPointF& scenePos, Qt::KeyboardModifiers modifiers);
     void updateRectanglePreview(const QPointF& scenePos);
+    void updateRectanglePreview(
+        const QPointF& scenePos, Qt::KeyboardModifiers modifiers);
     void cancelRectangleMode();
 
     // Круг по 2-м маркерам
