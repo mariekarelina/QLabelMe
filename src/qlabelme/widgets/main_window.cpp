@@ -10829,22 +10829,35 @@ void MainWindow::updateModeLabel()
     if (_drawingRuler || _isDrawingRuler)
     {
         _modeLabel->setText(_isDrawingRuler
-                            ? u8"Режим: линейка — вторая точка"
-                            : u8"Режим: линейка — первая точка");
+                            ? u8"Режим: линейка — ЛКМ поставить вторую точку"
+                            : u8"Режим: линейка — ЛКМ поставить первую точку");
         return;
     }
     if (_drawingRectangle && !_zoomRectActive)
     {
         _modeLabel->setText(_currRectangle
-                            ? u8"Режим: прямоугольник — второй угол"
-                            : u8"Режим: прямоугольник — первый угол");
+            ? QString::fromUtf8(
+                u8"Прямоугольник: выберите противоположный угол; ЛКМ — завершить; Shift — квадрат")
+            : QString::fromUtf8(
+                u8"Прямоугольник: выберите первый угол; ЛКМ — поставить угол"));
+
         return;
     }
     if (_drawingCircle && !_zoomRectActive)
     {
         _modeLabel->setText(_currCircle
-                            ? u8"Режим: круг — точка на окружности"
-                            : u8"Режим: круг — центр");
+            ? QString::fromUtf8(
+                u8"Круг: выберите точку на окружности; ЛКМ — задать радиус и завершить")
+            : QString::fromUtf8(
+                u8"Круг: выберите центр; ЛКМ — поставить центр"));
+
+        return;
+    }
+    if (_drawingPoint && !_zoomRectActive)
+    {
+        _modeLabel->setText(QString::fromUtf8(
+            u8"Точка: ЛКМ — поставить, затем выбрать класс"));
+
         return;
     }
 
